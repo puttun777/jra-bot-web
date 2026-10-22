@@ -135,7 +135,7 @@ dashboard ─読取（DTO）─▶ MySQL        export-dataset ─▶ GCS datase
 | 停止 | プロセス停止 | 4 つのモードと GCS の正本、DB の停止 |
 
 ## 10. 検証ゲート（まだ実現済みとは扱わない）
-一覧と実施する段階は `STAGE2_HANDOFF.md` §11 にまとめた。主なものは次のとおり。
+一覧と実施する段階は `STAGE2_HANDOFF.md` §13 にまとめた。主なものは次のとおり。
 - G-DB-0: MySQL 8.4/9.7 × Flyway 13.11.1 × Connector/J × Doma。
 - G-DB-1: 東京で db-g1-small を選べるか、`max_connections`。
 - G-DB-5: IAM DB 認証。

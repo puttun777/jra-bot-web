@@ -16,37 +16,41 @@
 - [x] T1.4 バージョン調査 → `VERSIONS.md`（2026-10-22 暫定選定。T2.1 で最終確定）：JDK, Kotlin, Spring Boot, Gradle, Doma+doma-kotlin+processor(KSP可否), Flyway, MySQL+JDBC, Terraform+provider, GitHub Actions, フロント (W) 
 - [x] T1.5 フロント選定（2026-10-22 FRONTEND_DESIGN.md。採用案 A）（Streamlit 7画面の調査 → 候補比較）(W) ← T1.1
 - [x] T1.6 （infra PR #1 マージ済み: jra-bot-infra/docs/CLOUD_COSTS.md）クラウド費用比較 → `CLOUD_COSTS.md`（GCP/Azure/AWS × 条件A/B/C、無料枠とクレジット分離、停止中残額、DB停止/自動再起動仕様、確認日・通貨・為替）(I) 
-- [ ] T1.7 クラウド・DB 決定（DECISIONS）← T1.6, T1.4
-- [ ] T1.8 運用モード正本・STOPPED 実現方式（DB 停止/自動再起動/Terraform 非干渉）設計 (I) ← T1.7
+- [x] T1.7 クラウド・DB 決定（根拠: infra PR #2 マージ済み。GCP を設計採用、Cloud SQL Enterprise db-g1-small、MySQL 8.4 暫定 = infra I-011〜I-013、web D-046）← T1.6, T1.4
+- [x] T1.8 運用モード正本・STOPPED 実現方式（根拠: infra PR #2 の `OPERATIONS_DESIGN.md`。実リソース検証は G-OPS-1〜9 = 第5段階）(I) ← T1.7
 - [x] T1.9 ML 方針（2026-10-22 ML_DESIGN.md。採用案 A）（Kotlin再実装 vs Python維持、学習/推論分離、非pickle形式）(W) ← T1.1
-- [ ] T1.10 アーキテクチャ確定・CONTRACTS 0.1.0 確定 (W,I) ← T1.3,T1.5,T1.7,T1.8,T1.9
+- [x] T1.10 アーキテクチャ確定・CONTRACTS 0.4.0（根拠: 2026-10-22 Stage 1-D② `ARCHITECTURE.md` 全面改訂、`CONTRACTS.md` 0.4.0 で D1〜D12 解消 §12、D-045〜D-059。検証ゲートは STAGE2_HANDOFF §13）(W) ← T1.3,T1.5,T1.7,T1.8,T1.9
 - [x] T1.11 既存 SQLite からのデータ移行方針（2026-10-22 DATA_MIGRATION_DESIGN.md。実ファイル未取得のため Runbook 化）（実DBの所在をユーザーに確認）(W)
 
 ## 第1段階 追加タスク（T1.4 で判明）
-- [ ] T1.12 Spring Boot 4.2.0 GA 後の 4.2.x 移行計画（D-014）
+- [x] T1.12 Spring Boot 4.2.x 移行計画（根拠: VERSIONS §7、D-053。4.2.0 は RC1 で GA 前のため移行の**実施**は GA・4.2.1 以降の段階の切れ目）
 - [x] T1.13 （JV-Link/開催日 + decision.py/bet_strategy.py/fetch_historical_data.py 精読済み 2026-10-22。MIGRATION_MATRIX §6・§7。残る未読は軽微: fetch_historical_data の全行、bet_strategy 三連複流しの中間部）MIGRATION_MATRIX の未精読箇所の精読（jvlink_provider パーサ、decision/bet_strategy の分岐、fetch_historical_data）— T1.3/T3.x の前に必要な分から
 
 ## 第1段階 追加タスク（T1.2/T1.3 で判明, 2026-10-22）
 - [x] T1.15 STOPPED 時の Windows エージェント契約（CONTRACTS §7）
 - [ ] T1.16 **ユーザー**: JRA-VAN への問い合わせ Q1〜Q8（DATA_SOURCE_COMPLIANCE §6）と 2 人目の契約有無の確認
 - [ ] T1.17 JV-Link/JV-Data 公式仕様書（SDK 同梱 PDF）で確認: JVOpen option 表、JVGets、JVWatchEvent、YS/TC/AV/CC/WE/JC/RA 項目位置、HR 払戻桁、RA 発走時刻の有無、0B14/0B16、64bit 版の一般提供・COM 登録（**仕様書は Git に入れず、結論のみ docs に記録**）
-- [ ] T1.18 infra 側 docs への同期（CONTRACTS §7.5 のビーコン/ingest 義務、PLAN）
-- [ ] T1.19 エージェント PoC 計画（第3段階冒頭で実機検証: 64bit JV-Link+pywin32、バイト取得、ハング検知）
+- [x] T1.18 infra 側 docs への同期（根拠: infra PR #2 で infra CONTRACTS を同期、差異 D1〜D12 は web CONTRACTS 0.4.0 で解消。0.4.0 で生じた infra 文書の追従は PROGRESS「infra への引継ぎ」I-H1〜I-H7）
+- [x] T1.19 エージェント PoC **計画**（根拠: JVLINK_DESIGN §11、D-054。**実機検証 G-AGENT-1〜6 は未実施** → T3.0）
 
 ## 第1段階 追加タスク（Stage 1-C 後半で判明, 2026-10-22）
 - [ ] T1.20 **ユーザー（実環境）**: ① 実 SQLite の所在・取得、② `SELECT prob_source, COUNT(*) FROM signals GROUP BY 1` と `SELECT model_type_used, COUNT(*) FROM race_evaluations GROUP BY 1`（H1: ML が実際に使われていたか）、③ 実 `config.yaml` の値（D-016: 関数既定との食い違い項目の運用実態）、④ `*.pkl` の所在
-- [ ] T1.21 ユーザー判断: ML の確率パイプライン `legacy` / `v2`（D-037）、E1〜E15 のうち挙動を変更する項目（D-044）、フロント案 A の承認（D-032）
-- [ ] T1.22 MIGRATION_MATRIX §7.3 の E 項目ごとの新仕様決定（T1.10 で一括）
+- [ ] T1.21 ユーザー判断: ML の確率パイプライン `legacy` / `v2`（D-037）、E 項目の C 分類 E6/E11/E12/E14/H10 と H2（MIGRATION_MATRIX §8）、フロント案 A の承認（D-032）
+- [x] T1.22 E 項目ごとの新仕様整理（根拠: MIGRATION_MATRIX §8、D-055。C 分類の採否は T1.21 でユーザー判断）
 
 ## 第2段階 ― 基盤（W）
 - [ ] T2.1 Gradle KTS マルチプロジェクト雛形、Version Catalog、依存検査（bot⇄dashboard禁止）← T1.4,T1.10
 - [ ] T2.2 :domain 値オブジェクト（Odds, Probability, Money 等）・Repository interface
-- [ ] T2.3 :db-migration Flyway V1（MySQL。DATA_MIGRATION_DESIGN §2・§3 の DDL。V2=カレンダー/ingest/ml_model/app_user）← T1.10
+- [ ] T2.3 :db-migration Flyway V1/V2/`R__grants.sql`（範囲は ARCHITECTURE §5.1）+ CLI `--mode`（CONTRACTS §4.2）。G-DB-0 ← T1.10
 - [ ] T2.4 :persistence Doma DAO/Entity/変換（Testcontainers 統合テスト）← T2.2,T2.3
 - [ ] T2.5 CI（build/lint/unit/DB統合/イメージ）、Renovate/Dependabot ← T2.1
 - [ ] T2.6 ゴールデンテスト基盤（旧実装出力フィクスチャ生成スクリプト、実データ非含有）
+- [ ] T2.7 :cloud-gcp `ModeProvider`（GCS, CONTRACTS §5.2）+ ローカル実装 ← T2.2
+- [ ] T2.8 各実行アプリの最小起動（`/internal/health|ready`、`--task`、終了コード、CONTRACTS §4.3・§9）← T2.4,T2.7
+- 実装順・完了条件・クラウドで実行できる/できないテストは `STAGE2_HANDOFF.md`
 
 ## 第3段階 ― bot（W）
+- [ ] T3.0 **ユーザー（実機）**: Windows エージェント PoC G-AGENT-1〜6（JVLINK_DESIGN §11）。Claude は `agent/poc/` と手順を用意 ← T1.19
 - [ ] T3.1 EV/Kelly/確率/判定/急落フィルタを :domain へ移植し旧実装と比較 ← T2.2,T2.6
 - [ ] T3.2 ワイド/三連複 確率・推定オッズ・bet_strategy 移植
 - [ ] T3.3 開催日制御（RACE_CALENDAR_DESIGN の実装: スキーマ、calendar-check、bot-run リース、手動補正、C01〜C28 のテスト）← T1.3,T2.4
@@ -78,6 +82,9 @@
 - [ ] T6.2 セキュリティレビュー
 - [ ] T6.3 `OPERATIONS.md`、ドキュメント整理
 - [ ] T6.4 PR 整理（W,I）
+
+## 第1段階の完了状況（2026-10-22 Stage 1-D②）
+設計タスクは完了（本 PR マージ後）。**ユーザー/実環境のタスク T1.16・T1.17・T1.20・T1.21 は未完了のまま**（完了扱いにしない）。第2段階は合成データで進められるが、T3.x の一部（T3.5・T3.6・旧新比較）はこれらに依存する。
 
 ## 依存の要点
 T1.1 → T1.2 → T1.3 → T3.3 / T1.4,T1.7,T1.10 → T2.x / T1.6 → T1.7 → T5.x。第1段階の T1.6/T1.8（I）は T1.1〜T1.5（W）と独立に別セッション可。
