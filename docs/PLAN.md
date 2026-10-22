@@ -15,7 +15,7 @@
 - [x] T1.3 開催日/発走予定（2026-10-22 設計完了: RACE_CALENDAR_DESIGN.md）の取得元と、代替/中止/延期/時刻変更の検出方式設計 (W) ← T1.2
 - [x] T1.4 バージョン調査 → `VERSIONS.md`（2026-10-22 暫定選定。T2.1 で最終確定）：JDK, Kotlin, Spring Boot, Gradle, Doma+doma-kotlin+processor(KSP可否), Flyway, MySQL+JDBC, Terraform+provider, GitHub Actions, フロント (W) 
 - [ ] T1.5 フロント選定（Streamlit 7画面の調査 → 候補比較）(W) ← T1.1
-- [ ] T1.6 クラウド費用比較 → `CLOUD_COSTS.md`（GCP/Azure/AWS × 条件A/B/C、無料枠とクレジット分離、停止中残額、DB停止/自動再起動仕様、確認日・通貨・為替）(I) 
+- [x] T1.6 （infra PR #1 マージ済み: jra-bot-infra/docs/CLOUD_COSTS.md）クラウド費用比較 → `CLOUD_COSTS.md`（GCP/Azure/AWS × 条件A/B/C、無料枠とクレジット分離、停止中残額、DB停止/自動再起動仕様、確認日・通貨・為替）(I) 
 - [ ] T1.7 クラウド・DB 決定（DECISIONS）← T1.6, T1.4
 - [ ] T1.8 運用モード正本・STOPPED 実現方式（DB 停止/自動再起動/Terraform 非干渉）設計 (I) ← T1.7
 - [ ] T1.9 ML 方針（Kotlin再実装 vs Python維持、学習/推論分離、非pickle形式）(W) ← T1.1
