@@ -227,3 +227,9 @@ data class ProbabilityResult(val probs: List<Double>, val source: ProbSource, va
 | D-036 | モデルレジストリ（`ml_model`、テナント単位、run 開始時に固定、ensemble はセットで原子切替、フォールバックは明示・サイレント禁止） | 案 |
 | D-037 | 確率パイプラインは `legacy`（挙動再現）と `v2`（単回ブレンド・明示）を設定で切替。v2 への切替はユーザー判断 | 案 |
 | 未確認 | 実 pkl の中身、H1 の実態（prob_source 分布）、`feature_1,11〜14` が定数の理由、`has_horse_master` が低い理由、α=0.25 二重適用が意図か | 利用者の実環境で確認（T1.20） |
+
+## 10. T1.10 での確定事項（2026-10-22）
+- **ml-train の DB 権限は `ml_model` の SELECT/INSERT のみ**（DB ユーザー `mltrain`）。学習データは GCS のデータセット（`export-dataset` 出力）だけから読み、DB の業務テーブルに触れない。ACTIVE への昇格は dashboard の管理者操作（CONTRACTS §5.1・§8.2, D12）。
+- **確率パイプラインの本番初期値は `legacy`**。`v2` は新設計の目標だが**高精度とは未証明**。旧新比較（G-ML-2）・バックテスト（T3.9, G-ML-3）・閾値再検討の後、ユーザー承認で切替える。**自動切替はしない**（D-037）。
+- 欠陥候補との対応（H1/H2/H3/H4/H10, E1/E5）と各項目の承認要否は `MIGRATION_MATRIX.md` §8。
+- 検証ゲート: G-ML-1（実データで H1 の実証: `prob_source` 分布, T1.20）、G-ML-2（実データのリプレイで legacy と旧記録値の一致, ローカルのみ）、G-ML-3（v2 vs legacy のバックテスト）。

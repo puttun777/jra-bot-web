@@ -270,13 +270,14 @@ stateDiagram-v2
 | 結果が出ない | 発走 + 30 分で RESULT_PENDING | 5 分毎に再取得、`settle_deadline` で INCOMPLETE |
 | 時刻変更の反映遅延 | — | 窓の開始が前倒しされた場合は次の calendar-check で起動、既に実行中なら次サイクルで窓更新 |
 
-### 6.5 クラウド非依存の境界（T1.7 未確定のため）
+### 6.5 クラウド非依存の境界（T1.7 で GCP を設計採用。実装は `:cloud-gcp`）
 ```kotlin
 interface JobLauncher { fun launch(task: BotTask, params: Map<String,String>): LaunchResult }   // Cloud Run Jobs / 他クラウド / ローカル実装
-interface ModeProvider { fun current(): OpsMode /* NORMAL|STOPPED|UNKNOWN */ }               // 正本=DB 非依存ストア(CONTRACTS §5)
+interface ModeProvider { fun current(): OpsMode /* NORMAL|STARTING|STOPPING|STOPPED|UNKNOWN */ } // 正本=GCS ops-state.json, 15秒キャッシュ (CONTRACTS §5.2)
 interface Clock { fun now(): Instant; val zone: ZoneId /* Asia/Tokyo */ }
 ```
 Scheduler は「固定間隔で `app --task=calendar-check` を起動するだけ」の外部機能とし、判断ロジックはすべてアプリ内。Cloud Scheduler → 他クラウドのスケジューラ置換時にアプリ変更は不要。
+- GCP 実装（T1.10）: `JobLauncher` = Cloud Run Jobs の execution 作成（`bot-run` に `--date`/`--trigger` を override 引数で渡す）、`ModeProvider` = GCS。終了コード・SIGTERM・再実行は CONTRACTS §9（UNKNOWN は exit 75、非 NORMAL は exit 0）。
 
 ## 7. 手動補正
 - 管理者のみ（役割分離、監査ログ必須）。`calendar_override` で DAY/RACE 単位。理由必須、期限推奨。
