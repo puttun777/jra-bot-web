@@ -1,4 +1,4 @@
-# Build
+# ビルド生成物
 build/
 .gradle/
 .kotlin/
@@ -10,24 +10,34 @@ out/
 .idea/
 *.iml
 .vscode/
-# Secrets / env
+# 秘密・環境
 .env
 .env.*
 *.pem
 *.key
+*.p12
+*.jks
 *.tfvars
+*.tfstate*
+credentials*.json
 service-account*.json
-application-local.*
-# Data / models / generated (never commit)
-data/
+# 実データ・モデル（Git に入れない: CLAUDE.md 絶対ルール 5）
 *.sqlite
 *.sqlite3
 *.db
-*.parquet
 *.pkl
-*.joblib
-*.npz
-logs/
-*.log
-# OS
-.DS_Store
+*.pickle
+*.sql.gz
+*.dump
+*.bak
+*.csv.gz
+/data/
+/datasets/
+/models/
+# JV-Link SDK 資料（再配布不可）
+*.pdf
+JV-Link*/
+# Python
+__pycache__/
+.venv/
+*.pyc

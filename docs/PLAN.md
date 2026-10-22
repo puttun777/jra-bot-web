@@ -39,11 +39,12 @@
 - [x] T1.22 E 項目ごとの新仕様整理（根拠: MIGRATION_MATRIX §8、D-055。C 分類の採否は T1.21 でユーザー判断）
 
 ## 第2段階 ― 基盤（W）
-- [ ] T2.1 Gradle KTS マルチプロジェクト雛形、Version Catalog、依存検査（bot⇄dashboard禁止）← T1.4,T1.10
+- [ ] T2.1 Gradle KTS マルチプロジェクト雛形、Version Catalog、依存検査（bot⇄dashboard禁止）← T1.4,T1.10 — **実装済み・CI 確認待ち**（PR は PROGRESS 参照。CI が緑になり JDK 25 の合格が確認できたら [x] にする）
 - [ ] T2.2 :domain 値オブジェクト（Odds, Probability, Money 等）・Repository interface
 - [ ] T2.3 :db-migration Flyway V1/V2/`R__grants.sql`（範囲は ARCHITECTURE §5.1）+ CLI `--mode`（CONTRACTS §4.2）。G-DB-0 ← T1.10
 - [ ] T2.4 :persistence Doma DAO/Entity/変換（Testcontainers 統合テスト）← T2.2,T2.3
 - [ ] T2.5 CI（build/lint/unit/DB統合/イメージ）、Renovate/Dependabot ← T2.1
+  - 前半（`ci.yml`: build/ktlint/依存方向/単体/JDK25/repo-hygiene）は T2.1 と同じ PR。DB 統合・イメージ・Dependabot は未着手
 - [ ] T2.6 ゴールデンテスト基盤（旧実装出力フィクスチャ生成スクリプト、実データ非含有）
 - [ ] T2.7 :cloud-gcp `ModeProvider`（GCS, CONTRACTS §5.2）+ ローカル実装 ← T2.2
 - [ ] T2.8 各実行アプリの最小起動（`/internal/health|ready`、`--task`、終了コード、CONTRACTS §4.3・§9）← T2.4,T2.7
