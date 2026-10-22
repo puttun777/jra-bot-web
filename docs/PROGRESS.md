@@ -1,7 +1,42 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-10-22（第2段階 / Stage 2-A: T2.1・T2.5 前半・G-ENV-1・G-VER-1）
+最終更新: 2026-10-22（第2段階 / Stage 2-B: T2.2）
 
+## Stage 2-B（claude/stage2-domain-vo, PR #6）
+### 結果
+- **T2.2 実装完了**（`:domain` の値オブジェクト・業務モデル・Repository・ポート・単体テスト）。T2.5 は前半のみ完了のまま（変更なし）。
+- CI（JDK 25）の結果: run 39832361545（head 3d8b0cb、T2.2 の全コード + docs）: build (Temurin 25) 成功（`./gradlew check` + 依存規則の明示実行）/ repo hygiene 成功。その後の PROGRESS 更新だけのコミットは docs のみで、同じ CI がもう一度走る（結果は PR のチェックを参照）。先行の run 39832300265（010b24a）は後続の push に置き換えられて cancelled
+### セッションの環境（CLAUDE.md の記録義務）
+`java -version` = OpenJDK 21.0.12（JDK 25 なし）、Gradle Wrapper 9.7.1 は動作、Docker CLI あり・デーモンなし（今回 Docker 依存のテストは無い）。`repo.maven.apache.org` / `repo1.maven.org` が 429 を返すため、ユーザー領域（`~/.gradle/init.d`、Git 外）に Google の Maven Central ミラーを先に試す init script を置き、再試行して解決した。**ローカルのフルビルド（Spring Boot の 3 アプリ）は依存取得の 429 で完了できなかったため、ローカルでは `:domain:test` `:build-logic:test` `ktlintCheck` `checkModuleDependencies` のみ実行**（アプリ 3 モジュールのビルドは CI が正）。
+### 追加した型とインターフェース（`jp.jrabot.domain.*`）
+- 値オブジェクト: `tenant.TenantId`（通常クラス）・`tenant.EmailAddress`・`race.RaceId`・`race.Venue`・`race.HorseNumber`・`odds.Odds`・`value.Probability`・`value.Money`・`ops.OpsMode`・`signal.SignalId`・`bot.RunId`・`ml.ModelId`/`DatasetId`・`agent.AgentId`（`TenantId` 以外は `@JvmInline value class`）。
+- 業務モデル: `Tenant` `AppUser` `Race` `RaceSchedule` `OddsEntry`/`OddsSnapshot`/`Market` `Signal`/`NotificationState` `BotRun`/`BotRunState`/`BotRunTrigger` `ModelArtifact` `DatasetDescriptor` `Notification` `AgentHeartbeat` `JobLaunchRequest`。`TenantScoped` がテナントを持つモデルの印。
+- Repository（Reader/Writer 分離）: Race、RaceSchedule、OddsSnapshot、Signal、BotRun、AppUser（読取りのみ）。結果型 `InsertOutcome` `UpsertOutcome` `UpdateResult`。
+- ポート: `Clock`/`SystemClock` `ModeProvider` `JobLauncher` `ModelReader`/`Writer`/`Store` `DatasetReader`/`Writer`/`Store` `Notifier` `HeartbeatMirror`。**各ポートの責務・入出力・エラー・テナント・冪等性・実装先は STAGE2_HANDOFF §14**。
+- 採用理由は DECISIONS D-060（値オブジェクト）・D-061（ポート）・D-062（EmailAddress）。
+- 作らなかったもの（必要性が未確認）: `Horse`/`RaceHorse`（特徴量を実装する T3.6 で追加）、`TenantRepository`、`race_day`/`calendar_override`/`race_schedule_event` のモデル（T3.3）、EV/Kelly/確率/ワイド・三連複の計算（Stage 3）、Doma/Entity/SQL（T2.3/T2.4）。数値の挙動（legacy/v2、市場ブレンド、Kelly 係数、E1〜E15、閾値、丸め）は一切変更していない。
+### 依存検査の強化（`build-logic`）
+`:domain` に HTTP クライアント（`java.net.http`・OkHttp・Ktor・Apache）、Jackson、JPA/Hibernate、AWS/Azure/Google API・gRPC、Flyway を禁止。import だけでなく**完全修飾名での直接参照**も検出。`java-test-fixtures` が付ける自己依存は違反にしない。単体 +3、TestKit +2（`domain` が import 無しで HTTP クライアントを使うと失敗することを実ビルドで確認）。
+### テスト（ローカル JDK 21 のスモーク。JDK 25 の結果ではない）
+| 対象 | 結果 |
+|---|---|
+| `:domain:test` | 214 件成功（うち既存 2、`JdkRuntimeTest` は `EXPECTED_JDK` が無いため何もしない） |
+| `:build-logic:test` | 18 件成功（既存 13 + 追加 5） |
+| `ktlintCheck` / `checkModuleDependencies` | 成功 |
+| ローカルのフルビルド（`:bot` `:ingest` `:dashboard`） | **未実施**（429 で依存を取得できず）。CI で確認 |
+主な検証: 正常値・不正値・境界（`Odds` 1.0 / 0 / 負 / NaN / Infinity、`Probability` 0・1・範囲外・-0.0・正規化、`Money` の桁あふれ・負・合計）、`RaceId`（桁数・全角数字・閏年・場コード・レース番号・往復・16 桁導出）、等価性と hashCode、`OpsMode`（UNKNOWN は NORMAL にならない・正本に無い表記は UNKNOWN）、UTC⇔JST（15:00Z の境界・年またぎ）、固定時計、テナント境界の契約（全ポートの第一引数が `TenantId`/`TenantScoped`、例外は `findByEmail` だけ。ドメイン外の型を出さない）、`Clock.kt` 以外での時刻の直接取得の禁止、パストラバーサルになる ID の拒否。**性質テスト（乱数）は入れていない**（パラメータ化テストで境界を網羅。必要なら T3.1 で追加）。
+### 未解決・注意（引き継ぎ）
+- T1.16 / T1.17 / T1.20 / T1.21 は**未完了のまま**。infra の I-H1〜I-H7（下の「infra への引継ぎ」）も第5段階の前に必要。
+- `RaceId` のレース番号・`HorseNumber` の上限（1〜99）、`Odds` の下限（正の有限値）は公式仕様（T1.17）の確認後に再検討（D-060）。
+- RACE_CALENDAR_DESIGN の `bot_run` DDL に `INTERRUPTED` が無い（CONTRACTS §9.2 にはある）。T2.3 で DDL を合わせる（STAGE2_HANDOFF §14.1）。`cycle_id` と `observed_at` の関係（Signal の自然キー）も T2.3/T3.3 で確定。
+- `DomainModule`（Stage 2-A のマーカー）は他モジュールが参照しているため残している。T2.4/T2.7 で実型を使うときに外す。
+- 固定時計 `FixedClock` はテスト内。2 つ目のモジュールが必要としたら `testFixtures` に移す（ARCHITECTURE §2）。
+### 次のタスク
+**T2.3**（`:db-migration`: V1/V2/`R__grants.sql` と CLI `--mode`。G-DB-0。STAGE2_HANDOFF §14.1 の整合事項を反映）。ブランチは `claude/stage2-db-migration`。T2.3 は Docker（Testcontainers）が必要で、クラウドセッションでは実行できないため CI で確認する。並行して T2.7（`ModeProvider` の GCS 実装、HTTP をフェイクにした単体テスト）も着手できる。
+### Git
+ブランチ `claude/stage2-domain-vo`、PR #6（main 向け、マージはユーザー）。コミット: 010b24a（T2.2 本体）、3d8b0cb（docs）、PROGRESS 更新。
+
+---
 ## Stage 2-A（claude/stage2-gradle-skeleton, PR #5）
 ### 結果
 - **T2.1 完了**、**T2.5 は前半のみ完了**（DB 統合・イメージ・Dependabot・manifest は未着手）。**G-VER-1 合格**（Kotlin 2.4.21 × Gradle 9.7.1 × Boot 4.1.2 × JDK 25）。**G-ENV-1**: クラウドセッションでは JDK 25 を取得できなかった（Adoptium・foojay は接続拒否、GitHub のリリース資産は 403、apt に無い）。GitHub Actions では取得できる。
