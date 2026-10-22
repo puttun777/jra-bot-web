@@ -131,6 +131,7 @@ CREATE TABLE payouts (
 | 実行 | **デプロイごとに 1 回の Job**（アプリ起動時 migrate 禁止: CONTRACTS §4）。`validateOnMigrate=true`、`outOfOrder=false`、`baselineOnMigrate=false`（空 DB 前提）。DDL 専用ユーザーとアプリ用 DML ユーザーを分離 |
 | 互換 | MySQL 8.4/9.7 で動く SQL のみ（バージョン固有構文を避ける）。Testcontainers で 8.4 と 9.7 の両方に適用（VERSIONS §3） |
 | テナント初期化 | `V1` で `tenant` を作るが**行は入れない**。初期テナントは管理手順（移行ツール/管理 API）で作成 |
+| 範囲の確定（T1.10, D-058） | V1/V2/`R__grants.sql` の表の割当は `ARCHITECTURE.md` §5.1。DB ユーザー（migrate/app/ingest/bot/mltrain）と権限は `CONTRACTS.md` §8.2。CLI は `--mode=info\|validate\|migrate`（CONTRACTS §4.2） |
 
 ### 3.1 後方互換な変更（運用開始後）
 - **expand/contract**: ① 追加（NULL 可列/新表/新索引を先にデプロイ）→ ② アプリが新旧を読み書き → ③ バックフィル（バッチ）→ ④ 旧を参照停止 → ⑤ 別リリースで削除。**リネーム・型変更・NOT NULL 追加を 1 リリースで行わない**。

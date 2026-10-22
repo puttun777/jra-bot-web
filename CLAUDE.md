@@ -38,10 +38,15 @@ JRA Bot (参照元 `puttun777/jra-bot`, Python/SQLite/Streamlit) を Kotlin/Spri
 | docs/DECISIONS.md | 判断記録 | リポジトリ別 |
 | docs/ARCHITECTURE.md | モジュール/責務/データ | web |
 | docs/CONTRACTS.md | web⇔infra の成果物・環境変数・API 契約 | **web が正本**、infra 側は同期コピー参照 |
-| docs/MIGRATION_MATRIX.md 他 | 第1段階以降で作成 | 作成時に決定 |
+| docs/STAGE2_HANDOFF.md | 第2段階の実装順・テスト区分・CI・再開手順・検証ゲート一覧 | web |
+| docs/VERSIONS.md | 版数・互換性ゲート・Boot 4.2 移行計画 | web |
+| docs/MIGRATION_MATRIX.md / FRONTEND_DESIGN / ML_DESIGN / DATA_MIGRATION_DESIGN / RACE_CALENDAR_DESIGN / JVLINK_DESIGN / DATA_SOURCE_COMPLIANCE | 機能移行・各設計（E 項目は MIGRATION_MATRIX §8） | web |
 
 ## モジュール（Gradle Kotlin DSL マルチプロジェクト）
-`:domain` `:persistence` `:db-migration` `:bot` `:dashboard`。bot と dashboard は相互依存しない。domain は Doma/クラウド SDK 非依存。詳細は ARCHITECTURE.md。
+`:domain` `:persistence` `:db-migration` `:cloud-gcp` `:bot` `:ingest` `:dashboard`（D-045）。bot / ingest / dashboard は相互依存しない。domain は Spring/Doma/クラウド SDK 非依存。Python は `agent/` `ml/` `tools/`（Gradle 外）。詳細は ARCHITECTURE.md。
+
+## 実行環境（クラウドセッション）
+- セッションごとにツールが異なり得る。作業冒頭で `java -version` / `./gradlew --version` / `docker info` を確認し PROGRESS に記録。実行できないテストは「未実施」と書き、成功と偽らない。完了判定の正は GitHub Actions（D-056）。
 
 ## 規約
 - 言語: コード識別子は英語、ドキュメント/UI/コミット本文は日本語可。タイムゾーンは Asia/Tokyo。
