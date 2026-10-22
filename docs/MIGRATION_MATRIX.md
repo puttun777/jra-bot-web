@@ -1,0 +1,81 @@
+# MIGRATION_MATRIX（T1.1）
+
+調査日: 2026-10-22 / 参照元: `puttun777/jra-bot` main `f7dbf69`（65 commits, Public, MIT）/ 調査者: Claude（読み取りのみ）。
+分類: **K**=Kotlin移行 / **P**=Python等で維持（別プロセス）/ **S**=段階移行（暫定維持→後で移行）/ **W**=Windows専用エージェント（K or P で実装、クラウド外）/ **D**=設計上置換（機能は新方式で実現、コード移植なし）/ **X**=移行しない（理由を記載）
+優先度: P0=必須の中核 / P1=主要機能 / P2=あると良い / P3=後回し可。
+行数は参照元の概算。**精査が浅い箇所は「要精査」と明記**し、第2/3段階の着手時に再確認する。
+
+## 1. 機能マトリクス
+| ID | 機能 | 実装ファイル | 概要 | 依存 | 分類 | 移行方法と理由 | 主なリスク | 優先 | テスト方法 |
+|---|---|---|---|---|---|---|---|---|---|
+| F01 | JV-Link 取得（COM 呼出し） | `data/jvlink_provider.py` (2.7k) | `win32com` で JVInit/JVOpen/JVRTOpen/JVRead/JVSkip/JVClose。蓄積系(RACE, RCOV/RCVN)と速報系(0B12,0B15,0B30,0B31,0B33,0B35)。`lastfiletimestamp`(14桁)で差分取得。当日/翌日レースを複数 dataspec からマージ。`race_days_back` で取りこぼし防止 | Windows, JV-Link 32bit COM, pywin32, SID, 利用規約 | **W** | Linux では不可。ユーザーPC上の取得エージェントとして分離し、**生レコード(Shift_JIS固定長) or 構造化JSON**を認証付き ingest API へ送る。エージェントの言語は T1.2 で決定（COM 利用なら .NET/Python 32bit が有力、Kotlin/JVM は 32bit JRE + JACOB 等で非現実的） | COM 32bit 制約、規約上クラウド保管の可否、PC 停止時の欠損、2.7k 行の巨大クラス | P0 | 録画した生レコードのフィクスチャ(実データ非含有の合成/匿名化)でパーサ比較 |
+| F02 | 固定長レコードのパース（RA/SE/UM/オッズ/払戻/結果） | 同上 `_parse_*`, `_slice_sjis` | Shift_JIS バイト位置で切出し。Race/OddsData/RaceResult/HorseMaster を生成 | F01 | **K**（パーサをサーバ側に置く案を優先） | エージェントは生レコード転送に徹し、パースは Kotlin（テスト容易・Linux 実行可）。**代替**: エージェント側パース。T1.2 で決定 | 桁位置・文字コード・欠損の再現性 | P0 | 旧実装パーサと同一入力の出力比較（ゴールデン） |
+| F03 | 開催日/発走予定の決定 | `jvlink_provider.get_today_races`, `run_daemon.py` L770-800 | **専用の開催カレンダーなし**。取得できた Race の `date`==今日（`include_tomorrow` で翌日含む）で「開催日」とみなす。土日祝判定はしていない（要件と整合）。代替/中止/延期/時刻変更の検知ロジック**は見当たらない** | F01, `races.post_time` | **K（新規設計）** | 専用カレンダー + 変更履歴 + 手動補正を新規実装（T1.3）。参照元は挙動の仕様源にならない | 変更検知が未実装＝新規要件。ソース(JV-Link 速報の発走時刻変更/出走取消系)の確認要 | P0 | シナリオテスト（通常/平日/代替/中止/延期/時刻変更/取得失敗/手動補正） |
+| F04 | 時刻ユーティリティ | `utils/time.py` | `parse_post_time`(分≥60/時≥24の繰上げ対応)、`minutes_to_post`、ポーリング間隔(>30:300s, >5:60s, else 30s) | なし | **K** | domain に純関数として移植。**`datetime.now()` が naive でマシンTZ依存**→ Asia/Tokyo の `Clock` を注入 | コンテナ(UTC)で発走判定がずれる最重要リスク | P0 | 境界値(12:60, 24:xx, 5/30分ちょうど, 日跨ぎ, DST なし) の表駆動テスト |
+| F05 | EV・期待回収・期待利益 | `ev/ev_calc.py` | `EV=p*odds-1`、p<=0/odds<=0 は -1、期待利益=stake*EV | なし | **K** | domain。純関数。数値は `BigDecimal` でなく **Double 同等(IEEE754)** で旧実装と一致させる（丸めは表示層のみ） | 浮動小数の差異 | P0 | 旧実装出力との許容誤差比較(1e-12)＋境界 |
+| F06 | Kelly・投資額 | `ev/ev_calc.py` `calc_kelly_fraction`/`suggest_bet_amount` | f=(pb−q)/b、上限 `max_fraction`、min/max クリップ、戦略文言 | F05 | **K** | domain。bankroll は「点」単位 | min_bet 未満→見送りの仕様差（docs/KELLY_* に経緯あり、要精査） | P0 | `scripts/test_kelly_bet_amount.py` 相当 + ゴールデン |
+| F07 | 勝率推定・正規化 | `ev/probability.py` | 1/odds、レース内正規化、±10% 補正制限(correction_limit)後に再正規化、ML 可用時は ML 優先・失敗時フォールバック | F10(ML) | **K** | domain。モジュールグローバル `_use_ml_model` のキャッシュ状態は廃止し、明示的な戦略注入に | ML 失敗時の暗黙フォールバックをどう扱うか（ログ・メトリクス化） | P0 | 数値ゴールデン、頭数1/オッズ0/全0 の異常系 |
+| F08 | ワイド・三連複の確率/推定オッズ/買い目 | `ev/bet_strategy.py` (803行) | 推定オッズ(区分係数)、Plackett-Luce 的組合せ確率(`plackett_luce_alpha`)、流し/BOX、確率の min/max クリップ、市場比上限、`ev_shrink_factor`、`best_only`/`proportional_ev` 配分、実オッズ必須(`require_real_odds_for_combo`) | F05-F07, 組合せオッズ(F02) | **K** | domain。設定項目が多いので型付き設定クラスへ。**ロジックの全分岐は第3段階で精読**（本調査では signature のみ確認） | 分岐の多さ、設定の組合せ爆発、暗黙デフォルトの差（関数既定値 vs config 既定値が異なる: 例 `ev_shrink_factor` 0.7 vs 0.55） | P0 | 設定プリセット×合成レースのゴールデン |
+| F09 | 購入判定・シグナル生成 | `ev/decision.py` (1,012行) | `evaluate_odds`（~40引数）: 急落(`check_odds_drop`, 古いスナップ比 >threshold)、人気急上昇、EV 閾値、priority_mode(edge/hit_rate)、hit_rate_min_ev(時間帯別 far/mid/near)、単勝オッズ上限/確率下限/ratio 下限、確率クリップ、見送り理由集計、複数賭式 | F05-F08, スナップショット履歴 | **K** | domain の `DecisionEngine`。引数群は `DecisionConfig`/`MarketContext` に構造化。見送り理由は enum 化し race_evaluations に保存 | 引数の暗黙結合・巨大関数、`recent_snapshots` の並び順（新しい順で `[-1]` が最古）の取り違え | P0 | 旧実装との入出力ゴールデン（シグナル有無・金額・理由コード） |
+| F10 | ML モデル（推論） | `ml/model.py`, `ml/predict.py`, `ml/features.py` | **numpy のみのロジスティック回帰**（特徴: odds, popularity, log_odds, inv_popularity, 交互作用 + 拡張）、Platt 校正、市場ブレンド(logit混合)、alpha(オッズ無し,馬/コース/血統ハッシュ特徴)・calibration・ensemble・legacy。mtime によるキャッシュ再読込 | numpy, pickle, DB(特徴量取得) | **K（推論）** | モデルが線形(sigmoid)なので **重みを JSON/NPZ にエクスポートして Kotlin で推論**可能。pickle は引き継がない(D-008)。特徴量生成(ハッシュバケット `_hash_bucket/_hash_sign`)の再現が鍵 | 特徴量の数値一致(ハッシュ関数: 要確認)、旧 pkl が手元にしか無い、ensemble_beta/tune 結果の管理 | P0 | 同一特徴量→同一確率の比較(許容1e-9)、モデルJSONのスキーマ検証 |
+| F11 | ML 学習・データセット・チューニング | `ml/train.py`, `dataset_builder.py`, `scripts/{train,train_ml_model,build_dataset,retrain_models,tune_params,evaluate_model,diagnose_training_data}.py` | DB→特徴量→parquet(pandas/pyarrow)→勾配降下(lr 0.1, 800 epoch, L2)→Platt→`*_latest.pkl`。`retrain_models` が一括。`tune_params` が ensemble_beta/半減期を最適化 | pandas, pyarrow, numpy, DB | **P（学習）** | 学習は Python 維持（オフライン/手動、または月次ジョブ）し、**出力を非 pickle のモデル成果物(JSON/NPZ+メタ)に変更**。学習と推論を分離(要件)。将来 Kotlin 化は P3 | 学習環境の再現、MySQL からの読み込みへ切替、32bit 制約は消える（クラウド/新PC は 64bit） | P1 | 小データで学習結果の再現性、成果物スキーマ検証 |
+| F12 | 自動再学習（常駐内） | `run_daemon.py` L505-750, 965-990 | 新規結果件数/間隔で非同期学習、`legacy` のみ対象 | F11 | **D** | bot-run 内では行わず、**独立の ml-train ジョブ**へ（STOPPED/コスト管理のため）。トリガは手動 or 週次 | 学習中のモデル差替えの原子性 | P2 | モデル成果物の原子的切替テスト |
+| F13 | Discord 通知 | `notify/discord.py` (694行) | Webhook、2000字制限の分割(`_split_content`)、429 の `Retry-After` 解釈、リトライ(3回/5s)、メンション(`mention`, `mention_user_id`+allowed_mentions)、グルーピング、重複買い目除去、エラー用 webhook(`error_webhook_url`) | requests, Webhook(秘密) | **K** | `:bot` に `Notifier` 抽象 + Discord 実装(Spring `RestClient`)。Webhook は Secret Manager。送信済み判定(`signals.sent`)を冪等化(送信前に claim) | 二重送信/未送信（再実行時）、Discord 側仕様、メンション設定 | P0 | MockWebServer で分割/429/リトライ、メッセージ文面のゴールデン |
+| F14 | 常駐監視ループ | `scripts/run_daemon.py` (2,010行) | 設定ロード→DB→provider→(補てん情報取込 `ingest_cover_data`)→無限ループ: 当日レース取得→各レース `minutes_to_post` が監視ウィンドウ(開始 240/120 分前〜終了 −5 分)内ならオッズ取得→snapshot 保存→評価→通知→結果取得/決済→自動再学習→sleep(間隔可変)。エラー時 `error_wait_seconds`、`no_race_wait_seconds`。adaptive_relaxation | 全て | **D+K** | 無限ループを廃し、**bot-run（有限ジョブ）**＋内部の有限スケジューラ(発走時刻ベース)に再設計。ロジック部分(F05-F09)は domain へ、オーケストレーションは `:bot` 新規。多重起動は run ロック | 2k 行に埋もれた副作用の取りこぼし(結果の保存→決済→評価の順序)、設定二重定義(watch_start 240/120 がYAML内で重複) | P0 | 録画オッズ列を再生するシミュレーションテスト(旧と同じ通知列になるか) |
+| F15 | 結果取得・払戻・決済 | `storage/{repo,bets_repo,evaluation_repo}.py`, `scripts/{settle_bets,settle_evaluations,backfill_results*,fetch_payout_from_jvlink,verify_*}.py` | 結果(着順/単勝払戻)保存、払戻(`payouts`: market,key)保存、paper bet の open→決済(単勝/ワイド/三連複)、評価の決済 | F01/F02, DB | **K** | `:domain` に決済ロジック(純関数) + `:persistence`。冪等(同一 race の再決済で二重計上しない) | 組合せキーの正規化(`_normalize_combo_key`)の差、払戻欠損 | P0 | 既知レースの的中/外れ/同着/取消ゴールデン |
+| F16 | DB スキーマ・アクセス | `storage/schema.sql`(15 tables), `db.py`(動的 migrate), `*_repo.py` | SQLite。races, odds_snapshots, signals(24列), results, jvlink_timestamps, horses, race_horses, horse_past_runs, model_metrics, payouts, combo_odds_snapshots, race_evaluations, ticket_evaluations, bets, bet_legs。起動時に `ALTER` 等で動的移行 | sqlite3 | **K** | Flyway V1 を再設計（MySQL）。型・一意制約・FK・インデックスを明示。JSON 文字列列(pedigree_json 等)は MySQL `JSON` か正規化を T1.10 で判断。時刻は文字列保存→DATETIME(6) へ | 既存データ移行（実DBの所在不明＝未解決）、文字列日付/ISO 混在、SQLite の型緩さ | P0 | Testcontainers(MySQL)で DAO、旧SQLiteからの変換スクリプトの件数/合計比較 |
+| F17 | 設定管理 | `utils/config.py`, `config/config.example.yaml`, `ui/pages/05_Config.py` | YAML + `${ENV}` 展開、`JVLINK_SOFTWARE_ID`/`DISCORD_WEBHOOK_URL`/`DISCORD_ERROR_WEBHOOK_URL` を env 優先、`validate_config` | python-dotenv | **K** | Spring `@ConfigurationProperties` + 検証(Jakarta Validation)。秘密は環境変数/Secret Manager。可変運用パラメータは管理者のみ DB/設定で変更（監査ログ） | YAML 全キーの網羅漏れ、デフォルト値の食い違い | P1 | 旧 YAML(example) を読み込み新設定と全キー対応表のテスト |
+| F18 | Streamlit ダッシュボード（新） | `apps/dashboard/streamlit_app.py`(2k), `pages_evaluations.py` | Model/ML学習状況、Overview、Race Detail、Horse Detail、**Performance(成績集計)**、Signals、Ops/Health（ログtail・PID確認・テーブル件数・取込状態） | Streamlit, sqlite(`ui/db_read*.py`) | **K（UI 再実装）** | フロントは T1.5 で選定。Ops/Health のうち PID/ローカルログは **D**（クラウドでは bot 状態/最終更新/次回実行/Cloud Logging リンクに置換） | 画面が巨大で仕様がコードに埋没、集計 SQL が UI に混在 | P1 | 画面別に旧画面のスクリーンショット/数値と比較、API の契約テスト |
+| F19 | Streamlit 旧UI | `ui/app.py`, `ui/pages/01-06` | 初期版のマルチページ(Status, Races, Signals, Odds, Config, Evaluations)。README の起動方法は `apps/dashboard/` 側 | 同上 | **X（機能は F18 に包含）** | 旧版と推定。ただし `04_Odds`(オッズ履歴)、`05_Config`(設定表示)が新版に無い場合は F18 へ取り込む（**要精査**）。コードは移植しない | 取りこぼし | P3 | F18 側で同機能を確認 |
+| F20 | 成績集計・バックテスト | `ui/db_read.py` (`calculate_performance_from_bets/signals`), `ev/verification.py`, `scripts/report_performance.py`, `ui/db_read_evals.py`(`calculate_evaluation_performance`), `model_metrics`(brier, logloss, calibration) | 回収率・的中率・EV 乖離、シグナル由来/bets 由来/評価由来の3系統集計、期間/競馬場/賭式フィルタ。**集計ロジックが UI モジュール内（1.2k+0.8k行）** | DB | **K** | domain の集計サービスに抽出（UI から分離）し API で提供。3系統のうち正を T1.10 で整理（`DASHBOARD_PERFORMANCE_V2.md` を参照） | 集計定義の揺れ（signals vs bets）、丸め、母数の定義 | P1 | 既知データで旧集計値と一致（件数/回収率/的中率） |
+| F21 | 過去データ/補てん取込 | `ingest_cover_data`, `scripts/{fetch_historical_data(1.7k),ingest_cover_data,ingest_alpha_features,backfill_*}.py` | 過去1年のレース/結果、馬マスタ/過去走/出走表(alpha 特徴量土台)の一括取込 | F01 | **W+K** | 取得はエージェント(バックフィルモード)、保存は ingest API。大量取込は冪等 upsert・チャンク・再開(checkpoint) | JV-Link 取得量/時間、規約、クラウド側の書込量 | P1 | 小期間バックフィルの件数一致、再実行で件数不変 |
+| F22 | タイムスタンプ/進捗管理 | `jvlink_timestamp_repo.py` | データ種別ごとの `lastfiletimestamp` を保存し差分取得 | DB | **K**（正本=サーバ） | サーバ側で保持しエージェントが問い合わせ(再開の正本をクラウドに)。エージェント再インストールでも継続 | エージェントとサーバの二重管理 | P0 | 再実行/再開テスト |
+| F23 | 定期実行・運用スクリプト | `run_daemon_*.bat/ps1`, `check_daemon_status.py` | Windows 上で 32bit Python 常駐を起動(UTF-8 設定・ログ)。PID/ログで状態確認 | Windows | **D** | Cloud Scheduler + Cloud Run Jobs（クラウド側）、エージェント側は Windows サービス/タスクスケジューラ。起動停止は運用モード(NORMAL/STOPPED)に従う | エージェントの死活監視 | P0 | infra 側 E2E（T5.x） |
+| F24 | 障害対応・エラー通知 | `run_daemon.py` L520-600、`notify/discord.py` | エラー用 webhook、`error_wait`、ML 失敗時フォールバック、DB ロック再試行(`db_read.get_connection`) | Discord | **K+D** | 失敗種別を構造化(再試行可/不可)、Cloud Monitoring アラート + Discord。DB ロックは MySQL では不要 | 沈黙失敗（except: pass が多い） | P1 | 障害注入テスト（取得失敗/Discord 5xx/DB 切断） |
+| F25 | ログ | `utils/logging.py` | ファイル/コンソール | なし | **D** | 構造化ログ(JSON) to stdout → Cloud Logging | — | P2 | — |
+| F26 | データ型/ドメインモデル | `data/models.py`, `provider_base.py` | Race, OddsData(単勝+wide/三連複), Signal, RaceResult。`OddsProvider` 抽象 + Dummy provider | なし | **K** | domain の値オブジェクトへ。`DummyProvider` はテスト/ローカル用 fake として保持 | — | P0 | 単体 |
+
+## 2. scripts/ 配下の棚卸し（.py 70本 + 起動 .bat/.ps1 4本）
+判断欄: **K**=機能を新実装に取り込む / **T**=テスト・ゴールデン資産として参照 / **D**=診断→運用ツール（admin 機能/Runbook）に置換 / **X**=移行しない（理由記載。削除はしない＝参照元は不変）
+
+| 区分 | スクリプト | 用途 | 判断 | 理由 |
+|---|---|---|---|---|
+| 常駐/実行 | run_daemon.py, run_once.py | 本体/1回実行 | K（F14） | run_once は bot-run のドライラン/手動実行の仕様源 |
+| 起動 | run_daemon_{32bit,utf8}.{bat,ps1} | Windows 起動 | D | エージェント用に再設計 |
+| DB | init_db, run_migration, test_db_init, check_db, check_db_counts, verify_db, check_data_persistence | 初期化/移行/確認 | D | Flyway + ヘルス/件数 API |
+| 取込 | fetch_historical_data, ingest_cover_data, ingest_alpha_features, read_local_jvlink_files, backfill_results, backfill_results_payout, fetch_payout_from_jvlink, backfill_bets_from_signals | 過去取込/補完 | K（F21, F15）/ read_local_jvlink_files は T | ローカルファイル読みはパーサ検証用 |
+| ML | build_dataset, train, train_ml_model, retrain_models, tune_params, evaluate_model, diagnose_training_data | 学習系 | P（F11） | Python 維持 |
+| 決済/成績 | settle_bets, settle_evaluations, report_performance, verify_bets_settlement, verify_results, verify_performance_v2, check_bets_results, check_settlement, check_results_table, check_results_payout, check_missing_result(_detail), debug_performance(_calculation), debug_daily_eval_status | 決済/集計/検証/デバッグ | K（settle, report）/ 他は T（期待値の根拠）/ debug は D | 検証系は旧新比較の期待値作成に再利用 |
+| 通知 | send_test_notification, test_notification_with_ml | テスト通知 | D | 管理者用「テスト通知」機能（F13） |
+| JV-Link 診断 | check_jvlink, check_jvlink_status, check_datatype_enabled, check_race_datatype, check_data_timing, check_timing_detail, open_jvlink_settings, analyze_jvlink_docs, read_jvlink_docs | 環境/データ種別/タイミング確認 | D | エージェントの「自己診断」コマンドへ集約。docs 解析は X（一回限りの調査）だが**調査結果は T1.2 で参照** |
+| JV-Link 試行錯誤 | test_jvopen_{simple,call,6params,with_6params}, test_jvinit_unknown, test_jvgets_direct, test_jvread_simple, test_jvlink_pattern, test_race_data, test_datatype_detail | API 呼出し方の試行 | X | 呼出し規約が `jvlink_provider` に確定済みの試行錯誤。ただし**引数の癖は T1.2 の知見として docs に転記**してから参照のみ |
+| 単体検証 | test_ev_calculation, test_kelly_bet_amount, test_betlist_config, test_performance_calculation, test_date_range_check, test_ml_horse_features, test_dashboard_*, verify_dashboard_data | 手動スクリプト型テスト（pytest ではない） | T | 期待値・境界値をゴールデンへ移植 |
+| その他 | check_daemon_status | PID/ログ確認 | D | 状態 API |
+
+> 全スクリプトの完全読解は行っていない（冒頭 docstring と命名・行数で用途推定）。**K/T と判断したものは第3段階の着手時に本文を精読**すること（TODO: 精読済みかを下表に記録）。
+
+## 3. DB テーブル → 移行対象
+| テーブル | 主な内容 | 主な利用箇所 | 移行 | メモ |
+|---|---|---|---|---|
+| races | レース条件（距離/馬場/天候コード等） | F03,F14 | K | 開催カレンダーは別テーブル新設 |
+| odds_snapshots | 単勝オッズ時系列 | F09 | K | 巨大化する→パーティション/保持期間を T1.10 |
+| combo_odds_snapshots | ワイド/三連複オッズ | F08 | K | 同上、行数が最大になる見込み |
+| signals / bets / bet_legs | 通知シグナル、ペーパー bet | F13,F15,F20 | K | signals は 24 列、sent 管理 |
+| results / payouts | 着順、払戻(market,key) | F15 | K | |
+| horses / race_horses / horse_past_runs | 馬マスタ、出走、過去走（JSON 列含む） | F10,F21 | K | JSON 列の扱い要決定 |
+| race_evaluations / ticket_evaluations | 評価（見送り理由、買い目評価） | F09,F20 | K | |
+| model_metrics | brier/logloss/校正 | F11,F18 | K | |
+| jvlink_timestamps | 差分取得位置 | F22 | K | サーバ正本 |
+
+## 4. 横断リスク・未解決（T1.1 で判明）
+1. **タイムゾーン**: `datetime.now()` が naive。新実装は `Clock`(Asia/Tokyo) 必須。旧実装の保存時刻が JST 前提かを実 DB で確認（D-006）。
+2. **開催変更検知は参照元に無い** → 新規要件（T1.3）。
+3. **設定の既定値二重化**: 関数既定値と config.example の既定値が異なる（例 `ev_shrink_factor` 0.7/0.55, `box_size` 4/3, `top_k_partners` 6/4, watch_start 240/120）。ゴールデンテストは「config.example を正」とした設定で行い、関数既定値は使わない（D-009）。
+4. **集計ロジックが UI 内**（F20）、signals/bets/evals の3系統。正の定義を決める。
+5. **pickle**: 旧 `*.pkl` は repo に無く、実体は利用者ローカル。モデル移行手順（pkl→JSON エクスポート、Python 側で一度だけ実行）を T1.9 で定義。
+6. **実 DB の所在**（未解決）と移行ツールの要否。
+7. **規約**: JRA-VAN データのクラウド保管・複数人閲覧・公開可否（T1.2）。
+8. **精読範囲**: `jvlink_provider.py` のパーサ本体、`decision.py`/`bet_strategy.py` の分岐、`fetch_historical_data.py` は未精読（第3段階で精読）。
+
+## 5. 優先順（第2/3段階への入力）
+P0 の順: F26/F04/F05/F06/F07（基礎純関数）→ F16（DB）→ F08/F09（判定）→ F10（推論）→ F13（通知）→ F15（決済）→ F02/F22/F03（取込・開催）→ F14（オーケストレーション）→ F01（エージェント）。P1: F11, F17, F18, F20, F21, F24。

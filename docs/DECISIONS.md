@@ -2,7 +2,7 @@
 
 | ID | 日付 | 判断 | 理由/備考 | 状態 |
 |---|---|---|---|---|
-| D-001 | 2026-10-22 | 作業ブランチ `claude/stage0-bootstrap` に push する。`main` は作成/変更しない | 実装先2リポジトリは**空**（コミット無し・main 無し）。PR には base ブランチが必要なため、初期 `main` をユーザーが用意するまで PR は作れない。「main へ直接 push 禁止」を優先 | 要ユーザー対応 |
+| D-001 | 2026-10-22 | 作業ブランチ `claude/stage0-bootstrap` に push する。`main` は作成/変更しない | 実装先2リポジトリは**空**（コミット無し・main 無し）。PR には base ブランチが必要なため、初期 `main` をユーザーが用意するまで PR は作れない。「main へ直接 push 禁止」を優先 | 解消（main は Stage 0 コミットで初期化済み） |
 | D-002 | 2026-10-22 | 単一リポジトリ単位でセッションを分ける（W と I は別セッション可）。本セッションは 3 リポジトリ全て clone 済みで両方へ push 可能だったため一括で実施 | 複数リポジトリ制約の確認結果は PROGRESS | 確定 |
 | D-003 | 2026-10-22 | 要件の正本は W、インフラ固有は I、契約(CONTRACTS)の正本は W | 二重管理による乖離防止 | 確定 |
 | D-004 | 2026-10-22 | 参照元は **Public**。内容は読み取りのみ。実装先に参照元のコードを大量複製しない（移植は再実装＋ゴールデンテストで検証） | ライセンスは MIT。JRA-VAN データ・モデルは含めない | 確定 |
@@ -10,3 +10,11 @@
 | D-006 | 2026-10-22 | 時刻保存方式（UTC vs JST）は第1段階で確定。表示/開催日判定は Asia/Tokyo | 参照元の扱いを精査してから | 保留 |
 | D-007 | 2026-10-22 | 版数・Doma の Kotlin 処理方式（KSP 等）は第0段階で決めない | 公式情報で確認が必要（T1.4） | 保留 |
 | D-008 | 2026-10-22 | ML モデルは pickle を引き継がない | 任意コード実行リスク。形式は T1.9 | 案 |
+| D-009 | 2026-10-22 | Doma の Kotlin アノテーション処理は **kapt**（公式手順）。KSP は不採用。Doma は `:persistence` に隔離し、kapt 不可時の退避路として Java 記述 DAO + `annotationProcessor` の PoC を T2.4 で残す | Doma README/リポジトリに KSP 対応なし、Doma CI は Kotlin 2.4.21 + kapt。詳細 VERSIONS §2 | 確定 |
+| D-010 | 2026-10-22 | 版数は暫定選定（JDK Temurin 25 LTS / Kotlin 2.4.21 / Gradle 9.7.1 / Spring Boot 4.1.2 / Doma 3.14.1 / Flyway 13.11.1 / Connector/J 9.7.0 / Testcontainers 2.0.5 等）。**最終確定は T2.1 の疎通ビルド** | 一部公式 docs に到達できず（VERSIONS §0）。未確認組合せのフォールバック: Kotlin 2.3.21、JDK 21 | 暫定 |
+| D-011 | 2026-10-22 | Gradle は最新 9.8.2 ではなく **9.7.1** | Kotlin Gradle Plugin 2.4.x の公式互換表が Gradle ≤9.7.0 | 暫定 |
+| D-012 | 2026-10-22 | 依存更新ボットは Dependabot を暫定採用（Renovate は App 導入が必要＝ユーザー作業のため必要時に提案） | 追加設定不要 | 暫定 |
+| D-013 | 2026-10-22 | Boot BOM 管理の依存（JUnit, mysql-connector-j, Testcontainers 等）は原則 BOM 値に従い、上書きは理由を VERSIONS に記録（Kotlin のみ意図的上書き）。`:db-migration` は Boot BOM 非依存で Flyway 最新 | 検証済み組合せ優先 | 確定 |
+| D-014 | 2026-10-22 | Spring Boot 4.1.x の OSS サポートは 2027 年前半で終了見込み → 4.2.0 GA 後に 4.2.x へ移行する作業を第2〜5段階の合間に計画 | 出典間で終了日が不一致、公式 support ページは要確認 | 要確認 |
+| D-015 | 2026-10-22 | MySQL は 9.7 LTS を暫定第一候補、8.4 LTS をフォールバック。Cloud SQL では **9.7 のエディション未指定 = Enterprise Plus 既定**のため Enterprise を明示する前提で T1.6 を評価 | 最新 LTS 優先 + 費用リスク | 暫定（T1.7 で確定） |
+| D-016 | 2026-10-22 | 設定の既定値は関数既定値でなく `config.example.yaml` を正としてゴールデンテストを作る（参照元で食い違いあり: ev_shrink_factor 0.7/0.55 等） | MIGRATION_MATRIX §4 | 確定 |
