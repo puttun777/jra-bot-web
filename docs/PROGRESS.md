@@ -1,9 +1,39 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-10-22（第1段階 / Stage 1-D②: T1.10・T1.12・T1.19・T1.22・CONTRACTS 0.4.0）
+最終更新: 2026-10-22（第2段階 / Stage 2-A: T2.1・T2.5 前半・G-ENV-1・G-VER-1）
 
-## 現在の段階
-**第1段階は設計タスクがすべて完了（本 PR がマージされたら）**。
+## Stage 2-A（claude/stage2-gradle-skeleton, PR #5）
+### 結果
+- **T2.1 完了**、**T2.5 は前半のみ完了**（DB 統合・イメージ・Dependabot・manifest は未着手）。**G-VER-1 合格**（Kotlin 2.4.21 × Gradle 9.7.1 × Boot 4.1.2 × JDK 25）。**G-ENV-1**: クラウドセッションでは JDK 25 を取得できなかった（Adoptium・foojay は接続拒否、GitHub のリリース資産は 403、apt に無い）。GitHub Actions では取得できる。
+- CI（run 39826288899, head d52be01）: build (Temurin 25) 成功 / repo hygiene 成功。
+### 実装したファイル
+`settings.gradle.kts` `build.gradle.kts` `gradle.properties` `gradle/libs.versions.toml` `gradlew*` `gradle/wrapper/*`（sha256 付き）`.gitignore` `.editorconfig` `README.md`、`build-logic/`（`DependencyRules` `ModuleDependencyRulesPlugin` `KotlinModulePlugin` `SpringBootAppPlugin` `KtlintPlugin` とテスト）、7 モジュールの `build.gradle.kts` と最小のソース/テスト、`.github/workflows/ci.yml`、`.github/scripts/check-repo-hygiene.sh`。
+### 確認した版
+VERSIONS §8・§8.1。Gradle 9.7.1（Kotlin 組込 2.4.0）、Kotlin 2.4.21、Boot 4.1.2（`spring-boot-starter-webmvc`）、ktlint-cli 1.8.0、Temurin 25.0.4.1（CI）、OpenJDK 21.0.12（ローカルのスモークのみ）。Actions の SHA: checkout v7.0.1 / setup-java v6.1.0 / setup-gradle v6.4.0。
+### 実行したコマンドとテスト
+| コマンド | 環境 | 結果 |
+|---|---|---|
+| `gradle -PjdkVersion=21 build`（配布物 9.7.1 を直接実行、Maven ミラー用の init script は Git に入れていない） | ローカル JDK 21 | 成功（スモーク。JDK 25 の結果ではない） |
+| 意図的に `:bot → :dashboard` を追加して `checkModuleDependencies` | ローカル | 失敗して違反を報告（確認後に元に戻した） |
+| `.github/scripts/check-repo-hygiene.sh`（`*.pkl` と秘密鍵ヘッダを仕込んで） | ローカル | 検知して失敗、除去後は成功 |
+| `./gradlew build` / `checkModuleDependencies ktlintCheck` | CI（JDK 25） | 成功 |
+| Docker / Testcontainers | — | **未実施**（DB テストはまだ無い） |
+### 互換性・環境の未確認事項
+- 公式 Gradle 配布元（downloads.gradle.org）はこのセッションから遮断。Wrapper のチェックサムは GitHub 上のリリースから算出し、CI が公式 URL で検証して一致した。
+- `repo.maven.apache.org` の 429（レート制限）。CI では発生しなかった。
+- 非 UTF-8 ロケールではテストレポート生成が失敗する（`LC_ALL=C.UTF-8` で回避。README に記載）。
+- Boot 4.2.0 は未 GA のまま。MySQL 8.4/9.7（G-DB-0）、Doma（G-VER-2）、時刻/JSON/UPSERT（G-VER-3）、Thymeleaf+Security+htmx（G-VER-4）、Testcontainers（G-VER-5）は後続タスクで検証（未実施）。
+- 最小アプリは `@SpringBootTest` でコンテキスト起動のみ確認。health/ready・`--task` は T2.8。
+### 次のタスク
+**T2.2**（`:domain` の値オブジェクトとポート）。ブランチは `claude/stage2-domain-vo`。PR #5 のマージ後に main から作る。
+### Git
+ブランチ `claude/stage2-gradle-skeleton`、PR #5（main 向け、マージはユーザー）。
+
+---
+# 以前の記録（Stage 1-D②）
+
+## 現在の段階（Stage 1-D② 時点の記録。現在は第2段階に入っている）
+**第1段階は設計タスクが完了**。
 - 完了: T1.1〜T1.15、T1.18、T1.19（計画）、T1.22。
 - 未完了（ユーザー・実環境。**完了扱いにしない**）: T1.16（JRA-VAN への問い合わせ）、T1.17（公式仕様書）、T1.20（実 SQLite など）、T1.21（判断）。
 - 次は**第2段階（基盤）**。実装順と完了条件は `STAGE2_HANDOFF.md`。

@@ -109,3 +109,27 @@
 6. ロールバック: 移行 PR を revert すれば元に戻る（スキーマの変更を含めない）。
 ### 7.4 検知
 Dependabot（D-012）が 4.2.x の PR を出したら、本計画に従って処理する。RC/M の PR は無視する（`ignore` 設定で除外: T2.5）。
+
+## 8. T2.1 での実測結果（2026-10-22, Stage 2-A）
+実際の依存解決とビルドで確認した事実。CI の結果は PROGRESS に記録する。
+| 項目 | 結果 | 備考 |
+|---|---|---|
+| Gradle 9.7.1 | ビルド成功（配布物を `github.com/gradle/gradle-distributions` から取得し、`gradle wrapper` で Wrapper を生成） | `distributionSha256Sum=acd53f1edaf02f1a8ff99879f8a34b302661a057d9b063ae9e35b552f804d20a`。**この値は公式配布元（downloads.gradle.org）が遮断されていたため GitHub 上の同一リリースから計算した**。公式 URL に対する Wrapper の検証は GitHub Actions が実行する（不一致なら CI が失敗する） |
+| Kotlin 2.4.21 × Gradle 9.7.1 × Spring Boot 4.1.2 | **JDK 21 でビルド・テスト成功**（G-VER-1 のうち JDK 21 部分） | Boot 4.1.2 の BOM（Kotlin 2.3.21）を Kotlin 2.4.21 で上書きして問題なし。`build-logic` も Kotlin 2.4.21 でコンパイル（Gradle 同梱の Kotlin は 2.4.0）。警告をエラーにする設定（`allWarningsAsErrors`）でも通った |
+| JDK 25 | **このセッションでは未確認**（JDK 25 が無く、取得経路が遮断: `api.adoptium.net`・`download.foojay.io` は接続拒否、GitHub のリリース資産は 403、apt に無い）。JDK 21 の成功を 25 の成功とは扱わない | G-ENV-1: クラウドセッションでの取得は**不可（2026-10-22 時点）**。JDK 25 の合否は GitHub Actions（`actions/setup-java` の Temurin 25）で確認する |
+| `spring-boot-starter-webmvc` | Boot 4.1.2 に存在し解決できた（`dashboard`/`ingest`） | Boot 4 の starter 名（旧 `-web` ではない） |
+| `ktlint-cli` 1.8.0（`all` jar を JavaExec） | Kotlin 2.4.21 のソースを検査できた | Gradle プラグインは互換性が未確認のため使わない |
+| Maven Central の 429 | `repo.maven.apache.org` が IP 単位でレート制限（このセッション）。ローカルでは GCS ミラー（`maven-central.storage-download.googleapis.com`）を init script で先頭に置き、不足分は待って再試行 | ミラーは新しい版（Boot 4.1.2 の一部）が未同期。リポジトリには**ミラー設定を入れない**（CI は Maven Central） |
+| 追加した依存 | `spring-boot-starter` / `-webmvc`（アプリ）、`spring-boot-starter-test`（アプリのテスト）、`kotlin-test-junit5`、`junit-jupiter`、`junit-platform-launcher`（版は Boot BOM）、ktlint-cli、`org.jetbrains.kotlin.plugin.spring` | 版の上書きは Kotlin のみ（既存の D-013） |
+| GitHub Actions のピン留め（コミット SHA） | `actions/checkout` v7.0.1 = `3d3c42e5…`、`actions/setup-java` v6.1.0 = `b843ebf9…`、`gradle/actions` v6.4.0 = `3f5f9ada…`（注釈付きタグの指す commit） | `git ls-remote` で取得。`upload-artifact` 等は未使用 |
+
+### 8.1 CI（GitHub Actions）での確認（PR #5, run 39826288899, 2026-10-22）
+| 項目 | 結果 |
+|---|---|
+| JDK 25 | **成功**。Temurin 25.0.4.1+1-LTS で `./gradlew build`（Launcher JVM 25.0.4.1）。`JdkRuntimeTest`（`EXPECTED_JDK=25`）が合格し、テストの JVM が 25 であることを確認（G-ENV-1: GitHub Actions では取得可能） |
+| Gradle Wrapper | 公式 URL（services.gradle.org）から 9.7.1 を取得し、`distributionSha256Sum` の検証を通過（§8 の「GitHub 上のリリースから計算した値」が公式配布物と一致したことになる） |
+| Kotlin 2.4.21 × Gradle 9.7.1 × Boot 4.1.2 × JDK 25 | ビルド・テスト成功（**G-VER-1 合格**）。`allWarningsAsErrors` 有効 |
+| 単体テスト | 合格 11 件・失敗 0（アプリ 3×2、domain 2、persistence/cloud-gcp/db-migration 各 1。build-logic の 13 件は別ビルドで実行され、ログには個別に出ないが `build` は成功） |
+| `checkModuleDependencies` / `ktlintCheck` | 成功（7 モジュール） |
+| repo-hygiene | 成功 |
+| Docker / Testcontainers | **未実施**（対象のテストがまだ無い） |

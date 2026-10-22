@@ -39,11 +39,12 @@
 - [x] T1.22 E 項目ごとの新仕様整理（根拠: MIGRATION_MATRIX §8、D-055。C 分類の採否は T1.21 でユーザー判断）
 
 ## 第2段階 ― 基盤（W）
-- [ ] T2.1 Gradle KTS マルチプロジェクト雛形、Version Catalog、依存検査（bot⇄dashboard禁止）← T1.4,T1.10
+- [x] T2.1 Gradle KTS マルチプロジェクト雛形、Version Catalog、依存検査（bot⇄dashboard禁止）← T1.4,T1.10 — 根拠: PR #5 の CI（run 39826288899）が Temurin 25.0.4.1 で成功（build/ktlint/checkModuleDependencies/単体 11 件/build-logic の依存規則テスト）。違反検知は単体 9 + TestKit 4 で確認。詳細は PROGRESS
 - [ ] T2.2 :domain 値オブジェクト（Odds, Probability, Money 等）・Repository interface
 - [ ] T2.3 :db-migration Flyway V1/V2/`R__grants.sql`（範囲は ARCHITECTURE §5.1）+ CLI `--mode`（CONTRACTS §4.2）。G-DB-0 ← T1.10
 - [ ] T2.4 :persistence Doma DAO/Entity/変換（Testcontainers 統合テスト）← T2.2,T2.3
 - [ ] T2.5 CI（build/lint/unit/DB統合/イメージ）、Renovate/Dependabot ← T2.1
+  - 前半 **完了**（`ci.yml`: build/ktlint/依存方向/単体/JDK25/repo-hygiene、PR #5 で緑）。DB 統合（T2.3 以降）・イメージ・Dependabot・manifest は**未着手**（T2.5 は未完了のまま）
 - [ ] T2.6 ゴールデンテスト基盤（旧実装出力フィクスチャ生成スクリプト、実データ非含有）
 - [ ] T2.7 :cloud-gcp `ModeProvider`（GCS, CONTRACTS §5.2）+ ローカル実装 ← T2.2
 - [ ] T2.8 各実行アプリの最小起動（`/internal/health|ready`、`--task`、終了コード、CONTRACTS §4.3・§9）← T2.4,T2.7
@@ -69,6 +70,7 @@
 - [ ] T4.5 セキュリティテスト（認可マトリクス）
 
 ## 第5段階 ― インフラ（I、一部 W）
+- [ ] **T5.0（必須の前提）infra の文書を web CONTRACTS 0.4.0 に追従させる（PROGRESS の I-H1〜I-H7）。解消するまで第5段階の実装に着手しない。web が古い infra 文書に合わせて 0.4.0 を戻すことはしない**
 - [ ] T5.1 Terraform 基盤（state、WIF、ネットワーク、Secret、Registry）← T1.7
 - [ ] T5.2 Web/Job/DB/Scheduler リソース、IAP、スケールゼロ
 - [ ] T5.3 deploy workflow（release-manifest 入力、migrate→更新）
