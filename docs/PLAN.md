@@ -11,8 +11,8 @@
 
 ## 第1段階 ― 詳細調査・費用比較・技術選定・設計
 - [x] T1.1 参照元の機能棚卸し → `MIGRATION_MATRIX.md`（2026-10-22 完了。精読が必要な箇所は同ファイル §4「精読範囲」に TODO 化）(W)
-- [ ] T1.2 JV-Link 調査：Windows/32bit/COM、データ種別、取得頻度、エージェント方式、**JRA-VAN 利用規約**（2人利用 vs 一般公開、クラウド保管・再配布）(W) ← T1.1
-- [ ] T1.3 開催日/発走予定の取得元と、代替/中止/延期/時刻変更の検出方式設計 (W) ← T1.2
+- [x] T1.2 JV-Link 調査（2026-10-22 設計完了: JVLINK_DESIGN.md / DATA_SOURCE_COMPLIANCE.md。公式一次資料は未確認＝T1.17）：Windows/32bit/COM、データ種別、取得頻度、エージェント方式、**JRA-VAN 利用規約**（2人利用 vs 一般公開、クラウド保管・再配布）(W) ← T1.1
+- [x] T1.3 開催日/発走予定（2026-10-22 設計完了: RACE_CALENDAR_DESIGN.md）の取得元と、代替/中止/延期/時刻変更の検出方式設計 (W) ← T1.2
 - [x] T1.4 バージョン調査 → `VERSIONS.md`（2026-10-22 暫定選定。T2.1 で最終確定）：JDK, Kotlin, Spring Boot, Gradle, Doma+doma-kotlin+processor(KSP可否), Flyway, MySQL+JDBC, Terraform+provider, GitHub Actions, フロント (W) 
 - [ ] T1.5 フロント選定（Streamlit 7画面の調査 → 候補比較）(W) ← T1.1
 - [ ] T1.6 クラウド費用比較 → `CLOUD_COSTS.md`（GCP/Azure/AWS × 条件A/B/C、無料枠とクレジット分離、停止中残額、DB停止/自動再起動仕様、確認日・通貨・為替）(I) 
@@ -24,7 +24,14 @@
 
 ## 第1段階 追加タスク（T1.4 で判明）
 - [ ] T1.12 Spring Boot 4.2.0 GA 後の 4.2.x 移行計画（D-014）
-- [ ] T1.13 MIGRATION_MATRIX の未精読箇所の精読（jvlink_provider パーサ、decision/bet_strategy の分岐、fetch_historical_data）— T1.3/T3.x の前に必要な分から
+- [~] T1.13 （JV-Link/開催日関連は精読済み 2026-10-22。残り: decision.py/bet_strategy.py の分岐、fetch_historical_data.py）MIGRATION_MATRIX の未精読箇所の精読（jvlink_provider パーサ、decision/bet_strategy の分岐、fetch_historical_data）— T1.3/T3.x の前に必要な分から
+
+## 第1段階 追加タスク（T1.2/T1.3 で判明, 2026-10-22）
+- [x] T1.15 STOPPED 時の Windows エージェント契約（CONTRACTS §7）
+- [ ] T1.16 **ユーザー**: JRA-VAN への問い合わせ Q1〜Q8（DATA_SOURCE_COMPLIANCE §6）と 2 人目の契約有無の確認
+- [ ] T1.17 JV-Link/JV-Data 公式仕様書（SDK 同梱 PDF）で確認: JVOpen option 表、JVGets、JVWatchEvent、YS/TC/AV/CC/WE/JC/RA 項目位置、HR 払戻桁、RA 発走時刻の有無、0B14/0B16、64bit 版の一般提供・COM 登録（**仕様書は Git に入れず、結論のみ docs に記録**）
+- [ ] T1.18 infra 側 docs への同期（CONTRACTS §7.5 のビーコン/ingest 義務、PLAN）
+- [ ] T1.19 エージェント PoC 計画（第3段階冒頭で実機検証: 64bit JV-Link+pywin32、バイト取得、ハング検知）
 
 ## 第2段階 ― 基盤（W）
 - [ ] T2.1 Gradle KTS マルチプロジェクト雛形、Version Catalog、依存検査（bot⇄dashboard禁止）← T1.4,T1.10
@@ -37,9 +44,9 @@
 ## 第3段階 ― bot（W）
 - [ ] T3.1 EV/Kelly/確率/判定/急落フィルタを :domain へ移植し旧実装と比較 ← T2.2,T2.6
 - [ ] T3.2 ワイド/三連複 確率・推定オッズ・bet_strategy 移植
-- [ ] T3.3 開催日制御（カレンダー、補正、軽量チェック Job）← T1.3,T2.4
+- [ ] T3.3 開催日制御（RACE_CALENDAR_DESIGN の実装: スキーマ、calendar-check、bot-run リース、手動補正、C01〜C28 のテスト）← T1.3,T2.4
 - [ ] T3.4 取込 API とデータ取得（冪等 upsert、バックフィル、再開、多重起動防止）← T2.4
-- [ ] T3.5 Windows 取得エージェント（JV-Link COM 分離、STOPPED 抑止）← T1.2,T3.4
+- [ ] T3.5 Windows 取得エージェント（JVLINK_DESIGN の実装: 薄い Python、キュー、ビーコン、署名更新）+ `:ingest` サービス ← T1.2,T1.17,T3.4
 - [ ] T3.6 ML 推論/学習プロセス（分離）← T1.9
 - [ ] T3.7 Discord 通知（分割・Retry-After・リトライ）
 - [ ] T3.8 bot-run オーケストレーション（監視ウィンドウ、結果反映後終了）← T3.1–T3.7

@@ -75,7 +75,21 @@
 5. **pickle**: 旧 `*.pkl` は repo に無く、実体は利用者ローカル。モデル移行手順（pkl→JSON エクスポート、Python 側で一度だけ実行）を T1.9 で定義。
 6. **実 DB の所在**（未解決）と移行ツールの要否。
 7. **規約**: JRA-VAN データのクラウド保管・複数人閲覧・公開可否（T1.2）。
-8. **精読範囲**: `jvlink_provider.py` のパーサ本体、`decision.py`/`bet_strategy.py` の分岐、`fetch_historical_data.py` は未精読（第3段階で精読）。
+8. **精読範囲**: `jvlink_provider.py` は T1.13(2026-10-22) で取得・パーサ・エラー処理を精読済み（§6）。`decision.py`/`bet_strategy.py` の分岐、`fetch_historical_data.py` は未精読（第3段階で精読）。
 
 ## 5. 優先順（第2/3段階への入力）
 P0 の順: F26/F04/F05/F06/F07（基礎純関数）→ F16（DB）→ F08/F09（判定）→ F10（推論）→ F13（通知）→ F15（決済）→ F02/F22/F03（取込・開催）→ F14（オーケストレーション）→ F01（エージェント）。P1: F11, F17, F18, F20, F21, F24。
+
+
+## 6. T1.13 追加精読の結果（2026-10-22, JV-Link・開催日関連）
+詳細は `JVLINK_DESIGN.md` §1、`RACE_CALENDAR_DESIGN.md` §0。
+| 対象 | 追記 |
+|---|---|
+| F01 JV-Link 取得 | 使用 API は Init/Open/RTOpen/Read/Skip/Close/SetSavePath/SetPort のみ。`JVGets`/`JVStatus`/`JVWatchEvent` 等は未使用。dataspec は RACE, RCVN/RCOV, 0B30/31/33/35, 0B12, 0B15。**YSCH と 0B14 は未使用**。**分類は W のまま**、実装はエージェント(Python 暫定, D-018)。64bit 版 JV-Link の登場で「32bit 必須」前提が変わる |
+| F02 パーサ | RA/SE/HR/O1/O3/O5/UM の位置一覧を JVLINK_DESIGN §1.4 に整理。**HR 払戻の桁解釈に 10 倍ずれの疑義**、文字列経由の cp932 再エンコードによる欠落リスク、レース ID が回・日目を欠く問題。**分類 K（server）のまま**、再現せず仕様書で正を確認(T1.17) |
+| F03 開催日/発走予定 | 専用ロジックなし(確認済)。新設計=YSCH+RA+0B14+手動補正、`race_day/race_schedule/…` スキーマ、calendar-check/bot-run 分離。**分類 K（新規）のまま** |
+| F14 常駐ループ | `post_time` が `00:00`/8時前/18時超なら監視窓の開始に置換する暗黙処理、`result_fetched` などメモリ状態、`datetime.now()` を確認。**新設計では UNKNOWN 明示・DB 状態・Clock 注入** |
+| F21/F22 補てん取込・タイムスタンプ | RCOV/RCVN は「非蓄積系ソフト向け補てん情報」で、蓄積用途では DIFN 等が本来。lastfiletimestamp は JVOpen 成功時に保存(読込完走と独立)→ **ACK 後のみ前進・オーバーラップ読み直し**へ |
+| 新規 F27 取込 API(ingest)/エージェント | 認証・冪等・キュー・ビーコン。契約 CONTRACTS §3・§7 |
+| 新規 F28 開催カレンダー/bot 起動制御 | RACE_CALENDAR_DESIGN |
+| 未精読(継続) | `decision.py`/`bet_strategy.py` の分岐、`fetch_historical_data.py`(1.7k 行)。T1.13 の残り（T3.1 の前） |
