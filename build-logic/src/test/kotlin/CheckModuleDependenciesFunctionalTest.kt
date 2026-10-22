@@ -62,4 +62,19 @@ class CheckModuleDependenciesFunctionalTest {
         val result = runner(dir).buildAndFail()
         assertTrue("java.sql." in result.output, result.output)
     }
+
+    @Test
+    fun `domain のソースが import 無しで HTTP クライアントを使うと失敗する`() {
+        val dir = fixture()
+        File(dir, "domain/src/main/kotlin/Bad.kt").writeText("class Bad {\n    val c = java.net.http.HttpClient.newHttpClient()\n}\n")
+        val result = runner(dir).buildAndFail()
+        assertTrue("Bad.kt:2:" in result.output && "java.net.http." in result.output, result.output)
+    }
+
+    @Test
+    fun `自分自身への依存 test-fixtures など は違反にしない`() {
+        val dir = fixture(mapOf("domain" to "    implementation(project(\":domain\"))"))
+        val result = runner(dir).build()
+        assertContains(result.output, "checkModuleDependencies: OK")
+    }
 }
