@@ -122,3 +122,14 @@ Dependabot（D-012）が 4.2.x の PR を出したら、本計画に従って処
 | Maven Central の 429 | `repo.maven.apache.org` が IP 単位でレート制限（このセッション）。ローカルでは GCS ミラー（`maven-central.storage-download.googleapis.com`）を init script で先頭に置き、不足分は待って再試行 | ミラーは新しい版（Boot 4.1.2 の一部）が未同期。リポジトリには**ミラー設定を入れない**（CI は Maven Central） |
 | 追加した依存 | `spring-boot-starter` / `-webmvc`（アプリ）、`spring-boot-starter-test`（アプリのテスト）、`kotlin-test-junit5`、`junit-jupiter`、`junit-platform-launcher`（版は Boot BOM）、ktlint-cli、`org.jetbrains.kotlin.plugin.spring` | 版の上書きは Kotlin のみ（既存の D-013） |
 | GitHub Actions のピン留め（コミット SHA） | `actions/checkout` v7.0.1 = `3d3c42e5…`、`actions/setup-java` v6.1.0 = `b843ebf9…`、`gradle/actions` v6.4.0 = `3f5f9ada…`（注釈付きタグの指す commit） | `git ls-remote` で取得。`upload-artifact` 等は未使用 |
+
+### 8.1 CI（GitHub Actions）での確認（PR #5, run 39826288899, 2026-10-22）
+| 項目 | 結果 |
+|---|---|
+| JDK 25 | **成功**。Temurin 25.0.4.1+1-LTS で `./gradlew build`（Launcher JVM 25.0.4.1）。`JdkRuntimeTest`（`EXPECTED_JDK=25`）が合格し、テストの JVM が 25 であることを確認（G-ENV-1: GitHub Actions では取得可能） |
+| Gradle Wrapper | 公式 URL（services.gradle.org）から 9.7.1 を取得し、`distributionSha256Sum` の検証を通過（§8 の「GitHub 上のリリースから計算した値」が公式配布物と一致したことになる） |
+| Kotlin 2.4.21 × Gradle 9.7.1 × Boot 4.1.2 × JDK 25 | ビルド・テスト成功（**G-VER-1 合格**）。`allWarningsAsErrors` 有効 |
+| 単体テスト | 合格 11 件・失敗 0（アプリ 3×2、domain 2、persistence/cloud-gcp/db-migration 各 1。build-logic の 13 件は別ビルドで実行され、ログには個別に出ないが `build` は成功） |
+| `checkModuleDependencies` / `ktlintCheck` | 成功（7 モジュール） |
+| repo-hygiene | 成功 |
+| Docker / Testcontainers | **未実施**（対象のテストがまだ無い） |
