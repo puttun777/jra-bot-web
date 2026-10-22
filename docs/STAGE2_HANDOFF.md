@@ -134,3 +134,31 @@ db-migration（単独）
 | G-AGENT-1〜6 | Windows エージェントの PoC | 3 の冒頭（ユーザー） | JVLINK_DESIGN §11 |
 | G-ML-1〜3 | H1 の実証、実データのリプレイ、v2 のバックテスト | 3（ユーザーの PC、クラウドには入れない） | ML_DESIGN §10 |
 | G-ENV-1 | クラウドセッションで JDK 25 を取得できるか（toolchain の自動取得） | 2 の冒頭 | §4 |
+
+## 14. `:domain` のポート一覧（T2.2 で実装済み。パッケージ `jp.jrabot.domain.*`）
+Reader/Writer は分かれており、`XxxRepository` は両方を継承する。テナントを扱う操作の第一引数は `TenantId` か `TenantScoped`（`TenantBoundaryContractTest` が検査）。T2.4 以降の実装は同じ規則の越境テスト（テナント 2 つ）で検証する。
+| ポート | 責務 | 入力 → 出力 | エラー | テナント | 冪等性 | 実装先 |
+|---|---|---|---|---|---|---|
+| `Clock` / `SystemClock` | 現在時刻（UTC の `Instant`、マイクロ秒）。`zone` の既定は Asia/Tokyo、`today()` は JST の暦日 | → `Instant` | なし | なし | 副作用なし | 本体 `SystemClock`。テスト用の固定時計は各テストに置く（2 モジュール目で必要になったら `testFixtures` へ） |
+| `ModeProvider` | 運用モード（CONTRACTS §5.2）。キャッシュ・タイムアウト・`seq` 検査は実装 | → `OpsMode` | **投げない**。失敗は `UNKNOWN` | なし（全体で 1 つ） | 読取りのみ | `:cloud-gcp`（GCS）+ ローカル（ファイル）= T2.7 |
+| `JobLauncher` | Job の実行を 1 つ作る | `JobLaunchRequest(tenantId, job, params)` → `LaunchResult`（Launched / Failed(transient)） | 失敗は結果で返す | `--tenant-id` を必ず渡す | **冪等でない**。二重実行はリース（D-026） | `:cloud-gcp`（Cloud Run Jobs）= T2.7 以降 |
+| `ModelReader`/`ModelWriter`（`ModelStore`） | モデル JSON + `.sig`（不変） | `(TenantId, ModelId)` → `ModelArtifact?` / 書込み → `CREATED`/`UNCHANGED`/`CONFLICT` | I/O は `StorageException`（Job は exit 75） | パスは `TenantId`+`ModelId` だけから組み立てる | 同一内容なら `UNCHANGED` | `:cloud-gcp`（GCS）、メモリ/ファイル実装 = T3.6 周辺 |
+| `DatasetReader`/`DatasetWriter`（`DatasetStore`） | gzip CSV（不変）。内容は解釈しない | `(TenantId, DatasetId, InputStream)` → `Created(descriptor{sha256,size})`/`AlreadyExists` | `StorageException` | 同上 | 既存なら上書きしない | 同上 |
+| `Notifier` | 通知 1 件の配送（分割・429・Webhook は実装） | `Notification` → `DELIVERED`/`NOT_SENT`/`UNKNOWN` | 結果で返す。`UNKNOWN` は自動で再送しない（CONTRACTS §9.2） | SIGNAL はテナント必須 | 冪等でない。二重通知は `SignalWriter.claim` が防ぐ | `:bot`（Discord）= T3.x |
+| `HeartbeatMirror` | エージェント最終接続を GCS に写す（時刻・ID・版だけ） | `(TenantId, AgentHeartbeat)` → `WRITTEN`/`SKIPPED`/`FAILED` | **投げない** | パスは `TenantId` だけから | 条件（5 分/版変更）を満たさなければ `SKIPPED` | `:cloud-gcp` = T3.4/T3.5 |
+| `RaceReader`/`RaceWriter` | レース | `find`/`listByDate`、`upsert` → `UpsertOutcome` | — | 必須 | 自然キーの upsert | `:persistence` = T2.4 |
+| `RaceScheduleReader`/`Writer` | 開催予定 | `find`/`listByDate`、`insertIfAbsent`、`update`（楽観ロック `UpdateResult`） | — | 必須 | `insertIfAbsent` は冪等 | `:persistence` = T2.4/T3.3（`race_schedule_event` の追記は T3.3 で拡張） |
+| `OddsSnapshotReader`/`Writer` | オッズ（レース単位。全件取得なし） | `latest`/`history`、`upsert` | — | 必須 | 自然キーの upsert | `:persistence` = T2.4 |
+| `SignalReader`/`Writer` | Signal と通知の claim | `insertIfAbsent`、`claim`→`markSent`/`markSendUnknown` | — | 必須 | claim は原子的。状態は逆戻りしない | `:persistence` = T2.4/T3.x |
+| `BotRunReader`/`Writer` | 実行とリース | `findActive`、`tryStart`（Started/AlreadyActive）、`update`（楽観ロック） | — | 必須 | 二重起動は DB の UNIQUE が最終防壁 | `:persistence` = T2.4/T3.3 |
+| `AppUserRepository`（読取りのみ） | 利用者 | `findByEmail`（唯一テナントを取らない 1 件の完全一致）、`listByTenant` | — | 例外は `findByEmail` のみ | 読取りのみ | `:persistence` = T2.4 |
+
+### 14.1 T2.3 / T2.4 への引き継ぎ（DDL と domain の整合）
+- `bot_run.state` の ENUM に **`INTERRUPTED` を追加**する（CONTRACTS §9.2。RACE_CALENDAR_DESIGN の DDL 案には無い）。
+- `signals` に通知の状態（`UNSENT`/`CLAIMED`/`SENT`/`SEND_UNKNOWN`）を持たせる（`sent` の TINYINT を置き換える）。自然キーは `(tenant_id, race_id, market, umaban, observed_at)`（RACE_CALENDAR §6.3 の `cycle_id`・`combo` との関係は T2.3/T3.3 で確定）。`id` は `AUTO_INCREMENT`。
+- `bot_run`・`race_schedule` に楽観ロック用の `version INT NOT NULL DEFAULT 0` を持たせる（domain の `version`）。
+- `app_user` は `(tenant_id, email, role VIEWER|ADMIN, enabled)`。`email` は小文字に正規化して保存し、`findByEmail` が一意に引けること（D-062）。
+- `race_id CHAR(12) ascii_bin`、`venue_code` は 01〜10、`race_no` は 1〜99、`umaban` は 1〜99（D-060）。`odds` は DOUBLE で 0 より大きい値のみ。
+- 時刻は UTC `DATETIME(6)` ⇔ `Instant`（マイクロ秒に切り捨て済み）。変換は `:persistence` の中だけ。
+- 実装は T2.4 で `XxxRepository` を実装し、**ポートの契約（冪等性・楽観ロック・テナント必須）を越境テストで検証**する。
+
