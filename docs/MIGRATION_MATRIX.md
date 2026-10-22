@@ -35,7 +35,7 @@
 | F25 | ログ | `utils/logging.py` | ファイル/コンソール | なし | **D** | 構造化ログ(JSON) to stdout → Cloud Logging | — | P2 | — |
 | F26 | データ型/ドメインモデル | `data/models.py`, `provider_base.py` | Race, OddsData(単勝+wide/三連複), Signal, RaceResult。`OddsProvider` 抽象 + Dummy provider | なし | **K** | domain の値オブジェクトへ。`DummyProvider` はテスト/ローカル用 fake として保持 | — | P0 | 単体 |
 
-## 2. scripts/ 配下の棚卸し（約74本 + 起動スクリプト）
+## 2. scripts/ 配下の棚卸し（.py 70本 + 起動 .bat/.ps1 4本）
 判断欄: **K**=機能を新実装に取り込む / **T**=テスト・ゴールデン資産として参照 / **D**=診断→運用ツール（admin 機能/Runbook）に置換 / **X**=移行しない（理由記載。削除はしない＝参照元は不変）
 
 | 区分 | スクリプト | 用途 | 判断 | 理由 |

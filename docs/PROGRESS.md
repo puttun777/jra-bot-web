@@ -7,7 +7,7 @@
 
 ## 完了済み
 - 第0段階一式（main に取り込み済み, 2c59374）
-- **T1.1** `docs/MIGRATION_MATRIX.md`: 機能 26 項目（F01–F26）の分類・移行方法・リスク・優先度・テスト方法、scripts/ 約 74 本の棚卸し、DB 15 テーブルの移行対象、横断リスク
+- **T1.1** `docs/MIGRATION_MATRIX.md`: 機能 26 項目（F01–F26）の分類・移行方法・リスク・優先度・テスト方法、scripts/ .py 70 本の棚卸し、DB 15 テーブルの移行対象、横断リスク
 - **T1.4** `docs/VERSIONS.md`: 版数の暫定選定、互換性表、Doma×Kotlin(kapt/KSP) 調査、フロント候補
 - `DECISIONS.md` に D-009〜D-016、`PLAN.md` 更新
 
