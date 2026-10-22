@@ -14,17 +14,17 @@
 - [x] T1.2 JV-Link 調査（2026-10-22 設計完了: JVLINK_DESIGN.md / DATA_SOURCE_COMPLIANCE.md。公式一次資料は未確認＝T1.17）：Windows/32bit/COM、データ種別、取得頻度、エージェント方式、**JRA-VAN 利用規約**（2人利用 vs 一般公開、クラウド保管・再配布）(W) ← T1.1
 - [x] T1.3 開催日/発走予定（2026-10-22 設計完了: RACE_CALENDAR_DESIGN.md）の取得元と、代替/中止/延期/時刻変更の検出方式設計 (W) ← T1.2
 - [x] T1.4 バージョン調査 → `VERSIONS.md`（2026-10-22 暫定選定。T2.1 で最終確定）：JDK, Kotlin, Spring Boot, Gradle, Doma+doma-kotlin+processor(KSP可否), Flyway, MySQL+JDBC, Terraform+provider, GitHub Actions, フロント (W) 
-- [ ] T1.5 フロント選定（Streamlit 7画面の調査 → 候補比較）(W) ← T1.1
+- [x] T1.5 フロント選定（2026-10-22 FRONTEND_DESIGN.md。採用案 A）（Streamlit 7画面の調査 → 候補比較）(W) ← T1.1
 - [x] T1.6 （infra PR #1 マージ済み: jra-bot-infra/docs/CLOUD_COSTS.md）クラウド費用比較 → `CLOUD_COSTS.md`（GCP/Azure/AWS × 条件A/B/C、無料枠とクレジット分離、停止中残額、DB停止/自動再起動仕様、確認日・通貨・為替）(I) 
 - [ ] T1.7 クラウド・DB 決定（DECISIONS）← T1.6, T1.4
 - [ ] T1.8 運用モード正本・STOPPED 実現方式（DB 停止/自動再起動/Terraform 非干渉）設計 (I) ← T1.7
-- [ ] T1.9 ML 方針（Kotlin再実装 vs Python維持、学習/推論分離、非pickle形式）(W) ← T1.1
+- [x] T1.9 ML 方針（2026-10-22 ML_DESIGN.md。採用案 A）（Kotlin再実装 vs Python維持、学習/推論分離、非pickle形式）(W) ← T1.1
 - [ ] T1.10 アーキテクチャ確定・CONTRACTS 0.1.0 確定 (W,I) ← T1.3,T1.5,T1.7,T1.8,T1.9
-- [ ] T1.11 既存 SQLite からのデータ移行方針（実DBの所在をユーザーに確認）(W)
+- [x] T1.11 既存 SQLite からのデータ移行方針（2026-10-22 DATA_MIGRATION_DESIGN.md。実ファイル未取得のため Runbook 化）（実DBの所在をユーザーに確認）(W)
 
 ## 第1段階 追加タスク（T1.4 で判明）
 - [ ] T1.12 Spring Boot 4.2.0 GA 後の 4.2.x 移行計画（D-014）
-- [~] T1.13 （JV-Link/開催日関連は精読済み 2026-10-22。残り: decision.py/bet_strategy.py の分岐、fetch_historical_data.py）MIGRATION_MATRIX の未精読箇所の精読（jvlink_provider パーサ、decision/bet_strategy の分岐、fetch_historical_data）— T1.3/T3.x の前に必要な分から
+- [x] T1.13 （JV-Link/開催日 + decision.py/bet_strategy.py/fetch_historical_data.py 精読済み 2026-10-22。MIGRATION_MATRIX §6・§7。残る未読は軽微: fetch_historical_data の全行、bet_strategy 三連複流しの中間部）MIGRATION_MATRIX の未精読箇所の精読（jvlink_provider パーサ、decision/bet_strategy の分岐、fetch_historical_data）— T1.3/T3.x の前に必要な分から
 
 ## 第1段階 追加タスク（T1.2/T1.3 で判明, 2026-10-22）
 - [x] T1.15 STOPPED 時の Windows エージェント契約（CONTRACTS §7）
@@ -33,10 +33,15 @@
 - [ ] T1.18 infra 側 docs への同期（CONTRACTS §7.5 のビーコン/ingest 義務、PLAN）
 - [ ] T1.19 エージェント PoC 計画（第3段階冒頭で実機検証: 64bit JV-Link+pywin32、バイト取得、ハング検知）
 
+## 第1段階 追加タスク（Stage 1-C 後半で判明, 2026-10-22）
+- [ ] T1.20 **ユーザー（実環境）**: ① 実 SQLite の所在・取得、② `SELECT prob_source, COUNT(*) FROM signals GROUP BY 1` と `SELECT model_type_used, COUNT(*) FROM race_evaluations GROUP BY 1`（H1: ML が実際に使われていたか）、③ 実 `config.yaml` の値（D-016: 関数既定との食い違い項目の運用実態）、④ `*.pkl` の所在
+- [ ] T1.21 ユーザー判断: ML の確率パイプライン `legacy` / `v2`（D-037）、E1〜E15 のうち挙動を変更する項目（D-044）、フロント案 A の承認（D-032）
+- [ ] T1.22 MIGRATION_MATRIX §7.3 の E 項目ごとの新仕様決定（T1.10 で一括）
+
 ## 第2段階 ― 基盤（W）
 - [ ] T2.1 Gradle KTS マルチプロジェクト雛形、Version Catalog、依存検査（bot⇄dashboard禁止）← T1.4,T1.10
 - [ ] T2.2 :domain 値オブジェクト（Odds, Probability, Money 等）・Repository interface
-- [ ] T2.3 :db-migration Flyway V1（MySQL）← T1.10
+- [ ] T2.3 :db-migration Flyway V1（MySQL。DATA_MIGRATION_DESIGN §2・§3 の DDL。V2=カレンダー/ingest/ml_model/app_user）← T1.10
 - [ ] T2.4 :persistence Doma DAO/Entity/変換（Testcontainers 統合テスト）← T2.2,T2.3
 - [ ] T2.5 CI（build/lint/unit/DB統合/イメージ）、Renovate/Dependabot ← T2.1
 - [ ] T2.6 ゴールデンテスト基盤（旧実装出力フィクスチャ生成スクリプト、実データ非含有）
@@ -47,7 +52,7 @@
 - [ ] T3.3 開催日制御（RACE_CALENDAR_DESIGN の実装: スキーマ、calendar-check、bot-run リース、手動補正、C01〜C28 のテスト）← T1.3,T2.4
 - [ ] T3.4 取込 API とデータ取得（冪等 upsert、バックフィル、再開、多重起動防止）← T2.4
 - [ ] T3.5 Windows 取得エージェント（JVLINK_DESIGN の実装: 薄い Python、キュー、ビーコン、署名更新）+ `:ingest` サービス ← T1.2,T1.17,T3.4
-- [ ] T3.6 ML 推論/学習プロセス（分離）← T1.9
+- [ ] T3.6 ML: Kotlin `FeatureBuilder`/`ProbabilityPipeline`、モデル JSON/レジストリ、`export-dataset`、`ml-train`（Python Job）、pkl→JSON 変換ツール、ゴールデン G1〜G7 ← T1.9
 - [ ] T3.7 Discord 通知（分割・Retry-After・リトライ）
 - [ ] T3.8 bot-run オーケストレーション（監視ウィンドウ、結果反映後終了）← T3.1–T3.7
 - [ ] T3.9 バックテスト・成績集計（settle/recovery）

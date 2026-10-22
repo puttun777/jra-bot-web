@@ -1,6 +1,6 @@
 # CONTRACTS（web ⇔ infra 受け渡し契約・正本は本ファイル）
 
-状態: **ドラフト 0.2.0（第1段階 / T1.2・T1.3・T1.15 を反映）**。クラウド選定（T1.7）後に確定する。infra 側 `docs/CONTRACTS.md` は本ファイルの版を参照する（infra 側の同期は T1.18）。変更時は両リポジトリの PROGRESS に記録する。
+状態: **ドラフト 0.3.0（第1段階 / T1.2・T1.3・T1.9・T1.15 を反映）**。クラウド選定（T1.7）後に確定する。infra 側 `docs/CONTRACTS.md` は本ファイルの版を参照する（infra 側の同期は T1.18）。変更時は両リポジトリの PROGRESS に記録する。
 
 ## 1. 成果物（web → infra）
 | 成果物 | 内容 | 識別 |
@@ -8,6 +8,8 @@
 | コンテナイメージ `dashboard` | Spring Boot dashboard | Artifact Registry、タグ=git SHA（不変）+ semver。デプロイは **digest 指定** |
 | コンテナイメージ `bot` | bot-run / bot-scheduler-check（同一イメージで引数切替も可、第1段階で決定） | 同上 |
 | コンテナイメージ `db-migration` | Flyway 実行 Job | 同上。マイグレーション版と対応 |
+| コンテナイメージ `ingest` | エージェント受信サービス（dashboard とは別デプロイ, §3.1） | 同上 |
+| コンテナイメージ `ml-train` | Python 学習 Job（常駐しない。bot とは独立, ML_DESIGN §4.2） | 同上。Python 版・ライブラリ版をマニフェストに記録 |
 | `release-manifest.json` | 各イメージ digest、アプリ版、Flyway 最新版、契約版、ビルド日時、git SHA | GitHub Release asset または Artifact Registry 上の artifact。infra はこれのみを入力とする |
 | Windows エージェント配布物 | zip（秘密を含まない） | GitHub Release asset（Private）。設定/トークンは別途ユーザー配置 |
 
@@ -24,6 +26,8 @@ web のレジストリ公開先・infra 側の pull 権限は **推測せず**�
 | `IAP_AUDIENCE` | Terraform | IAP JWT 検証 |
 | `OPS_MODE_SOURCE` | Terraform | 運用モード正本（DB 非依存ストア）の参照先 |
 | `MODE_BEACON_URL` `MODE_BEACON_PUBKEY` | Terraform / 配布 | モードビーコンの URL と検証用公開鍵（§7.2）。公開鍵はエージェントにも配布 |
+| `MODEL_STORE_URI` | Terraform | モデル成果物とデータセットの私的バケット（日本リージョン, 公開しない）。クラウド依存は URI のみ |
+| `MODEL_SIGNING_KEY` / `MODEL_VERIFY_PUBKEY` | Secret Manager（秘密鍵は ml-train のみ）/ 配布（公開鍵は bot） | モデル JSON の Ed25519 署名と検証（ML_DESIGN §5.2） |
 | `INGEST_TOKEN_*` | Secret Manager（サーバ側はハッシュのみ保持） | エージェントトークンの発行・失効（§3.3） |
 | `TZ` | 固定 | `Asia/Tokyo` |
 
@@ -93,9 +97,16 @@ web のレジストリ公開先・infra 側の pull 権限は **推測せず**�
 - Terraform apply/デプロイは mode を変更しない。STOPPED 中はリソースを起動しない（infra 側で `ignore_changes` 等。検証は T5.5）。
 - `phase`: `NORMAL | STOPPING | STOPPED | STARTING`。**エージェントが送信を許可するのは `NORMAL` のみ**。`STARTING`/`STOPPING`/不明はすべて「送らない」。
 
+## 5.1 ML 成果物・ジョブ契約（T1.9, ドラフト）
+- **モデル成果物**: `model_schema_version: 1` の JSON + `.sig`（ML_DESIGN §5.2）。置き場は `MODEL_STORE_URI` 配下 `/{tenant_id}/models/{model_id}.json`。レジストリは DB の `ml_model`。bot は `ACTIVE` のみ読み、`sha256`・署名・`feature_schema_hash`・重み長を検証してから使用（検証失敗は読込拒否＋フォールバック理由を記録）。
+- **データセット**: bot の `--task=export-dataset` が `MODEL_STORE_URI/{tenant_id}/datasets/{dataset_id}.csv.gz` を出力（gzip CSV, `feature_schema` の列順）。保持 90 日（案）。**Git・CI ログに載せない**。
+- **ml-train Job**: 入力=`dataset_id`・学習設定、出力=モデル JSON + 評価レポート + `ml_model` に `CANDIDATE`（品質ゲート不合格は `REJECTED`）。NORMAL 以外では実行しない（モード確認）。失敗時は非 0 終了で旧モデル継続。
+- **infra の義務**: ①バケット（日本リージョン・非公開・バージョニング・ライフサイクル 90 日/データセット）と IAM（ml-train: 書込、bot: 読取のみ）、②署名鍵の Secret、③`ml-train` Job の定義（Scheduler は初期 paused）、④STOPPED で Job を起動しない。
+- 互換性: bot は `model_schema_version` N と N-1 を読む。
+
 ## 6. 契約バージョン
-`contract_version: 0.2.0-draft`。破壊的変更でメジャーを上げ、`release-manifest.json` に含める。エージェントプロトコルは `/v1`（`protocol: 1`）。
-変更履歴: 0.1.0（第0段階）→ 0.2.0（ingest 別サービス化、エージェント認証、封筒、STOPPED 契約、ビーコン）。
+`contract_version: 0.3.0-draft`。破壊的変更でメジャーを上げ、`release-manifest.json` に含める。エージェントプロトコルは `/v1`（`protocol: 1`）。
+変更履歴: 0.1.0（第0段階）→ 0.2.0（ingest 別サービス化、エージェント認証、封筒、STOPPED 契約、ビーコン）→ 0.3.0（ingest/ml-train イメージ、モデル成果物・データセット・署名鍵、§5.1）。
 
 ## 7. Windows エージェントの STOPPED 時動作契約（T1.15）
 

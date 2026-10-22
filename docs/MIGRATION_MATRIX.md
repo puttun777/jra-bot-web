@@ -93,3 +93,83 @@ P0 の順: F26/F04/F05/F06/F07（基礎純関数）→ F16（DB）→ F08/F09（
 | 新規 F27 取込 API(ingest)/エージェント | 認証・冪等・キュー・ビーコン。契約 CONTRACTS §3・§7 |
 | 新規 F28 開催カレンダー/bot 起動制御 | RACE_CALENDAR_DESIGN |
 | 未精読(継続) | `decision.py`/`bet_strategy.py` の分岐、`fetch_historical_data.py`(1.7k 行)。T1.13 の残り（T3.1 の前） |
+
+
+## 7. T1.13 追加精読の結果（判定・買い目・履歴取得、2026-10-22）
+対象: `ev/decision.py`(1,012)、`ev/bet_strategy.py`(803)、`ev/ev_calc.py`、`ev/probability.py`、`scripts/fetch_historical_data.py`(1,682)、`scripts/run_daemon.py` の評価呼出し部、`config/config.example.yaml`、`scripts/test_ev_calculation.py` ほかテスト。関連設計: `ML_DESIGN.md`（確率パイプライン）。**精読の範囲**: decision.py と bet_strategy.py は全分岐を読了（bet_strategy の三連複「流し」部分は構造がワイドと同型であることを確認し、中間 80 行は目視していない）。`fetch_historical_data.py` は構造・JV-Link 呼出し・保存先を確認（本文 1.7k 行の全行は未読）。
+
+### 7.1 判定フロー（`evaluate_odds`）
+1. 入力なしなら空。2. **確率決定**（ML → 市場フォールバック、`ML_DESIGN §1.3`）。3. **市場ブレンド（2 回目）**→ 上限クリップ → 再正規化。4. 馬ごとのループ:
+   a. `priority_mode=="hit_rate"` のみ: `win_odds_max`（odds > 上限で除外）→ `win_prob_min`（p_final < 下限）→ `win_ratio_min`（p/p_mkt < 下限）。
+   b. 急落/人気急上昇フィルタ（`recent_snapshots_func` があるとき）。
+   c. `suggest_multiple_bet_strategies`（例外時は bet_strategy=None → その馬は `continue`、**理由集計なし**）。
+   d. `best_strategy` が無ければ `continue`（理由なし）。
+   e. EV 閾値: `best.ev <= threshold` で除外（`hit_rate` かつ `hit_rate_min_ev` 指定ならそれ、他は `ev_threshold`）。**境界は「閾値ちょうどは除外」**。
+   f. `suggested_bet <= 0`: 見送り（`notify_skips` ならスキップ通知用シグナルを追加）。
+   g. 単勝のみ `win_max_over_market`（p/p_mkt > 上限で除外、**理由集計なし**）。
+   h. シグナル生成（EV 再計算の不一致を警告ログ）。
+5. ソート: `edge`=EV 降順 / `hit_rate`=(p_final, ev, 賭式優先の小さい idx) 降順。`max_signals` 件に切詰め。
+6. `max_total_bet_per_race`: 選択シグナルの賭け額合計が上限超なら**全体を比例縮小**（`min_bet` 未満になり得る）。
+
+### 7.2 設定値の優先順位と暗黙のデフォルト
+| 項目 | 優先順位 | 暗黙のデフォルト・食い違い |
+|---|---|---|
+| EV 閾値 | `hit_rate_min_ev`（hit_rate かつ指定時）> `ev_threshold`。さらに **daemon が時間帯スケジュール `hit_rate_min_ev_schedule`（far≥30 分前 / mid≥5 分前 / near）と `adaptive_relaxation`（無通知が続くと EV 緩和、下限 `min_ev_floor`）で上書きして渡す**（run_daemon.py L1285〜） | 関数既定 `ev_threshold=0.08`、example は 0.30（hit_rate 時 0.20/0.22/0.16） |
+| ensemble β | config 数値 > `auto`（`ensemble_params_latest.json`、14 日失効→0.25、β<0.05→0.25、calibration 不可→1.0） | コード既定 0.35（config 無し）／ `auto` の失敗は 0.25 |
+| 市場ブレンド α | 引数 `ml_market_blend_alpha` > `ml.market_blend_alpha` > 0.25。**モデル内と decision 側で 2 回適用** | `train_model` 既定 0.6、モデルクラス既定 1.0 |
+| 確率上限 | 引数 > `ml.win_prob_clip_max`(0.35) > 0.35。`enable_prob_clip` 既定 True | クリップ後に**再正規化**するため上限を超え得る |
+| 賭式モード | 引数 `bet_type_mode` | 関数既定 `multi`、example は `best_only` |
+| 買い目設定 | 引数 > （daemon が config を渡す） | 関数既定と example が多数不一致: `ev_shrink_factor` 0.7/0.55、`box_size` 4/3、`top_k_partners` 6/4、`max_tickets_per_type` 6/4、`wide_max_prob` 0.35/0.18、`sanrenpuku_max_prob` 0.20/0.08、`max_bet` 10/6、`drop_threshold` 0.20/0.25、`surge_threshold` 3/4、`watch_start_minutes` 120/240（example 内でも 240 と 120 が重複定義） |
+| Kelly 分数 | `kelly_fraction`(0.25) × **確率ソース係数 m**。m は `prob_source` が "ml_features"=1.0 / "ml_model"=0.9 / "market"=0.8 / その他=0.8 | decision が渡す `prob_source` は "ml:alpha"/"ml:ensemble(...)"/"market:fallback(...)" 等で**どれにも一致せず常に 0.8** → **実効 Kelly 分数は 0.2** |
+**移行方針（D-016 の具体化）**: ゴールデンテストと新設定クラスの既定値は **example config を正**とし、関数既定値は使わない。食い違い項目は「どちらが運用実態か」を T1.20 で利用者の実 `config.yaml` から確認（実 config は秘密を含み得るため Git に入れない）。
+
+### 7.3 暗黙の挙動・欠陥候補（新実装で再現せず、仕様として決める）
+| # | 内容 | 影響 | 新実装の方針 |
+|---|---|---|---|
+| E1 | ML 例外の握り潰しで市場確率へ無言フォールバック（`prob_source` が "market:fallback(ml_disabled)" と誤表示。H1: ML_DESIGN） | 判定の根拠が不明 | フォールバック理由を明示・記録・アラート（D-036） |
+| E2 | ensemble の `prob_source` 判定が**ループ末尾の変数**（最後の馬の odds_ok/pc/pa）を参照 | ラベルが不正確 | 馬ごと/レース単位で正しく記録 |
+| E3 | `win_max_over_market` による除外・`bet_strategy` 例外・`best` 無しは**見送り理由カウントに入らない** | 見送り集計が実態と乖離（Overview の「見送り理由トップ」） | 全除外を理由コード化（enum） |
+| E4 | EV 不一致警告が常時発生し得る: 買い目の `prob`（表示用の生確率）と `ev`（`ev_shrink_factor` 適用後の確率で計算）が別、signal の `ev_calc` は生確率で再計算 | ログ汚染、`ratio` は生確率基準 | EV/確率/比率の基準を一つに定義し両方を保存 |
+| E5 | `calc_kelly_fraction(prob, odds)` は `odds==1.0` で `b=0` → **ZeroDivisionError**。decision の `try/except` で握り潰され、その馬が理由なしで除外 | 単勝 1.0 倍（ありうる境界）が無言で落ちる | odds ≤ 1.0 は明示的に Kelly=0・見送り理由 `ODDS_AT_PAR` |
+| E6 | `max_total_bet_per_race` の比例縮小が `min_bet` を無視 | 実際には `min_bet` 未満の賭け額になる | 縮小後に min_bet 再判定 or 縮小禁止を仕様化 |
+| E7 | `best_strategy` は `suggested_bet>0` の中で EV 最大、無ければ全体の EV 最大（見送り候補が best になり得る） | 見送り通知の対象選定 | 仕様として明示 |
+| E8 | ワイドは**オッズ下限側で EV 計算**（保守的）、確率は Plackett–Luce の `P(2頭とも3着以内)`（重み `p^α`、α は [0.1, 5] にクリップ）、`p` は 0.99 クリップ → `ev_shrink_factor` → `*_max_prob` → 市場比上限 `p ≤ k·R/odds` → `*_min_prob` → EV>0 | 分岐が多く、順序が結果を変える | 段階をパイプライン化し順序を固定、ゴールデンで全段階を検証 |
+| E9 | 流し相手 = 人気 1 位から `top_k_partners` 頭（`popularity>0` のみ）、BOX 候補 = 人気上位 `max(3, box_size)` 頭で、**軸馬が BOX 候補に含まれるときだけ BOX を追加**。重複買い目の除去は通知層（`_deduplicate_tickets`） | 人気データ欠損時の挙動（オッズ順にフォールバックするのは BOX 候補のみ） | 仕様として固定 |
+| E10 | 三連複の確率は 6 通りの順列の PL 確率の和（`_top3_set_prob`）、ワイドは他全馬との和 → 計算量 O(n·6·n)。ペアごとに再計算 | 1 レースの評価が重くなり得る（n=18 で数百〜数千回/サイクル） | 重みの前計算・メモ化 |
+| E11 | `require_real_odds_for_combo` 既定 True: 実オッズが無い買い目は除外（`continue`）。三連複は戦略が空だと「実オッズ未取得」の見送りエントリを返す（ワイドは返さない） | 賭式間の非対称 | 仕様として明記・統一するか決定 |
+| E12 | `Kelly` の `max_fraction` 引数は無視される経路あり（`max_fraction=1.0` 固定で呼ぶ） | docstring と挙動の乖離 | 仕様を設定に反映 |
+| E13 | `estimate_prob(odds)` は 0.99 上限、`estimate_prob_normalized` は ±10% 補正（正規化の後に元確率基準の範囲に押し戻す） | 合計は再正規化で 1 | `ProbabilityPipeline` に取り込み |
+| E14 | 急落フィルタは `recent_snapshots[-1]`（リストは新しい順なので**最古**）との比較のみ。連続的な変化は見ない | — | 仕様として固定。スナップショットの並びを型で保証 |
+| E15 | 時刻依存: decision 内に `datetime.now()` は `ensemble_params` の経過日数のみ。daemon 側は `minutes_to_post`（naive）でウィンドウ/EV スケジュールを決定 | TZ ずれ | `Clock` 注入（F04） |
+
+### 7.4 浮動小数・丸め
+- 全て Python `float`（IEEE754 倍精度）。**丸め処理は計算内に無い**（表示のみ `:.1%`/`:.2f`）。Kotlin は `Double` で同順序の演算を行う（結合順序の入替えを禁止）。許容: 確率 1e-9、EV/金額 1e-9（絶対）。
+- 境界クリップ: `1e-6`/`1-1e-6`、logit 入力ガード、`z` を ±50、`p` 0.99、odds 下限 0.1（`max(odds, 0.1)`）。これらの定数をテスト対象にする。
+
+### 7.5 ゴールデンテストの必要ケース（`evaluate_odds` 系）
+| ID | 観点 | ケース |
+|---|---|---|
+| GD01 | EV・Kelly | `ev_calc` 境界: prob=0/1、odds=0/0.1/1.0/1.01/999、Kelly 負、min_bet 境界（`bet_before_clip == min_bet`）、max_bet クリップ（既存 `test_kelly_bet_amount.py`/`test_ev_calculation.py` の入力を取り込む） |
+| GD02 | 確率 | 頭数 1/2/18、全 odds 同一、極端な人気馬、odds≤0 を含む、正規化後の和=1、補正制限の境界 ±10% |
+| GD03 | フィルタ | 急落（ちょうど閾値/超過）、人気急上昇（差=閾値）、スナップショット 0/1/2 件、`hit_rate` の 3 フィルタ境界 |
+| GD04 | 閾値 | `best.ev == threshold`（除外）、`hit_rate_min_ev` あり/なし、時間帯スケジュール境界（mins=30, 5）、adaptive_relaxation の下限 |
+| GD05 | ワイド | 実オッズあり/なし、`require_real_odds`、軸が BOX 候補内/外、`top_k_partners` 不足、`*_max_over_market` 発動、`min_prob` 発動、PL の α 端（0.1/5） |
+| GD06 | 三連複 | 同上 + 流し/BOX の重複、頭数 3 未満 |
+| GD07 | 賭け額 | `best_only` / `proportional_ev`、`ev` が全て 0 以下、`max_total_bet_per_race` 縮小と min_bet、`bet_type_mode=best_only` の剪定 |
+| GD08 | 選別 | `max_signals`、`edge`/`hit_rate` ソートの同点（p 同値→EV→賭式優先）、`notify_skips` |
+| GD09 | 異常系 | ML 失敗→市場フォールバックのラベル、`bet_strategy` 例外、odds=1.0（E5）、人気 0 の馬のみ |
+| GD10 | 設定 | example config 全キー、関数既定との差異（D-016）、欠損キー |
+- 期待値の生成: 参照元を固定コミット（f7dbf69）で実行し JSON 化（合成入力のみ）。E1〜E15 は「旧の挙動（記録）」と「新仕様」を分けてテストし、新仕様に変更する箇所は DECISIONS に記録して承認を得る。
+
+### 7.6 `fetch_historical_data.py`（過去データ取得）
+| 項目 | 内容 | 移行 |
+|---|---|---|
+| 目的 | 過去 1 年（`--from-date/--to-date`）のレース・結果・出走馬・過去走・払戻の一括取得 | F21: **エージェントのバックフィルモード**（`RACE` を `option=1`/セットアップ `option=4` で年単位に分割）+ サーバ側パース |
+| JV-Link 呼出し | `RACE` を `JVOpen(…, option=1 or 4)`。`option=4` ではセットアップの**ダイアログが出る** | 参照元は **Win32 UI オートメーション（`send_key`、ウィンドウハンドル操作）でダイアログを自動応答**。新設計ではバックフィルを**対話セッションで利用者が起動**し、UI 自動操作は採用しない（脆弱・保守困難）。ダイアログ有無は T1.17 で確認 |
+| 保存 | `races`（FK 対策に最小 `races` 行を先に upsert）、`results`、`race_horses`、`horse_past_runs`（バッチ upsert）、払戻（HR） | サーバの取込（冪等 upsert）に統一。FK 順序の問題はサーバの依存順で解消 |
+| 日付 | 範囲指定をローカル `datetime` で解釈 | JST 固定の `LocalDate` |
+| 再開 | 実行中断時は同コマンド再実行（`skip_existing`）。進捗の永続化は無い | ACK ベースのチェックポイント（JVLINK_DESIGN §5） |
+| 既知の癖 | `SE` 先頭ファイルのスキップ、`JVRead` のファイル切替/EOF 判定、巨大 `max_reads`（1,000,000） | 総読込上限・タイムアウトを設定化 |
+
+### 7.7 既存テストの位置づけ
+`scripts/test_*.py` は pytest ではなく手動実行のスクリプト型。`test_ev_calculation.py`（EV・期待回収・期待利益の一貫性、`ratio==expected_return` 等のアサート）、`test_kelly_bet_amount.py`（min_bet 未満→見送り、以上→推奨額）が数値期待の根拠になる。判定全体（`evaluate_odds`）、ワイド/3連複、フィルタ、設定優先順位を検証する自動テストは**存在しない** → GD01〜GD10 を新規に作る。

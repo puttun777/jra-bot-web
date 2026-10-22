@@ -66,3 +66,20 @@ JV-Link(COM) → agent(薄い: 生レコード+キュー+ACK) →(HTTPS, トー�
 Scheduler(固定間隔) → `app --task=calendar-check`(軽量) → 条件成立で `JobLauncher` → `bot-run`(有限ジョブ)。二重実行は DB UNIQUE+リース、状態は DB から再導出。クラウド依存は `JobLauncher/ModeProvider/Clock` のポートに隔離(T1.7 未確定)。詳細 `RACE_CALENDAR_DESIGN.md` §6。
 ### 7.4 STOPPED 時のエージェント
 モードビーコン(署名付き静的 JSON)で STOPPED と通信障害を区別。NORMAL が確認できない限り取得・送信しない。詳細 `CONTRACTS.md` §7。
+
+## 8. T1.5 / T1.9 / T1.11 による設計追加（2026-10-22）
+### 8.1 フロントエンド（`FRONTEND_DESIGN.md`）
+`dashboard` = Spring Boot + **Thymeleaf SSR + htmx + ECharts**（Node ビルドなし、1 コンテナ、ステートレス）。`/api/**`（DTO）を常に提供し将来 SPA 化の余地を残す。全ページ共通の状態バー（運用モード・bot・最終更新・次回実行予定・取得失敗）。認可は IAP の JWT をアプリ側でも検証し `app_user` でテナント/ロールを解決、**未登録は 403**。旧 Streamlit の 8 画面（Overview / Race Detail / Horse Detail / Performance / Signals / Ops-Health / Model / Evaluations）と旧 `ui/` の Odds・Config を全て移行（Ops は PID/ログ中心からクラウド向けに再設計）。
+### 8.2 ML（`ML_DESIGN.md`）
+**学習=Python（独立 Job `ml-train`、常駐しない）、推論=Kotlin（bot 内、`ProbabilityPipeline`）**。特徴量生成は Kotlin の `FeatureBuilder` に一本化し、学習用データセットは Kotlin がエクスポート（時点整合でリークを構造的に排除）。モデルは **JSON（スキーマ版・sha256・Ed25519 署名）**、pickle は持ち込まない。`ml_model` レジストリ（テナント単位、run 開始時に固定、ensemble はセットで原子的切替、フォールバックは明示）。旧 ML の疑義（H1〜H10）により、互換性は「推論の算術」で保証し、学習は修正版（v2）で再設計。
+```
+bot(JVM) ── ModelStore ──▶ ml_model(ACTIVE) ─▶ model JSON  ◀── ml-train(Python Job) ◀── export-dataset(Kotlin) ◀── DB
+```
+### 8.3 データ（`DATA_MIGRATION_DESIGN.md`）
+MySQL は **共有スキーマ + `tenant_id` 先頭 + 複合 FK**（方式 A）。レース識別は `race_id CHAR(12)`（+ `kai/nichime` NULL 可）。時刻は UTC `DATETIME(6)`。SQLite からの移行は Python ツール（`tools/migrate/`）で preflight→extract→transform→staging→verify→promote、チャンク再開・隔離・ロールバック。実ファイル取得後に、まずローカル MySQL でリハーサル（クラウドは規約回答後）。
+### 8.4 実行単位の更新
+| 単位 | 追加/変更 |
+|---|---|
+| `bot` | `--task=export-dataset`（学習用データセット出力、管理者/Scheduler 手動）を追加 |
+| `ml-train`（新） | Python Job（独立イメージ）。NORMAL のみ実行。結果は `ml_model` に CANDIDATE 登録 |
+| `tools/migrate`（新） | 移行専用ツール（デプロイ対象外、利用者 PC / CI で実行） |
