@@ -32,3 +32,16 @@
 | D-029 | 2026-10-22 | STOPPED 時のエージェント契約（CONTRACTS §7）: NORMAL 確認できない限り取得・送信しない。署名付きモードビーコンで STOPPED と通信障害を区別。無限リトライ禁止。stop=ビーコン最初/start=最後 | T1.15、infra 調査（desired 正本は DB 非依存） | 案（infra 同期 T1.18） |
 | D-030 | 2026-10-22 | 実データ（JV-Data/DB ダンプ）は Git・CI ログ・PR に含めない。ゴールデンテストは仕様書レイアウトから生成した合成レコード | DATA_SOURCE_COMPLIANCE #10 | 確定 |
 | D-031 | 2026-10-22 | 一般公開は現契約では前提にしない（JRADB が必要）。技術的拡張性は維持。本番データ投入は規約回答（Q1〜Q3）後 | DATA_SOURCE_COMPLIANCE #8, §7 | 案（ユーザー承認待ち） |
+| D-032 | 2026-10-22 | フロントは **A: Spring Boot + Thymeleaf SSR + htmx + ECharts** を採用案。B（React+TS+Vite）は見直しゲート付きで保留。`/api/**`（DTO）を常に提供 | FRONTEND_DESIGN §4。読み取り中心・2 人利用・単一コンテナ・スケールゼロ・Kotlin 統一 | 案（採用推奨） |
+| D-033 | 2026-10-22 | ML の互換性保証は「推論の算術」まで。旧モデルの予測品質は正解とみなさず、学習は時点整合（リーク是正）の v2 で再設計 | ML_DESIGN §2（H1〜H10: 市場フォールバックの疑い、alpha 次元ずれ、ラベルリーク、二重ブレンド等） | 案 |
+| D-034 | 2026-10-22 | ML 方式 **A: 学習=Python 独立 Job / 推論=Kotlin**。特徴量は Kotlin に一本化しデータセットをエクスポート | 線形モデルで推論が単純、Python を実行経路から外す、学習は必要時のみ | 案（採用推奨） |
+| D-035 | 2026-10-22 | モデル形式は JSON（`model_schema_version`、sha256、Ed25519 署名）。NPZ/ONNX は不採用/将来。pickle 禁止。pkl→JSON 変換は利用者ローカルの一回限りツール | ML_DESIGN §5 | 案 |
+| D-036 | 2026-10-22 | モデルレジストリ `ml_model`（テナント単位）。bot-run は開始時にモデル固定、ensemble はセット単位で原子切替、**フォールバックは理由を記録しサイレント禁止**、パディング/スライスで次元を合わせない | ML_DESIGN §6 | 案 |
+| D-037 | 2026-10-22 | 確率パイプラインは `legacy`（二重ブレンド含む挙動再現）と `v2`（単回ブレンド）を設定で切替。`v2` への切替は旧新比較と閾値再検討の後にユーザー判断 | ML_DESIGN §7.1。H4（モデル寄与 ≈ 0.0625） | 案（ユーザー判断待ち） |
+| D-038 | 2026-10-22 | データ移行は Python ツール `tools/migrate/`（staging→promote、チャンク再開、隔離、ロールバック）。まずローカル MySQL でリハーサル、クラウド投入は規約回答後 | DATA_MIGRATION_DESIGN §5・§12 | 案 |
+| D-039 | 2026-10-22 | テナント方式 A（共有スキーマ + `tenant_id` 先頭 + 複合 FK + DAO 必須引数 + CI の SQL 検査 + 越境テスト）。共有表は `tenant/app_user/code_venue` のみ。JRA-VAN 由来のマスタもテナント表 | DATA_MIGRATION_DESIGN §4。規約（案 A） | 案 |
+| D-040 | 2026-10-22 | レース識別を `race_id CHAR(12)`（+ `kai/nichime` NULL 可、`rt_key16` 導出）に統一。RACE_CALENDAR_DESIGN の `race_key CHAR(16)` を修正済み | 旧データに回・日目がない、開催は日・場で一意 | 案 |
+| D-041 | 2026-10-22 | 時刻は UTC `DATETIME(6)`。移行時は形式（`T` 有無）で JST/UTC を判別、実ファイルで検証 | DATA_MIGRATION_DESIGN §1.2 | 案 |
+| D-042 | 2026-10-22 | 旧 ID は `legacy_id` に保持し新 ID を採番（`UNIQUE(tenant_id, legacy_id)`） | 冪等・ロールバックの識別 | 案 |
+| D-043 | 2026-10-22 | 保持ポリシー（DATA_MIGRATION_DESIGN §9.2）。combo オッズは既定で保存しない。保持ジョブはドライラン + 管理者承認（実データ削除は承認制） | 年 2.7 億行規模の回避 | 案 |
+| D-044 | 2026-10-22 | 判定ロジックの旧挙動の欠陥候補 E1〜E15（MIGRATION_MATRIX §7.3）は、旧挙動をゴールデンに記録した上で、新仕様への変更は個別に承認を得て DECISIONS に記録 | 黙って挙動を変えない（既存機能を勝手に変えない） | 案 |

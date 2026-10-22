@@ -1,6 +1,6 @@
 # RACE_CALENDAR_DESIGN（T1.3 開催日・発走予定・変更検知・bot 起動方式）
 
-設計のみ（実装は第3段階）。前提: `JVLINK_DESIGN.md`（取得）、`CONTRACTS.md`（モード/プロトコル）、`DATA_SOURCE_COMPLIANCE.md`（データ取扱い）。タイムゾーンは常に **Asia/Tokyo**。単純な曜日・祝日判定は**使わない**。
+設計のみ（実装は第3段階）。**識別子の更新（T1.11/D-040）**: レース識別は `race_id CHAR(12)`（+ `kai`/`nichime` NULL 可、`rt_key16` 導出）に統一した（旧データと互換）。前提: `JVLINK_DESIGN.md`（取得）、`CONTRACTS.md`（モード/プロトコル）、`DATA_SOURCE_COMPLIANCE.md`（データ取扱い）。タイムゾーンは常に **Asia/Tokyo**。単純な曜日・祝日判定は**使わない**。
 
 ## 0. 検出能力の確度（実現済みとして扱わない）
 | 能力 | 想定ソース | 確度 | 扱い |
@@ -101,7 +101,7 @@ flowchart LR
 取得のたびに前回ぶんを破棄し「いま含まれている情報」だけを使う仕様 [二次]。したがって:
 1. 取得ごとに `snapshot_0b14(date, observed_at, records[])` を保存（履歴として残す。生レコードの保管期間は規約確認後）。
 2. 直前スナップショットとの**差分**を取り、`TIME_CHANGE / SCRATCH / JOCKEY_CHANGE / COURSE_CHANGE / WEATHER` イベントを生成。前回あって今回無いものは `REVOKED`（取消）イベント。
-3. イベントの冪等キー = `sha256(race_key, event_type, payload_normalized, snapshot_group)`。
+3. イベントの冪等キー = `sha256(race_id, event_type, payload_normalized, snapshot_group)`。
 
 ### 3.3 発走時刻
 - RA の `HHMM`（JST のローカル時刻、日付は race_date）を `scheduled_post_at`（UTC 保存）に変換。**時刻が `0000` や欠落**の場合は `post_time_unknown=true` として扱う（参照元の「00:00 や 8 時前/18 時超なら監視窓の開始時刻に置換する」暗黙処理は廃止し、UNKNOWN として明示。bot は UNKNOWN のレースでは通知しない、またはオッズ取得のみ行う設定にする）。
@@ -127,7 +127,8 @@ CREATE TABLE race_day (
 
 CREATE TABLE race_schedule (
   tenant_id        BIGINT NOT NULL,
-  race_key         CHAR(16) NOT NULL,              -- YYYY+MMDD+JJ+KK+NN+RR (JV-Data のレースキー)
+  race_id          CHAR(12) NOT NULL,              -- YYYYMMDD+JJ+RR（自然キー。D-040）
+  kai              TINYINT NULL, nichime TINYINT NULL,  -- 開催回/日目(旧データは NULL → 後で補完)。rt_key16 = YYYYMMDD+JJ+KK+NN+RR を導出
   race_date        DATE NOT NULL,
   venue_code       CHAR(2) NOT NULL,
   race_no          TINYINT NOT NULL,
@@ -139,7 +140,7 @@ CREATE TABLE race_schedule (
   race_name        VARCHAR(100) NULL,
   last_changed_at  DATETIME(6) NOT NULL,
   version          INT NOT NULL DEFAULT 0,
-  PRIMARY KEY (tenant_id, race_key),
+  PRIMARY KEY (tenant_id, race_id),
   KEY ix_day (tenant_id, race_date, scheduled_post_at)
 );
 
@@ -147,7 +148,7 @@ CREATE TABLE race_schedule (
 CREATE TABLE race_schedule_event (
   id               BIGINT AUTO_INCREMENT PRIMARY KEY,
   tenant_id        BIGINT NOT NULL,
-  race_key         CHAR(16) NULL,                   -- 日単位のイベントは NULL
+  race_id          CHAR(12) NULL,                   -- 日単位のイベントは NULL
   race_date        DATE NOT NULL,
   event_type       ENUM('ADDED','DELETED','CANCELLED','TIME_CHANGE','SCRATCH','JOCKEY_CHANGE','COURSE_CHANGE','WEATHER','DAY_STATUS','POSTPONED','REVOKED','MANUAL_OVERRIDE','MANUAL_REVOKE','FETCH_FAILURE','STALE') NOT NULL,
   old_value        JSON NULL,
@@ -165,7 +166,7 @@ CREATE TABLE calendar_override (                    -- 手動補正
   tenant_id     BIGINT NOT NULL,
   scope         ENUM('DAY','RACE') NOT NULL,
   race_date     DATE NOT NULL,
-  race_key      CHAR(16) NULL,
+  race_id       CHAR(12) NULL,
   action        ENUM('MARK_RACE_DAY','MARK_NO_RACE','CANCEL','SET_POST_TIME','POSTPONE_TO','ALLOW_RUN','DENY_RUN') NOT NULL,
   value         JSON NULL,                          -- 例 {"post_at":"2026-11-01T06:35:00Z"} / {"to":"2026-11-02"}
   reason        VARCHAR(500) NOT NULL,
@@ -251,7 +252,7 @@ stateDiagram-v2
 | 要件 | 設計 |
 |---|---|
 | 二重実行防止 | `bot_run.active_slot=1` の **UNIQUE** 制約（DB が拒否）+ `lease_expires_at`（heartbeat 60s、期限 5 分）。期限切れリースは新規実行が奪取（前実行は ABORTED 扱い） |
-| 冪等性 | サイクルは `(race_key, cycle_id)` で一意。通知は送信前に `signal` 行を claim（UNIQUE(race_key, market, combo, cycle_id)）→ 送信 → sent 更新。再実行しても二重通知しない。結果反映・決済は `race_key` 単位で冪等 |
+| 冪等性 | サイクルは `(race_id, cycle_id)` で一意。通知は送信前に `signal` 行を claim（UNIQUE(race_id, market, combo, cycle_id)）→ 送信 → sent 更新。再実行しても二重通知しない。結果反映・決済は `race_id` 単位で冪等 |
 | チェックポイント | `bot_run.checkpoint` にレース別ステージ（MONITORING/OFF/RESULT_PARTIAL/SETTLED）と最終サイクル時刻。再開時は DB の `race_schedule.status` と突合して**状態を再導出**（メモリ状態に依存しない。参照元の `result_fetched` 問題を解消） |
 | 再実行/バックフィル | `trigger_type=BACKFILL` は過去日付の欠損取得・再決済専用（通知しない）。`RECONCILE` は確定成績照合 |
 | 手動起動 | 管理者 API/UI。**必ず calendar を検証**: 開催日(CONFIRMED)以外は `403 NOT_A_RACE_DAY`。例外は `ALLOW_RUN`（理由・期限付き override）または `BACKFILL`/`RECONCILE`/`DRY_RUN`（通知なし） |
@@ -300,7 +301,7 @@ Scheduler は「固定間隔で `app --task=calendar-check` を起動するだ�
 | C09 | 延期（日付不明） | YS から消える、振替先不明 | UNCONFIRMED/POSTPONED(手動待ち)、アラート、手動補正で解消 |
 | C10 | 発走時刻変更 | TC で 11R が 15:35→15:50 | `TIME_CHANGE` イベント、窓更新、実行中 run は次サイクルで反映 |
 | C11 | TC の取消（全置換で消える） | 0B14 から TC が消失 | `REVOKED` イベント、元の時刻へ戻す |
-| C12 | レース追加（臨時） | 新 race_key が RA に出現 | ADDED、窓へ編入 |
+| C12 | レース追加（臨時） | 新 race_id が RA に出現 | ADDED、窓へ編入 |
 | C13 | データ区分0（提供ミス削除） | RA 区分0 | DELETED として保持、再読込で復活しない |
 | C14 | 取得失敗（朝） | 06:30 に RA 無し・YS は PLANNED | UNCONFIRMED、アラート、起動しない。RA 到着で CONFIRMED→起動 |
 | C15 | データ更新遅延（stale） | last_confirmed_at が 3h 前 | UNCONFIRMED 扱い、起動せずアラート |
