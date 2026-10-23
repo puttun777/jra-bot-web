@@ -1,9 +1,18 @@
 package jp.jrabot.persistence.integration
 
-import jp.jrabot.domain.bot.BotRun
-import jp.jrabot.domain.bot.BotRunState
 import jp.jrabot.domain.bot.BotRunTrigger
+import jp.jrabot.domain.bot.LeaseRequest
 import jp.jrabot.domain.bot.RunId
+import jp.jrabot.domain.calendar.CalendarOverride
+import jp.jrabot.domain.calendar.EventJson
+import jp.jrabot.domain.calendar.OverrideAction
+import jp.jrabot.domain.calendar.OverrideScope
+import jp.jrabot.domain.calendar.OverrideValue
+import jp.jrabot.domain.calendar.RaceDay
+import jp.jrabot.domain.calendar.RaceDayStatus
+import jp.jrabot.domain.calendar.ScheduleEvent
+import jp.jrabot.domain.calendar.ScheduleEventSource
+import jp.jrabot.domain.calendar.ScheduleEventType
 import jp.jrabot.domain.odds.Market
 import jp.jrabot.domain.odds.Odds
 import jp.jrabot.domain.odds.OddsEntry
@@ -17,6 +26,7 @@ import jp.jrabot.domain.race.Venue
 import jp.jrabot.domain.signal.Signal
 import jp.jrabot.domain.tenant.TenantId
 import jp.jrabot.domain.value.Probability
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -55,26 +65,17 @@ object Fixtures {
         values.mapIndexed { i, (n, o) -> OddsEntry(HorseNumber.of(n), Odds.of(o), i + 1) },
     )
 
-    fun run(
+    val NOW: Instant = Instant.parse("2026-10-24T00:00:00.500000Z")
+
+    fun lease(
         tenantId: TenantId = T1,
         runDate: LocalDate = DATE,
-        state: BotRunState = BotRunState.STARTING,
         runId: RunId = RunId.of(UUID.randomUUID()),
-        startedAt: Instant = Instant.parse("2026-10-24T00:00:00.500000Z"),
-    ) = BotRun(
-        tenantId = tenantId,
-        runId = runId,
-        runDate = runDate,
-        trigger = BotRunTrigger.SCHEDULER,
-        state = state,
-        leaseOwner = "owner-1",
-        leaseExpiresAt = startedAt.plusSeconds(300),
-        heartbeatAt = startedAt,
-        checkpoint = null,
-        startedAt = startedAt,
-        finishedAt = null,
-        exitReason = null,
-    )
+        owner: String = "owner-1",
+        now: Instant = NOW,
+        duration: Duration = Duration.ofMinutes(5),
+        trigger: BotRunTrigger = BotRunTrigger.SCHEDULER,
+    ) = LeaseRequest(tenantId, runId, runDate, trigger, owner, now, duration)
 
     fun schedule(
         tenantId: TenantId = T1,
@@ -91,6 +92,26 @@ object Fixtures {
         sourceVersion = "202610231",
         raceName = "予定レース",
         lastChangedAt = Instant.parse("2026-10-23T03:00:00Z"),
+    )
+
+    /** [schedule] の変更に付ける履歴（種類・グループを変えれば別の履歴になる）。 */
+    fun event(
+        schedule: RaceSchedule,
+        type: ScheduleEventType = ScheduleEventType.ADDED,
+        group: String = "g1",
+        batchId: String? = null,
+    ) = ScheduleEvent.create(
+        tenantId = schedule.tenantId,
+        raceId = schedule.raceId,
+        raceDate = schedule.raceId.date,
+        type = type,
+        oldValue = null,
+        newValue = EventJson.obj("status" to schedule.status.name),
+        source = ScheduleEventSource.RACE,
+        observedAt = Instant.parse("2026-10-23T02:59:59.123456Z"),
+        receivedAt = Instant.parse("2026-10-23T03:00:00.000001Z"),
+        dedupGroup = group,
+        batchId = batchId,
     )
 
     fun signal(
@@ -113,4 +134,101 @@ object Fixtures {
         stake = 1.0,
         probSource = "market",
     )
+
+    // --- 開催日・手動補正・履歴 ---
+
+    fun day(
+        tenantId: TenantId = T1,
+        status: RaceDayStatus = RaceDayStatus.PLANNED,
+        venue: Venue = Venue.TOKYO,
+        date: LocalDate = DATE,
+        confirmedAt: Instant? = NOW,
+        replacedBy: LocalDate? = null,
+    ) = RaceDay(tenantId, date, venue, 4, 8, status, replacedBy, Instant.parse("2026-10-20T03:00:00.000001Z"), confirmedAt)
+
+    /** 日単位の履歴（レースを指さない）。[group] を変えれば別の履歴になる。 */
+    fun dayEvent(
+        tenantId: TenantId = T1,
+        group: String = "d1",
+        type: ScheduleEventType = ScheduleEventType.DAY_STATUS,
+    ) = ScheduleEvent.create(
+        tenantId,
+        null,
+        DATE,
+        type,
+        null,
+        EventJson.obj("status" to "PLANNED", "venue" to "05"),
+        ScheduleEventSource.YSCH,
+        Instant.parse("2026-10-23T02:59:59.123456Z"),
+        Instant.parse("2026-10-23T03:00:00.000001Z"),
+        group,
+    )
+
+    fun staleEvent(
+        tenantId: TenantId = T1,
+        group: String = "stale",
+    ) = ScheduleEvent.create(
+        tenantId,
+        null,
+        DATE,
+        ScheduleEventType.STALE,
+        null,
+        EventJson.obj("reason" to "AGENT_SILENT"),
+        ScheduleEventSource.SYSTEM,
+        Instant.parse("2026-10-24T03:00:00Z"),
+        Instant.parse("2026-10-24T03:00:00Z"),
+        group,
+    )
+
+    fun manual(
+        tenantId: TenantId = T1,
+        by: String = "admin@example.com",
+        action: OverrideAction = OverrideAction.DENY_RUN,
+        scope: OverrideScope = OverrideScope.DAY,
+        race: RaceId? = null,
+        value: OverrideValue? = null,
+        createdAt: Instant = NOW,
+        validUntil: Instant? = null,
+    ) = CalendarOverride(tenantId, null, scope, DATE, race, action, value, "理由（合成）", by, createdAt, validUntil)
+
+    fun overrideEvent(
+        tenantId: TenantId = T1,
+        by: String = "admin@example.com",
+        race: RaceId? = null,
+        group: String = "o1",
+    ) = ScheduleEvent.create(
+        tenantId,
+        race,
+        DATE,
+        ScheduleEventType.MANUAL_OVERRIDE,
+        null,
+        EventJson.obj("action" to "X", "created_by" to by),
+        ScheduleEventSource.MANUAL,
+        NOW,
+        NOW,
+        group,
+    )
+
+    fun revokeEvent(override: CalendarOverride) =
+        ScheduleEvent.create(
+            override.tenantId,
+            override.raceId,
+            override.raceDate,
+            ScheduleEventType.MANUAL_REVOKE,
+            null,
+            EventJson.obj("override_id" to checkNotNull(override.id)),
+            ScheduleEventSource.MANUAL,
+            NOW,
+            NOW,
+            "revoke:${override.id}",
+        )
 }
+
+/** [user]（本番と同じ最小権限のユーザー）で生の JDBC 接続を開いて [block] を実行する。 */
+fun <T> TestDb.asUser(
+    user: String,
+    block: (java.sql.Connection) -> T,
+): T =
+    java.sql.DriverManager
+        .getConnection(MySqlSupport.jdbcUrl(name), user, MySqlSupport.PASSWORDS.getValue(user))
+        .use(block)

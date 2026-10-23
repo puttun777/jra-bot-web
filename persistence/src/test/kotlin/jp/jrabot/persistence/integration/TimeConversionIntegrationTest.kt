@@ -1,6 +1,6 @@
 package jp.jrabot.persistence.integration
 
-import jp.jrabot.domain.bot.StartResult
+import jp.jrabot.domain.bot.AcquireResult
 import jp.jrabot.domain.odds.Market
 import jp.jrabot.domain.race.RaceId
 import jp.jrabot.domain.race.Venue
@@ -39,9 +39,9 @@ class TimeConversionIntegrationTest {
     fun `マイクロ秒まで往復し、7 桁目以降は切り捨てる（丸めない）`() {
         RepositoryHarness(db).use { h ->
             val withNanos = Instant.parse("2026-10-24T00:00:00.123456999Z")
-            val run = Fixtures.run(startedAt = withNanos)
-            val saved = assertIs<StartResult.Started>(h.botRuns.tryStart(run)).run
+            val saved = assertIs<AcquireResult.Acquired>(h.botRuns.acquire(Fixtures.lease(now = withNanos))).run
             assertEquals(Instant.parse("2026-10-24T00:00:00.123456Z"), saved.startedAt)
+            assertEquals(Instant.parse("2026-10-24T00:05:00.123456Z"), saved.leaseExpiresAt)
             assertEquals("2026-10-24 00:00:00.123456", raw("SELECT DATE_FORMAT(started_at, '%Y-%m-%d %H:%i:%s.%f') FROM bot_run"))
             // 切り捨て済みの値は完全に往復する
             assertEquals(saved, h.botRuns.find(T1, saved.runId))

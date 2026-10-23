@@ -1,9 +1,17 @@
 package jp.jrabot.persistence.integration
 
+import jp.jrabot.domain.bot.AcquireResult
 import jp.jrabot.domain.bot.BotRunState
-import jp.jrabot.domain.bot.StartResult
+import jp.jrabot.domain.bot.CheckpointResult
+import jp.jrabot.domain.bot.HeartbeatResult
+import jp.jrabot.domain.bot.TransitionResult
+import jp.jrabot.domain.calendar.AppendResult
+import jp.jrabot.domain.calendar.ChangeResult
+import jp.jrabot.domain.calendar.OverrideCreateResult
+import jp.jrabot.domain.calendar.OverrideRevokeResult
+import jp.jrabot.domain.calendar.RaceDayStatus
+import jp.jrabot.domain.calendar.ScheduleEventType
 import jp.jrabot.domain.odds.Market
-import jp.jrabot.domain.repository.UpdateResult
 import jp.jrabot.domain.tenant.TenantId
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeEach
@@ -37,7 +45,7 @@ class TenantIsolationIntegrationTest {
         db.resetData()
         h.races.upsert(Fixtures.race(T1))
         h.odds.upsert(Fixtures.odds(T1))
-        h.schedules.insertIfAbsent(Fixtures.schedule(T1))
+        h.schedules.insertIfAbsent(Fixtures.schedule(T1), Fixtures.event(Fixtures.schedule(T1)))
     }
 
     @Test
@@ -67,13 +75,55 @@ class TenantIsolationIntegrationTest {
 
     @Test
     fun `BotRun は T2 から見えず・更新できず、T1 の排他も T2 を妨げない`() {
-        val run = assertIs<StartResult.Started>(h.botRuns.tryStart(Fixtures.run(T1))).run
+        val run = assertIs<AcquireResult.Acquired>(h.botRuns.acquire(Fixtures.lease(T1))).run
         assertNull(h.botRuns.find(T2, run.runId))
         assertNull(h.botRuns.findActive(T2, Fixtures.DATE))
         assertEquals(emptyList(), h.botRuns.listRecent(T2, 10))
-        assertEquals(UpdateResult.NotFound, h.botRuns.update(run.copy(tenantId = T2, state = BotRunState.FAILED)))
-        assertEquals(BotRunState.STARTING, h.botRuns.find(T1, run.runId)?.state)
-        assertIs<StartResult.Started>(h.botRuns.tryStart(Fixtures.run(T2)))
+        assertEquals(emptyList(), h.botRuns.listByDate(T2, Fixtures.DATE))
+        // T2 の資格で T1 の実行を、同じ所有者名で操作しても見えない（NotFound）。何も変わらない
+        val now = Fixtures.NOW.plusSeconds(1)
+        assertEquals(HeartbeatResult.NotFound, h.botRuns.heartbeat(T2, run.runId, "owner-1", now, java.time.Duration.ofMinutes(5)))
+        assertEquals(TransitionResult.NotFound, h.botRuns.transition(T2, run.runId, "owner-1", BotRunState.FAILED, now))
+        assertEquals(CheckpointResult.NotFound, h.botRuns.saveCheckpoint(T2, run.runId, "owner-1", 0, """{"a":1}""", now))
+        assertEquals(run, h.botRuns.find(T1, run.runId))
+        // T1 が稼働中でも T2 は同じ日に取得できる。T2 が期限切れを奪取しても T1 の行は無傷
+        assertIs<AcquireResult.Acquired>(h.botRuns.acquire(Fixtures.lease(T2)))
+        assertEquals(run, h.botRuns.findActive(T1, Fixtures.DATE))
+    }
+
+    @Test
+    fun `開催日・履歴・手動補正は T2 から見えず、T2 の補正は T1 の判定に影響しない`() {
+        val day = Fixtures.day(T1)
+        assertIs<ChangeResult.Applied<*>>(h.raceDays.insertIfAbsent(day, Fixtures.dayEvent(T1)))
+        val override = assertIs<OverrideCreateResult.Created>(h.overrides.create(Fixtures.manual(T1), Fixtures.overrideEvent(T1))).override
+        val id = checkNotNull(override.id)
+        assertNull(h.raceDays.find(T2, Fixtures.DATE, day.venue))
+        assertEquals(emptyList(), h.raceDays.listByDate(T2, Fixtures.DATE))
+        assertNull(h.overrides.find(T2, id))
+        assertEquals(emptyList(), h.overrides.listByDate(T2, Fixtures.DATE))
+        assertEquals(emptyList(), h.events.eventsOfDate(T2, Fixtures.DATE))
+        assertEquals(emptyList(), h.events.eventsOfRace(T2, raceId))
+        // T2 の資格で T1 の補正は取り消せない
+        assertEquals(
+            OverrideRevokeResult.NotFound,
+            h.overrides.revoke(T2, id, "x@example.com", Fixtures.NOW, Fixtures.revokeEvent(override).copy(tenantId = T2)),
+        )
+        assertNull(h.overrides.find(T1, id)!!.revokedAt)
+        // T2 の開催日の更新・確認は T1 の行に届かない
+        assertEquals(ChangeResult.NotFound, h.raceDays.update(day.copy(tenantId = T2, status = RaceDayStatus.CANCELLED), Fixtures.dayEvent(T2, "cancel")))
+        assertEquals(false, h.raceDays.confirm(T2, Fixtures.DATE, day.venue, Fixtures.NOW))
+        assertEquals(RaceDayStatus.PLANNED, h.raceDays.find(T1, Fixtures.DATE, day.venue)!!.status)
+    }
+
+    @Test
+    fun `履歴の追記は他テナントのレースを指せない（複合 FK）`() {
+        val schedule = Fixtures.schedule(T2)
+        // T2 にはまだ無いレース（T1 にだけある）を指す履歴は、複合 FK (tenant_id, race_id) が拒否する
+        assertSqlError(MySqlError.FK_CHILD) { h.events.append(Fixtures.event(schedule, ScheduleEventType.TIME_CHANGE, "x")) }
+        assertEquals(emptyList(), h.events.eventsOfRace(T2, raceId))
+        assertIs<AppendResult.Appended>(h.events.append(Fixtures.staleEvent(T2)))
+        assertEquals(1, h.events.eventsOfDate(T2, Fixtures.DATE).size)
+        assertEquals(1, h.events.eventsOfRace(T1, raceId).size)
     }
 
     @Test
@@ -126,6 +176,10 @@ class TenantIsolationIntegrationTest {
         assertNull(h.odds.latest(ghost, raceId, Market.WIN))
         assertEquals(emptyList(), h.schedules.listByDate(ghost, Fixtures.DATE))
         assertEquals(emptyList(), h.botRuns.listRecent(ghost, 10))
+        assertEquals(emptyList(), h.botRuns.listByDate(ghost, Fixtures.DATE))
+        assertEquals(emptyList(), h.raceDays.listByDate(ghost, Fixtures.DATE))
+        assertEquals(emptyList(), h.overrides.listByDate(ghost, Fixtures.DATE))
+        assertEquals(emptyList(), h.events.eventsOfDate(ghost, Fixtures.DATE))
         assertEquals(emptyList(), h.signals.listUnsent(ghost, 10))
         assertEquals(emptyList(), h.appUsers.listByTenant(ghost))
     }

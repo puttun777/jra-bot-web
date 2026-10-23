@@ -30,7 +30,12 @@ object MySqlSupport {
         )
     val RESTRICTED_USERS = listOf("app", "ingest", "bot", "mltrain")
 
+    /** **ローカル検証専用**: `JRABOT_TEST_MYSQL_EXTERNAL=host:port` で Docker を使わず動作中の MySQL を使う（persistence 側と同じ。CI では設定しない）。 */
+    private val external: Pair<String, Int>? =
+        System.getenv("JRABOT_TEST_MYSQL_EXTERNAL")?.takeIf { it.isNotBlank() }?.let { it.substringBeforeLast(':') to it.substringAfterLast(':').toInt() }
+
     private val container: MySQLContainer by lazy {
+        check(external == null) { "外部の MySQL を使うときはコンテナを起動しない" }
         MySQLContainer(image)
             .withDatabaseName("bootstrap")
             .withUsername("bootstrap")
@@ -47,8 +52,8 @@ object MySqlSupport {
         true
     }
 
-    val host: String get() = container.host
-    val port: Int get() = container.getMappedPort(3306)
+    val host: String get() = external?.first ?: container.host
+    val port: Int get() = external?.second ?: container.getMappedPort(3306)
 
     fun jdbcUrl(database: String?): String = "jdbc:mysql://$host:$port/${database.orEmpty()}"
 

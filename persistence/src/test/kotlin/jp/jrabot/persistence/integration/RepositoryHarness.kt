@@ -2,6 +2,9 @@ package jp.jrabot.persistence.integration
 
 import com.zaxxer.hikari.HikariDataSource
 import jp.jrabot.domain.bot.BotRunRepository
+import jp.jrabot.domain.calendar.CalendarOverrideRepository
+import jp.jrabot.domain.calendar.RaceDayRepository
+import jp.jrabot.domain.calendar.ScheduleEventRepository
 import jp.jrabot.domain.odds.OddsSnapshotRepository
 import jp.jrabot.domain.race.RaceRepository
 import jp.jrabot.domain.race.RaceScheduleRepository
@@ -36,9 +39,11 @@ class RepositoryHarness(
     val user: String = "migrate",
     val clock: MutableClock = MutableClock(),
     poolMax: Int = 4,
+    /** 接続先（既定は [db] を直接）。DB 停止の再現では [TcpProxy] 経由の URL を渡す。 */
+    url: String = MySqlSupport.jdbcUrl(db.name),
 ) : AutoCloseable {
     private val pool: HikariDataSource =
-        DataSourceFactory.create(DbSettings(MySqlSupport.jdbcUrl(db.name), user, MySqlSupport.PASSWORDS.getValue(user), poolMax), "test-$user")
+        DataSourceFactory.create(DbSettings(url, user, MySqlSupport.PASSWORDS.getValue(user), poolMax), "test-$user")
 
     private val context =
         AnnotationConfigApplicationContext().apply {
@@ -54,6 +59,9 @@ class RepositoryHarness(
     val appUsers: AppUserRepository get() = context.getBean(AppUserRepository::class.java)
     val schedules: RaceScheduleRepository get() = context.getBean(RaceScheduleRepository::class.java)
     val signals: SignalRepository get() = context.getBean(SignalRepository::class.java)
+    val raceDays: RaceDayRepository get() = context.getBean(RaceDayRepository::class.java)
+    val events: ScheduleEventRepository get() = context.getBean(ScheduleEventRepository::class.java)
+    val overrides: CalendarOverrideRepository get() = context.getBean(CalendarOverrideRepository::class.java)
     val dataSource: DataSource get() = context.getBean(DataSource::class.java)
 
     fun <T : Any> bean(type: Class<T>): T = context.getBean(type)

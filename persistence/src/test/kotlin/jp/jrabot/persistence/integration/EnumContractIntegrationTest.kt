@@ -2,6 +2,11 @@ package jp.jrabot.persistence.integration
 
 import jp.jrabot.domain.bot.BotRunState
 import jp.jrabot.domain.bot.BotRunTrigger
+import jp.jrabot.domain.calendar.OverrideAction
+import jp.jrabot.domain.calendar.OverrideScope
+import jp.jrabot.domain.calendar.RaceDayStatus
+import jp.jrabot.domain.calendar.ScheduleEventSource
+import jp.jrabot.domain.calendar.ScheduleEventType
 import jp.jrabot.domain.odds.Market
 import jp.jrabot.domain.race.RaceScheduleStatus
 import jp.jrabot.domain.signal.NotificationState
@@ -48,6 +53,23 @@ class EnumContractIntegrationTest {
     @Test
     fun `race_schedule の status は RaceScheduleStatus と一致する`() {
         assertEquals(RaceScheduleStatus.entries.map { it.name }.toSet(), enumValues("race_schedule", "status"))
+    }
+
+    @Test
+    fun `race_day の status は RaceDayStatus と一致する`() {
+        assertEquals(RaceDayStatus.entries.map { it.name }.toSet(), enumValues("race_day", "status"))
+    }
+
+    @Test
+    fun `race_schedule_event の event_type と source はドメインの ScheduleEventType・ScheduleEventSource と一致する`() {
+        assertEquals(ScheduleEventType.entries.map { it.name }.toSet(), enumValues("race_schedule_event", "event_type"))
+        assertEquals(ScheduleEventSource.entries.map { it.dbValue }.toSet(), enumValues("race_schedule_event", "source"))
+    }
+
+    @Test
+    fun `calendar_override の scope と action は OverrideScope・OverrideAction と一致する`() {
+        assertEquals(OverrideScope.entries.map { it.name }.toSet(), enumValues("calendar_override", "scope"))
+        assertEquals(OverrideAction.entries.map { it.name }.toSet(), enumValues("calendar_override", "action"))
     }
 
     @Test

@@ -222,7 +222,8 @@ class CalendarCheckService(
         val active =
             runs.findActive(tenantId, target)?.let { r ->
                 val expiresAt = r.leaseExpiresAt
-                if (expiresAt != null && now < expiresAt) ActiveRun.LeaseValid(r.runId, expiresAt) else ActiveRun.LeaseExpired(r.runId, expiresAt)
+                // 期限の情報が無い行は、期限切れと証明できないので有効として扱う（排他を優先。bot_run の奪取と同じ規則）
+                if (expiresAt == null || now < expiresAt) ActiveRun.LeaseValid(r.runId, expiresAt) else ActiveRun.LeaseExpired(r.runId, expiresAt)
             } ?: ActiveRun.None
         val decision = CalendarCheckPolicy.decide(now, target, today, mode, day, active, settings.watch)
         if (decision.reason != CalendarCheckReason.LAUNCH_ELIGIBLE) return CalendarCheckReport(tenantId, target, decision, null, day)

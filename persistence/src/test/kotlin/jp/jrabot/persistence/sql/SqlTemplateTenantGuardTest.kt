@@ -92,6 +92,19 @@ class SqlTemplateTenantGuardTest {
                 .orEmpty()
                 .map { it.name }
                 .sorted()
-        assertEquals(listOf("AppUserDao", "BotRunDao", "OddsSnapshotDao", "RaceDao", "RaceScheduleDao", "SignalDao"), daoNames)
+        assertEquals(
+            listOf(
+                "AppUserDao",
+                "BotRunDao",
+                "CalendarOverrideDao",
+                "OddsSnapshotDao",
+                "RaceDao",
+                "RaceDayDao",
+                "RaceScheduleDao",
+                "ScheduleEventDao",
+                "SignalDao",
+            ),
+            daoNames,
+        )
     }
 }
