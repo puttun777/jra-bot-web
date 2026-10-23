@@ -6,6 +6,7 @@ ktlint = "1.8.0"
 flyway = "13.11.1"
 doma = "3.14.1"
 doma-spring-boot = "3.0.0"
+google-cloud-storage = "2.75.0"
 
 [libraries]
 # Boot の BOM（JUnit・Spring 系・mysql-connector-j などの版をここに従わせる）
@@ -24,6 +25,10 @@ doma-kotlin = { module = "org.seasar.doma:doma-kotlin", version.ref = "doma" }
 doma-processor = { module = "org.seasar.doma:doma-processor", version.ref = "doma" }
 doma-spring-boot-starter = { module = "org.seasar.doma.boot:doma-spring-boot-starter", version.ref = "doma-spring-boot" }
 spring-boot-starter-jdbc = { module = "org.springframework.boot:spring-boot-starter-jdbc" }
+# :cloud-gcp だけが使う（D-076）。Jackson 3 と slf4j の版は Boot の BOM に従う
+google-cloud-storage = { module = "com.google.cloud:google-cloud-storage", version.ref = "google-cloud-storage" }
+jackson-databind = { module = "tools.jackson.core:jackson-databind" }
+slf4j-api = { module = "org.slf4j:slf4j-api" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 kotlin-test-junit5 = { module = "org.jetbrains.kotlin:kotlin-test-junit5" }

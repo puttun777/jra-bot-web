@@ -41,6 +41,30 @@ jobs:
         run: ./gradlew build --stacktrace
       - name: Dependency rules (explicit)
         run: ./gradlew checkModuleDependencies ktlintCheck
+      # :cloud-gcp の単体テスト（T2.7。ModeProvider）。実 GCP には接続しない（フェイクとローカルの HTTP サーバだけ）。0 件・スキップ・失敗を許さない。
+      - name: Verify that the cloud-gcp unit tests actually ran
+        run: |
+          dir=cloud-gcp/build/test-results/test
+          test -d "$dir" || { echo "::error::no cloud-gcp test results"; exit 1; }
+          python3 - "$dir" <<'PY'
+          import glob, sys, xml.etree.ElementTree as ET
+          expected = {
+              "OpsStateParserTest", "CachingModeProviderTest", "CachingModeProviderConcurrencyTest",
+              "GcsOpsStateSourceTest", "LocalFileModeProviderTest",
+          }
+          seen = set()
+          tests = skipped = failures = errors = 0
+          for f in glob.glob(sys.argv[1] + "/*.xml"):
+              r = ET.parse(f).getroot()
+              seen.add(r.get("name").rsplit(".", 1)[-1])
+              tests += int(r.get("tests")); skipped += int(r.get("skipped")); failures += int(r.get("failures")); errors += int(r.get("errors"))
+          print(f"tests={tests} skipped={skipped} failures={failures} errors={errors} classes={len(seen)}")
+          missing = expected - seen
+          if missing:
+              sys.exit(f"cloud-gcp test classes missing from the results: {sorted(missing)}")
+          if tests < 55 or skipped or failures or errors:
+              sys.exit("cloud-gcp unit tests did not all run and pass")
+          PY
 
   repo-hygiene:
     name: repo hygiene (secrets / real data)
