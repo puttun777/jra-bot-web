@@ -122,7 +122,7 @@ class GoldenRunnerTest {
                 .contains("unknown_option"),
         )
         val e =
-            runOn("E" to fixture("E", """"function":"evaluate_odds","args":{"odds":[{"umaban":1,"odds":3.0,"popularity":1}],"kwargs":{"top_k_partners":3}}"""))
+            runOn("E" to fixture("E", """"function":"evaluate_odds","args":{"odds":[{"umaban":1,"odds":3.0,"popularity":1}],"kwargs":{"unknown_option":3}}"""))
         assertEquals(0, e.coverage.get("supported").size())
     }
 
@@ -222,10 +222,19 @@ class GoldenRunnerTest {
                 "GD04-WIN-HITRATE-003",
                 "GD07-SIZING-004",
                 "GD08-SELECT-003",
+                // T3.2 で対応
+                "GD05-COMBO-001",
+                "GD05-PL-005",
+                "GD05-FLOW-006",
+                "GD05-BOX-007",
+                "GD05-REAL-008",
+                "GD05-FILTER-009",
+                "GD07-COMBO-STAKE-010",
+                "GD06-EVAL-011",
             ),
             supported.keys,
         )
-        assertEquals(setOf("G1-MODEL-001", "G2-HASH-001", "GD05-COMBO-001", "GD10-DEFAULTS-001"), unsupported.keys)
+        assertEquals(setOf("G1-MODEL-001", "G2-HASH-001", "GD10-DEFAULTS-001"), unsupported.keys)
 
         // 出力されたケースは申告した対応ケースと一致し、全呼び出しに結果がある
         assertEquals(
@@ -246,9 +255,159 @@ class GoldenRunnerTest {
                 id,
             )
         }
-        assertEquals(562, supported.values.sum() + unsupported.values.sum()) // 旧 Python の 14 ケース・562 呼び出し（10 ケース・447 に 4 ケース・115 を追加）
-        assertEquals(380, supported.values.sum())
-        assertEquals(182, unsupported.values.sum())
+        // 旧 Python の 21 ケース・810 呼び出し（T2.6 の 10 ケース・447 + T3.1 の 4 ケース・115 + T3.2 の 7 ケース・248）
+        assertEquals(810, supported.values.sum() + unsupported.values.sum())
+        assertEquals(661, supported.values.sum()) // T3.1 の 380 + GD05-COMBO-001 の 33 + T3.2 で追加した 7 ケース 248
+        assertEquals(149, unsupported.values.sum())
+    }
+
+    // ---- T3.2: ワイド/三連複 -----------------------------------------------------------------------------------------
+
+    private val horses4 =
+        listOf(3.0, 4.5, 7.0, 12.0).withIndex().joinToString(",", "[", "]") { (i, o) -> """{"umaban":${i + 1},"odds":$o,"popularity":${i + 1}}""" }
+    private val probs4 = """{"1":0.4,"2":0.3,"3":0.2,"4":0.1}"""
+
+    @Test
+    fun `推定オッズと旧の粗い近似の関数を実行できる`() {
+        val out =
+            runOn(
+                "T" to
+                    fixture(
+                        "T",
+                        """"function":"estimate_wide_odds","args":{"win_odds":3.0,"kwargs":{"num_horses":8}}""",
+                        """"function":"estimate_trifecta_odds","args":{"win_odds":10.01}""",
+                        """"function":"calculate_wide_prob","args":{"win_prob":0.66,"odds_list":[{"umaban":1,"odds":3.0,"popularity":1}],"target_umaban":1}""",
+                        """"function":"calculate_trifecta_prob","args":{"win_prob":0.3,"odds_list":[],"target_umaban":1}""",
+                    ),
+            )
+        assertEquals(1.2000000000000002, outcome(out, "T", 0).get("value").doubleValue())
+        assertEquals(0.1001, outcome(out, "T", 1).get("value").doubleValue())
+        assertEquals(0.99, outcome(out, "T", 2).get("value").doubleValue())
+        assertEquals(0.0, outcome(out, "T", 3).get("value").doubleValue())
+    }
+
+    @Test
+    fun `suggest_multiple_bet_strategies - 実オッズの配列がタプルキーの辞書として使われ、買い目が旧 dict と同じキーで出力される`() {
+        val out =
+            runOn(
+                "C" to
+                    fixture(
+                        "C",
+                        """"function":"suggest_multiple_bet_strategies","args":{"umaban":1,"win_prob":0.4,"win_odds":3.0,"odds_list":$horses4,
+                            |"kwargs":{"probs_by_umaban":$probs4,"ev_shrink_factor":1.0,"wide_max_prob":0.0,"max_tickets_per_type":9,"box_size":3,
+                            |"wide_odds_map":[[1,2,50.0,60.0],[1,3,40.0,45.0]],"ticket_allocation":"proportional_ev"}}
+                        """.trimMargin(),
+                    ),
+            )
+        val v = outcome(out, "C").get("value")
+        assertEquals(setOf("strategies", "best_strategy", "total_suggested_bet", "total_expected_profit", "meta"), v.propertyNames().toSet())
+        val wide = v.get("strategies").get("ワイド")
+        assertEquals(
+            setOf(
+                "type",
+                "umaban",
+                "odds",
+                "prob",
+                "prob_used_for_bet",
+                "ev",
+                "suggested_bet",
+                "expected_profit",
+                "kelly_fraction",
+                "kelly_raw",
+                "kelly_adjusted",
+                "kelly_bet_before_clip",
+                "clipped",
+                "skip_reason",
+                "strategy",
+                "note",
+                "tickets",
+                "kumi",
+                "combo_key",
+            ),
+            wide.propertyNames().toSet(),
+        )
+        val t = wide.get("tickets").get(0)
+        assertEquals(setOf("kumi", "odds", "odds_note", "prob", "prob_used", "ev", "source", "stake"), t.propertyNames().toSet())
+        assertEquals("実オッズ", t.get("source").stringValue())
+        assertEquals("50.0\u301c60.0", t.get("odds_note").stringValue())
+        assertTrue(t.get("stake").isFloatingPointNumber)
+        assertEquals(wide.get("kumi").stringValue(), wide.get("combo_key").stringValue())
+        // 実オッズの無い三連複は見送りエントリ（kumi / combo_key を持たない）
+        val tri = v.get("strategies").get("三連複")
+        assertEquals(0, tri.get("tickets").size())
+        assertTrue(!tri.has("kumi"))
+        assertEquals("※ 実オッズが取れた場合のみ判定/投資します", tri.get("note").stringValue())
+    }
+
+    @Test
+    fun `evaluate_odds にも実オッズを渡せる - ワイド・三連複の設定キーを受け付ける`() {
+        val out =
+            runOn(
+                "E" to
+                    fixture(
+                        "E",
+                        """"function":"evaluate_odds","args":{"odds":$horses4,"kwargs":{"ev_threshold":-0.5,"ev_shrink_factor":1.0,"bankroll":2000.0,"max_bet":50.0,
+                            |"bet_types":["ワイド"],"wide_odds_map":[[1,2,80.0,90.0],[1,3,80.0,90.0],[1,4,80.0,90.0],[2,3,80.0,90.0],[2,4,80.0,90.0],[3,4,80.0,90.0]],
+                            |"top_k_partners":2,"max_tickets_per_type":3,"box_size":3,"plackett_luce_alpha":1.5,"wide_max_over_market":0.0}}
+                        """.trimMargin(),
+                    ),
+            )
+        val signals = outcome(out, "E").get("value").get("signals")
+        assertTrue(signals.size() > 0)
+        assertEquals("ワイド", signals.get(0).get("bet_type").stringValue())
+        assertEquals("wide", signals.get(0).get("market").stringValue())
+    }
+
+    @Test
+    fun `確率が与えられない直接呼び出しや、戦略が空になる呼び出しは未対応（旧実装の 1 オッズ近似・int の 0 を再現しない）`() {
+        val noProbs =
+            runOn(
+                "N" to
+                    fixture(
+                        "N",
+                        """"function":"suggest_multiple_bet_strategies","args":{"umaban":1,"win_prob":0.4,"win_odds":3.0,"odds_list":$horses4,"kwargs":{}}""",
+                    ),
+            )
+        assertEquals(0, noProbs.coverage.get("supported").size())
+        val empty =
+            runOn(
+                "M" to
+                    fixture(
+                        "M",
+                        """"function":"suggest_multiple_bet_strategies","args":{"umaban":1,"win_prob":0.4,"win_odds":3.0,"odds_list":$horses4,"kwargs":{"probs_by_umaban":$probs4,"allowed_bet_types":[]}}""",
+                    ),
+            )
+        assertEquals(0, empty.coverage.get("supported").size())
+        assertTrue(
+            empty.coverage
+                .get("unsupported")
+                .get(0)
+                .get("reason")
+                .stringValue()
+                .contains("戦略が空"),
+        )
+    }
+
+    @Test
+    fun `整数の実オッズや不明な賭式は未対応にする`() {
+        val intOdds =
+            runOn(
+                "I" to
+                    fixture(
+                        "I",
+                        """"function":"suggest_multiple_bet_strategies","args":{"umaban":1,"win_prob":0.4,"win_odds":3.0,"odds_list":$horses4,"kwargs":{"probs_by_umaban":$probs4,"wide_odds_map":[[1,2,50,60]]}}""",
+                    ),
+            )
+        assertEquals(0, intOdds.coverage.get("supported").size())
+        val badType =
+            runOn(
+                "B" to
+                    fixture(
+                        "B",
+                        """"function":"suggest_multiple_bet_strategies","args":{"umaban":1,"win_prob":0.4,"win_odds":3.0,"odds_list":$horses4,"kwargs":{"probs_by_umaban":$probs4,"allowed_bet_types":["馬単"]}}""",
+                    ),
+            )
+        assertEquals(0, badType.coverage.get("supported").size())
     }
 
     @Test

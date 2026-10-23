@@ -152,7 +152,13 @@ object BetStrategyBuilder {
                 for (j in i + 1 until box.size) {
                     val a = box[i]
                     val b = box[j]
-                    offer(a, b, race.realOdds.wide(a, b), { PythonCompat.min(race.winOddsOf(a) ?: winOdds, race.winOddsOf(b) ?: winOdds) }, ComboTicket.BOX_PREFIX)
+                    offer(
+                        a,
+                        b,
+                        race.realOdds.wide(a, b),
+                        { PythonCompat.min(race.winOddsOf(a) ?: winOdds, race.winOddsOf(b) ?: winOdds) },
+                        ComboTicket.BOX_PREFIX,
+                    )
                 }
             }
         }

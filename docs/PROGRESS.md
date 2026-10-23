@@ -1,6 +1,68 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-10-23（第3段階 / Stage 3-A: T3.1 EV・Kelly・確率・判定・急落フィルタの Kotlin 移植と旧 Python とのゴールデン比較）
+最終更新: 2026-10-23（第3段階 / Stage 3-B: T3.2 ワイド・三連複の Plackett–Luce 確率・推定/実オッズ・流し/BOX・ticket_allocation の Kotlin 移植と旧 Python とのゴールデン比較）
+
+## Stage 3-B（claude/stage3-combo-strategy）: T3.2 ワイド・三連複の確率計算・買い目戦略
+### 結果（T3.2 の範囲で完了。本番で動作する Bot ではない）
+- **着手前の確認**: PR #17（T3.1）は main にマージ済み（f41b701）。参照元は固定コミット `f7dbf69fd8940121782870de902e8c449e6ca149`（読み取り専用。変更なし）。numpy は 2.5.3 のまま。**既存 14 ケースのフィクスチャは 1 バイトも変えていない**（`generate --add-new`。`generate --check` は 21 ケースで一致）。作業ブランチは `claude/stage3-combo-strategy`（環境指定のサフィックス付きの名前で作成）。
+- **実装したもの**（`:domain` の `jp.jrabot.domain.decision` に追加。T3.1 の型は作り直さず拡張。D-112）:
+  | クラス | 旧 Python の対応 | 内容 |
+  |---|---|---|
+  | `PlackettLuce` | `suggest_multiple_bet_strategies` 内の `_score`/`_pl_order_prob`/`_top3_set_prob`/`_wide_pair_prob` | 重み `clamp(p,1e-12,0.99)^clamp(α or 1.0,0.1,5)`、着順確率、三連複（6 通りの和）、ワイド（他の全馬の三連複の和）。W の前計算とメモ化（ビット単位で同じ値: D-114） |
+  | `ComboOdds`・`WideKey`・`SanrenpukuKey`・`WideOddsRange` | `wide_odds_map`/`sanrenpuku_odds_map` | 実オッズの注入（昇順に正規化したキー。DB 非依存。鮮度は持たない: D-117） |
+  | `ComboOddsEstimate`・`LegacySimpleComboProbability` | `estimate_wide_odds`/`estimate_trifecta_odds`・`calculate_wide_prob`/`calculate_trifecta_prob` | 推定オッズ（丸め・上下限なし）／旧の粗い近似（旧実装でも判定に未使用のため単独の関数。GD05-COMBO-001 用） |
+  | `ComboSettings`・`ComboRaceContext`・`ComboTicket`・`OddsSource`・`ComboTickets.deduplicated` | `top_k_partners` ほかの引数・`_pick_box_candidates`・`tickets[]`・`notify/discord.py` の `_deduplicate_tickets` | 設定、1 レースの共有入力（遅延生成の PL・BOX 候補）、買い目、重複除去の規則（通知用。生成では除かない: D-116） |
+  | `BetStrategyBuilder`（拡張）・`StrategyEntry.tickets`/`kumi` | `suggest_multiple_bet_strategies` のワイド/三連複 | 流し・BOX・E8 の段階・EV 降順の点数上限・最良の買い目の Kelly・`ticket_allocation`・見送りエントリ・最推奨（E7）・`best_only`・総投資上限での買い目の縮小 |
+  | `SignalOrdering`・`WinDecisionEvaluator.evaluate(horses, realOdds)` | `evaluate_odds` のソートと統合 | edge/hit_rate の並びを独立した部品に。同点の賭式優先を単体で検証 |
+  | `:golden-runner`（`GoldenCalls`） | - | `suggest_multiple_bet_strategies` の直接呼び出し、実オッズ配列の注入、買い目の JSON 化、推定オッズ/旧近似の関数 |
+- **単勝の既存結果は不変**: T3.1 の 10 ケース/380 呼び出し（26,759 個の浮動小数）は全一致のまま（最大絶対誤差 0）。単体テスト（T3.1 の 387 件）も全て緑（推定オッズの経路が `UnsupportedDecisionScopeException` だったテスト 1 件だけ、新しい挙動に合わせて書き換えた）。
+### 旧 Python との比較（ローカル実測。CI の結果は下の「CI・PR」）
+| 項目 | 結果 |
+|---|---|
+| フィクスチャ全体 | 21 ケース / **810 呼び出し**（既存 14 ケース/562 + 今回追加 7 ケース/248） |
+| **Kotlin が検証した（対応）** | **18 ケース / 661 呼び出し — 全一致**。T3.1 の 10 ケース/380 + 既存の `GD05-COMBO-001` 33（今回 Kotlin 対応）+ **今回追加の 7 ケース/248**（`GD05-PL-005` 42 / `GD05-FLOW-006` 17 / `GD05-BOX-007` 22 / `GD05-REAL-008` 35 / `GD05-FILTER-009` 48 / `GD07-COMBO-STAKE-010` 50 / `GD06-EVAL-011` 34）。比較した浮動小数 **62,903 個**（うち今回追加の 7 ケース 36,111 個） |
+| **未対応（比較していない。成功に数えない）** | **3 ケース / 149 呼び出し** — `G1-MODEL-001` 73（ML 推論: T3.6）、`G2-HASH-001` 70（特徴量ハッシュ: T3.6）、`GD10-DEFAULTS-001` 6（旧関数の既定値の突合: T1.20） |
+| 検証済みの割合 | 661 / 810 呼び出し = 81.6%（**『全件一致』ではない**） |
+| 最大絶対誤差 | **0**（許容は各ケースの `comparison_rules` のまま: 確率・EV・金額 1e-9、正規化 1e-12。全値がビット一致。`pow`（α≠1: 0.1〜5.0）も一致。別の CPU/libm では最後の 1〜2 桁が揺れ得るため許容誤差は維持） |
+| 比較の感度（変異テスト） | 14 件の変更を入れて確認: 11 件はゴールデンが不一致になる（EV の `<=`→`<`、下限の `<`→`<=`、上限を縮小の前に適用、BOX の『軸が候補内』条件の除去、相手の頭数 max(1,k)/max(3,k)、EV 昇順、配分を常に best_only、α 下限、確率下限、重みの合計を素の加算に）。**不一致にならない 3 件は意図どおり**: ①市場比上限と `max_prob` の適用順（`min` の可換で結果が同じ）、②三連複オッズ 0.0 を『有る』扱い（EV −1 で除外されるので出力が同じ。単体テストは『無い』扱いの経路の見送りを確認）、③三連複の 6 通りの和の順序（最後の数桁の差で、許容誤差内）。元に戻して再確認済み |
+| 検証できない範囲 | 実オッズの分布・取得失敗・鮮度（旧実装に鮮度の概念が無い。T3.4）、実データでの正確性（合成入力のみ）、旧関数既定値の突合（T1.20） |
+### テスト
+| 区分 | 結果（ローカル、JDK 21） |
+|---|---|
+| `:domain` 単体 | **488 件成功**（旧 387 + 新 101: `PlackettLuceTest` 20 / `ComboOddsTest` 13 / `ComboStrategyTest` 47 / `WinDecisionComboTest` 21） |
+| `:golden-runner` 単体 | **14 件成功**（旧 9 + 新 5: 推定オッズ/旧近似、直接呼び出しの形、evaluate_odds の実オッズ、未対応の判定 2。実フィクスチャの分類を 810 = 661 + 149 に更新） |
+| ktlint / checkModuleDependencies | 成功（`ktlintCheck` `:domain:check` `:golden-runner:check` `checkModuleDependencies`） |
+| Python ゴールデン | **82 件成功**（旧 74 + `test_combo_inputs` 8）、`generate --check`（21 ケース）・`verify` 成功 |
+| Python ci/release | 109 件成功（変更なし） |
+| 未実施（ローカル） | 他モジュール（persistence/bot/ingest/dashboard/cloud-gcp）のビルド・DB 統合・イメージ・build-logic のテスト（変更なし）。完了判定の正は GitHub Actions（D-056） |
+- **主な検証項目**: Plackett–Luce の旧 Python 値との一致（6 頭×α 3 通り・5 頭）、恒等式（3 頭で和 1、全馬同確率の閉じた式 n=5/8/18、4 頭の和 1 と 3）、馬番順の不変（1e-12）、α の端、確率 0/負/1 超、重複・0 以下・非有限の拒否、前計算とメモ化が素朴な旧実装の写しとビット単位で同じ（18 頭・816 通り）、段階の順序と各境界（縮小→上限→市場比上限→下限→EV。`ちょうど` の等号）、流しの相手・BOX 候補・人気 0・同順位・オッズ順、実オッズの優先・欠損・0.0、`ticket_allocation`（大文字小文字・未知の文字列）、Kelly（min/max_bet・確率源の係数）、最推奨（E7・同値は先勝ち）、`best_only`、総投資上限での買い目の縮小（買い目 = scale 倍、最推奨 = scale²）、hit_rate の賭式をまたぐ同点、見送りシグナル、18 頭の性能。
+### 性能（E10。ローカル JDK 21、ウォームアップなし、1 回目の実測）
+| 条件（合成） | Kotlin | 旧 Python |
+|---|---|---|
+| 18 頭の全ワイド 153 + 全三連複 816 の確率（`PlackettLuce`） | 約 2 ms | - |
+| `evaluate` 18 頭・全馬を軸・実オッズ全組合せ（`top_k_partners=6`・`box_size=4`/5） | 約 8〜29 ms | 約 23〜27 ms（`evaluate_odds`） |
+| 同・最大（`top_k_partners=17`・`box_size=18`） | 約 0.3〜0.5 秒 | 約 0.5 秒 |
+JIT のウォームアップや環境で変わる目安。数値の仕様は変えていない（D-114）。表示用の文字列は残る買い目だけ作る（`oddsNote`/`kumi`）。
+### 意図的な差異・互換（詳細は D-113〜D-118・D-121）
+- **旧挙動を維持（未承認の数値変更なし）**: `pipeline_version=legacy`、`fixes.*` はすべて false。E6（縮小後の min_bet 再判定）・E12・E14・H4・H10 の改善案は未実装。最推奨の賭け額は総投資上限で scale²、買い目の賭け額は scale（合計が一致しない）。`ticket_allocation` は `proportional_ev`（大小無視）以外はすべて best_only 扱い。流しと BOX が同じ組合せなら重複が点数上限を消費する。
+- **旧実装の精読で判明（再現済み。D-121）**: `calculate_wide_prob`/`calculate_trifecta_prob` は旧実装でも未使用の粗い近似で、判定の確率は Plackett–Luce。E11 の『ワイドは見送りエントリを返さない』は誤り（ワイドも三連複も返す）。三連複の確率は引数の順で最後の数桁が変わる。`axis_place3` は未使用。
+- **入力検証の差異（D-117・D-118）**: 実オッズのキーは昇順に正規化（旧は逆順だと黙って不一致）、馬番が 0 以下・重複した並びで買い目の確率を計算するときは拒否（確率が不要な経路は T3.1 と同じ）、非有限の確率/α/実オッズ・`low > high` は拒否。
+- **重複した買い目（D-116）**: 通知層の `_deduplicate_tickets` と同じ規則を `ComboTickets.deduplicated` に置いた。生成段階では除かない（除くと点数上限と按分の数値が変わるため）。生成段階での除去は承認待ち。
+### 未対応・範囲外（T3.2 の完了範囲と残りを区別）
+- ML 経路・特徴量（T3.6）、実オッズの DB 取得・鮮度（T3.4）、取込 API（T3.4）、Windows エージェント（T3.5）、Discord 本文（T3.7）、時間帯スケジュール・adaptive_relaxation・bot-run のオーケストレーション（T3.8）、バックテスト（T3.9）、開催日制御（T3.3）。`StubTaskHandler` は置き換えていない。bot-run のループ・checkpoint・SIGTERM は未実装・未検証のまま。
+### セッションの環境
+`java -version`: OpenJDK 21（JDK 25 なし。ローカルのビルドは `-PjdkVersion=21`、CI は JDK 25）。`./gradlew`: 9.7.1 が動作（`LC_ALL=C.UTF-8` が必要。Maven Central の 429 が出るため再試行した）。`docker info`: Docker 29.9.1（未使用）。Python 3.13.16（venv の numpy 2.5.3 で旧実装を実行）。
+### 未解決のまま保持（このセッションでは変更していない）
+T1.16（JRA-VAN 利用条件）、T1.17（JV-Link 公式仕様）、T1.20（実 SQLite・設定・モデル）、T1.21（数値挙動の承認: E6/E12/E14/H4/H10、生成段階の重複除去、買い目の賭け額の整合）、T3.0（Windows 実機 PoC）、infra I-H1〜I-H9、T5.0（infra 契約同期）、Cloud SQL・GCS 等の実環境検証（G-*）、MySQL 9.7 の本番採否、Connector/J 26.x の採否、`0<odds<1` の取込境界の扱い、デッドロック 1213 の再試行、bot-run の checkpoint・SIGTERM、本番 release-manifest、ml-train イメージ。branch protection の required checks を `ci gate` のみにする作業（ユーザー作業）も未確認。
+### CI・PR
+- **PR**: 作成後に記載（main 向け。マージはユーザー）。
+- **CI の方針**: `.github/workflows/ci.yml` は未変更（D-120）。変更判定は `kotlin_core`・`kotlin_golden`・`golden`・`docs` → `build`（Kotlin と旧 Python の比較を含む）・`golden`・DB 統合（MySQL 8.4 のみ）。images・Connector/J 26.x・MySQL 9.7 は走らない。`domain unit` の件数下限（387）とクラス一覧は、次に CI 設定を変更する PR で 488 と新クラスに更新する。
+### 次の作業（T3.3 への引き継ぎ。今回は着手していない）
+- T3.3 は開催日制御（RACE_CALENDAR_DESIGN の実装: スキーマ、calendar-check、bot-run リース、手動補正、C01〜C28 のテスト）。T3.2 の計算エンジンとは独立。
+- T3.2 の成果を使う後続: T3.4（DB から `ComboOdds` を作る Repository 実装。**キーは昇順に正規化される**・**取得時刻の鮮度は呼び出し側で判定する**）、T3.7（通知は `ComboTickets.deduplicated` で複数シグナルの買い目をまとめる。表示用の `oddsNote`/`kumi` は旧実装と同じ文字列）、T3.8（`ComboSettings` の運用値は example config を正に決める: D-016）。
+- 先に決めておくとよいこと: `0<odds<1` の扱い、運用の既定値（example config）、生成段階の重複除去・買い目の賭け額の整合の承認（T1.21）。
+### ブランチ
+`claude/stage3-combo-strategy`（main の f41b701 から作成。PR は main 向け、マージはユーザー）。
 
 ## Stage 3-A（claude/stage3-core-decision）: T3.1 EV・Kelly・確率・判定・急落フィルタ
 ### 結果（単勝の範囲で完了。本番で動作する Bot ではない）

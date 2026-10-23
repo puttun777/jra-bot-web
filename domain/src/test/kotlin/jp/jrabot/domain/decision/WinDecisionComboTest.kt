@@ -30,9 +30,19 @@ class WinDecisionComboTest {
     private fun realOdds(odds: List<Double>): ComboOdds {
         val p = marketProbs(odds)
         val n = odds.size
-        val wide = (1..n).flatMap { a -> (a + 1..n).map { b -> WideKey.of(a, b) to WideOddsRange(0.3 / (p[a - 1] * p[b - 1]) + 1.0, 0.5 / (p[a - 1] * p[b - 1]) + 1.0) } }.toMap()
+        val wide =
+            (1..n)
+                .flatMap { a ->
+                    (a + 1..n).map { b ->
+                        WideKey.of(a, b) to
+                            WideOddsRange(0.3 / (p[a - 1] * p[b - 1]) + 1.0, 0.5 / (p[a - 1] * p[b - 1]) + 1.0)
+                    }
+                }.toMap()
         val tri =
-            (1..n).flatMap { a -> (a + 1..n).flatMap { b -> (b + 1..n).map { c -> SanrenpukuKey.of(a, b, c) to 0.2 / (p[a - 1] * p[b - 1] * p[c - 1]) + 1.0 } } }.toMap()
+            (1..n)
+                .flatMap { a ->
+                    (a + 1..n).flatMap { b -> (b + 1..n).map { c -> SanrenpukuKey.of(a, b, c) to 0.2 / (p[a - 1] * p[b - 1] * p[c - 1]) + 1.0 } }
+                }.toMap()
         return ComboOdds(wide, tri)
     }
 
@@ -126,7 +136,12 @@ class WinDecisionComboTest {
         assertEquals(none, withReal, "単勝だけを対象にすれば実オッズは結果に影響しない")
         val all = evaluate(cfg, real = ComboOdds.EMPTY)
         for (sig in bets(all)) assertEquals(BetType.WIN, sig.betType)
-        val e = bets(all).first().betStrategy!!.strategies.single { it.type == BetType.WIDE }
+        val e =
+            bets(all)
+                .first()
+                .betStrategy!!
+                .strategies
+                .single { it.type == BetType.WIDE }
         assertTrue(e.isComboSkip)
     }
 
@@ -148,7 +163,13 @@ class WinDecisionComboTest {
     fun `実オッズ必須でない設定 - 推定オッズで判定でき、例外にならない`() {
         val r = evaluate(cfg.copy(requireRealOddsForCombo = false), real = ComboOdds.EMPTY)
         assertTrue(bets(r).isNotEmpty())
-        assertTrue(bets(r).first().betStrategy!!.meta.requireRealOddsForCombo.not())
+        assertTrue(
+            bets(r)
+                .first()
+                .betStrategy!!
+                .meta.requireRealOddsForCombo
+                .not(),
+        )
     }
 
     @Test
@@ -162,7 +183,10 @@ class WinDecisionComboTest {
         assertTrue(skip.skipReason!!.startsWith("Kelly推奨額("))
         assertEquals(c.widePayoutRate, skip.payoutRate)
         assertTrue(skip.ev.value > 0.0)
-        assertTrue(skip.betStrategy.best.tickets.all { it.stake == null })
+        assertTrue(
+            skip.betStrategy.best.tickets
+                .all { it.stake == null },
+        )
     }
 
     // ---- 総投資上限 ------------------------------------------------------------------------------------------------
@@ -322,7 +346,8 @@ class WinDecisionComboTest {
     @Test
     fun `単勝だけを対象にした判定は、ワイド・三連複の設定に影響されない`() {
         val a = evaluate(cfg.copy(betTypes = setOf(BetType.WIN)))
-        val b = evaluate(cfg.copy(betTypes = setOf(BetType.WIN), combo = ComboSettings.legacyFunctionDefaults().copy(topKPartners = 1, plackettLuceAlpha = 3.0)))
+        val b =
+            evaluate(cfg.copy(betTypes = setOf(BetType.WIN), combo = ComboSettings.legacyFunctionDefaults().copy(topKPartners = 1, plackettLuceAlpha = 3.0)))
         assertEquals(a, b)
     }
 

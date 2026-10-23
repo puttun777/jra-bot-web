@@ -101,14 +101,30 @@ class ComboStrategyTest {
         val pops = listOf(3, 0, 1, 0, 2, 4, 0, 5)
         val b = build(1, odds8, withCombo { it.copy(topKPartners = 2, boxSize = 3) }, all(8), pops)!!
         // 軸 1（人気 3）の相手は 人気 1 の 3 番と 人気 2 の 5 番（人気 0 の 2, 4, 7 番は、オッズが低くても対象外）
-        assertEquals(setOf("01-03", "01-05"), b.entry(BetType.WIDE).tickets.filterNot { it.isBox }.map { it.kumi }.toSet())
+        assertEquals(
+            setOf("01-03", "01-05"),
+            b
+                .entry(BetType.WIDE)
+                .tickets
+                .filterNot { it.isBox }
+                .map { it.kumi }
+                .toSet(),
+        )
     }
 
     @Test
     fun `人気の同順位は出走順を保つ`() {
         val pops = listOf(1, 1, 2, 2, 3, 3, 4, 4)
         val b = build(1, odds8, withCombo { it.copy(topKPartners = 3, boxSize = 3) }, all(8), pops)!!
-        assertEquals(setOf("01-02", "01-03", "01-04"), b.entry(BetType.WIDE).tickets.filterNot { it.isBox }.map { it.kumi }.toSet())
+        assertEquals(
+            setOf("01-02", "01-03", "01-04"),
+            b
+                .entry(BetType.WIDE)
+                .tickets
+                .filterNot { it.isBox }
+                .map { it.kumi }
+                .toSet(),
+        )
     }
 
     @Test
@@ -133,6 +149,7 @@ class ComboStrategyTest {
     @Test
     fun `BOX - 軸が候補に入るときだけ。候補は人気上位 max(3, box_size) 頭`() {
         val odds = listOf(3.0, 4.5, 7.0, 12.0, 25.0, 40.0, 80.0)
+
         fun boxCount(
             axis: Int,
             boxSize: Int,
@@ -259,7 +276,11 @@ class ComboStrategyTest {
         val tickets = b!!.entry(BetType.WIDE).tickets
         assertTrue(tickets.any { it.isBox }, "BOX の買い目が少なくとも 1 点ある")
         tickets.filter { it.isBox }.forEach { t ->
-            val (x, y) = t.kumi.removePrefix("[BOX]").split("-").map { it.toInt() }
+            val (x, y) =
+                t.kumi
+                    .removePrefix("[BOX]")
+                    .split("-")
+                    .map { it.toInt() }
             assertEquals(ComboOddsEstimate.wide(minOf(odds[x - 1], odds[y - 1])), t.odds, "${t.kumi}")
         }
     }
@@ -279,7 +300,15 @@ class ComboStrategyTest {
     @Test
     fun `ワイドの実オッズ下限 0_0 はそのまま使われ（EV −1 で除外）、推定には戻らない`() {
         val zero = ComboOdds(wide = mapOf(WideKey.of(1, 2) to WideOddsRange(0.0, 0.0)))
-        val b = build(1, listOf(3.0, 4.5, 7.0, 12.0, 25.0, 40.0), withCombo(raw.copy(requireRealOddsForCombo = false)) { it.copy(topKPartners = 1, boxSize = 3) }, zero)!!
+        val b =
+            build(
+                1,
+                listOf(3.0, 4.5, 7.0, 12.0, 25.0, 40.0),
+                withCombo(raw.copy(requireRealOddsForCombo = false)) {
+                    it.copy(topKPartners = 1, boxSize = 3)
+                },
+                zero,
+            )!!
         assertTrue(b.strategies.none { it.type == BetType.WIDE && it.tickets.any { t -> t.kumi == "01-02" } })
     }
 
@@ -295,8 +324,19 @@ class ComboStrategyTest {
         low: Double = 20.0,
     ): ComboTicket? {
         val real = ComboOdds(wide = mapOf(WideKey.of(1, 2) to WideOddsRange(low, low + 1.0)))
-        val b = build(1, oddsF, withCombo(cfg) { it.copy(topKPartners = 1, boxSize = 3) }.copy(betTypes = setOf(BetType.WIDE)), real, pops = listOf(9, 1, 2, 3, 4, 5))
-        return b?.strategies?.singleOrNull()?.tickets?.singleOrNull()
+        val b =
+            build(
+                1,
+                oddsF,
+                withCombo(cfg) { it.copy(topKPartners = 1, boxSize = 3) }.copy(betTypes = setOf(BetType.WIDE)),
+                real,
+                pops = listOf(9, 1, 2, 3, 4, 5),
+            )
+        return b
+            ?.strategies
+            ?.singleOrNull()
+            ?.tickets
+            ?.singleOrNull()
     }
 
     @Test
@@ -374,9 +414,14 @@ class ComboStrategyTest {
     fun `三連複も同じ段階で処理される`() {
         val rawP = plF.top3SetProb(1, 2, 3)
         val real = ComboOdds(sanrenpuku = mapOf(SanrenpukuKey.of(1, 2, 3) to 20.0))
+
         fun tri(f: (ComboSettings) -> ComboSettings): ComboTicket? {
             val cfg = withCombo(raw.copy(betTypes = setOf(BetType.SANRENPUKU))) { f(it.copy(topKPartners = 2, boxSize = 3)) }
-            return build(1, oddsF, cfg, real, pops = listOf(9, 1, 2, 3, 4, 5))?.strategies?.singleOrNull()?.tickets?.singleOrNull()
+            return build(1, oddsF, cfg, real, pops = listOf(9, 1, 2, 3, 4, 5))
+                ?.strategies
+                ?.singleOrNull()
+                ?.tickets
+                ?.singleOrNull()
         }
         assertEquals(rawP, tri { it }!!.probUsed.value)
         assertEquals(0.1, tri { it.copy(sanrenpukuMaxProb = 0.1) }!!.probUsed.value)
@@ -429,7 +474,14 @@ class ComboStrategyTest {
     private fun realStake(): ComboOdds {
         val p = market(oddsF)
         return ComboOdds(
-            wide = (1..6).flatMap { a -> (a + 1..6).map { b -> WideKey.of(a, b) to WideOddsRange(0.5 / (p[a - 1] * p[b - 1]) + 1.0, 0.7 / (p[a - 1] * p[b - 1]) + 1.0) } }.toMap(),
+            wide =
+                (1..6)
+                    .flatMap { a ->
+                        (a + 1..6).map { b ->
+                            WideKey.of(a, b) to
+                                WideOddsRange(0.5 / (p[a - 1] * p[b - 1]) + 1.0, 0.7 / (p[a - 1] * p[b - 1]) + 1.0)
+                        }
+                    }.toMap(),
             sanrenpuku = triAll(6, 0.0).keys.associateWith { k -> 0.3 / (p[k.first - 1] * p[k.second - 1] * p[k.third - 1]) + 1.0 },
         )
     }
@@ -453,7 +505,13 @@ class ComboStrategyTest {
         for (t in e.tickets) assertEquals(e.suggestedBet * t.ev.value / sumEv, t.stake!!, 1e-12)
         assertEquals(e.suggestedBet, e.tickets.sumOf { it.stake!! }, 1e-12)
         assertEquals(e.tickets.sumOf { it.stake!! * it.ev.value }, e.expectedProfit, 1e-12)
-        assertTrue(e.tickets.map { it.stake!! }.distinct().size > 1, "買い目ごとに配分が違う")
+        assertTrue(
+            e.tickets
+                .map { it.stake!! }
+                .distinct()
+                .size > 1,
+            "買い目ごとに配分が違う",
+        )
     }
 
     @Test
@@ -499,7 +557,9 @@ class ComboStrategyTest {
 
     @Test
     fun `確率源ラベルによる Kelly 係数（H10） - 完全一致のラベルだけ 1_0 や 0_9`() {
-        fun adj(label: String) = build(1, oddsF, stakeCfg.copy(probSource = label, maxBet = 1e9, kellyFraction = 0.5), realStake())!!.entry(BetType.WIDE).kellyAdjusted / build(1, oddsF, stakeCfg.copy(probSource = label, maxBet = 1e9, kellyFraction = 0.5), realStake())!!.entry(BetType.WIDE).kellyRaw
+        fun adj(label: String) =
+            build(1, oddsF, stakeCfg.copy(probSource = label, maxBet = 1e9, kellyFraction = 0.5), realStake())!!.entry(BetType.WIDE).kellyAdjusted /
+                build(1, oddsF, stakeCfg.copy(probSource = label, maxBet = 1e9, kellyFraction = 0.5), realStake())!!.entry(BetType.WIDE).kellyRaw
         assertEquals(0.5, adj("ml_features"), 1e-15)
         assertEquals(0.45, adj("ML_MODEL"), 1e-15)
         assertEquals(0.4, adj("market"), 1e-15)

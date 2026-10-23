@@ -1,10 +1,10 @@
 package jp.jrabot.golden
 
 import jp.jrabot.domain.decision.BetSignal
+import jp.jrabot.domain.decision.BetStrategyBuilder
 import jp.jrabot.domain.decision.BetStrategyBundle
 import jp.jrabot.domain.decision.BetType
 import jp.jrabot.domain.decision.BetTypeMode
-import jp.jrabot.domain.decision.BetStrategyBuilder
 import jp.jrabot.domain.decision.ComboOdds
 import jp.jrabot.domain.decision.ComboOddsEstimate
 import jp.jrabot.domain.decision.ComboRaceContext
@@ -20,16 +20,16 @@ import jp.jrabot.domain.decision.MarketProbability
 import jp.jrabot.domain.decision.OddsPopularitySnapshot
 import jp.jrabot.domain.decision.PriorityMode
 import jp.jrabot.domain.decision.ProbRaw
+import jp.jrabot.domain.decision.SanrenpukuKey
 import jp.jrabot.domain.decision.SkipSignal
 import jp.jrabot.domain.decision.SnapshotFilters
-import jp.jrabot.domain.decision.SanrenpukuKey
 import jp.jrabot.domain.decision.SnapshotsNewestFirst
 import jp.jrabot.domain.decision.StrategyEntry
 import jp.jrabot.domain.decision.WideKey
 import jp.jrabot.domain.decision.WideOddsRange
-import jp.jrabot.domain.decision.WinStake
 import jp.jrabot.domain.decision.WinDecisionConfig
 import jp.jrabot.domain.decision.WinDecisionEvaluator
+import jp.jrabot.domain.decision.WinStake
 import tools.jackson.databind.JsonNode
 
 /**
@@ -323,14 +323,21 @@ object GoldenCalls {
                 DecisionHorse(umaban = it.int("umaban"), odds = it.double("odds"), popularity = it.int("popularity"))
             }
         val pm = k?.get("probs_by_umaban")?.takeUnless { it.isNull } ?: throw UnsupportedGoldenCall("probs_by_umaban が必要（1/オッズ近似は未対応）")
-        val probs = horses.map { h -> (pm.get(h.umaban.toString()) ?: throw UnsupportedGoldenCall("probs_by_umaban に馬${h.umaban}が無い")).asDouble("probs_by_umaban") }
+        val probs =
+            horses.map { h ->
+                (pm.get(h.umaban.toString()) ?: throw UnsupportedGoldenCall("probs_by_umaban に馬${h.umaban}が無い")).asDouble("probs_by_umaban")
+            }
         val d = WinDecisionConfig.legacyFunctionDefaults()
 
         fun optD(name: String): Double? = k.get(name)?.takeUnless { it.isNull }?.asDouble(name)
         val betTypes =
-            k.get("allowed_bet_types")?.takeUnless { it.isNull }?.values()?.map { t ->
-                BetType.fromLabelOrNull(t.stringValue()) ?: throw UnsupportedGoldenCall("未知の賭式: ${t.stringValue()}")
-            }?.toSet()
+            k
+                .get("allowed_bet_types")
+                ?.takeUnless { it.isNull }
+                ?.values()
+                ?.map { t ->
+                    BetType.fromLabelOrNull(t.stringValue()) ?: throw UnsupportedGoldenCall("未知の賭式: ${t.stringValue()}")
+                }?.toSet()
         val config =
             d.copy(
                 bankroll = optD("bankroll") ?: d.bankroll,
