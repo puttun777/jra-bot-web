@@ -108,7 +108,7 @@ dashboard ─読取（DTO）─▶ MySQL        export-dataset ─▶ GCS datase
 ## 6. セキュリティ
 | 主体 | 経路 | 認証 | 認可 |
 |---|---|---|---|
-| 利用者（最大 2 人） | ブラウザ → dashboard | 直接 IAP + **アプリ側の JWT 検証**（二重） | `ALLOWED_USERS` ∩ `app_user`。テナントとロールを解決し、未登録は 403（deny by default） |
+| 利用者（**本人 1 名**。2026-10-23 に最大 2 人から変更: REQUIREMENTS §0） | ブラウザ → dashboard | 直接 IAP + **アプリ側の JWT 検証**（二重） | `ALLOWED_USERS` ∩ `app_user`。テナントとロールを解決し、未登録は 403（deny by default） |
 | 管理者 | 同上 | 同上 | `ROLE_ADMIN`（`ADMIN_USERS` にも含まれること）+ CSRF + mode=NORMAL + 監査ログ |
 | infra（ops SA） | GitHub Actions → `/internal/*` | IAP JWT（dashboard）/ Google ID トークン（ingest） | `ROLE_OPS` は読み取り専用で、テナントのデータには触れない |
 | エージェント | Windows → ingest | トークン（ハッシュで保管）+ HMAC + nonce | 自テナントの `/v1/agent/*` だけ |
@@ -150,7 +150,7 @@ dashboard ─読取（DTO）─▶ MySQL        export-dataset ─▶ GCS datase
 - G-ML-1〜3: H1 の実証、旧新比較、v2 のバックテスト。
 
 ## 11. ユーザーの承認・確認待ち（勝手に確定しない）
-- T1.16: JRA-VAN への問い合わせ Q1〜Q8。**2 人目の利用方法、クラウド保存、データの再利用、一般公開はどれも未確認**。個人契約のデータを 2 人で共有できるとは仮定しない（D-023・D-031）。
+- T1.16（2026-10-23 に再スコープ。現行は UNRESOLVED.md の E-1〜E-3 / COMP-1〜4。以下は 2026-10-22 時点の記述）: JRA-VAN への問い合わせ Q1〜Q8。**2 人目の利用方法、クラウド保存、データの再利用、一般公開はどれも未確認**。個人契約のデータを 2 人で共有できるとは仮定しない（D-023・D-031）。
 - T1.17: JV-Link の公式仕様書での確認。
 - T1.20: 実 SQLite、`prob_source` の分布、実 `config.yaml`、`*.pkl`。
 - T1.21: フロント案 A の承認、`legacy`/`v2`、E 項目の挙動変更。

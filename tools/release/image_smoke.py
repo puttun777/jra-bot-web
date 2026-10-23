@@ -45,6 +45,13 @@ TEXT_RESOURCE = re.compile(r"\.(properties|ya?ml|xml|json|sql|txt|md|conf|toml)$
 
 
 # calendar-check（T3.3）は監視ウィンドウ・鮮度の設定が必須（既定値なし。CONTRACTS §2）。合成のテスト値で、運用の既定値ではない
+# ingest の追加の必須設定（T3.4）。本番相当の起動には署名鍵の KEK が要る（合成の値。秘密ではない）
+INGEST_EXTRA = {
+    "INTERNAL_ID_TOKEN_AUDIENCE": "https://ingest.example.invalid",
+    "OPS_SA_EMAIL": "ops@example.invalid",
+    "AGENT_KEK_KEYS": "k1:AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+    "AGENT_KEK_ACTIVE_KID": "k1",
+}
 CALENDAR_ENV = {
     "CALENDAR_WATCH_START_MINUTES": "120",
     "CALENDAR_PRESTART_MINUTES": "10",
@@ -405,12 +412,12 @@ class Smoke:
             if set(infos) == set(repo_facts.BUILDABLE_IMAGES):
                 self.bot_checks_no_db()
                 self.dbm_checks_no_db()
-                self.web_checks_no_db("ingest", {"INTERNAL_ID_TOKEN_AUDIENCE": "https://ingest.example.invalid", "OPS_SA_EMAIL": "ops@example.invalid"})
+                self.web_checks_no_db("ingest", {**INGEST_EXTRA})
                 self.web_checks_no_db("dashboard", {"IAP_AUDIENCE": "/projects/0/global/backendServices/0", "OPS_SA_EMAIL": "ops@example.invalid"})
                 if self.start_mysql():
                     self.dbm_checks_with_db()
                     self.bot_checks_with_db()
-                    self.web_checks_with_db("ingest", "ingest", {"INTERNAL_ID_TOKEN_AUDIENCE": "https://ingest.example.invalid", "OPS_SA_EMAIL": "ops@example.invalid"})
+                    self.web_checks_with_db("ingest", "ingest", {**INGEST_EXTRA})
                     self.web_checks_with_db("dashboard", "app", {"IAP_AUDIENCE": "/projects/0/global/backendServices/0", "OPS_SA_EMAIL": "ops@example.invalid"})
             self.secret_scan_outputs()
         except Exception as e:  # noqa: BLE001 - 実行できなかった検査を成功にしない

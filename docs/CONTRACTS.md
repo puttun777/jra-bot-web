@@ -1,6 +1,6 @@
 # CONTRACTS（web ⇔ infra 受け渡し契約・正本は本ファイル）
 
-状態: **0.4.5（第2段階 / T2.5 後半で §1・§10 にイメージの形式と manifest の検証規則を補足。T2.8 の 0.4.4 は §2・§3.2・§4.3・§9.1・§11。0.4.0 の契約の意味は変えていない）**。0.4.0 は第1段階 / T1.10 で確定した設計契約。infra の `docs/CONTRACTS.md` §2 の差異 D1〜D12 をすべて取り込んだ（対応表は §12）。実装・実リソースで確かめる必要がある箇所は「検証ゲート」として ID を書いている（一覧は `STAGE2_HANDOFF.md` §13）。
+状態: **0.4.7（第3段階 / T3.4: V3、エージェント API の実装、環境変数の追加。§3.3 の署名方式と §3.4 の取得セッション・応答の追加は『提案 P-1 / P-2 / P-3』で、ユーザーの承認まで確定仕様ではない。0.4.5 以前の説明は下に残す）** — **0.4.5（第2段階 / T2.5 後半で §1・§10 にイメージの形式と manifest の検証規則を補足。T2.8 の 0.4.4 は §2・§3.2・§4.3・§9.1・§11。0.4.0 の契約の意味は変えていない）**。0.4.0 は第1段階 / T1.10 で確定した設計契約。infra の `docs/CONTRACTS.md` §2 の差異 D1〜D12 をすべて取り込んだ（対応表は §12）。実装・実リソースで確かめる必要がある箇所は「検証ゲート」として ID を書いている（一覧は `STAGE2_HANDOFF.md` §13）。
 - 正本はこのファイル。infra 側は版番号を参照し、変更点を同期する。infra の文書を直す必要がある箇所は `PROGRESS.md` の「infra への引継ぎ」に記録する。web のセッションから infra を直接変更しない。
 - 用語: **mode** は現在のフェーズ（`NORMAL | STARTING | STOPPING | STOPPED`）。**desired** は利用者の意図（`NORMAL | STOPPED`）。アプリが読み取りに失敗したときや、内容が不正なときの判定値は **`UNKNOWN`** とする。UNKNOWN はアプリ内部だけの値で、正本には書かない。旧版の `phase` は廃止して `mode` に統一した（実装はまだ無いため互換フィールドは置かない）。
 
@@ -35,7 +35,11 @@ web→Artifact Registry の push 権限と、infra 側の manifest 取得権限�
 | `MODEL_STORE_URI` | Terraform | bot / ml-train | `gs://<prj>-model-store`（非公開）（§5.1） |
 | `MODEL_SIGNING_KEY` | **Secret Manager**（`model-signing-key`） | ml-train のみ | モデル JSON の Ed25519 署名 |
 | `MODEL_VERIFY_PUBKEY` | Terraform（公開値） | bot | 署名検証 |
-| `INGEST_TOKEN_PEPPER` | **Secret Manager**（`ingest-token-pepper`） | ingest / dashboard（発行） | エージェントトークンのハッシュ用ペッパー（§3.3） |
+| `INGEST_TOKEN_PEPPER` | **Secret Manager**（`ingest-token-pepper`） | ingest / dashboard（発行） | エージェントトークンの**識別用**ハッシュのペッパー（§3.3。**署名の検証には使えない**: §3.3.1） |
+| `AGENT_KEK_KEYS` / `AGENT_KEK_ACTIVE_KID` | **Secret Manager**（`agent-kek`）（**0.4.7・提案 P-1**） | ingest（本番は必須。無いと起動失敗） | エージェントの署名鍵を暗号化する鍵（KEK、256bit）。`AGENT_KEK_KEYS` は `kid:base64` のカンマ区切り（ローテーション用に複数）、`AGENT_KEK_ACTIVE_KID` が暗号化に使う kid。**DB には置かない**（DB だけが漏れても署名を偽造できない）。未設定の local は認証できず `/v1/agent/**` は 503 |
+| `INGEST_ODDS_BELOW_PAR` / `INGEST_STORE_COMBO_ODDS` | Terraform（**0.4.7**） | ingest | `quarantine`（既定。`0<odds<1` を隔離。**提案 P-3**）／`accept`。ワイド・三連複オッズの保存（`true`／既定 `false`: D-043） |
+| `INGEST_MAX_BODY_BYTES` / `INGEST_MAX_INFLATED_BYTES` | Terraform（任意。**0.4.7**） | ingest | 受信本文（gzip 後）の上限（既定 1 MiB）／展開後の上限（既定 32 MiB） |
+| `INGEST_ACCEPT_NORMALIZED_RECORDS` | **local のみ**（本番で `true` にすると起動失敗。**0.4.7**） | ingest | 合成の正規化 JSON レコードを解析する（テスト用）。実データの JV-Data パーサは未実装（T1.17 の確認後） |
 | `DISCORD_WEBHOOK_URL` / `DISCORD_ERROR_WEBHOOK_URL` | **Secret Manager** | bot（通知）/ 全（エラー） | 通知 |
 | `CALENDAR_WATCH_START_MINUTES` / `CALENDAR_PRESTART_MINUTES` / `CALENDAR_SETTLE_DEADLINE_MINUTES` / `CALENDAR_STALE_AFTER_MINUTES` | Terraform（**運用値は未確定: D-016・D-122。既定値を置かない**） | bot（`--task=calendar-check` のみ必須） | 監視ウィンドウ（最初の発走の何分前から監視するか=1〜1440、さらに前の起動余裕=0〜1440、最後の発走の何分後まで起動してよいか=1〜1440）と、開催日の確認の鮮度（何分を超えたら古い=1〜10080）。**1 つでも欠落・不正なら calendar-check は exit 2**（DB にもモード確認にも進まない）。他のタスクでは不要。**0.4.6（T3.3 / D-122）** |
 | `RELEASE_ID` / `REQUIRED_SCHEMA_VERSION` | イメージに焼き込み（ビルド時） | 全 | 版の表示と ready 判定（§4.3）。**0.4.4**: `REQUIRED_SCHEMA_VERSION` は実行 jar の `jrabot-app.properties`（Gradle が生成）に焼き込まれ、**環境変数では上書きしない**（infra が渡す必要は無い）。`RELEASE_ID` は環境変数があれば表示用に使う |
@@ -58,20 +62,41 @@ web→Artifact Registry の push 権限と、infra 側の manifest 取得権限�
 | `POST/PUT/DELETE /api/v1/admin/**` | dashboard | ブラウザ（管理者） | IAP + `ROLE_ADMIN` + CSRF | 手動補正、手動起動（開催検証あり）、エージェントの発行/失効。**mode=NORMAL のときだけ**受け付け、それ以外は 409 `OPS_MODE_NOT_NORMAL` |
 | `GET /v1/agent/mode` | ingest | エージェント | トークン + 署名 | **DB に触れず**、現在のビーコンと同じ内容（署名付き）を返す |
 | `GET /v1/agent/plan` | ingest | エージェント | トークン + 署名 | 取得計画 `{planId, validUntil, items:[{dataspec, key, option, notBefore, interval}], idle}`。NORMAL 以外は 503（§3.6） |
-| `POST /v1/agent/ingest` | ingest | エージェント | トークン + 署名 | 生レコードのバッチ（§3.4）。NORMAL 以外は 503 |
-| `POST /v1/agent/heartbeat` | ingest | エージェント | トークン + 署名 | 状態通知（§3.5）。最終接続時刻の写しを GCS に書く（§5.4） |
+| `POST /v1/agent/ingest` | ingest | エージェント | トークン + 署名 | 生レコードのバッチ（§3.4）。NORMAL 以外は 503。**0.4.7 実装済み** |
+| `POST /v1/agent/heartbeat` | ingest | エージェント | トークン + 署名 | 状態通知（§3.5）。最終接続時刻の写しを GCS に書く（§5.4）。**0.4.7 実装済み**（DB の `agent_heartbeat`。GCS への写しは未実装で `SKIPPED`） |
 | `GET /v1/agent/update` | ingest | エージェント | トークン + 署名 | 署名付き更新 manifest（NORMAL のときだけ） |
-| `POST /v1/agent/register` | ingest | エージェント（初回） | 登録コード | `agent_id` とトークンを発行する。登録コードは管理者が事前に発行する 1 回限りのもの |
+| `POST /v1/agent/register` | ingest | エージェント（初回） | 登録コード | `agent_id` とトークンを発行する。登録コードは管理者が事前に発行する 1 回限りのもの。**0.4.7 では未実装**（発行ロジック `AgentCredentialIssuer` と保存 `AgentRegistrar` はあり、HTTP は T3.5 / 管理操作 T4.4） |
 
 - `/v1` はエージェントプロトコルのメジャー版。破壊的な変更をするときは `/v2` を並行して提供する。
 - 人向けの HTML ルート（`/`、`/races/...` など）は `/api/v1` と同じアプリケーションサービスを使う（FRONTEND_DESIGN §4.4）。
 
 ### 3.3 エージェント認証・権限（機械連携の分離）
-- 主体: `agent_id`（テナントに属する）。トークンは 256bit ランダム、**サーバはハッシュ（SHA-256+ペッパー）のみ保存**、有効期限 90 日・ローテーション可・即時失効可。
-- リクエスト署名: `X-Agent-Id`, `X-Timestamp`（±300 秒）, `X-Nonce`, `X-Signature = HMAC-SHA256(token, method|path|timestamp|nonce|sha256(body))`。トークン自体は送らない。nonce は 10 分保持（リプレイ防止）。
+- 主体: `agent_id`（**全体で一意**。V3 の UNIQUE。テナントは `agent` の行から決まり、リクエスト本文のテナントは信用しない）。トークンは 256bit ランダム、有効期限 90 日・ローテーション可・即時失効可。
+- リクエスト署名: `X-Agent-Id`, `X-Timestamp`（Unix 秒、±300 秒）, `X-Nonce`（16〜64 文字の `[A-Za-z0-9_-]`）, `X-Signature`（小文字 16 進 64 桁）。トークン自体は送らない。nonce は 10 分保持（リプレイ防止。署名が正しいと確認できた後にだけ消費する）。
+- **署名の定義（0.4.6 まで）**: `X-Signature = HMAC-SHA256(token, method|path|timestamp|nonce|sha256(body))`、サーバは「SHA-256＋ペッパーのハッシュ」だけを保存。→ **この 2 つは両立しない（§3.3.1）。0.4.6 の記述のままではサーバは署名を検証できない。**
+- **署名の定義（0.4.7 の実装・提案 P-1。未承認）**: 署名鍵 `K = HMAC-SHA256(token, "jra-bot/agent-sign/v1")`、`X-Signature = HMAC-SHA256(K, method|requestUri|timestamp|nonce|sha256(送信した本文のバイト列))`（`requestUri` はクエリを含む。本文は gzip 後のバイト列そのもの = 認証の前に展開しない）。サーバは K を KEK で AES-256-GCM 暗号化して保存（AAD にテナント・エージェント・kid を含め、暗号文を別の行へ移しても復号できない）。トークンそのものは保存せず、発行の瞬間にだけ見る。
+- 認証の順序: ヘッダ形式 → 時刻 → エージェント解決 → 署名（定数時間比較）→ 失効（403。署名が正しい相手にだけ）・期限切れ（401）→ nonce 消費（再利用は 401）。失敗の応答は状態コードのみ（理由を出さない）。存在しないエージェントでもダミーの署名計算をする。
 - 権限: エージェントは自テナントの ingest / heartbeat / plan / mode / update のみ。ダッシュボード API・管理 API は不可。
-- 保管: PC 側は DPAPI。ログにトークン・本文を出さない。
-- 失効・盗難時: 管理者 API で失効→以後 401。
+- 保管: PC 側は DPAPI。ログにトークン・署名・nonce・本文を出さない（テスト `AgentAuthIntegrationTest` で検査）。
+- 失効・盗難時: 管理者 API で失効→以後 403。KEK の漏えい時は kid を切り替えて全エージェントのトークンを再発行する。
+
+#### 3.3.1 署名方式の検証と代替案（提案 P-1。T3.4 の調査結果・D-130）
+**暗号学的な検証**: HMAC の検証には、署名した側と同じ鍵（`token` または `token` から決定的に導いた値）をサーバが持つ必要がある。SHA-256(pepper‖token) は一方向関数で、ハッシュから `token` は復元できない（原像計算困難性）。したがってサーバが保存するのがハッシュだけなら、`HMAC(token, m)` を計算して照合することはできない。ハッシュそのものを HMAC の鍵にする（エージェントも同じハッシュを持つ）なら、保存値＝鍵になり、DB の漏えいだけで署名を偽造できる（ハッシュ化の意味が無い）。ペッパーをエージェントに配ると、ペッパーの秘匿が崩れる。単体テスト `AgentAuthTest` が、ハッシュを鍵にした署名は本物と一致しないことを確認している。
+
+| 比較項目 | A 0.4.6 の記述（HMAC(token)＋ハッシュ保存） | **B 導出鍵 HMAC＋KEK 暗号化（実装）** | C B の KEK を Cloud KMS で保護 | D Ed25519 署名（公開鍵だけ保存） |
+|---|---|---|---|---|
+| 成立するか | **不成立**（検証不能） | 成立 | 成立 | 成立 |
+| セキュリティ | - | 良い。署名鍵は DB 上で暗号化 | B と同等＋KEK がアプリのメモリに出ない | **最も強い**（サーバに秘密が無い） |
+| サーバ侵害時の影響 | - | DB 漏えいだけでは偽造不可。**KEK ＋ DB の両方**が漏れると全エージェントの署名を偽造可能（kid 切替で全再発行） | DB ＋ KMS の呼び出し権限の両方 | 公開鍵が漏れても偽造不可。署名の検証だけなら侵害の影響が最小 |
+| 登録・失効 | - | 発行時にトークンを 1 回だけ渡す。失効は `status` 更新 | 同左 | エージェントが鍵対を生成し、公開鍵を登録コードと一緒に送る。失効は同様 |
+| トークン更新 | - | 再発行（新トークン→新 K） | 同左 | 新しい鍵対を作り公開鍵を再登録 |
+| Windows エージェントとの互換 | - | **標準ライブラリだけ**（`hmac`・`hashlib`）。D-018 の「薄い Python」に最適 | 同左 | `cryptography` または PyNaCl の追加依存（PyInstaller に同梱）。秘密鍵は DPAPI で保護 |
+| 実装量 | - | 小（実装済み・テスト済み） | 中（KMS クライアントと IAM） | 中（署名検証・登録の鍵受取・クライアント側の鍵生成） |
+| GCP での鍵管理 | - | Secret Manager に KEK 1 つ（既存の Secret に追加） | Cloud KMS の鍵 1 本＋復号の権限（`sa-ingest`） | 不要（公開鍵は DB） |
+| 運用コスト | - | ほぼ 0（Secret Manager の 1 シークレット。見積りは infra の CLOUD_COSTS） | 鍵と操作の従量課金（金額は未確認。infra で見積り） | ほぼ 0 |
+| 契約の変更 | 無し | `X-Signature` の鍵が `token`→`K`（エージェントは未実装なので互換問題なし） | 同 B | 署名アルゴリズムの変更（`X-Signature` の形式と登録 API が変わる） |
+
+**推奨と扱い**: 単一利用者・小規模・Python の薄いエージェントなので **B を実装した**（このコードで `/v1/agent/ingest`・`heartbeat` が動く）。将来さらに強くしたければ D（署名方式の変更は別の承認）。**契約の変更なので、承認までは確定仕様にしない**（UNRESOLVED D-5）。承認が得られない場合も、実装は `AgentSigning` と `AgentAuthenticator` に閉じているので差し替えられる。エージェント（T3.5）がまだ無いため、現時点で互換性の問題は起きない。
 
 ### 3.4 ingest 封筒（JSON, gzip 可）
 ```json
@@ -79,11 +104,17 @@ web→Artifact Registry の push 権限と、infra 側の manifest 取得権限�
   "observedAt": "2026-11-01T01:23:45.678Z",
   "dataspec": "RACE", "option": 2, "fromtime": "20261101000000", "lastFileTimestamp": "20261031200000",
   "eof": true,
+  "fetch": { "id": "uuid", "seq": 0, "targetFrom": "20261101", "targetTo": "20271231", "origin": "LIVE", "backfillId": null },
   "records": [ { "id": "RA", "bytesB64": "…cp932…", "sha256": "…" } ] }
 ```
-- 1 バッチ ≤ 1 MB（gzip 後）・≤ 200 レコード。同一内容は**同一 `batchId` で再送**。
-- 応答: `200 {accepted, duplicates, ackTs, serverTime}`。`ackTs` を受けて初めてエージェントはチェックポイントを前進（JVLINK_DESIGN §5.2）。
-- 冪等: サーバは `batchId` と `record_hash` で重複を吸収。重複でも 200（`duplicate=true`）。
+- 1 バッチ ≤ 1 MB（gzip 後）・≤ 200 レコード（1 レコード ≤ 256 KiB）。同一内容は**同一 `batchId` で再送**。
+- **検証（0.4.7 実装）**: 未知のキーは拒否（`tenantId` を含む。理由 `TENANT_FIELD_FORBIDDEN`）。`protocol`=1、`agentId` は認証したエージェントと一致（違えば 403）、`batchId` は小文字の UUIDv7、`class` は S/R で dataspec と整合（S: RACE・YSCH・RCVN・RCOV／R: 0B11・0B12・0B14・0B15・0B30・0B31・0B33・0B35。**一覧は二次情報**で公式表は T1.17）、`observedAt` は UTC（`Z`）で未来 5 分以内・速報は 7 日以内、`fromtime`/`lastFileTimestamp` は実在する `yyyyMMddHHmmss`、各レコードは厳密な標準 Base64 と SHA-256 の一致、EOF 以外の空バッチは拒否。
+- 応答: `200 {accepted, duplicates, quarantined, unsupported, duplicate, ackTs, serverTime, fetch, cursor}`。`accepted`=新しく保存した生レコード数、`duplicates`=既知の `record_hash`、`quarantined`=不正で隔離（FAILED）、`unsupported`=解析できず保留（PENDING）。`duplicate=true` は**同じ内容で完了済みのバッチの再送**（件数は最初の処理のもの）。`ackTs` を受けて初めてエージェントはチェックポイントを前進（JVLINK_DESIGN §5.2）。`cursor` は取得セッションが EOF まで連続して読了したときだけ（サーバのカーソルが進んだ印）。
+- 冪等: `ingest_batch` の `(tenant_id, batch_id)` と `payload_sha256`（検証済みの項目と各レコードの SHA-256 から作る指紋。JSON の整形・gzip の違いに依存しない）。同じ内容 → 重複 ACK（200）／同じ `batchId` で内容が違う、または別のエージェントが使った `batchId` → 422 `BATCH_ID_REUSED`／処理中 → 409 `BATCH_IN_PROGRESS`（120 秒以上放置された処理は再送で引き継ぐ）／失敗した（FAILED）バッチは再送で引き継ぐ。
+- `record_hash` = SHA-256(`dataspec`・`id`・`class`・（R のときだけ `observedAt`）・レコードの SHA-256)。蓄積系は同じバイト列なら同じ値（重なりを持たせた再取得を吸収）。速報は観測時刻ごとに別（同じオッズでも別時刻は時系列の別の点）。
+- **提案 P-2（未承認）取得セッション `fetch`**: 蓄積系（S）の 1 回の `JVOpen` が複数バッチに分かれるとき、`fetch.id`（UUID）・`seq`（0 始まりの連番）・`targetFrom`/`targetTo`（`yyyyMMdd`。YSCH の対象範囲）・`origin`（`LIVE`／`BACKFILL`）・`backfillId` を付ける。これが無いと**取得の完了（EOF まで欠けなく読了）をサーバが確認できない**ため、`fetch` なしのバッチは保存・適用されるが、取得の事実もカーソルの前進も作られない。サーバは `seq` が連続しない（先走りは 409 `FETCH_SEQ_AHEAD`、重複は 422 `FETCH_SEQ_REUSED`）、終了した取得への追加（422 `FETCH_CLOSED`）、属性の食い違い（422 `FETCH_MISMATCH`）を拒否する。
+- 取得の事実（YSCH）は、EOF まで連続して読了し、全レコードを解析・適用でき、`targetFrom`/`targetTo` の申告があるときだけ作られ、範囲は `[targetFrom, min(targetTo, この取得で見た最後の開催日)]`（それより先は「まだ公表されていない」と区別できないため）。実データ形式のレコードは解析できない（保留）ので、**現時点では実データの YSCH から取得の事実は作られない**（fail closed）。
+- **提案 P-3（未承認）**: `0 < odds < 1` は取込境界で隔離（`INGEST_ODDS_BELOW_PAR`）。計算側の `Odds`・旧 Python の数値は変えない。
 
 ### 3.5 ハートビート
 `{agentVersion, clockSkewMs, queueDepth, oldestQueuedAt, ackedTs:{…}, lastJvResult:{…}, diskFreeMb, lastError, mode:{local judgement}}`。NORMAL 時 60 秒毎。STOPPED/UNKNOWN 時は送らない（ビーコンのみ）。
@@ -92,15 +123,17 @@ web→Artifact Registry の push 権限と、infra 側の manifest 取得権限�
 | 応答 | 意味 | エージェントの扱い |
 |---|---|---|
 | 200 | 受理 | チェックポイント前進 |
-| 400/413/422 | 不正な封筒（バグ） | そのバッチを DEAD へ、アラート。リトライしない |
+| 400/413/422 | 不正な封筒（バグ）。0.4.7 のコード: `INVALID_JSON`・`INVALID_GZIP`・`BODY_TOO_LARGE`・`BODY_TOO_LARGE_INFLATED`・`TOO_MANY_RECORDS`・`UNSUPPORTED_PROTOCOL`・`UNSUPPORTED_DATASPEC`・`INVALID_*`・`RECORD_SHA256_MISMATCH`・`BATCH_ID_REUSED` ほか | そのバッチを DEAD へ、アラート。リトライしない |
 | 401/403 | 認証失敗・失効 | **送信停止**し、ローカルアラート（トークン再発行が必要）。自動リトライしない |
-| 409 | `batchId` は処理中 | 待って同一バッチで再送 |
+| 409 | `batchId` は処理中（`BATCH_IN_PROGRESS`）／取得セッションの手前のバッチが未着（`FETCH_SEQ_AHEAD`）／バックフィルが別の取得で進行中（`BACKFILL_BUSY`） | `Retry-After` に従い、待って同一バッチで再送 |
 | 429 | レート超過 | `Retry-After` に従う |
 | **503 + `X-Ops-Mode: <STARTING|STOPPING|STOPPED>`** | **運用モードが NORMAL 以外（確定）** | §7: 送信・取得を止める。バックオフではなく**モード待機** |
 | 503（ヘッダなし）/ 502 / 504 / タイムアウト / 接続不可 | 障害または STOPPED の副作用で**区別不能** | §7: UNKNOWN。安全側（送らない）。ビーコンで判別を試みる |
-| その他 5xx | サーバ障害 | 指数バックオフ（上限あり）。ただし §7 の UNKNOWN 規則が優先 |
+| 503 + `Retry-After`（`UNAVAILABLE`） | DB の一時障害（デッドロック・ロック待ち・接続）。バッチ全体は巻き戻っている | 同一バッチで再送 |
+| その他 5xx（500 `INTERNAL`） | サーバ障害 | 指数バックオフ（上限あり）。ただし §7 の UNKNOWN 規則が優先 |
 
 ## 4. DB マイグレーション契約（D6）
+**0.4.7 追加（V3 `V3__ingest_auth_fetch_backfill.sql`。V1/V2 は不変）**: `agent` に `sign_key_enc`・`sign_key_kid`（暗号化した署名鍵。NULL の行は認証できない）と `agent_id` の全体 UNIQUE、`ingest_batch` に `fetch_id`・`fetch_seq`・`fail_reason`、新規 `ingest_fetch`（取得セッションと取得の事実の正本）・`ingest_backfill`（バックフィル要求。実行中の同一要求だけ UNIQUE）、`combo_odds_snapshots.odds_high`（ワイド上限）、`ingest_gap` に `(tenant_id, id)` の UNIQUE（複合 FK 用）。権限は `R__grants.sql`（ingest: `ingest_fetch` SELECT/INSERT/UPDATE・`ingest_backfill` SELECT/UPDATE、bot: `ingest_fetch` SELECT・`ingest_backfill` SELECT/INSERT/UPDATE、app: 両表 SELECT。**app は署名鍵の列を読めない**）。ingest・bot の必要スキーマ版は 3。
 ### 4.1 原則
 - Flyway は `db-migration` イメージを Cloud Run Job として実行する。**アプリの起動時には実行しない**。アプリのイメージには Flyway を入れない（`spring.flyway.enabled` に頼らず、依存として持たない）。
 - 実行する場面は 2 つ。① **deploy**: mode=NORMAL のときにリリースごとに 1 回 `migrate`。② **start**: S4 で `info` → `validate`。未適用の版があれば start を失敗させる。`apply_pending_migrations=true` を指定したときだけ `migrate` する（infra OPERATIONS_DESIGN §5）。
@@ -183,7 +216,7 @@ web→Artifact Registry の push 権限と、infra 側の manifest 取得権限�
 - **エージェントが送信してよいのは mode=NORMAL のときだけ**。STARTING、STOPPING、不明のときはすべて「送らない」。
 
 ## 6. 契約バージョン
-`contract_version: 0.4.0`。破壊的な変更はメジャー版を上げ、`release-manifest.json` に含める。エージェントプロトコルは `/v1`（`protocol: 1`）。第2段階以降に実装でずれが見つかったら 0.4.x / 0.5.0 として本ファイルで管理する。1.0.0 は第6段階の統合レビューで凍結する。
+`contract_version: 0.4.7`（0.4.0 から意味を変える変更は無いが、§3.3 の署名方式は P-1 の承認で確定する）。破壊的な変更はメジャー版を上げ、`release-manifest.json` に含める。エージェントプロトコルは `/v1`（`protocol: 1`）。第2段階以降に実装でずれが見つかったら 0.4.x / 0.5.0 として本ファイルで管理する。1.0.0 は第6段階の統合レビューで凍結する。
 
 ## 7. Windows エージェントの STOPPED 時動作契約（T1.15）
 
@@ -397,3 +430,5 @@ STOPPED 中の `ingest` 503、ビーコンのみ STOPPED、両方不達（UNKNOW
 0.4.5（第2段階 / T2.5 後半）: §10 に release-manifest の JSON Schema・プレビュー（ドライラン）の区別・検証規則、イメージの形式（`images.*` の形、ml-train 必須）、§1 のイメージの規約（non-root・ENTRYPOINT・PORT・HEALTHCHECK なし）を補足。契約の意味は変えていない。infra への影響: ① manifest を読むときは本番スキーマで検証し、`kind`/`deployable` を持つプレビューを拒否する、② Cloud Run のプローブ（startup / liveness）は infra 側で設定する、③ コンテナの `command` は上書きせず `args` だけを渡す（PROGRESS の I-H9）。
 
 0.4.6（第3段階 / T3.3）: §2 に calendar-check の設定の環境変数（既定なし）、§8.2 に `app` の `race_schedule_event` への INSERT（履歴の追記のみ）、§9.1 に calendar-check の終了コードと起動要求の重複の扱い。契約の意味は変えていない（追加のみ）。infra への影響: ① `bot` の calendar-check に `CALENDAR_*` の 4 つの環境変数を渡す（値はユーザー確認後。無いと exit 2）、② 起動基盤（Cloud Run Jobs の `JobLauncher`）は未実装で、calendar-check が起動を要求しても本番では `LAUNCHER_NOT_CONFIGURED`（exit 1）になる（T5 系）、③ 取得の事実（YSCH の成功）は T3.4/T3.5 まで存在しないので、行の無い日は `SCHEDULE_UNKNOWN`（exit 75）のまま、④ `R__grants.sql` の変更（`app` へ `race_schedule_event` の INSERT）は次回の migrate で適用される（T5.0 で同期）。
+
+0.4.7（第3段階 / T3.4）: §2 に `AGENT_KEK_KEYS`・`AGENT_KEK_ACTIVE_KID`・`INGEST_*`、§3.2 に ingest・heartbeat の実装状況と register の未実装、§3.3 に署名方式の検証と代替案の比較（§3.3.1）、§3.4 に検証規則・応答・冪等・`record_hash`・取得セッション（P-2）・取得の事実の条件・オッズ境界（P-3）、§3.6 に新しいコード、§4 に V3。**P-1（署名鍵の導出と KEK 暗号化）・P-2（`fetch`）・P-3（`0<odds<1` の隔離）は未承認の提案**で、承認までは確定仕様にしない（UNRESOLVED D-5・D-6・D-7）。infra への影響: ingest に KEK の Secret、V3 の GRANT、環境変数（UNRESOLVED G-9）。

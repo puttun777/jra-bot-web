@@ -124,12 +124,12 @@ jobs:
         run: |
           python3 .github/scripts/verify_test_results.py "persistence unit" persistence/build/test-results/test 33 \
             "SchemaVersionTest,SchemaCheckClassificationTest,DbSettingsTest,MappingTest,PersistenceModuleTest,SqlTemplateTenantGuardTest,DeadlockRetryTest,BotRunAcquireContentionTest"
-          python3 .github/scripts/verify_test_results.py "domain unit (incl. decision logic T3.1/T3.2, calendar T3.3)" domain/build/test-results/test 632 \
-            "EvMathTest,KellyMathTest,PythonCompatTest,MarketProbabilityTest,SnapshotFiltersTest,MarketBlendTest,WinStakeTest,WinDecisionEvaluatorTest,PlackettLuceTest,ComboOddsTest,ComboStrategyTest,WinDecisionComboTest,SourceVersionTest,TransitionsTest,ScheduleEventTest,CalendarOverrideTest,WatchWindowTest,EffectiveCalendarTest,ScheduleUpdaterTest,CalendarCheckPolicyTest,CalendarCheckServiceTest,CalendarSourceGuardTest,LeaseAndDayModelTest"
+          python3 .github/scripts/verify_test_results.py "domain unit (incl. decision logic T3.1/T3.2, calendar T3.3, ingest T3.4)" domain/build/test-results/test 667 \
+            "EvMathTest,KellyMathTest,PythonCompatTest,MarketProbabilityTest,SnapshotFiltersTest,MarketBlendTest,WinStakeTest,WinDecisionEvaluatorTest,PlackettLuceTest,ComboOddsTest,ComboStrategyTest,WinDecisionComboTest,SourceVersionTest,TransitionsTest,ScheduleEventTest,CalendarOverrideTest,WatchWindowTest,EffectiveCalendarTest,ScheduleUpdaterTest,CalendarCheckPolicyTest,CalendarCheckServiceTest,CalendarSourceGuardTest,LeaseAndDayModelTest,EnvelopeValidatorTest,AgentAuthTest,FetchPolicyTest,HeartbeatAndBackfillTest"
           python3 .github/scripts/verify_test_results.py "golden-runner unit" golden-runner/build/test-results/test 9 "GoldenRunnerTest"
           python3 .github/scripts/verify_test_results.py "bot unit" bot/build/test-results/test 67 \
             "BotArgsParserTest,BotLauncherTest,BotJobExecutorTest,BotProcessTest,BotSpringWiringTest,JobGateTest,CycleGateTest,CalendarCheckTaskHandlerTest,CalendarSettingsParserTest"
-          python3 .github/scripts/verify_test_results.py "ingest unit" ingest/build/test-results/test 28 \
+          python3 .github/scripts/verify_test_results.py "ingest unit" ingest/build/test-results/test 31 \
             "IngestInternalApiTest,AgentApiOpsGuardTest,IngestStartupConfigTest"
           python3 .github/scripts/verify_test_results.py "dashboard unit" dashboard/build/test-results/test 30 \
             "DashboardInternalApiTest,AdminWriteGuardTest,DashboardStartupConfigTest"
@@ -267,7 +267,7 @@ jobs:
               "AppUserRepositoryIntegrationTest", "TenantIsolationIntegrationTest", "TimeConversionIntegrationTest",
               "EnumContractIntegrationTest", "PermissionsIntegrationTest", "SchemaVersionVerifierIntegrationTest",
               "RaceDayRepositoryIntegrationTest", "ScheduleEventRepositoryIntegrationTest", "CalendarOverrideRepositoryIntegrationTest",
-              "BotRunLeaseConcurrencyIntegrationTest", "DeadlockRetryIntegrationTest",
+              "BotRunLeaseConcurrencyIntegrationTest", "DeadlockRetryIntegrationTest", "IngestStoresIntegrationTest",
           }
           seen = set()
           tests = skipped = failures = errors = 0
@@ -279,7 +279,7 @@ jobs:
           missing = expected - seen
           if missing:
               sys.exit(f"integration test classes missing from the results: {sorted(missing)}")
-          if tests < 153 or skipped or failures or errors:
+          if tests < 161 or skipped or failures or errors:
               sys.exit("persistence integration tests did not all run and pass")
           PY
       # 実行アプリの統合テスト（T2.8）: /internal/ready のスキーマ版・DB 停止/復旧、Job の終了コード（DB 不達 75 とスキーマ不足 1 の区別）、
@@ -291,7 +291,7 @@ jobs:
         if: always() && contains(env.DB_SUITES, 'apps')
         run: |
           python3 .github/scripts/verify_test_results.py "bot integration" bot/build/test-results/integrationTest 31 "BotJobIntegrationTest,CalendarCheckIntegrationTest"
-          python3 .github/scripts/verify_test_results.py "ingest integration" ingest/build/test-results/integrationTest 9 "IngestReadyIntegrationTest"
+          python3 .github/scripts/verify_test_results.py "ingest integration" ingest/build/test-results/integrationTest 46 "IngestReadyIntegrationTest,AgentAuthIntegrationTest,IngestIdempotencyIntegrationTest,IngestPipelineIntegrationTest"
           python3 .github/scripts/verify_test_results.py "dashboard integration" dashboard/build/test-results/integrationTest 9 "DashboardReadyIntegrationTest"
 
   # イメージのビルドとスモーク + ドライラン manifest（images.yml）。push も認証もしない。Dockerfile・リリース関連・ビルド定義が変わったときと、フル検証のときだけ

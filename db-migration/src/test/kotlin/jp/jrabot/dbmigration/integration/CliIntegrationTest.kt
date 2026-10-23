@@ -21,11 +21,11 @@ class CliIntegrationTest {
 
         val info0 = CliHarness.run(db, "info")
         assertEquals(0, info0.code, info0.stderr)
-        assertEquals("""{"current":null,"pending":["1","2","R__grants"],"failed":[],"latest":"2"}""" + "\n", info0.stdout)
+        assertEquals("""{"current":null,"pending":["1","2","3","R__grants"],"failed":[],"latest":"3"}""" + "\n", info0.stdout)
 
         val validate0 = CliHarness.run(db, "validate")
         assertEquals(10, validate0.code, validate0.stderr + validate0.stdout)
-        assertTrue(""""valid":true""" in validate0.stdout && """"pending":["1","2","R__grants"]""" in validate0.stdout, validate0.stdout)
+        assertTrue(""""valid":true""" in validate0.stdout && """"pending":["1","2","3","R__grants"]""" in validate0.stdout, validate0.stdout)
 
         assertEquals(0, CliHarness.run(db, "migrate").code)
 
@@ -35,7 +35,7 @@ class CliIntegrationTest {
 
         val info1 = CliHarness.run(db, "info")
         assertEquals(0, info1.code)
-        assertEquals("""{"current":"2","pending":[],"failed":[],"latest":"2"}""" + "\n", info1.stdout)
+        assertEquals("""{"current":"3","pending":[],"failed":[],"latest":"3"}""" + "\n", info1.stdout)
     }
 
     @Test
@@ -114,7 +114,7 @@ class CliIntegrationTest {
         val migrate = ProcessSupport.launch(listOf("--mode=migrate"), env)
         assertEquals(0, migrate.code, migrate.stderr)
         singleJsonLine(migrate.stdout)
-        assertTrue(""""applied":["1","2","R__grants"]""" in migrate.stdout, migrate.stdout)
+        assertTrue(""""applied":["1","2","3","R__grants"]""" in migrate.stdout, migrate.stdout)
 
         val again = ProcessSupport.launch(listOf("--mode=migrate"), env)
         assertEquals(0, again.code, again.stderr)
@@ -126,7 +126,7 @@ class CliIntegrationTest {
 
         val info = ProcessSupport.launch(listOf("--mode=info"), env)
         assertEquals(0, info.code, info.stderr)
-        assertEquals("""{"current":"2","pending":[],"failed":[],"latest":"2"}""" + "\n", info.stdout)
+        assertEquals("""{"current":"3","pending":[],"failed":[],"latest":"3"}""" + "\n", info.stdout)
 
         for (r in listOf(validate0, migrate, again, validate1, info)) {
             assertFalse(MySqlSupport.PASSWORDS.getValue("migrate") in r.stdout + r.stderr, "パスワードが出力に出ている")

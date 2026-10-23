@@ -28,8 +28,8 @@
 
 ## 第1段階 追加タスク（T1.2/T1.3 で判明, 2026-10-22）
 - [x] T1.15 STOPPED 時の Windows エージェント契約（CONTRACTS §7）
-- [ ] T1.16 **ユーザー**: JRA-VAN への問い合わせ Q1〜Q8（DATA_SOURCE_COMPLIANCE §6）と 2 人目の契約有無の確認
-- [ ] T1.17 JV-Link/JV-Data 公式仕様書（SDK 同梱 PDF）で確認: JVOpen option 表、JVGets、JVWatchEvent、YS/TC/AV/CC/WE/JC/RA 項目位置、HR 払戻桁、RA 発走時刻の有無、0B14/0B16、64bit 版の一般提供・COM 登録（**仕様書は Git に入れず、結論のみ docs に記録**）
+- [ ] T1.16 **ユーザー**（2026-10-23 に再スコープ: 本人 1 名・非営利。2 人利用・配布・一般公開・JRADB は対象外）: 規約本文（第7条・第9条）の一読と、JRA-VAN への 3 問（クラウド保存／ダッシュボード・Discord 通知／取得ソフトの登録と利用キー。DATA_SOURCE_COMPLIANCE §0）。**規約確認（COMP-1）と実データのクラウド投入確認（COMP-4）は別項目。回答まで実データを投入しない**
+- [ ] T1.17（2026-10-23 更新: **SDK 5.0.0・64bit 版の正式提供・共存と別利用キー・公式 Python サンプルは公式ページの抜粋で確認済み**（実機動作は T3.0 で未確認）。**SDK 本体 5.0.0 と仕様書の文書版 4.9.0.1 は別**。仕様書 12 項目は未確認: JVLINK_DESIGN §12）JV-Link/JV-Data 公式仕様書（SDK 同梱 PDF）で確認: JVOpen option 表、JVGets、JVWatchEvent、YS/TC/AV/CC/WE/JC/RA 項目位置、HR 払戻桁、RA 発走時刻の有無、0B14/0B16、64bit 版の一般提供・COM 登録（**仕様書は Git に入れず、結論のみ docs に記録**）
 - [x] T1.18 infra 側 docs への同期（根拠: infra PR #2 で infra CONTRACTS を同期、差異 D1〜D12 は web CONTRACTS 0.4.0 で解消。0.4.0 で生じた infra 文書の追従は PROGRESS「infra への引継ぎ」I-H1〜I-H7）
 - [x] T1.19 エージェント PoC **計画**（根拠: JVLINK_DESIGN §11、D-054。**実機検証 G-AGENT-1〜6 は未実施** → T3.0）
 
@@ -54,8 +54,8 @@
 - [x] T3.1 EV/Kelly/確率/判定/急落フィルタを :domain へ移植し旧実装と比較 ← T2.2,T2.6 — **完了（単勝の範囲。2026-10-23、claude/stage3-core-decision）**。`:domain` の `jp.jrabot.domain.decision`（EV・Kelly・賭け額・市場確率・正規化・判定側ブレンド・急落/人気急上昇・単勝の判定・見送り理由）、Kotlin ランナー `:golden-runner`、`tools/golden/kotlin_compare.py`（対応/未対応を分けて報告）、ゴールデン 4 ケース追加（14 ケース/562 呼び出し中、Kotlin が検証したのは 10 ケース/380 呼び出し）。**範囲外・残り**: ML 経路（T3.6）、ワイド/三連複の買い目と Plackett–Luce（T3.2）、時間帯スケジュール/adaptive_relaxation（T3.8）、DB のスナップショット取得（T3.4）、旧関数既定値の突合 GD10（T1.20）、未承認の数値変更 E6/E12/E14/H10（T1.21。既定 off・未実装）。本番で動作する Bot ではない。D-104〜D-111、PROGRESS の Stage 3-A
 - [x] T3.2 ワイド/三連複 確率・推定オッズ・bet_strategy 移植 — **完了（2026-10-23、claude/stage3-combo-strategy）**。`:domain` の `jp.jrabot.domain.decision` に Plackett–Luce（`PlackettLuce`）・実オッズの注入（`ComboOdds`）・推定オッズ（`ComboOddsEstimate`）・流し/BOX・E8 の段階・`ticket_allocation`・`StrategyEntry.tickets` を追加し、`WinDecisionEvaluator` に統合。ゴールデン 7 ケース/248 呼び出しを旧実装から追加生成（21 ケース/810 呼び出し）、Kotlin が検証したのは 18 ケース/661 呼び出し（全一致、最大絶対誤差 0、比較した浮動小数 62,903 個）。**範囲外・残り**: ML 経路（T3.6）、実オッズの DB 取得と鮮度（T3.4）、通知本文（T3.7）、時間帯スケジュール（T3.8）、旧関数既定値の突合 GD10（T1.20）、未承認の数値変更 E6/E12/E14/H4/H10・生成段階の重複除去（T1.21。既定 off・未実装）。本番で動作する Bot ではない。D-112〜D-121、PROGRESS の Stage 3-B
 - [x] T3.3 開催日制御（RACE_CALENDAR_DESIGN の実装: スキーマ、calendar-check、bot-run リース、手動補正、C01〜C28 のテスト）← T1.3,T2.4 — **完了（T3.3 の範囲。2026-10-23、claude/stage3-calendar-lease。PR は PROGRESS を参照）**。`:domain` の `jp.jrabot.domain.calendar`（有効予定の導出・状態遷移・版の比較・履歴・手動補正・calendar-check の判断）、`:persistence`（`race_day`・`race_schedule_event`・`calendar_override`、`bot_run` の DB リース: 取得・奪取・heartbeat・遷移・checkpoint）、`:bot` の `calendar-check`。**C01〜C28: 完了 19・一部 7（C01・C07・C10・C16・C21・C22・C27）・未対応 2（C25・C28）— 残りは T3.4〜T3.9（RACE_CALENDAR_DESIGN §11）**。本番の起動基盤（`JobLauncher` の GCP 実装）・取得の事実（YSCH）・運用値（`CALENDAR_*`・リース）・bot-run の業務ループは未実装/未確定
-- [ ] T3.4 取込 API とデータ取得（冪等 upsert、バックフィル、再開、多重起動防止）← T2.4
-- [ ] T3.5 Windows 取得エージェント（JVLINK_DESIGN の実装: 薄い Python、キュー、ビーコン、署名更新）+ `:ingest` サービス ← T1.2,T1.17,T3.4
+- [x] T3.4 取込 API とデータ取得（冪等 upsert、バックフィル、再開、多重起動防止）← T2.4 — **完了（T3.4 の範囲。2026-10-23、claude/stage3-ingest-api。PR は PROGRESS を参照）**。V3（`ingest_fetch`・`ingest_backfill`・署名鍵列）、`POST /v1/agent/ingest`・`heartbeat`、エージェント認証（契約 0.4.6 の方式が検証不能なため導出鍵 HMAC＋KEK 暗号化。**提案 P-1・未承認**）、バッチ冪等・並行・巻き戻り、取得の事実の永続化と `ScheduleFetchFactReader` の DB 実装、`RecordParser` 登録（実データ形式は未対応＝保留。合成の正規化 JSON はローカルのみ）、オッズ・ワイド・三連複の保存、ACK・カーソル、バックフィル基盤。**未解決の管理表は `docs/UNRESOLVED.md`**。実データ形式のパーサは T1.17 後。D-130〜D-143
+- [ ] T3.5 Windows 取得エージェント（JVLINK_DESIGN の実装: 薄い Python、キュー、ビーコン、署名更新）+ `:ingest` サービス（plan・mode・update・register の残り）← T1.2,T1.17,T3.4,**UNRESOLVED D-5（署名方式 P-1）・D-6（取得セッション P-2）の承認**
 - [ ] T3.6 ML: Kotlin `FeatureBuilder`/`ProbabilityPipeline`、モデル JSON/レジストリ、`export-dataset`、`ml-train`（Python Job）、pkl→JSON 変換ツール、ゴールデン G1〜G7 ← T1.9
 - [ ] T3.7 Discord 通知（分割・Retry-After・リトライ）
 - [ ] T3.8 bot-run オーケストレーション（監視ウィンドウ、結果反映後終了）← T3.1–T3.7

@@ -1,6 +1,47 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-10-23（第3段階 / Stage 3-C: T3.3 開催日制御・calendar-check・bot-run の DB リース・手動補正）
+最終更新: 2026-10-23（第3段階 / Stage 3-D: T3.4 取込 API・認証・冪等処理・取得の事実・バックフィル基盤 ＋ 要件変更（本人 1 名）と未解決事項の整理）
+
+## Stage 3-D（claude/stage3-ingest-api）: T3.4 取込 API・認証・冪等・取得の事実・バックフィル基盤
+### 結果（T3.4 の範囲で完了。**本番で動作する取込ではない**: 実データ形式のパーサは未実装、署名方式は承認待ち、Windows エージェント本体は T3.5）
+- **要件変更（本人 1 名・私的・非営利）を反映**: REQUIREMENTS §0 を新設、CLAUDE.md・README・ARCHITECTURE・DATA_SOURCE_COMPLIANCE・STAGE2_HANDOFF ほかの「初期利用者 2 名」を履歴付きで改訂（D-139）。`tenant_id`・Repository のテナント境界・認証認可は維持。新規利用者の登録・招待・共有は作らない。
+- **JRA-VAN 規約（第7条・第9条）**: 公式ページの**検索抜粋**で条文の構造を確認（原文は 403 で直接読めていない）。T1.16 を再スコープ（2 人利用・配布・一般公開・JRADB は対象外）。**クラウド保存・生データ保管・Discord 通知の可否は未確認のまま維持**し、問い合わせを 3 問に絞った。**規約確認（COMP-1）と実データのクラウド投入の確認（COMP-4）を別項目で管理**（DATA_SOURCE_COMPLIANCE §0、D-140）。
+- **SDK 5.0.0（T1.17）**: 64bit JV-Link の正式提供、32/64bit の共存と別利用キー、公式 Python サンプル（3.14）、**SDK 本体 5.0.0 と仕様書の文書版 4.9.0.1 は別**を確認（検索抜粋）。古い「64bit 未確認」の記述を修正。**公開の確認と実機動作を区別**（T3.0 は未完了。手順は SDK 5.0.0 対応に更新）。仕様書 12 項目は**すべて未確認**（PDF に到達できず。JVLINK_DESIGN §12）。D-141。
+- **認証方式（最優先の確認）**: 契約 0.4.6 の「HMAC(token) 署名＋サーバはハッシュのみ保存」は**暗号学的に検証不能**（単体テストで確認）。導出鍵 HMAC＋KEK（AES-256-GCM、AAD で行に束縛）を実装。Cloud KMS・Ed25519 の代替との比較は CONTRACTS §3.3.1。**契約変更なので提案 P-1（未承認）**。KEK が無ければ `/v1/agent/**` は全て 503（未認証で保存しない）。D-130。
+- **実装したもの**
+  | 層 | 内容 |
+  |---|---|
+  | `:db-migration` | **V3**（V1/V2 は不変）: `agent` の署名鍵列＋`agent_id` 全体 UNIQUE、`ingest_batch` の取得セッション列、`ingest_fetch`、`ingest_backfill`、`combo_odds_snapshots.odds_high`、複合 FK 用 UNIQUE。`R__grants.sql` に新表の権限（app は署名鍵の列を読めない） |
+  | `:domain` `ingest` | `EnvelopeValidator`（JSON 木から検証。未知キー・`tenantId` 拒否、UUIDv7、Base64/SHA-256、件数・サイズ、時刻）、`AgentSigning`/`SigningKeyCipher`/`AgentAuthenticator`/`AgentCredentialIssuer`、`BatchIngestor`（claim→1 トランザクション処理→完了の印）、`FetchPolicy`（取得の事実の条件）、`ObservationApplier`（`RaceDayUpdater`・`RaceScheduleUpdater`・オッズ・combo）、`RecordParser`（実データは Unsupported=保留）、`BackfillService`、ハートビート検証、`ComboKeys` |
+  | `:persistence` | DAO/Repository 10 組（Agent・Nonce・Heartbeat・Batch・Raw・Fetch・Cursor・Gap・Backfill・ComboOdds）、`SpringUnitOfWork`（READ COMMITTED、デッドロックは全体再実行）、`DbScheduleFetchFactReader` |
+  | `:ingest` | `AgentAuthFilter`（モードガードの後）、`AgentApiController`（`POST /v1/agent/ingest`・`heartbeat`）、gzip/JSON の上限、合成の正規化 JSON パーサ（**ローカルのみ**）、`UnavailableHeartbeatMirror`（GCS への写しは未実装） |
+  | `:bot` | `ScheduleFetchFactReader` を DB 実装に（`NoScheduleFetchFacts` の本番配線を廃止）。必要スキーマ版 3 |
+- **実測で見つけた欠陥（テストで検出して修正）**: ① 同一 batchId の 8 並行送信で 1 本が 500（重複キーの S ロック→`FOR UPDATE` の X ロック待ち合いでデッドロック）→ `INSERT … ON DUPLICATE KEY UPDATE` に変更 ② 先走りバッチが失敗行で連番を占有して別の batchId での再送を妨げた → 事前の `peek` で行を作らず 409 ③ `FetchStore` と `ScheduleFetchFactReader` を 1 クラスで実装すると Bean が曖昧になった → 分離 ④ 3 アプリの `requiredSchemaVersion` が揃わないと release-manifest の検証が失敗する（`tools/release`）→ dashboard も 3 に統一 ⑤ ingest の本番起動に KEK が要るため image smoke を更新 ⑥ **RA だけを取り込むと `race_day` が無く有効な予定が STALE になる／確認済みの日が YSCH で再確認されない**（YSCH の PLANNED が CONFIRMED の日を INVALID_TRANSITION で拒否し確認時刻が進まない）→ RA で開催日を CONFIRMED にし、YSCH の PLANNED は先へ進んだ日では確認時刻だけ進める ⑦ 認証・モードガードのパス書き換え迂回のテストを追加（ハンドラは認証済みの呼び出し元が無ければ 500 で何も保存しない）。
+### テスト（ローカル、JDK 21、**MySQL 8.0.46。8.4/9.7 の合否ではない**）
+| 区分 | 結果 |
+|---|---|
+| `:domain` 単体 | **667 件成功**（T3.3 の 632 ＋ 新規 35: `EnvelopeValidatorTest` 13・`AgentAuthTest` 10・`FetchPolicyTest` 9・`HeartbeatAndBackfillTest` 3） |
+| `:ingest` 単体 | 31 件成功（起動設定の新規 3: 本番の KEK 必須・本番で正規化レコード不可・オプション不正） |
+| `:ingest` MySQL 統合（**新規 37**） | **46 件成功**（`AgentAuthIntegrationTest` 10・`IngestIdempotencyIntegrationTest` 9・`IngestPipelineIntegrationTest` 18・既存 `IngestReadyIntegrationTest` 9）。署名不正・nonce 再利用・時刻ずれ・失効・期限切れ・OpsMode STOPPED/UNKNOWN・テナント越境・展開爆弾・ログに秘密なし・同一 batchId の 8 並行 ×5 ラウンド・途中失敗の巻き戻り・ACK 直前の失敗・YSCH 取得の事実（途中／EOF／予定なし／失敗／古い）・source_version・オッズ upsert・combo キー正規化・1 倍未満の隔離・カーソル・バックフィル・逆順更新の並行 |
+| `:persistence` 統合 | 161 件中 160 成功（新規 `IngestStoresIntegrationTest` 8 件: 全体一意の agent_id、nonce、カーソル、ギャップ、バックフィルの重複排除と越境 FK、取得の事実、UnitOfWork のデッドロック再実行）。**失敗 1 件は `WiringIntegrationTest`（`mysql:8.4` 固定の版確認。ローカルが 8.0 のため。CI では 8.4/9.7 で実行）** |
+| `:db-migration` | 単体 57・統合 44 成功（V3 の適用・権限・FK を反映） |
+| `:bot` 単体 / 統合（T3.3 の回帰） | 67 / 31 成功 |
+| `:dashboard` 単体 / 統合 | 30 / 9 成功 |
+| ktlint・`checkModuleDependencies`・Python `tools/ci`（57）・`tools/release`（52）・repo hygiene | 成功 |
+| Kotlin vs 旧 Python ゴールデン | **18 ケース / 661 呼び出し 全一致、最大絶対誤差 0**（T3.1〜T3.2 から不変。未対応 3 ケース/149 呼び出しは成功に数えない） |
+| **未実施（ローカル）** | MySQL 8.4 / 9.7 の統合テスト（Docker 不可。CI）、Python ゴールデン（CI）、イメージのビルド・スモーク（CI）。完了判定の正は GitHub Actions（D-056） |
+### 環境・セッション
+`java -version`: OpenJDK 21（JDK 25 なし。ローカルは `-PjdkVersion=21`）。`./gradlew`: 9.7.1（Maven Central の 429 を再試行。**UTF-8 ロケール（`LC_ALL=C.UTF-8`）が必要**。無いと日本語のテスト名でビルドが壊れる）。`docker info`: クライアントのみでデーモンなし。apt の MySQL 8.0.46 を起動してテスト支援の外部 MySQL モード（D-129）で実行。本番 GCP・Cloud SQL・実 JRA-VAN データには接続していない。Terraform・infra・参照元は未変更。
+### 未解決事項
+**`docs/UNRESOLVED.md` に分類 A〜G で整理した（現在の状態の正本）。** ユーザーが対応すべきもの: D-1（規約の一読と Q1〜Q3）、D-2（T1.20 の取得）、D-3（T1.21）、D-4（T3.3 運用値の暫定推奨値の承認）、**D-5（署名方式 P-1）・D-6（取得セッション P-2）・D-7（オッズ境界 P-3）**、D-8〜D-12。
+### 次の作業
+- T3.5（Windows 取得エージェント）は **D-5・D-6 の承認が前提**。`plan`・`mode`・`update`・`register` の HTTP、`HeartbeatMirror` の GCS 実装、KEK の運用が残る（UNRESOLVED G-1〜G-4）。実データ形式のパーサは T1.17（仕様書 12 項目）の確認後。
+### ブランチ
+`claude/stage3-ingest-api`（main の 7cd8fdc から作成。PR は main 向け、マージはユーザー）。CI の結果と PR 番号は下の「CI・PR」。
+### CI・PR
+- **PR #20**（main 向け。マージはユーザー）: https://github.com/puttun777/jra-bot-web/pull/20
+- **CI（コードを含む最新コミット cdc599f、run 40003205466）: ci gate 成功**。成功 — changes and repo hygiene / build (Temurin 25: ktlint・依存規則・単体・Kotlin ゴールデン比較) / golden tests (Python 3.12) / release tools and ci scripts / **db integration (MySQL 8.4)・(MySQL 9.7)**（db-migration・persistence 161・bot 31・ingest 46・dashboard 9 の下限と期待クラスを CI が検証）/ images (build + smoke, no push)。設計どおり skipped — connectorj26（Connector/J 26.x の変更なし）。ローカルで失敗していた `WiringIntegrationTest` は CI（8.4/9.7）では成功。
+- 本記録のコミット（docs のみ）でも CI が走る。その結果は PR のチェックを参照（ここには追記しない）。
 
 ## Stage 3-C（claude/stage3-calendar-lease）: T3.3 開催日制御・calendar-check・bot-run リース・手動補正
 ### 結果（T3.3 の範囲で完了。**本番で動作する Bot ではない**。bot-run の業務ループは T3.8、実データ取込は T3.4）

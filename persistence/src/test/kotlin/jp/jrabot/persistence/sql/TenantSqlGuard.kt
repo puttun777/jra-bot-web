@@ -9,10 +9,30 @@ package jp.jrabot.persistence.sql
  */
 internal object TenantSqlGuard {
     /** テナント条件を持たない SQL の許可リスト（ログイン時のテナント解決。email は全体で UNIQUE: D-063）。 */
-    val ALLOWED_WITHOUT_TENANT = setOf("AppUserDao/selectByEmail.sql")
+    val ALLOWED_WITHOUT_TENANT = setOf("AppUserDao/selectByEmail.sql", "AgentDao/selectByAgentId.sql", "AgentNonceDao/deleteExpired.sql")
 
     val TENANT_TABLES =
-        setOf("races", "odds_snapshots", "bot_run", "signals", "race_schedule", "app_user", "race_day", "race_schedule_event", "calendar_override")
+        setOf(
+            "races",
+            "odds_snapshots",
+            "bot_run",
+            "signals",
+            "race_schedule",
+            "app_user",
+            "race_day",
+            "race_schedule_event",
+            "calendar_override",
+            "combo_odds_snapshots",
+            "agent",
+            "agent_nonce",
+            "agent_heartbeat",
+            "ingest_batch",
+            "ingest_raw",
+            "ingest_fetch",
+            "ingest_cursor",
+            "ingest_gap",
+            "ingest_backfill",
+        )
 
     val TENANT_BIND = Regex("""tenant_id\s*=\s*/\*\s*(?:entity\.|rows\.)?tenantId\s*\*/\s*[^\s,)]+""")
     private val TABLE_REF = Regex("""\b(?:FROM|JOIN|UPDATE|INTO)\s+([a-z_]+)""", RegexOption.IGNORE_CASE)

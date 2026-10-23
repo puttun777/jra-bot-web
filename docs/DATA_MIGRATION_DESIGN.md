@@ -153,7 +153,7 @@ CREATE TABLE payouts (
 |---|---|---|
 | **テナント表**（JRA-VAN 由来データ・利用者の判断/成績・モデル） | races, race_horses, horses, horse_past_runs, odds_snapshots, combo_odds_snapshots, results, payouts, signals, bets, bet_legs, race_evaluations, ticket_evaluations, model_metrics, ingest_cursor（旧 `jvlink_timestamps`）, race_day, race_schedule, race_schedule_event, calendar_override, bot_run, ml_model, ingest_batch, agent, agent_heartbeat, import_quarantine | データ・派生物は契約者のもの（DATA_SOURCE_COMPLIANCE #4/#7/#9） |
 | **共有表**（データを含まない） | `tenant`、`app_user`（メール・ロール・`tenant_id`）、`code_venue`（競馬場コード→名称。事実の定数）、`schema_history`（Flyway）、設定の既定値 | JRA-VAN 由来のデータを含まない。`app_user` は deny by default の根拠 |
-| **注意** | `horses` 等のマスタを「共有して節約」しない | 2 人が同じデータを持つ形になっても、契約者ごとに自分の取得物を保持する（案 A）。重複保存は容量で数百 MB 規模で、費用より規約適合を優先 |
+| **注意** | `horses` 等のマスタを「共有して節約」しない | （2026-10-23: 利用者は本人 1 名。以下は構造を維持する理由として残す）2 人が同じデータを持つ形になっても、契約者ごとに自分の取得物を保持する（案 A）。重複保存は容量で数百 MB 規模で、費用より規約適合を優先 |
 
 ## 5. 移行パイプライン
 ### 5.1 構成

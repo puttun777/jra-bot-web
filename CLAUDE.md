@@ -3,6 +3,10 @@
 JRA Bot (参照元 `puttun777/jra-bot`, Python/SQLite/Streamlit) を Kotlin/Spring Boot の Web アプリへ段階的にリプレースするアプリ側リポジトリ。
 インフラは別リポジトリ `puttun777/jra-bot-infra`（Terraform / GitHub Actions デプロイ / 起動停止）。
 
+## 利用者・利用目的（2026-10-23 要件変更）
+このシステムは**開発者本人 1 名だけ**が、**私的・非営利**で使う（JRA-VAN 契約者も本人）。第三者へのデータ提供・共有、商用、広告、一般公開はしない。Private 維持。`tenant_id`・テナント境界・認証認可は省略しない。新規利用者の登録・招待・共有機能は作らない。詳細は `docs/REQUIREMENTS.md` §0。
+**規約の確認と、実データのクラウド投入の確認は別。公式回答（`docs/UNRESOLVED.md` COMP-4）が得られるまで実データをクラウドへ投入しない**（テストは合成データ）。
+
 ## 絶対ルール
 1. 参照元 `jra-bot` は **読み取り専用**。変更・commit・push・PR をしない。
 2. 本リポジトリと infra は **Private 維持**。新規リポジトリを作らない。
@@ -38,6 +42,7 @@ JRA Bot (参照元 `puttun777/jra-bot`, Python/SQLite/Streamlit) を Kotlin/Spri
 | docs/DECISIONS.md | 判断記録 | リポジトリ別 |
 | docs/ARCHITECTURE.md | モジュール/責務/データ | web |
 | docs/CONTRACTS.md | web⇔infra の成果物・環境変数・API 契約 | **web が正本**、infra 側は同期コピー参照 |
+| docs/UNRESOLVED.md | **未解決事項の管理表**（分類 A〜G: 解決済み／対象外／今回解消／ユーザー判断／公式確認／実機検証／後続）。現在の状態の正本 | web |
 | docs/STAGE2_HANDOFF.md | 第2段階の実装順・テスト区分・CI・再開手順・検証ゲート一覧 | web |
 | docs/VERSIONS.md | 版数・互換性ゲート・Boot 4.2 移行計画 | web |
 | docs/CI_AND_IMAGES.md | CI の実行範囲・required check（`ci gate`）・Docker イメージ・release-manifest・Dependabot・無料枠 | web |
