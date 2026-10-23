@@ -44,6 +44,15 @@ SECRET_ASSIGNMENT = re.compile(r"(?im)^\s*[\w.\-]*(password|secret|token|api[_-]
 TEXT_RESOURCE = re.compile(r"\.(properties|ya?ml|xml|json|sql|txt|md|conf|toml)$")
 
 
+# calendar-check（T3.3）は監視ウィンドウ・鮮度の設定が必須（既定値なし。CONTRACTS §2）。合成のテスト値で、運用の既定値ではない
+CALENDAR_ENV = {
+    "CALENDAR_WATCH_START_MINUTES": "120",
+    "CALENDAR_PRESTART_MINUTES": "10",
+    "CALENDAR_SETTLE_DEADLINE_MINUTES": "90",
+    "CALENDAR_STALE_AFTER_MINUTES": "120",
+}
+
+
 class Report:
     def __init__(self) -> None:
         self.results: list[dict] = []
@@ -224,9 +233,9 @@ class Smoke:
         rc, out, _ = self.run("bot", args=["--task=calendar-check"], env={"APP_ENV": "local"}, desc="bot no tenant")
         self.r.check("[bot] missing --tenant-id -> exit 2", rc == 2, f"rc={rc}")
         bad_db = {"DB_URL": "jdbc:mysql://127.0.0.1:1/jrabot", "DB_USER": "bot", "DB_PASSWORD": pw}
-        rc, out, _ = self.run("bot", args=["--task=calendar-check", "--tenant-id=1"], env={"APP_ENV": "local", "OPS_MODE_SOURCE": "/nonexistent/ops-state.json", **bad_db}, desc="bot UNKNOWN")
+        rc, out, _ = self.run("bot", args=["--task=calendar-check", "--tenant-id=1"], env={"APP_ENV": "local", "OPS_MODE_SOURCE": "/nonexistent/ops-state.json", **CALENDAR_ENV, **bad_db}, desc="bot UNKNOWN")
         self.r.check("[bot] ModeProvider UNKNOWN (unreadable source) -> exit 75", rc == 75, f"rc={rc}")
-        rc, out, _ = self.run("bot", args=["--task=calendar-check", "--tenant-id=1"], env={"APP_ENV": "prod", "OPS_MODE_SOURCE": "/nonexistent/ops-state.json", **bad_db}, desc="bot prod local file")
+        rc, out, _ = self.run("bot", args=["--task=calendar-check", "--tenant-id=1"], env={"APP_ENV": "prod", "OPS_MODE_SOURCE": "/nonexistent/ops-state.json", **CALENDAR_ENV, **bad_db}, desc="bot prod local file")
         self.r.check("[bot] prod refuses a local-file mode source -> exit 2 (never 0)", rc == 2, f"rc={rc}")
         rc, out, _ = self.run("bot", args=["--task=bot-run", "--tenant-id=1"], env={"APP_ENV": "prod", "OPS_MODE_SOURCE": "gs://synthetic-bucket/state/ops-state.json", **bad_db}, desc="bot prod gcs unreachable")
         self.r.check("[bot] prod, mode source unreachable (no network) -> exit 75, never 0", rc == 75, f"rc={rc}")
@@ -312,7 +321,7 @@ class Smoke:
                 })
             )
             f.chmod(0o644)
-        base = {"APP_ENV": "local", "DB_URL": self.jdbc(), "DB_USER": "bot", "DB_PASSWORD": self.passwords["bot"]}
+        base = {"APP_ENV": "local", "DB_URL": self.jdbc(), "DB_USER": "bot", "DB_PASSWORD": self.passwords["bot"], **CALENDAR_ENV}
         mounts = [f"{d}:/ops:ro"]
         tasks = ["bot-run", "calendar-check", "reconcile", "retention", "export-dataset"]
         before = self.connections()
@@ -321,10 +330,13 @@ class Smoke:
         self.r.check("[bot] STOPPED -> exit 0 for all 5 tasks", set(codes.values()) == {0}, str(codes))
         self.r.check("[bot] STOPPED never opens a DB connection (server Connections delta == 1: the probe itself)", after - before == 1, f"delta={after - before}")
         before = self.connections()
-        rc, out, err = self.run("bot", args=["--task=calendar-check", "--tenant-id=1"], env={**base, "OPS_MODE_SOURCE": "/ops/NORMAL.json"}, network=self.network, mounts=mounts, desc="bot NORMAL local stub", timeout=120)
+        rc, out, err = self.run("bot", args=["--task=reconcile", "--tenant-id=1"], env={**base, "OPS_MODE_SOURCE": "/ops/NORMAL.json"}, network=self.network, mounts=mounts, desc="bot NORMAL local stub", timeout=120)
         after = self.connections()
         self.r.check("[bot] NORMAL (local only) connects to the DB and runs the stub task -> exit 0", rc == 0 and after - before >= 2, f"rc={rc} delta={after - before}\n{(out + err)[-300:]}")
         self.r.check("[bot] the stub says so in the log (TASK_NOT_IMPLEMENTED, result STUB_LOCAL_OK: local only)", "TASK_NOT_IMPLEMENTED" in out + err and "STUB_LOCAL_OK" in out + err, (out + err)[-300:])
+        # calendar-check は実装済み（T3.3）。予定の無い DB・取得の事実なしでは「不明」= exit 75 で、起動を要求しない（スタブの成功ではない）
+        rc, out, err = self.run("bot", args=["--task=calendar-check", "--tenant-id=1"], env={**base, "OPS_MODE_SOURCE": "/ops/NORMAL.json"}, network=self.network, mounts=mounts, desc="bot calendar-check unknown", timeout=120)
+        self.r.check("[bot] calendar-check on an empty schedule -> exit 75 SCHEDULE_UNKNOWN (fail closed, no launch)", rc == 75 and "SCHEDULE_UNKNOWN" in out + err, f"rc={rc}\n{(out + err)[-300:]}")
         rc, _, _ = self.run("bot", args=["--task=calendar-check", "--tenant-id=1"], env={**base, "OPS_MODE_SOURCE": "/ops/NORMAL.json", "DB_PASSWORD": "wrong-" + secrets.token_hex(4)}, network=self.network, mounts=mounts, desc="bot wrong pw", timeout=120)
         self.r.check("[bot] DB authentication failure -> exit 1 (not 75, not 0)", rc == 1, f"rc={rc}")
         # スキーマ版不足: 履歴の表の無い別 DB
