@@ -1,6 +1,6 @@
 # CONTRACTS（web ⇔ infra 受け渡し契約・正本は本ファイル）
 
-状態: **0.4.0（第1段階 / T1.10 で確定。設計契約）**。infra の `docs/CONTRACTS.md` §2 の差異 D1〜D12 をすべて取り込んだ（対応表は §12）。実装・実リソースで確かめる必要がある箇所は「検証ゲート」として ID を書いている（一覧は `STAGE2_HANDOFF.md` §13）。
+状態: **0.4.1（第2段階 / T2.3 で §4.2・§8.2 を実装に合わせて補足。0.4.0 の契約は変えていない）**。0.4.0 は第1段階 / T1.10 で確定した設計契約。infra の `docs/CONTRACTS.md` §2 の差異 D1〜D12 をすべて取り込んだ（対応表は §12）。実装・実リソースで確かめる必要がある箇所は「検証ゲート」として ID を書いている（一覧は `STAGE2_HANDOFF.md` §13）。
 - 正本はこのファイル。infra 側は版番号を参照し、変更点を同期する。infra の文書を直す必要がある箇所は `PROGRESS.md` の「infra への引継ぎ」に記録する。web のセッションから infra を直接変更しない。
 - 用語: **mode** は現在のフェーズ（`NORMAL | STARTING | STOPPING | STOPPED`）。**desired** は利用者の意図（`NORMAL | STOPPED`）。アプリが読み取りに失敗したときや、内容が不正なときの判定値は **`UNKNOWN`** とする。UNKNOWN はアプリ内部だけの値で、正本には書かない。旧版の `phase` は廃止して `mode` に統一した（実装はまだ無いため互換フィールドは置かない）。
 
@@ -113,7 +113,11 @@ web→Artifact Registry の push 権限と、infra 側の manifest 取得権限�
 | `--mode=info` | 現在版・未適用版・失敗版を **JSON 1 行で標準出力**: `{"current":"2","pending":["3"],"failed":[],"latest":"3"}` | 0（DB に接続できないときは 75） |
 | `--mode=validate` | 適用済みのチェックサム一致・失敗版なし・`outOfOrder` なしを検証する。結果を JSON で出力 | 0=適用済みが正しく未適用なし / **10=正しいが未適用あり** / 1=不一致・失敗版あり / 75=DB 不達 |
 | `--mode=migrate` | 未適用版を適用する。その後 `R__grants.sql` で権限を再適用する（§8.2） | 0=成功 / 1=失敗（Flyway が失敗版を記録。自動の修復はしない）/ 75=DB 不達 |
-- `--mode` は必須で既定値は無い。未指定なら終了コード 2。
+- `--mode` は必須で既定値は無い。未指定・不正な引数・`DB_URL` `DB_USER` `DB_PASSWORD` の不足は終了コード 2（標準出力は空、詳細は標準エラー）。
+- **出力（0.4.1 で補足）**: 標準出力は JSON 1 行だけ。診断は標準エラー（パスワードは伏せる）。Repeatable の未適用・失敗は `"R__<説明>"`（例: `"R__grants"`）。`info` は上記 4 キーのみ（DB が空なら `"current":null`）。`validate` は `{"valid":true,"current":…,"pending":[…],"failed":[…],"latest":…,"errors":[…]}`、`migrate` は `{"success":true,"applied":[…],"current":…,"pending":[…],"failed":[…],"latest":…}`。失敗は `{"mode":"…","error":"unavailable"|"failed"}`。
+- **75 になるのは接続系だけ**（接続拒否・タイムアウト・通信断・サーバ停止中/接続数超過）。認証失敗・DB が無い・SQL の誤りは 1（再試行しても直らない）。接続の待ちは既定 10 秒（`connectTimeout`）。
+- `validate` の未適用の判定は、変更された Repeatable（`R__grants.sql` の内容変更）も含む（→ 10）。履歴のある DB が image より新しい版を持つ場合（旧 image での検証）は不整合にしない。
+- 履歴の無い空でないスキーマには `migrate` しない（1。`baselineOnMigrate=false`）。
 - 固定する設定: `validateOnMigrate=true`、`outOfOrder=false`、`baselineOnMigrate=false`、`cleanDisabled=true`、`group=true`（1 回の実行の版をまとめる。MySQL は DDL が暗黙コミットされるため、効くのは DML だけ）。
 - 接続ユーザーは `migrate`（DDL 権限）だけを使う（§8.2）。
 
@@ -264,6 +268,7 @@ STOPPED 中の `ingest` 503、ビーコンのみ STOPPED、両方不達（UNKNOW
 | `bot` | `db-bot-password` | bot（全 `--task`） | 業務表の SELECT。判定・成績・実行管理の表（`signals`、`bets`、`bet_legs`、`race_evaluations`、`ticket_evaluations`、`bot_run`、`race_schedule` の状態など）の INSERT/UPDATE。DELETE は保持ポリシー対象の表だけ（`retention` 用。ドライランと管理者承認: D-043） |
 | `mltrain` | `db-mltrain-password` | ml-train | `ml_model` の SELECT/INSERT だけ（§5.1、D12） |
 - ユーザーそのものは infra（Terraform）が作り、パスワードは Secret Manager に置く。**GRANT は web の Flyway（`R__grants.sql`）が `REVOKE ALL` → 最小限の GRANT の順で定義する**。Cloud SQL が API で作ったユーザーに付ける既定の権限と、`migrate` が GRANT できる範囲は要検証（G-DB-6）。
+- **0.4.1 の補足（T2.3 / D-065）**: `R__grants.sql` は `migrate` ユーザー自身の権限に触れない（infra が `GRANT ALL ON <schema>.* TO migrate WITH GRANT OPTION` まで付ける）。app / ingest / bot / mltrain は infra が先に作る（無いユーザーへの GRANT は失敗＝exit 1。ユーザーを勝手に作らない）。`app` の SELECT は「全テナント表」から `ingest_raw`・`agent_nonce`・`import_quarantine`・`agent.token_hash`・`agent_registration_code.code_hash` を除く。`app` の `agent` への書込は失効の列（`status, revoked_at, revoked_by`）だけで、エージェントの INSERT（登録）は `ingest`。`app` / `ingest` / `bot` は `flyway_schema_history` を SELECT できる（§4.3 の ready 判定）。`mltrain` は読めない（要検討: T3.x）。CI の MySQL コンテナでの検証であり、**Cloud SQL では未検証（G-DB-6）**。
 - テナントは行単位では DB で強制できない（MySQL に RLS が無い）。DAO の必須引数、SQL の静的検査、複合 FK、越境テストで多重に防ぐ（DATA_MIGRATION_DESIGN §4）。
 
 ### 8.3 接続プールの上限（初期値）
@@ -374,3 +379,4 @@ STOPPED 中の `ingest` 503、ビーコンのみ STOPPED、両方不達（UNKNOW
 
 ## 13. 変更履歴
 0.1.0（第0段階）→ 0.2.0（ingest の別サービス化、エージェント認証、封筒、STOPPED 契約、ビーコン）→ 0.3.0（ingest/ml-train イメージ、モデル成果物・データセット・署名鍵）→ **0.4.0（T1.10: D1〜D12 を取り込み、`phase` を廃止、ModeProvider、heartbeat の写し、db-migration の CLI、DB 接続とユーザー、Job の終了コード、release-manifest、内部 API の認証、bot イメージの `--task` 化）**。
+0.4.1（第2段階 / T2.3）: §4.2 に出力 JSON・75 の範囲・Repeatable の扱いを補足、§8.2 に `R__grants.sql` の前提と app の権限範囲（D-065）を補足。契約の意味は変えていない（infra への影響は PROGRESS「infra への引継ぎ」）。
