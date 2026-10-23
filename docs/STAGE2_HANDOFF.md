@@ -134,6 +134,7 @@ db-migration（単独）
 | G-AGENT-1〜6 | Windows エージェントの PoC | 3 の冒頭（ユーザー） | JVLINK_DESIGN §11 |
 | G-ML-1〜3 | H1 の実証、実データのリプレイ、v2 のバックテスト | 3（ユーザーの PC、クラウドには入れない） | ML_DESIGN §10 |
 | G-ENV-1 | クラウドセッションで JDK 25 を取得できるか（toolchain の自動取得） | 2 の冒頭 | §4 |
+| G-AUTH-1 / G-APP-1 / G-JOB-1 | 内部 API の実 Google 鍵での署名検証、Cloud Run 上の health/ready、Jobs の引数と終了コード | 5 | §14.5（T2.8 で新設。**未実施**） |
 
 ## 14. `:domain` のポート一覧（T2.2 で実装済み。パッケージ `jp.jrabot.domain.*`）
 Reader/Writer は分かれており、`XxxRepository` は両方を継承する。テナントを扱う操作の第一引数は `TenantId` か `TenantScoped`（`TenantBoundaryContractTest` が検査）。T2.4 以降の実装は同じ規則の越境テスト（テナント 2 つ）で検証する。
@@ -195,4 +196,25 @@ Reader/Writer は分かれており、`XxxRepository` は両方を継承する�
 - **ローカル実行**: `OPS_MODE_SOURCE=/path/to/ops-state.json APP_ENV=local`（合成データだけ。サンプルは `cloud-gcp/src/test` の `opsStateJson()`）。`APP_ENV` が `local` 以外でファイルを指定すると起動失敗。
 - **未検証（実 GCP が要る）**: ADC（Cloud Run のランタイム SA）での認証、実バケットの IAM（読取りのみで足りること）、リージョン間のレイテンシ、SDK のリトライ設定が 3 秒の上限内で働くこと、メタデータサーバ不達時の挙動。単体テストの成功を実 GCP のアクセス成功とは扱わない。T2.8 の後 / T5 で infra と一緒に確認する（第5段階の実環境検証。既存の G-OPS-1〜9 に「ModeProvider が実 GCS から ADC で読めること」は含まれていないので、infra の T5.0 で項目を足す）。
 - **未実装（範囲外）**: `ModelStore`・`DatasetStore`・`HeartbeatMirror`・`JobLauncher`・Google の ID トークン検証（`:cloud-gcp` の残り。必要になる段階で追加）、ヘルス/ready、bot-run の連続 UNKNOWN の数え上げ。
+
+### 14.5 T2.8 の結果と T2.6 / Stage 3・4 への引き継ぎ（実装済みの 3 アプリの起動）
+- **実装**: 3 アプリが独立して起動する。判断は DECISIONS D-081〜D-088、契約の補足は CONTRACTS 0.4.4。構成は次のとおり。
+  | アプリ | 起動の仕組み | 内部 API / 入口 | 認証 | モードガード |
+  |---|---|---|---|---|
+  | `:ingest` | Spring Boot（Tomcat）。DataSource は遅延、`ModeProvider` は `OpsModeProviders.fromEnvironment` | `/internal/health` `/internal/ready` `/internal/ops/mode`（GET のみ） | Google ID トークン（RS256、aud=`INTERNAL_ID_TOKEN_AUDIENCE`、email=`OPS_SA_EMAIL`）。満たさなければ 401 | `/v1/agent` 配下（`/v1/agent/mode` を除く）: NORMAL 以外は 503 + `X-Ops-Mode`（UNKNOWN はヘッダなし）。ハンドラに到達しない |
+  | `:dashboard` | 同上 | 同上 | IAP JWT（`X-Goog-IAP-JWT-Assertion`、ES256、aud=`IAP_AUDIENCE`、email=`OPS_SA_EMAIL`）。無効=401、ops 以外=403 | 全パスの書込みメソッド: NORMAL 以外は 409 `OPS_MODE_NOT_NORMAL` |
+  | `:bot` | `main` → `BotLauncher`（引数 → 設定 → モード → NORMAL のみ Spring 起動 → スキーマ版 → タスク）。Web サーバなし | `--task=bot-run\|calendar-check\|reconcile\|retention\|export-dataset` `--tenant-id=<n>` | — | Job の開始時に `JobGate`（DB 接続の前） |
+- **Bean 構成**（各アプリの `XxxConfiguration`）: `Clock`=`SystemClock`、`XxxSettings`（環境変数の検証）、`AppBuildInfo`（jar 焼き込み）、`DataSource`（`createLazy`）、`ModeProvider`（`InspectableModeProvider`）、`SchemaVersionVerifier`、(web) `InternalCallerVerifier`、`PersistenceConfiguration` を `@Import`（Repository 6 つと Doma の `Config`）。Flyway は無い。
+- **環境変数**: 全アプリ `APP_ENV`（必須 local/prod）・`DB_URL`・`DB_USER`・`DB_PASSWORD`・`DB_POOL_MAX`（任意）・`OPS_MODE_SOURCE`・`RELEASE_ID`（任意）。dashboard は `IAP_AUDIENCE`・`OPS_SA_EMAIL`、ingest は `INTERNAL_ID_TOKEN_AUDIENCE`・`OPS_SA_EMAIL`。**本番で足りなければ起動失敗**（ローカル実装へフォールバックしない）。
+- **ローカルで起動する手順**: 合成の `ops-state.json` を置き（`cloud-gcp/src/test` の `opsStateJson()` の形）、`APP_ENV=local OPS_MODE_SOURCE=/path/ops-state.json DB_URL=jdbc:mysql://127.0.0.1:3306/jrabot DB_USER=… DB_PASSWORD=…` を渡して `./gradlew :ingest:bootRun`。`/internal` は署名付きトークンが必要なので、手元から叩くには本番と同じ検証を通るトークンが要る（認証のバイパスは無い。テストは偽の JWKS を使う）。bot は `./gradlew :bot:bootRun --args="--task=calendar-check --tenant-id=1"`（`STOPPED` なら DB に触れず exit 0）。
+- **テスト区分**: Docker 不要（`./gradlew build` の `test`）— bot 54 / ingest 28 / dashboard 30 / persistence 23 / cloud-gcp 91 / domain 214 / db-migration 57。Docker 必要（`integrationTest`、MySQL 8.4 と 9.7）— bot 8 / ingest 9 / dashboard 9 / persistence 98 / db-migration 44。CI の検証スクリプトは `.github/scripts/verify_test_results.py`（0 件・スキップ・失敗・期待クラスの欠落を失敗にする）。
+- **T2.5 後半（Dockerfile・manifest）が使うもの**: bootJar の `jrabot-app.properties`（`-PreleaseId=<git sha>` で `releaseId`）。bot のイメージの ENTRYPOINT は `java -jar` で `--task=…` を args に渡す。
+- **Stage 3 が足すもの**: 各 `--task` の業務処理（`StubTaskHandler` を差し替える。本番でスタブが exit 1 になる仕組みを外すのは実装が揃ってから）、bot-run のループ（`CycleGate` を接続）・checkpoint・リース解放・SIGTERM（CONTRACTS §9.2。**未実装・未検証**）、`/v1/agent/*` の本体（認証フィルタは `AgentApiOpsGuardFilter.ORDER`=20 より後）、`/v1/agent/mode`。
+- **Stage 4 が足すもの**: 人の認証/認可（IAP JWT → `ALLOWED_USERS` + `app_user` + ロール）、管理操作（`AdminWriteGuardFilter.ORDER`=50 より前に認可を置く）、CSRF、画面。
+- **新しい検証ゲート（未実施。完了扱いにしない）**
+  | ID | 内容 | 段階 |
+  |---|---|---|
+  | G-AUTH-1 | 実 Google の公開鍵（IAP の JWK、Google の証明書）で、実際の IAP JWT／ID トークン（ops SA）が検証できること。鍵の取得の失敗時の挙動（現在は拒否＝401）、取得のタイムアウト（ライブラリの既定。上限は未設定）、直接 IAP の `aud` の形式（G-OPS-7 と同時） | 5 |
+  | G-APP-1 | Cloud Run 上で `/internal/health` が DB 停止中も 200、`/internal/ready` が STARTING 中に DB を確認できること（start の S8）。Cloud SQL の IAM/TLS の下での `flyway_schema_history` の読取り（`app`/`ingest`/`bot` の SELECT）と `SchemaVersionVerifier` の分類（Connector/J の例外が実環境でも想定どおりか） | 5 |
+  | G-JOB-1 | Cloud Run Jobs で `--task` の引数が渡ること、終了コード 0/75/2/1 が Scheduler/通知で意図どおり扱われること | 5 |
 

@@ -4,17 +4,13 @@ import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 
 /**
- * :dashboard の最小エントリポイント。業務処理は後続タスクで追加する。
+ * :dashboard の起動点（T2.8）。画面・`/api/v1`・利用者の認証/認可・管理者操作は Stage 4。ここにあるのは起動設定・
+ * 内部 API（`/internal/health|ready|ops/mode`、IAP JWT による ops サービスアカウント認証）・書込みの運用モードガードだけ。
  *
- * T2.4: `:persistence` が starter-jdbc / doma-spring-boot-starter を持ち込むが、DataSource を組み立てるのは T2.8
- * （`DataSourceFactory` + `PersistenceConfiguration`）。それまで DB なしで起動できるよう、クラス参照を持たずに名前で除外する。T2.8 でこの除外を外す。
+ * T2.4 で入れていた `DataSourceAutoConfiguration` / `DomaAutoConfiguration` の除外は外した。DataSource は
+ * [DashboardConfiguration] が（遅延で）定義するので、Boot の自動構成は引き下がり、起動時に DB へ接続しない。
  */
-@SpringBootApplication(
-    excludeName = [
-        "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration",
-        "org.seasar.doma.boot.autoconfigure.DomaAutoConfiguration",
-    ],
-)
+@SpringBootApplication
 class DashboardApplication
 
 fun main(args: Array<String>) {

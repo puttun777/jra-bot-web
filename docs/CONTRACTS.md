@@ -1,6 +1,6 @@
 # CONTRACTS（web ⇔ infra 受け渡し契約・正本は本ファイル）
 
-状態: **0.4.2（第2段階 / T2.4 で §8.1 に JDBC 接続の固定値を補足。0.4.0 の契約は変えていない）**。0.4.0 は第1段階 / T1.10 で確定した設計契約。infra の `docs/CONTRACTS.md` §2 の差異 D1〜D12 をすべて取り込んだ（対応表は §12）。実装・実リソースで確かめる必要がある箇所は「検証ゲート」として ID を書いている（一覧は `STAGE2_HANDOFF.md` §13）。
+状態: **0.4.4（第2段階 / T2.8 で §2・§3.2・§4.3・§9.1・§11 に実装の補足。0.4.0 の契約の意味は変えていない）**。0.4.0 は第1段階 / T1.10 で確定した設計契約。infra の `docs/CONTRACTS.md` §2 の差異 D1〜D12 をすべて取り込んだ（対応表は §12）。実装・実リソースで確かめる必要がある箇所は「検証ゲート」として ID を書いている（一覧は `STAGE2_HANDOFF.md` §13）。
 - 正本はこのファイル。infra 側は版番号を参照し、変更点を同期する。infra の文書を直す必要がある箇所は `PROGRESS.md` の「infra への引継ぎ」に記録する。web のセッションから infra を直接変更しない。
 - 用語: **mode** は現在のフェーズ（`NORMAL | STARTING | STOPPING | STOPPED`）。**desired** は利用者の意図（`NORMAL | STOPPED`）。アプリが読み取りに失敗したときや、内容が不正なときの判定値は **`UNKNOWN`** とする。UNKNOWN はアプリ内部だけの値で、正本には書かない。旧版の `phase` は廃止して `mode` に統一した（実装はまだ無いため互換フィールドは置かない）。
 
@@ -20,7 +20,7 @@ web→Artifact Registry の push 権限と、infra 側の manifest 取得権限�
 ## 2. 環境変数/設定（infra → app）
 | 名前 | 供給元 | 対象 | 用途 |
 |---|---|---|---|
-| `APP_ENV` | Terraform | 全 | `local` / `prod` |
+| `APP_ENV` | Terraform | 全 | `local` / `prod`。**0.4.4: 3 アプリとも必須**（未設定・他の値は起動失敗/Job は exit 2）。ローカル専用の挙動（モードのローカルファイル・スタブの成功終了・DB ユーザーの制限緩和）は `local` のときだけ |
 | `TZ` | 固定 | 全 | `Asia/Tokyo`（表示・開催日判定用。保存は UTC: §8） |
 | `DB_URL` | Terraform | DB を使う全て | `jdbc:mysql://<private-ip>:3306/jrabot?sslMode=VERIFY_CA&…`（§8） |
 | `DB_USER` / `DB_PASSWORD` | Terraform / **Secret Manager** | 同上 | 用途別ユーザー（§8.2）。Secret 名は `db-<用途>-password` |
@@ -37,7 +37,7 @@ web→Artifact Registry の push 権限と、infra 側の manifest 取得権限�
 | `MODEL_VERIFY_PUBKEY` | Terraform（公開値） | bot | 署名検証 |
 | `INGEST_TOKEN_PEPPER` | **Secret Manager**（`ingest-token-pepper`） | ingest / dashboard（発行） | エージェントトークンのハッシュ用ペッパー（§3.3） |
 | `DISCORD_WEBHOOK_URL` / `DISCORD_ERROR_WEBHOOK_URL` | **Secret Manager** | bot（通知）/ 全（エラー） | 通知 |
-| `RELEASE_ID` / `REQUIRED_SCHEMA_VERSION` | イメージに焼き込み（ビルド時） | 全 | 版の表示と ready 判定（§4.3） |
+| `RELEASE_ID` / `REQUIRED_SCHEMA_VERSION` | イメージに焼き込み（ビルド時） | 全 | 版の表示と ready 判定（§4.3）。**0.4.4**: `REQUIRED_SCHEMA_VERSION` は実行 jar の `jrabot-app.properties`（Gradle が生成）に焼き込まれ、**環境変数では上書きしない**（infra が渡す必要は無い）。`RELEASE_ID` は環境変数があれば表示用に使う |
 
 - 秘密は Secret Manager だけに置く。GitHub、イメージ、ログ、Terraform の state に秘密の値を置かない。値が state に載る Terraform リソースは使わない（第5段階）。
 - 名前は 0.4.0 で確定した。変更するときは契約のマイナー版を上げ、infra と同期する。
@@ -52,7 +52,7 @@ web→Artifact Registry の push 権限と、infra 側の manifest 取得権限�
 |---|---|---|---|---|
 | `GET /internal/health` | dashboard / ingest | infra（start S8・status） | dashboard: IAP + ops SA / ingest: Google ID トークン（ops SA） | プロセスの生存確認。DB にもモードにも依存しない。`200 {status:"UP", release}` |
 | `GET /internal/ready` | dashboard / ingest | 同上 | 同上 | 受付の準備ができているか（§4.3）。DB 接続 OK かつスキーマ版 ≥ `REQUIRED_SCHEMA_VERSION` で 200、それ以外は 503。**mode が NORMAL でなくても判定する**（start の S8 は mode=STARTING の間に呼ばれるため） |
-| `GET /internal/ops/mode` | dashboard / ingest | infra（status） | 同上 | そのインスタンスの `ModeProvider` から見えるモード `{mode, desired, seq, cacheAgeMs, source:"gcs"\|"unknown"}`。**読み取り専用**。bot は使わない（bot は GCS を直接読む: §5.2） |
+| `GET /internal/ops/mode` | dashboard / ingest | infra（status） | 同上 | そのインスタンスの `ModeProvider` から見えるモード `{mode, desired, seq, cacheAgeMs, source:"gcs"\|"unknown"}`。**読み取り専用**。bot は使わない（bot は GCS を直接読む: §5.2）。**0.4.4**: 採用中の値だけを返し（15 秒キャッシュ。呼ぶたびに GCS を読まない）、UNKNOWN のときは `desired`/`seq`/`cacheAgeMs` が null で `source:"unknown"`。`APP_ENV=local` のローカルファイル実装では `source:"file"`（本番では現れない）。正本の JSON 全文・パス・`set_by` などは返さない |
 | `GET /api/v1/**` | dashboard | ブラウザ | IAP + `app_user` | DTO のみ返す。テナント境界は必須。一般/管理者の区別は §11.1 |
 | `POST/PUT/DELETE /api/v1/admin/**` | dashboard | ブラウザ（管理者） | IAP + `ROLE_ADMIN` + CSRF | 手動補正、手動起動（開催検証あり）、エージェントの発行/失効。**mode=NORMAL のときだけ**受け付け、それ以外は 409 `OPS_MODE_NOT_NORMAL` |
 | `GET /v1/agent/mode` | ingest | エージェント | トークン + 署名 | **DB に触れず**、現在のビーコンと同じ内容（署名付き）を返す |
@@ -125,6 +125,7 @@ web→Artifact Registry の push 権限と、infra 側の manifest 取得権限�
 - 各アプリのイメージには、ビルド時に `REQUIRED_SCHEMA_VERSION`（そのアプリが必要とする最小のスキーマ版）を焼き込む。
 - `/internal/ready` と Job の開始時に `flyway_schema_history` の最大成功版を読み、`REQUIRED_SCHEMA_VERSION` 未満なら ready=503。Job は終了コード 1 で終える（不一致のまま動かない）。
 - スキーマ版が `REQUIRED_SCHEMA_VERSION` より**新しい**ことは許容する（expand/contract の前提）。
+- **0.4.4 の補足（T2.8 / D-084）**: ① `REQUIRED_SCHEMA_VERSION` はビルド時に実行 jar へ焼き込み（環境変数では上書きしない）。現在の 3 アプリは `2`。② 読むのは `flyway_schema_history` の `success=1` の行だけ。版は数値の組として比較する（`10` > `9`）。履歴の表が無い DB は「不足」（マイグレーションを勝手に実行しない）。③ **DB に接続できない（一時障害）と、スキーマ不足・認証失敗・DB/権限の誤りを区別する**: ready は `DB_UNAVAILABLE` / `SCHEMA_INSUFFICIENT` / `DB_AUTH_FAILED` / `DB_ERROR` の理由で 503。Job は接続不能のみ 75、不足・認証・権限・想定外は 1。④ ready の本文: 200 は `{status:"READY", schemaVersion, requiredSchemaVersion}`、503 は `{status:"NOT_READY", reason, …}`（接続情報・例外メッセージを含まない）。ready は運用モードを見ない（STARTING/STOPPED/UNKNOWN でも DB とスキーマが良ければ 200）。
 
 ## 5. 運用モード契約（D1・D4・D5）
 ### 5.1 ML 成果物・ジョブ契約（D12）
@@ -295,7 +296,8 @@ STOPPED 中の `ingest` 503、ビーコンのみ STOPPED、両方不達（UNKNOW
 | **75** | 一時的な失敗（EX_TEMPFAIL） | DB 不達、GCS 不達、**モード UNKNOWN**、外部 API のタイムアウト | **再試行しない**（`max-retries=0`）。通知する。次の定期起動に任せる |
 | 2 | 引数・設定の誤り | `--task` 不明、必須の環境変数が無い | 通知する |
 | 1・その他 | 失敗（バグ・検証 NG・スキーマ版不足） | 例外、`REQUIRED_SCHEMA_VERSION` 未満 | 通知する |
-- `db-migration` だけは `10`（validate で未適用あり）を追加で使う（§4.2）。
+- `db-migration` だけは `10`（validate で未適用あり）を追加で使う（§4.2）。通常の Job（bot）は 10 を使わない。
+- **0.4.4 の補足（T2.8 / D-085）**: 設定不正（`OPS_MODE_SOURCE` の未設定・不正、`APP_ENV` の誤り、DB の環境変数の不足、本番での `bot` 以外の DB ユーザー）は **2**。想定外の例外は **1**（75 にしない）。Job の順序は 引数 → 設定 → モード（DB に触れない）→（NORMAL のみ）スキーマ版 → タスク。**スタブ（業務処理が未実装のタスク）は本番(`APP_ENV=prod`)で exit 1・理由 `TASK_NOT_IMPLEMENTED`**（成功に見せない）。`--task` ごとの引数: 共通 `--task`・`--tenant-id`（必須）、`bot-run` `--date` `--trigger`、`calendar-check`/`reconcile` `--date`、`retention` `--dry-run`、`export-dataset` なし（暫定）。
 - infra の OPERATIONS_DESIGN §2.4 は「UNKNOWN なら exit 0」と書いている。web は **UNKNOWN を 75** にした（D-048）。開催日に GCS 障害で何もしなかったことに気付けないのを防ぐため。infra への引継ぎ事項として記録した。
 
 ### 9.2 SIGTERM（cancel）と checkpoint、再実行
@@ -348,14 +350,14 @@ STOPPED 中の `ingest` 503、ビーコンのみ STOPPED、両方不達（UNKNOW
 | 入口 | Cloud Run の直接 IAP。IAP が通したリクエストにだけ `X-Goog-IAP-JWT-Assertion` が付く |
 | JWT 検証（アプリ側でも必ず行う） | `alg=ES256`、署名を IAP の公開鍵（JWK、キャッシュ可）で検証、`iss=https://cloud.google.com/iap`、`aud=IAP_AUDIENCE`、`exp`/`iat`（許容 30 秒）。直接 IAP の `aud` の形式（`/projects/<番号>/locations/<リージョン>/services/<名前>` の想定）は要確認（G-OPS-7） |
 | 人の主体 | JWT の `email` → **`ALLOWED_USERS` に含まれ、かつ `app_user` に有効な行がある**場合だけ認める。`app_user.tenant_id` と `role`（`VIEWER`/`ADMIN`）を解決する。`ADMIN` は `ADMIN_USERS` にも含まれていなければならない。どれかを満たさなければ 403（deny by default） |
-| ops SA | `email == OPS_SA_EMAIL` のときだけ `ROLE_OPS`。**許されるのは `/internal/health|ready|ops/mode` の GET だけ**で、テナントのデータには一切アクセスできない |
+| ops SA | `email == OPS_SA_EMAIL` のときだけ `ROLE_OPS`。**許されるのは `/internal/health|ready|ops/mode` の GET だけ**で、テナントのデータには一切アクセスできない。**0.4.4**: `/internal` はトークンが無い/検証できなければ 401、署名は正しいが ops SA 以外（通常の利用者）なら 403。人の認可（`ALLOWED_USERS`・`app_user`）は Stage 4 で、T2.8 には `/internal` 以外の公開ルートが無い |
 | 管理操作 | `ROLE_ADMIN` + CSRF トークン + mode=NORMAL。監査ログ（`audit_log`: who/when/what/before/after/理由）を必ず残す。破壊的な操作（失効・補正の削除）は確認画面と理由入力を必須にする |
 | 返却 | DTO だけ返す。Entity は公開しない。他テナントの ID を指定されたら 404（存在を漏らさない） |
 
 ### 11.2 ingest（IAP の外）
 | 対象 | 規則 |
 |---|---|
-| `/internal/*` | `Authorization: Bearer <Google ID トークン>`。`RS256` を Google の JWK で検証、`iss ∈ {https://accounts.google.com, accounts.google.com}`、`aud=INTERNAL_ID_TOKEN_AUDIENCE`（サービスの URL）、`email == OPS_SA_EMAIL` かつ `email_verified=true`、`exp`。満たさなければ 401。返すのは**読み取り専用で秘密を含まない情報だけ** |
+| `/internal/*` | `Authorization: Bearer <Google ID トークン>`。`RS256` を Google の JWK で検証、`iss ∈ {https://accounts.google.com, accounts.google.com}`、`aud=INTERNAL_ID_TOKEN_AUDIENCE`（サービスの URL）、`email == OPS_SA_EMAIL` かつ `email_verified=true`、`exp`。満たさなければ 401。返すのは**読み取り専用で秘密を含まない情報だけ**。**0.4.4**: アルゴリズムは RS256 に固定し、`exp` 必須・`iat` が未来すぎない（許容 30 秒）も検査する。パスは `;`・`//`・`.`/`..`・`%xx`・大文字小文字を正規化して判定する。`INTERNAL_ID_TOKEN_AUDIENCE`・`OPS_SA_EMAIL` が無ければ起動失敗 |
 | `/v1/agent/*` | §3.3 のトークン + HMAC。Google のトークンは受け付けない（経路ごとに認証方式を分け、混ぜない） |
 | Cloud Run の invoker | `allUsers`（アプリが認証する）。ingress は NORMAL のとき `all`、STOPPED のとき `internal`（infra） |
 
@@ -386,3 +388,5 @@ STOPPED 中の `ingest` 503、ビーコンのみ STOPPED、両方不達（UNKNOW
 0.4.2（第2段階 / T2.4）: §8.1 に JDBC 接続の固定値（`useAffectedRows=true` ほか）を補足。契約の意味は変えていない（infra への影響なし。接続 URL に同名のプロパティを入れても上書きされる）。
 
 0.4.3（第2段階 / T2.7）: §5.2 に実装の補足（任意項目・同一 seq の扱い・巻き戻り検知の寿命・タイムアウトの強制・ローカルファイルの条件）を追加。契約の意味は変えていない（infra への影響: 復元手順にアプリの再起動を含める）。
+
+0.4.4（第2段階 / T2.8）: §2（`APP_ENV` 必須、`REQUIRED_SCHEMA_VERSION` は jar 焼き込み）、§3.2（`/internal/ops/mode` の診断の意味、`source:"file"`）、§4.3（スキーマ版の検証規則と ready の理由）、§9.1（設定不正=2、想定外=1、スタブの扱い、`--task` の引数）、§11（401/403 の区別、検証項目）に実装の補足。契約の意味は変えていない。infra への影響: ① `APP_ENV` を全アプリに必ず渡す、② `REQUIRED_SCHEMA_VERSION` を環境変数で渡す必要は無い、③ ready の本文に理由が入る、④ `INTERNAL_ID_TOKEN_AUDIENCE`/`IAP_AUDIENCE`/`OPS_SA_EMAIL` が無いとアプリは起動しない（T5.0 の確認項目）。

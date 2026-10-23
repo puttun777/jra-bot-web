@@ -47,6 +47,23 @@ object MySqlSupport {
 
     fun jdbcUrl(database: String?): String = "jdbc:mysql://${container.host}:${container.getMappedPort(3306)}/${database.orEmpty()}"
 
+    /** コンテナの接続先（ホスト, ポート）。中継（[TcpProxy]）の転送先に使う。 */
+    fun hostAndPort(): Pair<String, Int> = container.host to container.getMappedPort(3306)
+
+    /**
+     * サーバが受け付けた接続の累計（`Connections` ステータス。接続の試行を含み、失敗した認証も数える）。
+     * 「この操作で DB 接続が一切発生しない」ことの確認に使う（この確認自体は 1 本の root 接続を使うので、前後の差は +1 になる）。
+     */
+    fun serverConnections(): Long =
+        rootConnection(null).use { c ->
+            c.createStatement().use { s ->
+                s.executeQuery("SHOW GLOBAL STATUS LIKE 'Connections'").use {
+                    it.next()
+                    it.getLong(2)
+                }
+            }
+        }
+
     fun rootConnection(database: String?): Connection = DriverManager.getConnection(jdbcUrl(database), "root", ROOT_PASSWORD)
 
     fun serverVersion(): String =

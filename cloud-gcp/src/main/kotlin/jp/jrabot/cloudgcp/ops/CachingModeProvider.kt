@@ -1,6 +1,7 @@
 package jp.jrabot.cloudgcp.ops
 
-import jp.jrabot.domain.ops.ModeProvider
+import jp.jrabot.domain.ops.InspectableModeProvider
+import jp.jrabot.domain.ops.ModeSnapshot
 import jp.jrabot.domain.ops.OpsMode
 import jp.jrabot.domain.time.Clock
 import org.slf4j.Logger
@@ -32,11 +33,14 @@ class CachingModeProvider(
     private val retryInterval: Duration = MIN_RETRY_INTERVAL,
     private val warnReminder: Duration = WARN_REMINDER,
     private val log: Logger = LoggerFactory.getLogger(CachingModeProvider::class.java),
-) : ModeProvider {
+    private val sourceLabel: String = SOURCE_GCS,
+) : InspectableModeProvider {
     private class Cached(
-        val mode: OpsMode,
+        val state: OpsState,
         val fetchedAt: Instant,
-    )
+    ) {
+        val mode: OpsMode get() = state.mode
+    }
 
     @Volatile
     private var cached: Cached? = null
@@ -50,18 +54,32 @@ class CachingModeProvider(
     private var lastWarnKey: String? = null
     private var lastWarnAt: Instant? = null
 
-    override fun current(): OpsMode {
-        freshOrNull(clock.now())?.let { return it }
+    override fun current(): OpsMode = resolve().first
+
+    /**
+     * 診断用の写し。[current] と同じ経路（キャッシュ・単一飛行・検証）で解決した値だけを返し、取得し直さない。
+     * 採用された状態が無い（UNKNOWN）ときは詳細を持たない。
+     */
+    override fun snapshot(): ModeSnapshot {
+        val (mode, adopted) = resolve()
+        if (mode == OpsMode.UNKNOWN || adopted == null) return ModeSnapshot.unknown()
+        val ageMs = Duration.between(adopted.fetchedAt, clock.now()).toMillis().coerceAtLeast(0)
+        return ModeSnapshot(mode, adopted.state.desiredMode, adopted.state.seq, ageMs, sourceLabel)
+    }
+
+    private fun resolve(): Pair<OpsMode, Cached?> {
+        freshOrNull(clock.now())?.let { return it.mode to it }
         return lock.withLock {
             val now = clock.now()
-            freshOrNull(now)?.let { return@withLock it }
-            if (withinRetryWindow(now)) return@withLock OpsMode.UNKNOWN
-            refresh(now)
+            freshOrNull(now)?.let { return@withLock it.mode to it }
+            if (withinRetryWindow(now)) return@withLock OpsMode.UNKNOWN to null
+            val mode = refresh(now)
+            mode to cached?.takeIf { mode != OpsMode.UNKNOWN }
         }
     }
 
     /** 時計が戻っている場合（now < fetchedAt）は期限切れとして扱う（古い値を使い続けない）。 */
-    private fun freshOrNull(now: Instant): OpsMode? = cached?.takeIf { !now.isBefore(it.fetchedAt) && now.isBefore(it.fetchedAt.plus(cacheTtl)) }?.mode
+    private fun freshOrNull(now: Instant): Cached? = cached?.takeIf { !now.isBefore(it.fetchedAt) && now.isBefore(it.fetchedAt.plus(cacheTtl)) }
 
     private fun withinRetryWindow(now: Instant): Boolean {
         val failedAt = lastFailureAt ?: return false
@@ -95,7 +113,7 @@ class CachingModeProvider(
         lastAccepted = state
         lastFailureAt = null
         lastWarnKey = null
-        cached = Cached(state.mode, fetchedAt)
+        cached = Cached(state, fetchedAt)
         val reported = state.mode to state.seq
         if (lastInfo != reported) {
             log.info("ops mode: mode={} seq={}", state.mode, state.seq)
@@ -123,6 +141,9 @@ class CachingModeProvider(
     }
 
     companion object {
+        const val SOURCE_GCS = "gcs"
+        const val SOURCE_FILE = "file"
+
         /** CONTRACTS §5.2: 成功した結果を 15 秒キャッシュする。 */
         val CACHE_TTL: Duration = Duration.ofSeconds(15)
 

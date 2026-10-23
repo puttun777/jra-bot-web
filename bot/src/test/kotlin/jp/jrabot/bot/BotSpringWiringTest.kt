@@ -1,0 +1,95 @@
+package jp.jrabot.bot
+
+import com.zaxxer.hikari.HikariDataSource
+import jp.jrabot.domain.bot.BotRunRepository
+import jp.jrabot.domain.odds.OddsSnapshotRepository
+import jp.jrabot.domain.ops.ModeProvider
+import jp.jrabot.domain.ops.OpsMode
+import jp.jrabot.domain.race.RaceRepository
+import jp.jrabot.domain.race.RaceScheduleRepository
+import jp.jrabot.domain.signal.SignalRepository
+import jp.jrabot.domain.tenant.AppUserRepository
+import jp.jrabot.persistence.schema.SchemaVersionVerifier
+import org.junit.jupiter.api.Test
+import org.springframework.boot.WebApplicationType
+import org.springframework.boot.builder.SpringApplicationBuilder
+import org.springframework.context.ApplicationContextInitializer
+import org.springframework.context.ConfigurableApplicationContext
+import java.nio.file.Files
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertSame
+import kotlin.test.assertTrue
+
+/** NORMAL と判定された後の Spring のコンテキスト（DI・Doma・DataSource）。DB は接続を受け付けないポート。実 DB・実 GCP には接続しない。 */
+class BotSpringWiringTest {
+    private val ops = writeOpsState(Files.createTempDirectory("bot-wiring"))
+
+    private fun runtime(
+        task: String = "bot-run",
+        mode: ModeProvider = FixedMode(OpsMode.NORMAL),
+    ): BotRuntime {
+        val command = (BotArgsParser.parse(args(task)) as ParsedArgs.Valid).command
+        return BotRuntime(command, BotSettings.from(baseEnv(ops.toString()), command.task), mode)
+    }
+
+    private fun start(rt: BotRuntime): ConfigurableApplicationContext =
+        SpringApplicationBuilder(BotApplication::class.java)
+            .web(WebApplicationType.NONE)
+            .initializers(ApplicationContextInitializer<ConfigurableApplicationContext> { it.beanFactory.registerSingleton("botRuntime", rt) })
+            .run()
+
+    @Test
+    fun `DI が解決され、Repository・ModeProvider・スキーマ検証が Bean になる（DataSource と Doma が接続される）`() {
+        val mode = FixedMode(OpsMode.NORMAL)
+        start(runtime(mode = mode)).use { ctx ->
+            for (type in listOf(
+                RaceRepository::class.java,
+                OddsSnapshotRepository::class.java,
+                BotRunRepository::class.java,
+                AppUserRepository::class.java,
+                RaceScheduleRepository::class.java,
+                SignalRepository::class.java,
+            )) {
+                assertNotNull(ctx.getBean(type), type.simpleName)
+            }
+            assertSame(mode, ctx.getBean(ModeProvider::class.java), "モード確認に使ったものと同じインスタンス")
+            assertEquals("2", ctx.getBean(SchemaVersionVerifier::class.java).required.toString())
+            assertTrue(ctx.getBeansOfType(Class.forName("org.seasar.doma.jdbc.Config")).isNotEmpty())
+            assertNotNull(ctx.getBean(BotJobExecutor::class.java))
+        }
+    }
+
+    @Test
+    fun `コンテキストの初期化では DB に接続しない（プールは最初の接続まで起動しない）`() {
+        start(runtime()).use { ctx ->
+            val ds = ctx.getBean(javax.sql.DataSource::class.java) as HikariDataSource
+            assertNull(ds.hikariPoolMXBean, "初期化でプールが接続を試みている")
+            assertEquals(4, ds.maximumPoolSize, "bot-run のプール既定値は 4")
+            assertEquals("bot", ds.username)
+        }
+    }
+
+    @Test
+    fun `Flyway は組み込まれていない`() {
+        start(runtime()).use { ctx ->
+            assertFalse(ctx.beanDefinitionNames.any { it.contains("flyway", ignoreCase = true) })
+            assertTrue(runCatching { Class.forName("org.flywaydb.core.Flyway") }.isFailure)
+        }
+    }
+
+    @Test
+    fun `実際の Spring の実行(NORMAL、DB なし)は DB 不達の 75、スタブは動かない`() {
+        val r = SpringJobExecutor.run(runtime("calendar-check"))
+        assertEquals(JobResult(75, "DB_UNAVAILABLE"), r)
+    }
+
+    @Test
+    fun `プール上限の既定値は task ごと`() {
+        for ((task, max) in mapOf("calendar-check" to 1, "export-dataset" to 2)) {
+            start(runtime(task)).use { ctx -> assertEquals(max, (ctx.getBean(javax.sql.DataSource::class.java) as HikariDataSource).maximumPoolSize, task) }
+        }
+    }
+}
