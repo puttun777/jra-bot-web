@@ -170,3 +170,11 @@ GitHub Actions（`db-integration` 8.4 / 9.7、ubuntu-24.04、Temurin 25、PR #8�
 - 確認したこと: コンパイル・単体テストが JDK 21（ローカルのスモーク）で成功。JDK 25 は CI。SDK の挙動（404/403/401/500/遅延/接続拒否の変換、読取り（GET）だけを送ること）は**ローカルのフェイク HTTP サーバ**で確認した。**実 GCP（ADC・ランタイム SA・実バケット）は未確認**。
 - 注意: ADC を取得できない環境では SDK は認証なしで要求する（非公開バケットは 401/403 → UNKNOWN）。Cloud Run 上の ADC によるメタデータサーバ経由の認証、実バケットの IAM（`storage.objects.get` のみ）は infra の実環境で確認する（第5段階の実環境検証。既存の G-OPS-1〜9 に「ModeProvider が実 GCS から ADC で読めること」は含まれていないので、infra の T5.0 で項目を足す）。
 
+## 12. T2.8 での追加（2026-10-23, Stage 2-F）
+| 依存 | 版 | 使うモジュール | 根拠 |
+|---|---|---|---|
+| `com.google.auth:google-auth-library-oauth2-http` | **1.54.0** | `:cloud-gcp` だけ | `google-cloud-storage` 2.75.0 が引き込む版（`dependencies` の解決結果）に合わせて**明示的に固定**した（推移的な依存に頼らない）。`TokenVerifier`（IAP の ES256 JWK と Google の RS256 鍵、署名・audience・有効期限の検証と鍵のキャッシュ）を内部 API の認証に使う（D-082） |
+- 新しい実行時依存は他に無い（Spring の webmvc / jdbc は既存。テストは `java-test-fixtures` を使う。`spring-boot-starter-jdbc` をアプリのテストに足したのは `HikariDataSource` の状態確認のため）。
+- 確認したこと: 署名（ES256/RS256）・kid 不明・audience/issuer/期限の違い・alg=none・鍵の取得失敗の拒否が、ローカルの偽 JWKS サーバとテスト用の鍵で動く（GoogleSignedTokenVerifierTest 23 件）。**実 Google の鍵・実トークンでは未検証**（G-AUTH-1）。ライブラリは `exp` の検査に許容を持つが、`GoogleSignedTokenVerifier` が `exp`/`iat` を 30 秒で再検査する。
+- MySQL 8.4 / 9.7 での結果は PROGRESS の Stage 2-F。
+

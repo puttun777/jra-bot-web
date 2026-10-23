@@ -1,6 +1,61 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-10-23（第2段階 / Stage 2-E: T2.7）
+最終更新: 2026-10-23（第2段階 / Stage 2-F: T2.8）
+
+## Stage 2-F（claude/stage2-app-bootstrap）
+### 結果
+- **T2.8 実装完了**（3 アプリの起動設定・内部ヘルスチェック・Job 実行契約）。T2.6 には進んでいない。**業務処理は未実装のスタブ**。スタブの起動成功を、本番で Bot が正常動作することの証明として扱わない。**実 GCP・実 Cloud SQL には一度も接続していない。**
+- **PR**: <PR>（main 向け、マージはユーザーが判断）。
+- **CI（GitHub Actions、Temurin 25）**: <CI>
+- ローカル（JDK 21 スモーク + Docker）: 全体の `./gradlew build`、`ktlintCheck`、`checkModuleDependencies` 成功。**MySQL 8.4.13 と 9.7.4 の両方**で `:persistence` 98 / `:bot` 8 / `:ingest` 9 / `:dashboard` 9 の統合テストが成功（スキップ 0・失敗 0）。`:db-migration:integrationTest`（44）は 8.4 で成功（9.7 は CI）。JDK 25 の結果は CI のもの。
+### セッションの環境（CLAUDE.md の記録義務）
+`java -version` = OpenJDK 21.0.12（JDK 25 なし。`-PjdkVersion=21` のスモーク）、Gradle 9.7.1 動作、Docker 29.9.1: **`dockerd` を起動でき（root）**、`mysql:8.4`・`mysql:9.7` を取得できた（ローカルの統合テストを実行できた）。Maven Central の 429 は待って再試行して解消（ミラーは使っていない）。`LC_ALL=C.UTF-8` で実行。
+### 実装したもの
+| 区分 | 内容 |
+|---|---|
+| `:domain` | `AppEnv`（local/prod）、`ModeSnapshot`、`InspectableModeProvider`（`ModeProvider` + `snapshot()`） |
+| `:cloud-gcp` | `CachingModeProvider.snapshot()`（キャッシュ内の値だけ。取り直さない）、`auth/GoogleSignedTokenVerifier`（IAP JWT=ES256 / Google ID トークン=RS256。署名・audience・issuer・exp・iat・email・email_verified・ops SA の完全一致）、`auth/RequestPaths`（パス正規化）、testFixtures（偽 JWKS・署名済みトークン）、`google-auth-library-oauth2-http` 1.54.0 を固定 |
+| `:persistence` | `DataSourceFactory.createLazy`（最初の接続までプールを起動しない）、`schema/SchemaVersion`・`SchemaVersionVerifier`・`AppBuildInfo`、testFixtures（`MySqlSupport`・`TcpProxy`。`:persistence` の既存テストも共用に移動） |
+| `:ingest` | `IngestApplication`（除外を解除）・`IngestSettings`・`IngestConfiguration`・`/internal/health|ready|ops/mode`・`InternalAuthFilter`（Google ID トークン）・`AgentApiOpsGuardFilter`（`/v1/agent` 配下を 503）・`WebFilters` |
+| `:dashboard` | 同上の構成（`IAP_AUDIENCE`・IAP JWT・DB ユーザー `app`）+ `AdminWriteGuardFilter`（書込みを 409） |
+| `:bot` | `BotApplication`（`main` → `BotLauncher`）・`BotArgsParser`・`BotSettings`・`JobGate`・`BotJobExecutor`・`BotConfiguration`・`StubTaskHandler`・`CycleGate`（未接続）・`JobExit` |
+| ビルド・CI | `SpringBootAppPlugin`: `generateAppInfo`（`requiredSchemaVersion` と `releaseId` を jar に焼き込み）・`integrationTest` タスク。`ci.yml`: 件数検証スクリプト `.github/scripts/verify_test_results.py`、`build` に cloud-gcp(91)・persistence 単体(23)・bot(54)・ingest(28)・dashboard(30) の検証、`db-integration`(8.4/9.7) に persistence(98) と bot(8)・ingest(9)・dashboard(9) の統合テストと検証 |
+### Bean・アプリ起動構成
+STAGE2_HANDOFF §14.5 の表。要点: DataSource は遅延（起動時に DB へ接続しない）、`ModeProvider` は `OpsModeProviders.fromEnvironment(env, SystemClock)`、`@Import(PersistenceConfiguration)` で Repository 6 つと Doma の `Config`、Flyway なし、`DataSourceAutoConfiguration`/`DomaAutoConfiguration` の除外は解除。bot は **モード確認の後（NORMAL のときだけ）に Spring を起動**する。
+### スキーマ版検証方法
+`flyway_schema_history` の `success=1` の最大版 ≥ `REQUIRED_SCHEMA_VERSION`（ビルドで jar に焼き込み。現在 2。環境変数では上書き不可）。新しい版は許容。履歴の表なし=不足（マイグレーションは実行しない）。**接続不能（一時障害）= ready `DB_UNAVAILABLE` / Job 75**、スキーマ不足 = ready `SCHEMA_INSUFFICIENT` / Job 1、認証失敗 = `DB_AUTH_FAILED` / 1、DB・権限の誤り・想定外 = `DB_ERROR` / 1（D-084）。
+### 内部 API の認証状況
+- **実装済み（署名検証付き）**: ingest=Google ID トークン、dashboard=IAP JWT。署名・アルゴリズム固定・issuer・audience・exp/iat・email（ID トークンは email_verified）・ops SA の完全一致。無認証=401、不正=401、dashboard で ops 以外=403。パス迂回（`;` `//` `.` `%xx` 大文字）でも素通りできない。設定が足りなければ起動失敗。認証のバイパスは存在しない。
+- **未検証（ゲート G-AUTH-1）**: 実 Google の公開鍵・実トークン、鍵取得のタイムアウト、直接 IAP の `aud` の形式（G-OPS-7）。人の認可は Stage 4、エージェント認証は Stage 3。
+### Job 終了コード（実装・テスト済み）
+0=正常/非 NORMAL の確定状態（`MODE_<mode>`）、75=UNKNOWN・DB 不達、2=引数・設定不正（`--task` 不明・必須欠落・`OPS_MODE_SOURCE` 不正・本番での他の DB ユーザーなど）、1=スキーマ不足・認証失敗・DB/権限の誤り・想定外の例外・**本番でのスタブ（`TASK_NOT_IMPLEMENTED`）**。10 は流用しない。
+### テスト件数
+| 区分 | 件数 | 実行場所 |
+|---|---|---|
+| bot 単体 | 54（引数 9・Launcher 12・Executor 9・実プロセス 9・Spring 配線 5・JobGate 4・CycleGate 6） | `./gradlew build` |
+| ingest 単体 | 28（内部 API・認証 13、エージェントガード 7、起動設定 8） | 同上 |
+| dashboard 単体 | 30（内部 API・認証 14、書込みガード 8、起動設定 8） | 同上 |
+| cloud-gcp | 91（既存 56 + 検証器 23・パス 5・スナップショット 7） | 同上 |
+| persistence 単体 | 23（既存 15 + 版比較 2・分類 6） | 同上 |
+| bot / ingest / dashboard 統合 | 8 / 9 / 9 | `integrationTest`（MySQL 8.4・9.7） |
+| persistence 統合 | 98（既存 86 + スキーマ検証 12） | 同上 |
+- 変異テスト（手動、全て検出された）: パス判定を素朴な `startsWith` に変更／ガードの常時通過／`X-Ops-Mode` の常時付与／UNKNOWN を続行扱い／ops 主体・issuer・email_verified の検査削除／DataSource を即時接続に変更／bot の実行を空に／スタブの本番成功／認証失敗を接続不能に分類／dashboard のメソッド判定の変更。
+- 依頼の優先テスト 24 項目との対応: 1〜3 `*InternalApiTest`/`BotSpringWiringTest`、4 `*StartupConfigTest`、5 `*StartupConfigTest`/`BotLauncherTest`、6 health のテスト、7〜11 `*ReadyIntegrationTest`、12 `ops/mode` のテスト、13〜15 認証のテスト、16〜21 `BotLauncherTest`/`BotProcessTest`/`BotJobIntegrationTest`、22 `AgentApiOpsGuardTest`、23 `AdminWriteGuardTest`、24 `checkModuleDependencies`。
+### 判断（DECISIONS D-081〜D-088）と契約
+D-081 構成と配置 / D-082 内部 API の認証 / D-083 DB 接続の起動方針・最小権限 / D-084 スキーマ版 / D-085 bot の Job 契約 / D-086 モードの業務ガード / D-087 ops/mode と ready / D-088 APP_ENV 必須。契約: CONTRACTS 0.4.4（infra への影響は §13）。
+### 未実装・未検証（完了扱いにしない）
+- 各 `--task` の業務処理（スタブ。本番は exit 1）。bot-run のループ・checkpoint 保存・リース解放・SIGTERM（`CycleGate` は未接続）。`/v1/agent/*` の本体、`/v1/agent/mode`。画面・`/api/v1`・人の認証/認可・管理操作。
+- 実 GCP での ModeProvider（ADC・IAM・3 秒）、実 Google の鍵での内部 API 認証（G-AUTH-1）、Cloud Run 上の health/ready（G-APP-1）、Jobs の引数・終了コードの運用（G-JOB-1）、Cloud SQL。
+### 未解決・注意（引き継ぎ）
+- T1.16 / T1.17 / T1.20 / T1.21、infra I-H1〜I-H7（+ 下の I-H8）、T5.0（infra 契約同期）、MySQL 9.7 の採否、Connector/J 26.x の採否、Cloud SQL の実環境検証、デッドロック 1213 の再試行設計、T3.4 の HMAC とトークンハッシュの整合、mltrain のスキーマ版確認方法（`mltrain` は履歴を読めない: D-065）、bot-run の checkpoint・SIGTERM 検証は**未完了のまま**。
+- `/internal/ready` の DB 確認は呼ぶたびに 1 クエリ（キャッシュなし）。DB 停止中は最大 10 秒（`connectionTimeout`）待つことがある。infra の status/start が頻繁に呼ぶ場合は見直す。
+- google-auth の鍵取得 HTTP のタイムアウトはライブラリの既定（未設定）。実環境で確認する（G-AUTH-1）。
+### 次のタスク（T2.6 への引き継ぎ）
+**T2.6**（ゴールデンテスト基盤: `tools/golden/` で参照元を固定コミット f7dbf69 で実行し、合成入力 → JSON フィクスチャ。T2.8 とは独立）。その後 T2.5 後半（イメージ・manifest・Dependabot。`jrabot-app.properties`・bootJar を使う）。ブランチは main から作り直す（本 PR のマージ後）。
+### Git
+ブランチ `claude/stage2-app-bootstrap`（main 向け PR、マージはユーザー）。
+
+---
 
 ## Stage 2-E（claude/stage2-gcp-mode-provider）
 ### 結果
@@ -239,6 +294,7 @@ D-045〜D-059（DECISIONS）。主なもの:
 | I-H5 | DB ユーザー名は `migrate`/`app`/`ingest`/`bot`/`mltrain`。Terraform はユーザーの作成だけを行い、GRANT は web の `R__grants.sql`（G-DB-6）。プール表の合計は retention・export-dataset を含めて 24 | ARCHITECTURE（infra）§DB、CONTRACTS D8 |
 | I-H6 | calendar-check・reconcile・retention・export-dataset の Job は **bot イメージ + `--task=`**。ml-train の引数は `--tenant-id --dataset-id` | ARCHITECTURE（infra）Jobs |
 | I-H7 | cancel の猶予時間について、アプリは 10 秒を前提にしている（G-OPS-4 で実測）。bot-run は NORMAL 中の cancel で exit 75 | OPERATIONS_DESIGN §6・§12 |
+| I-H8 | (T2.8 / CONTRACTS 0.4.4) **`APP_ENV`（local/prod）を全アプリに必ず渡す**（無いと起動/Job が失敗）。`REQUIRED_SCHEMA_VERSION` は環境変数で渡さない（jar に焼き込み）。dashboard は `IAP_AUDIENCE`・`OPS_SA_EMAIL`、ingest は `INTERNAL_ID_TOKEN_AUDIENCE`・`OPS_SA_EMAIL` が無いと起動しない。本番の DB ユーザーは `app`/`ingest`/`bot` 以外だと起動しない。`/internal/ready` は理由付きの 503（`DB_UNAVAILABLE` 等）を返す。dashboard の `/internal` は ops 以外の IAP 主体に 403。bot の Job は引数エラー・設定不正が exit 2 | CONTRACTS §2・§4.3・§9.1・§11 |
 
 ## 未完了・未解決（ユーザーの判断・確認）
 1. **T1.16**: JRA-VAN への問い合わせ Q1〜Q8。**2 人目の利用方法、クラウド保存、データの再利用、一般公開は未確認のまま**。個人契約のデータを 2 人で共有できるとは仮定しない。2 人目が自分で契約しているかどうか。規約の回答が来るまで、実データをクラウドへ投入しない。
