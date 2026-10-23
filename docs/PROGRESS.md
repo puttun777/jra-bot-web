@@ -1,6 +1,47 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-10-23（第2段階 / Stage 2-C: T2.3）
+最終更新: 2026-10-23（第2段階 / Stage 2-D: T2.4）
+
+## Stage 2-D（claude/stage2-persistence-doma, PR #8）
+### 結果
+- **T2.4 実装完了**（`:persistence` の Doma DAO・Entity・SQL・Repository、統合テスト、CI）。T2.7 以降には進んでいない。
+- **CI（GitHub Actions、Temurin 25）**: run 39898663936（head 5730d70、T2.4 の全コード）で **build (Temurin 25) / repo hygiene / db integration (MySQL 8.4) / db integration (MySQL 9.7) の必須 4 つと、非ゲートの connector/j 26.x check（8.4・9.7）がすべて成功**。件数（ジョブ内の検証ステップの出力）: `:persistence:integrationTest` **86 件（11 クラス）× 8.4・9.7 の両方、スキップ 0・失敗 0**、`:db-migration` 統合 44 件 × 両方（従来どおり）、Connector/J 26.10.0 の確認ジョブは 8.4・9.7 とも 86 件合格。Docker 不要の `:persistence:test` は 15 件。その後の docs だけのコミットで CI が再実行される（結果は PR のチェックを参照）。
+- 途中の失敗（隠さず記録）: ① 初回 CI（head 931f12a、run 39897665565）で `build` が失敗 — `:dashboard:test` が `DataSourceAutoConfiguration`（Failed to determine a suitable driver class）で落ちた。`:persistence` が starter-jdbc / doma-spring-boot-starter を実行時に持ち込み、DataSource の無い最小アプリ（bot / ingest / dashboard）の起動テストに自動構成が効いたため。3 アプリで当該の自動構成を名前指定で除外して解決（T2.8 で外す。STAGE2_HANDOFF §14.3）。この時 DB 統合テストは緑だった。② ローカルでの試行錯誤（`NamingType` の import、Spring の `registerBean` のオーバーロード、SQL ガードの正規表現、権限の読み違い 4 件）は CI に出る前に修正済み。
+### セッションの環境（CLAUDE.md の記録義務）
+`java -version` = OpenJDK 21.0.12（JDK 25 なし。`-PjdkVersion=21` のスモーク）、Gradle 9.7.1 動作。**今回は `dockerd` を起動でき（root）、Docker 29.9.1 で MySQL 8.4（8.4.13）の統合テストをローカルで実行できた**（前回は許可されなかった）。`mysql:9.7` は Docker Hub の 429 でローカルに取得できず、9.7 は CI だけ。Maven Central の 429 は GCS ミラーの init script（`~/.gradle/init.d`、Git 外）で回避。ローカルの結果は JDK 21 のスモークで、JDK 25 の結果ではない（JDK 25 は CI）。
+### 実装したもの（`persistence/`）
+| 区分 | 内容 |
+|---|---|
+| Repository 実装（`internal`） | `RaceRepositoryImpl` `OddsSnapshotRepositoryImpl` `BotRunRepositoryImpl` `AppUserRepositoryImpl` `RaceScheduleRepositoryImpl` `SignalRepositoryImpl`（ポートの全メソッド） |
+| Entity + DAO（`internal`、Doma kapt、SQL ファイル方式） | `RaceDao` `OddsSnapshotDao` `BotRunDao` `SignalDao` `RaceScheduleDao` `AppUserDao`（SQL 25 本は `src/main/resources/META-INF/jp/jrabot/persistence/dao/`） |
+| 変換・方言・接続 | `mapping/Mapping.kt`（Instant⇔UTC、ENUM）、`doma/UtcJdbcMappingVisitor.kt`（JVM のタイムゾーン非依存）、`jdbc/DbSettings.kt` `jdbc/DataSourceFactory.kt`（HikariCP、UTC、`useAffectedRows`）、`PersistenceConfiguration.kt`（Spring 配線。公開 API はこの 3 つ） |
+| 単体テスト（Docker 不要、15 件） | `SqlTemplateTenantGuardTest`（6。SQL から `tenant_id` 条件を外すと失敗。実ファイルの変異で検証）`DbSettingsTest` `MappingTest` `PersistenceModuleTest` |
+| 統合テスト（Testcontainers、86 件） | `WiringIntegrationTest`(5) `RaceRepository…`(9) `OddsSnapshotRepository…`(8) `BotRunRepository…`(13) `SignalRepository…`(13) `RaceScheduleRepository…`(8) `AppUserRepository…`(6) `TenantIsolation…`(7) `TimeConversion…`(4) `EnumContract…`(6) `Permissions…`(7)。スキーマは本物の db-migration CLI（installDist）で適用 |
+| ビルド・CI | `persistence/build.gradle.kts`（kapt、`integrationTest`、`-PconnectorJVersion`）、`gradle/libs.versions.toml`（Doma 3.14.1、doma-spring-boot 3.0.0）、`.github/workflows/ci.yml`（`db-integration` に :persistence を追加、期待 11 クラス・件数・スキップ・失敗の検証、非ゲートの `persistence-connectorj26`） |
+### テナント分離の検証結果
+`TenantIsolationIntegrationTest`（テナント 2 件）: 他テナントのレース・オッズ・予定・BotRun・Signal・利用者は find/list で見えず、`update`/`claim`/`markSent`/`markSendUnknown` は NotFound/false で元の行は不変。同じ自然キーを T2 が書いても T1 の行は変わらない。他テナントの親（レース）を使ったオッズ・Signal の保存は複合 FK（1452）で拒否（DAO 経由と生 SQL の両方）。存在しないテナントは空/ null（全件へフォールバックしない）、`TenantId.of(0)` は拒否。**SQL 静的検査**: 全 SQL が `tenant_id` を束縛で必須（例外は `findByEmail` の 1 本のみ、許可リストに固定）。OR・定数のテナント・`SET tenant_id`・WHERE 無し・未知の表は違反。実ファイルから条件を外すと CI が失敗することを実際に確認した。
+### 楽観ロック・冪等・排他の検証結果
+楽観ロック（`bot_run`・`race_schedule`）: 一致する version で成功し +1、古い version は Conflict、他テナント/不在は NotFound。**2 接続の同時更新で成功は常に 1 つ**（10 回/8 回の反復）。冪等: `races`/`odds` の upsert は CREATED→UNCHANGED（`updated_at` 不変）→UPDATED、オッズの再送は行を増やさず、途中で失敗したスナップショットは 1 行も残らない。bot の二重起動: 2〜6 接続の同時 `tryStart` で勝者は常に 1 つ（15 ラウンド）、負けは勝者の runId を返す。主キー重複は AlreadyActive にならず 1062 のまま投げる。INTERRUPTED で `active_slot` が NULL になり同日に再開始できる。通知: `claim` は 8 接続の同時でも勝者 1 つ、不正な遷移（逆戻り・別の終端・UNSENT からの終端）は拒否、再実行は冪等、`insertIfAbsent` の再送は通知の状態を戻さない。
+### MySQL 8.4 / 9.7 のテスト結果
+上記 CI の件数のとおり、両方で 86 件合格（`db integration`）。9.7 のマイナー版はログに残していない。D-069（9.7.4 の自己参照 FK）の問題は `ml_model` の DDL で対処済みで、今回の DAO には影響しなかった。
+### Doma と Connector/J の互換性
+G-VER-2（Doma 3.14.1 kapt × Kotlin 2.4.21 × Boot 4.1.2 × starter 3.0.0）・G-VER-3（UTC・JSON・UPSERT・楽観ロック・複合キー）は**合格**、Java DAO への退避は不要だった（PoC なし）。Doma 標準の `Timestamp` 経由は JVM のタイムゾーンで値がずれるため使わず、`setObject`/`getObject` の方言を使う（D-073）。G-DB-0b: Connector/J 26.10.0 は 8.4・9.7 で 86 件合格（非ゲート。**採否は未決**、9.7.0 を既定のまま維持）。詳細は VERSIONS §10。
+### 判断（DECISIONS D-070〜D-075）
+D-070 技術構成 / D-071 楽観ロックと更新の意味 / D-072 冪等性・重複の扱い（`useAffectedRows=true` が前提）/ D-073 時刻・型変換 / D-074 権限（`R__grants.sql` は変更なし）/ D-075 テスト構成と SQL 静的検査。契約: CONTRACTS 0.4.2（§8.1 に JDBC の固定値）。
+### 新たに見つかった仕様差異・注意（完了扱いにしない）
+- **`app_user` を読めるのは `app` だけ**、`ingest` は `bot_run`・`signals` も読めない（R__grants.sql どおりで不足ではない）。bot / ingest のテナントは起動引数（`--tenant-id`）で渡す設計のまま。
+- `tryStart` / `insertIfAbsent` は長い REPEATABLE READ のトランザクション内で呼ばない前提（STAGE2_HANDOFF §14.3）。デッドロック（1213）の自動再試行は未実装（並行テストでは発生せず）。
+- `post_time_unknown` は `postTime == null` で 1（domain の「不明なら null」に合わせた解釈）。`race_schedule.kai/nichime` は domain に無く NULL のまま。
+- `bot_run.checkpoint` は JSON 列なので、不透明な文字列でも**妥当な JSON** でなければ保存できない（domain の KDoc の想定より厳しい）。T3.3 で型付けするときに確認する。
+### 未解決・注意（引き継ぎ。完了扱いにしない）
+- T1.16 / T1.17 / T1.20 / T1.21、I-H1〜I-H7、T5.0（infra 契約同期）、Cloud SQL の実環境検証（G-DB-1/5/6/7）、G-DB-4（負荷）、MySQL 9.7 の採否（D-069 の原因確認が未了）、Connector/J 26.x の採否、D-064・D-066 の未決定事項、T3.4 の HMAC とトークンハッシュの整合、mltrain のスキーマ版確認方法は**未完了のまま**。
+- T2.5 の残り（イメージ・Dependabot・release-manifest）、T2.6（ゴールデン）、T2.7、T2.8 は未着手。
+### 次のタスク（T2.7 への引き継ぎ）
+**T2.7**（`:cloud-gcp` の `ModeProvider`: GCS 実装 + ローカル実装。CONTRACTS §5.2。`:persistence` には依存しない。HTTP をフェイクにした単体テストで足りる）。**T2.8** は T2.7 の後で、`DataSourceFactory` + `PersistenceConfiguration` を組み込み、3 アプリの `excludeName` を外す（STAGE2_HANDOFF §14.3）。ブランチは main から作り直す（PR #8 のマージ後）。
+### Git
+ブランチ `claude/stage2-persistence-doma`、PR #8（main 向け、マージはユーザー）。コミット: 931f12a（T2.4 本体+テスト+CI）→ 2fd2b79（docs）→ 5730d70（アプリの自動構成の除外）→ 本 docs。
+
+---
 
 ## Stage 2-C（claude/stage2-db-migration, PR #7）
 ### 結果

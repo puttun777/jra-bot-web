@@ -150,13 +150,13 @@ GitHub Actions（`db-integration` ジョブ、ubuntu-24.04、Docker 28.0.4、Tem
 - テストで使った MySQL サーバの版: 9.7 は 9.7.4。8.4 のマイナー版はログに出していない（digest のみ記録）。
 
 ## 10. T2.4 での実測結果（2026-10-23, Stage 2-D。G-VER-2 / G-VER-3 / G-DB-0 の後半 / G-DB-0b）
-GitHub Actions（`db-integration` 8.4 / 9.7、ubuntu-24.04、Temurin 25、PR #8）の結果は @@CI@@。クラウドセッションでは Docker デーモンを起動でき（`dockerd`）、**MySQL 8.4.13 と Connector/J 9.7.0 / 26.10.0 の組合せをローカル（JDK 21）で先に確認**した（Docker Hub の 429 で `mysql:9.7` はローカルで取得できなかったため、9.7 は CI だけ）。
+GitHub Actions（`db-integration` 8.4 / 9.7、ubuntu-24.04、Temurin 25、PR #8）の結果は下表（run 39898663936、head 5730d70）。クラウドセッションでは Docker デーモンを起動でき（`dockerd`）、**MySQL 8.4.13 と Connector/J 9.7.0 / 26.10.0 の組合せをローカル（JDK 21）で先に確認**した（Docker Hub の 429 で `mysql:9.7` はローカルで取得できなかったため、9.7 は CI だけ）。
 | ゲート | 内容 | 結果 |
 |---|---|---|
 | G-VER-2 | Doma 3.14.1（kapt）× Kotlin 2.4.21 × Spring Boot 4.1.2 × doma-spring-boot-starter 3.0.0 | **合格**: kapt が DAO（`*DaoImpl`）と Entity メタクラスを生成し、`allWarningsAsErrors` のままコンパイル・実行できた（ローカル JDK 21、CI は JDK 25）。starter の `DomaAutoConfiguration`（`Config` と `TransactionAwareDataSourceProxy` 相当）で Repository を Spring のトランザクションに参加させた。starter の既定 `dialect` は自前の方言で置き換え（`@ConditionalOnMissingBean`）。Java DAO への退避は**不要だった**（PoC なし）。Doma Gradle plugin は使わず、kapt の `doma.resources.dir` で SQL ファイルの存在を検査 |
 | G-VER-3 | UTC 変換・JSON 列・UPSERT・楽観ロック・複合キー | **合格**: マイクロ秒の往復と切り捨て、5 つの JVM タイムゾーン × 夏時間の欠落時刻、`ON DUPLICATE KEY UPDATE`（行別名構文）の 1/2/0 件、`bot_run`/`race_schedule` の `version`、複合 PK・複合 FK、JSON 列（`bot_run.checkpoint`）。**Doma 標準の `Timestamp` 経由は使わない**（D-073） |
-| G-DB-0（後半） | MySQL 8.4 / 9.7 × Doma の DAO テスト | @@CI@@ |
-| G-DB-0b | Connector/J 26.x | ローカル（MySQL 8.4.13 × 26.10.0、JDK 21）: 統合 86 件中 85 件合格・1 件は版文字列を比べる**テスト側の誤り**（修正済み）。CI の非ゲート確認ジョブで 8.4 / 9.7 を確認: @@CI26@@。**採否は未決**（26.x の位置づけ・サーバ対応表を一次情報で確認できていない。9.7.0 を既定のまま維持） |
+| G-DB-0（後半） | MySQL 8.4 / 9.7 × Doma の DAO テスト | **合格**: `:persistence:integrationTest` 86 件（11 クラス）を MySQL 8.4・9.7 の両方で実行し、スキップ 0・失敗 0（ジョブ内の検証ステップが件数・スキップ・失敗・期待クラスの欠落を検査）。同ジョブの `:db-migration` 統合 44 件も合格。Connector/J 9.7.0、Temurin 25。9.7 のマイナー版は今回ログに残していない |
+| G-DB-0b | Connector/J 26.x | ローカル（MySQL 8.4.13 × 26.10.0、JDK 21）: 統合 86 件中 85 件合格・1 件は版文字列を比べる**テスト側の誤り**（修正済み）。CI の非ゲート確認ジョブ（Connector/J 26.10.0、Temurin 25）: **MySQL 8.4・9.7 の両方で 86 件すべて合格**（スキップ 0・失敗 0。26.10.0 が実際に使われたことはテストが版を検査）。ただし Flyway のスキーマ適用は :db-migration の 9.7.0 で行っており、26.x で確認したのは :persistence の DAO・接続だけ。**採否は未決**（26.x の位置づけ・サーバ対応表を一次情報で確認できていない。9.7.0 を既定のまま維持） |
 - 版の固定: `doma = 3.14.1`、`doma-spring-boot = 3.0.0`（`gradle/libs.versions.toml`）。Hikari・spring-jdbc・Connector/J は Boot の BOM（Connector/J 9.7.0）。
 - Connector/J の `useAffectedRows` は既定 false で、**この設定が無いと upsert の UNCHANGED/UPDATED を区別できない**（CONTRACTS §8.1 0.4.2）。26.x でも同じ挙動で動いた。
 - MySQL 9.7 の採否は保留のまま（D-069 の原因確認が未了）。今回の成功だけで本番採用を決めない。
