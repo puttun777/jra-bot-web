@@ -1,6 +1,47 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-10-23（第2段階 / Stage 2-G: T2.6）
+最終更新: 2026-10-23（第2段階 / Stage 2-H: T2.5 後半）
+
+## Stage 2-H（claude/stage2-images-ci, PR #12）
+### 結果
+- **T2.5 後半 実装完了**（Docker イメージ・release-manifest ドライラン・Dependabot・CI 最適化）。Stage 3 には進んでいない。**ml-train イメージと本番 release-manifest は未完成**（偽装していない）。
+- **CI（GitHub Actions）**: run 39927310473（head 3ba8cb6、PR #12。CI 設定の変更のため全ジョブ + Connector/J 26.x）で **10 ジョブすべて成功** — changes and repo hygiene / build (Temurin 25) / release tools and ci scripts (Python) / golden tests (Python 3.12) / db integration (MySQL 8.4) / db integration (MySQL 9.7) / images (build + smoke, no push) / connector/j 26.x check (8.4, 9.7) / ci gate。最新コミット（docs の追記）の結果は下の「最新 CI」。
+### 作成したもの
+- **Dockerfile**（ルート 1 つ、4 ターゲット: `dashboard` `ingest` `bot` `db-migration`）・`.dockerignore`（既定拒否）。D-093。
+- **ビルドしたイメージ**（CI の `images` と、クラウドセッションのローカルで）: `jra-bot/{dashboard,ingest,bot,db-migration}:<git sha>`（ローカルのみ。push なし・認証なし）。サイズ（ローカル・非圧縮）: bot 586MB / ingest 601MB / dashboard 601MB / db-migration 440MB。CI の所要: ビルド 189 秒（4 イメージ、Gradle は 1 回）+ スモーク 133 秒。
+- **スモーク**（`tools/release/image_smoke.py`、D-096）: ローカル（クラウドセッション）で **138 検査すべて成功**、CI の `images` ジョブも成功（失敗 0 でなければジョブが落ちる）。内容は `CI_AND_IMAGES.md` §4.2: JDK 25 で起動、non-root（10001）、ENTRYPOINT、必須設定不足で起動失敗、bot 不正 task = 2、UNKNOWN = 75、STOPPED = 0 で DB 接続ゼロ、スタブが本番で成功にならない（prod は 0 にならない）、db-migration の CLI（2/75/10/0/1、実 MySQL 8.4 で migrate→validate→info）、パスワード非混入、SIGTERM で正常終了。スモーク自身が不備を検出できることも確認（ローカルで `db-migration` の `/app/lib` が `--chmod=0444` でディレクトリ走査不可になっていた不具合を検出→`a=rX` に修正）。
+- **release-manifest**: スキーマ `docs/schemas/release-manifest.v1.json`（本番）・`release-manifest-preview.v1.json`（ドライラン）、`docs/release/rollback-verified.json`（検証記録、現在は空）、`tools/release/{manifest,cli,jsonschema_lite,repo_facts}.py`。D-094・D-095、CONTRACTS 0.4.5。**検証結果**: 単体テスト（正常・必須欠落・不正 SHA・不正 digest・不正スキーマ版・未対応 contract_version・スキーマ不一致・不正/未検証ロールバック・プレビューの本番利用拒否・再現性）。CI の `images` で `manifest-preview.json` を生成→プレビューとして適合→本番としては**拒否**→2 回生成して同一バイト、を確認。**状態**: `deployable:false`、ブロッカー `IMAGES_NOT_PUSHED` `ROLLBACK_RANGE_UNVERIFIED` `FEATURE_SCHEMA_HASH_UNDEFINED` `IMAGE_NOT_BUILT`（ml-train）。本番 manifest は生成していない（push 後の digest・ml-train・feature_schema_hash が無い）。
+- **Dependabot**: `.github/dependabot.yml`（gradle / github-actions / docker / pip=`tools/golden`、週次、minor+patch グループ、自動マージなし、Boot minor/major・Connector/J major・eclipse-temurin major・numpy major は ignore）。D-100。**実 PR は未検証**。
+- **CI 最適化**: `tools/ci/classify.py`（変更判定。fail closed）・`tools/ci/gate.py`（`ci gate`）、`ci.yml` の再構成、`images.yml`、`compat-connectorj26.yml`。D-097〜D-099。**分岐保護の required checks を `ci gate` だけにする**（ユーザー作業。`CI_AND_IMAGES.md` §1.2）。
+### テスト結果
+| 区分 | 結果 |
+|---|---|
+| Python（tools/ci + tools/release） | **104 件成功**（スキップ 0）。ローカル（Python 3.13）と CI の `release tools and ci scripts` ジョブ |
+| Python ゴールデン | CI の `golden tests (Python 3.12)` 成功（既存、回帰なし） |
+| Kotlin（build/ktlint/依存方向/単体） | CI の `build (Temurin 25)` 成功（bootJar 名の固定・アーカイブ再現性の変更を含む）。ローカルでは JDK 25 が無く、Docker 内の JDK 25 でビルドのみ確認 |
+| DB 統合（MySQL 8.4 / 9.7） | CI 成功（全スイート）。Connector/J 26.x も 8.4・9.7 で成功（非ゲート） |
+| 未実施 | 実 Dependabot PR、`workflow_dispatch` のフル検証、main への push 後の実行、必須テストの故意の失敗による ci gate の赤（単体テストでのみ確認）、docs だけの実 CI（本 PR は CI 設定の変更なので全ジョブが走る。docs のみの実測は PR マージ後） |
+### CI の実行時間（詳細は `CI_AND_IMAGES.md` §3）
+- 最適化前（run 39921807006）: 7 ジョブ・**20 分/回**（docs だけでも）。
+- 最適化後: 本 PR（最悪ケース）10 ジョブ・**33 分**（connector/j なしなら 25）。docs だけ **2 分**（推定: 6 秒 + 6 秒の各ジョブを 1 分に切り上げ）、アプリのみ 7〜9 分、persistence/Flyway 15〜24 分、Docker だけ 9 分（推定）。月 2,000 分に対し、想定の使い方で約 580 分（推定。旧方式の同条件は約 1,260 分）。**課金（ジョブ時間の合計）と壁時間（約 6 分）は別**。
+### セッションの環境
+`java -version`: OpenJDK 21（JDK 25 なし）。`./gradlew` はローカルで未実行（Docker 内で JDK 25 のビルドを実行）。`docker info`: Docker 29.9.1（`dockerd` を起動して使用。Docker Hub / Maven Central の 429 が一時的に発生）。Python 3.13.16。actionlint 1.7.12 でワークフローを検証（エラー 0）。
+### 判断
+D-093〜D-100。契約: CONTRACTS 0.4.5（§1・§10 の補足。意味は変えていない）。infra への引継ぎ: I-H9（下の表）。
+### Stage 2 全体の完了判定（技術面）
+- T2.1〜T2.8 はすべて実装済み・PR 済み・CI 緑（T2.1 PR #5、T2.2 #6、T2.3 #7、T2.4 #8、T2.7/T2.8 #9・#10、T2.6 #11、T2.5 後半 本 PR #12）。依存の互換性（Doma 3.14.1 / Kotlin 2.4.21 / Boot 4.1.2 / Flyway 13.11.1 / Connector/J 9.7.0、MySQL 8.4・9.7）は CI で確認済み。4 イメージのビルドとスモーク成功。release-manifest は**ドライラン（プレビュー）のみ**。
+- **Stage 2 の技術的な完了とは分けて残るもの**: 実 GCP での検証ゲート（G-OPS-1〜9、G-AUTH-1、G-APP-1、G-JOB-1、G-DB-1/5/6/7）、MySQL 9.7 の本番採否（D-069）、Connector/J 26.x の採否、デッドロック 1213 の再試行、bot-run の checkpoint・SIGTERM、`mltrain` のスキーマ版確認方法、ml-train イメージ（Stage 3）、本番 release-manifest（第5段階）、T1.16・T1.17・T1.20・T1.21、infra I-H1〜I-H9 と T5.0。MySQL 8.4 は暫定の本番基準のまま。**本 PR のマージ（ユーザー判断）をもって Stage 2 の実装は完了**。
+### Stage 3 への引き継ぎ
+- 進められる: T3.1（EV/Kelly 等の Kotlin 移植 + `tools/golden` の比較。入口は `tools/golden/catalog.py` の partial/planned）、T3.2、T3.3、T3.4、T3.7、T3.6 の Kotlin 側（実データ不要の範囲）。ブロック: T3.5・T3.6 の実データ部分・旧新比較の総合（T1.16/T1.17/T1.20/T1.21）、T3.0（実機）、第5段階（T5.0・ユーザーの GCP 承認）。
+- イメージ関連の宿題: ml-train の Dockerfile ターゲットと `IMAGE_NAMES`/スモーク/`images.yml` の更新、`feature_schema_hash` の定義、ロールバック検証（`rollback-verified.json`）、bot のスタブ差し替え時にスモークの『prod は 0 にならない』を見直す。詳細は `STAGE2_HANDOFF.md` §14.7。
+### 未解決・維持（完了扱いにしていない）
+T1.16 / T1.17 / T1.20 / T1.21、infra I-H1〜I-H9、T5.0、MySQL 9.7 の本番採否（D-069）、Connector/J 26.x の採否、Cloud SQL の実環境検証、実 GCP での ModeProvider 検証、G-AUTH-1、G-APP-1（**追加: `/internal/health` は無トークンで 401 のため Cloud Run の HTTP プローブにそのまま使えない。プローブ方式は infra で決める**）、G-JOB-1、デッドロック 1213 の再試行、bot-run の checkpoint・SIGTERM、`mltrain` のスキーマ版確認方法、Dependabot の実運用確認、branch protection の更新。Docker のスモークの成功は Bot の業務機能の完成を意味しない。
+### 次の作業
+本 PR のレビュー・マージ（ユーザー）→ branch protection を `ci gate` だけに更新 → Stage 3（T3.1 から）。
+### 最新 CI
+（このコミットの結果は PR #12 のチェックを参照。結果を確認次第ここを更新）
+### ブランチ
+`claude/stage2-images-ci`（PR #12、main 向け。マージはユーザー）。
 
 ## Stage 2-G（claude/stage2-golden-tests）
 ### 結果
@@ -314,6 +355,7 @@ D-045〜D-059（DECISIONS）。主なもの:
 | I-H6 | calendar-check・reconcile・retention・export-dataset の Job は **bot イメージ + `--task=`**。ml-train の引数は `--tenant-id --dataset-id` | ARCHITECTURE（infra）Jobs |
 | I-H7 | cancel の猶予時間について、アプリは 10 秒を前提にしている（G-OPS-4 で実測）。bot-run は NORMAL 中の cancel で exit 75 | OPERATIONS_DESIGN §6・§12 |
 | I-H8 | (T2.8 / CONTRACTS 0.4.4) **`APP_ENV`（local/prod）を全アプリに必ず渡す**（無いと起動/Job が失敗）。`REQUIRED_SCHEMA_VERSION` は環境変数で渡さない（jar に焼き込み）。dashboard は `IAP_AUDIENCE`・`OPS_SA_EMAIL`、ingest は `INTERNAL_ID_TOKEN_AUDIENCE`・`OPS_SA_EMAIL` が無いと起動しない。本番の DB ユーザーは `app`/`ingest`/`bot` 以外だと起動しない。`/internal/ready` は理由付きの 503（`DB_UNAVAILABLE` 等）を返す。dashboard の `/internal` は ops 以外の IAP 主体に 403。bot の Job は引数エラー・設定不正が exit 2 | CONTRACTS §2・§4.3・§9.1・§11 |
+| I-H9 | (T2.5後半 / CONTRACTS 0.4.5) **イメージと manifest**: ① release-manifest は本番スキーマ（`docs/schemas/release-manifest.v1.json`）で検証し、`kind`/`deployable` を持つプレビュー（`manifest-preview.json`）を拒否する。`images.*` は `…-docker.pkg.dev/<prj>/jra-bot/<name>@sha256:<64桁>` の 5 つ（ml-train を含む。現時点で ml-train は未実装＝本番 manifest は未生成）。② コンテナは uid 10001 の non-root、`ENTRYPOINT` は `java` の exec 形式で `CMD` なし。Cloud Run Jobs では `command` を上書きせず `args`（`--task=… --tenant-id=…` / `--mode=…`）だけ渡す。③ web アプリは `PORT`（既定 8080）で待受け。Dockerfile に `HEALTHCHECK` は無い → startup/liveness プローブ（`/internal/health` は無トークンだと 401 を返す点に注意: 認証付きプローブか TCP プローブか HTTP でのヘッダー付与を infra で決める。G-APP-1）。④ ルート FS は読取り専用でも動く（一時ファイルは `/tmp`）。 | CONTRACTS §1・§10 |
 
 ## 未完了・未解決（ユーザーの判断・確認）
 1. **T1.16**: JRA-VAN への問い合わせ Q1〜Q8。**2 人目の利用方法、クラウド保存、データの再利用、一般公開は未確認のまま**。個人契約のデータを 2 人で共有できるとは仮定しない。2 人目が自分で契約しているかどうか。規約の回答が来るまで、実データをクラウドへ投入しない。

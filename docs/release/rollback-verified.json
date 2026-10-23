@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "description": "旧イメージ × 新スキーマの統合テストで『このスキーマの上で動く』と確認できた、最も古いアプリのリリースの記録。空の間、release-manifest の rollback.min_app_release は release 自身だけが許される。",
+  "verified": []
+}

@@ -1,0 +1,55 @@
+name: compat-connectorj26
+
+# G-DB-0b: MySQL Connector/J 26.x の互換性確認（:persistence の統合テストを、Connector/J の版を差し替えて実行する）。
+# 既定の Connector/J は 9.7.0 のまま（採否は別の判断: D-070）。**検証自体は残し、必要なときだけ実行する**:
+#   - 手動実行（workflow_dispatch。採否の判断をするとき）
+#   - ci.yml の月次スケジュール（フル検証）
+#   - ci.yml が Connector/J・DB 関連の依存設定（gradle/libs.versions.toml、persistence / db-migration の build 定義、本ファイル）の変更を検出したとき
+# 採否の判断を PR の合否にしない（continue-on-error）。結果は PROGRESS / VERSIONS に記録する。
+on:
+  workflow_call:
+  workflow_dispatch:
+    inputs:
+      connector_j_version:
+        description: "確認する Connector/J の版（安定版のみ）"
+        required: false
+        default: "26.10.0"
+
+permissions:
+  contents: read
+
+jobs:
+  persistence-connectorj26:
+    name: connector/j 26.x check (MySQL ${{ matrix.mysql }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        mysql: ["8.4", "9.7"]
+    env:
+      MYSQL_IMAGE: mysql:${{ matrix.mysql }}
+      CONNECTOR_J_VERSION: ${{ inputs.connector_j_version || '26.10.0' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "25"
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - name: Persistence integration tests (Connector/J ${{ env.CONNECTOR_J_VERSION }}, ${{ env.MYSQL_IMAGE }})
+        run: ./gradlew :persistence:integrationTest -PconnectorJVersion="$CONNECTOR_J_VERSION" --stacktrace
+      - name: Summary
+        if: always()
+        run: |
+          python3 - persistence/build/test-results/integrationTest <<'PY'
+          import glob, sys, xml.etree.ElementTree as ET
+          tests = skipped = failures = errors = 0
+          for f in glob.glob(sys.argv[1] + "/*.xml"):
+              r = ET.parse(f).getroot()
+              tests += int(r.get("tests")); skipped += int(r.get("skipped")); failures += int(r.get("failures")); errors += int(r.get("errors"))
+          print(f"connector/j 26.x: tests={tests} skipped={skipped} failures={failures} errors={errors}")
+          PY

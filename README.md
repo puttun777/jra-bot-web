@@ -23,8 +23,22 @@ bash .github/scripts/check-repo-hygiene.sh   # 秘密・実データの混入チ
 - `repo.maven.apache.org` が 429（レート制限）を返す環境では、時間を空けて再実行する（Gradle は成功分をキャッシュする）。
 
 ## CI
-`.github/workflows/ci.yml`（main 向け PR と main への push）。Temurin 25 / Gradle Wrapper / 権限は `contents: read` のみ / Secrets 不使用。
-DB 統合テスト（`db-integration` ジョブ）: `:db-migration:integrationTest`（Flyway V1/V2/`R__grants.sql` と CLI）、`:persistence:integrationTest`（Doma の Repository 実装・スキーマ版の検証。スキーマは本物の db-migration CLI で適用）、`:bot:integrationTest` `:ingest:integrationTest` `:dashboard:integrationTest`（T2.8: ready・Job の終了コード・非 NORMAL で DB に接続しないこと）が、Testcontainers で使い捨ての **MySQL 8.4 と 9.7** を起動して検証する（Docker が無ければ失敗し、スキップしない）。手元で実行するには Docker が必要: `MYSQL_IMAGE=mysql:8.4 ./gradlew :db-migration:integrationTest :persistence:integrationTest :bot:integrationTest :ingest:integrationTest :dashboard:integrationTest`。Connector/J 26.x の確認は `-PconnectorJVersion=26.10.0`（採否は未決。D-070）。通常の `./gradlew build` は Docker 不要の単体テストだけ。
+`.github/workflows/ci.yml`（main 向け PR、main への push、手動、月次）。Temurin 25 / Gradle Wrapper / 権限は `contents: read` のみ / Secrets 不使用 / 外部アクションは SHA 固定。
+**変更内容で実行するジョブを決める**（`tools/ci/classify.py`。docs だけなら `changes and repo hygiene` と `ci gate` だけ。判定に失敗したら全部実行）。**分岐保護の required check は `ci gate` だけ**にする。運用・14 ケースの表・キャッシュ・無料枠の見積りは `docs/CI_AND_IMAGES.md`。
+DB 統合テスト（`db-integration`）: `:db-migration:integrationTest`（Flyway V1/V2/`R__grants.sql` と CLI）、`:persistence:integrationTest`（Doma の Repository 実装・スキーマ版の検証）、`:bot:integrationTest` `:ingest:integrationTest` `:dashboard:integrationTest`（ready・Job の終了コード・非 NORMAL で DB に接続しないこと）が、Testcontainers で使い捨ての MySQL を起動して検証する（Docker が無ければ失敗し、スキップしない）。範囲は変更内容で決まる（DB・Doma・Flyway・依存の変更は **8.4 と 9.7**、アプリだけの変更は 8.4）。手元: `MYSQL_IMAGE=mysql:8.4 ./gradlew :db-migration:integrationTest :persistence:integrationTest :bot:integrationTest :ingest:integrationTest :dashboard:integrationTest`。Connector/J 26.x の確認（`-PconnectorJVersion=26.10.0`。採否は未決: D-070）は `compat-connectorj26.yml`（手動・月次・関連依存の変更時）。通常の `./gradlew build` は Docker 不要の単体テストだけ。
+
+## Docker イメージ（T2.5 後半）
+`Dockerfile` 1 つから 4 ターゲット: `dashboard` `ingest` `bot`（単一イメージで `--task=` を切り替え）`db-migration`。JDK 25 の JRE、non-root（uid 10001）、ENTRYPOINT は `java` の exec 形式（SIGTERM と終了コードがそのまま届く）、`HEALTHCHECK` なし。**push しない・クラウドに認証しない**（ローカルビルドだけ）。
+```bash
+SHA=$(git rev-parse HEAD)
+for t in db-migration bot ingest dashboard; do docker build --target $t --build-arg GIT_SHA=$SHA -t jra-bot/$t:$SHA .; done
+python3 -m tools.release.image_smoke --git-sha $SHA --report-dir out   # 起動スモーク（Docker と mysql:8.4 が必要。合成データのみ）
+python3 -m tools.release.cli preview --git-sha $SHA --built-at "$(date -u -d @$(git show -s --format=%ct HEAD) +%FT%TZ)" --local-images out/images-local.json --out out/manifest-preview.json
+```
+**ml-train イメージは未実装**（Stage 3）。bot の業務処理はスタブで、イメージが動くことは Bot の機能が完成した証明ではない。手順・設計の詳細は `docs/CI_AND_IMAGES.md`、判断は D-093〜D-096。
+
+## release-manifest（ドライランまで）
+`docs/schemas/release-manifest.v1.json`（本番）と `release-manifest-preview.v1.json`（ドライラン）。`tools/release` が生成・検証する（`python3 -m tools.release.cli validate --kind preview|production FILE`）。プレビュー（`manifest-preview.json`）は `deployable:false` で、レジストリ digest が無く、**本番用として拒否される**。本番の `release-manifest.json` はレジストリへの push 後の実 digest・ml-train・検証済みのロールバック範囲が揃うまで生成できない（第5段階）。単体テスト: `python3 -m tools.ci.run_tests --min-tests 100`。
 
 ## persistence（Doma）
 `:persistence` が domain の Repository ポート（Race / OddsSnapshot / BotRun / AppUser / RaceSchedule / Signal）を実装する。Doma（kapt）の DAO・Entity・SQL テンプレートは `internal` で、公開するのは `DbSettings`・`DataSourceFactory`・`PersistenceConfiguration` だけ。SQL は全て `tenant_id` を必須にし（`SqlTemplateTenantGuardTest` が静的に検査）、時刻は UTC の `DATETIME(6)`。起動設定はアプリ側（T2.8）で組み立てる。判断は `docs/DECISIONS.md` D-070〜D-075。

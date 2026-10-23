@@ -40,6 +40,7 @@ JRA Bot (参照元 `puttun777/jra-bot`, Python/SQLite/Streamlit) を Kotlin/Spri
 | docs/CONTRACTS.md | web⇔infra の成果物・環境変数・API 契約 | **web が正本**、infra 側は同期コピー参照 |
 | docs/STAGE2_HANDOFF.md | 第2段階の実装順・テスト区分・CI・再開手順・検証ゲート一覧 | web |
 | docs/VERSIONS.md | 版数・互換性ゲート・Boot 4.2 移行計画 | web |
+| docs/CI_AND_IMAGES.md | CI の実行範囲・required check（`ci gate`）・Docker イメージ・release-manifest・Dependabot・無料枠 | web |
 | docs/MIGRATION_MATRIX.md / FRONTEND_DESIGN / ML_DESIGN / DATA_MIGRATION_DESIGN / RACE_CALENDAR_DESIGN / JVLINK_DESIGN / DATA_SOURCE_COMPLIANCE | 機能移行・各設計（E 項目は MIGRATION_MATRIX §8） | web |
 
 ## モジュール（Gradle Kotlin DSL マルチプロジェクト）

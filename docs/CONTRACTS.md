@@ -1,6 +1,6 @@
 # CONTRACTS（web ⇔ infra 受け渡し契約・正本は本ファイル）
 
-状態: **0.4.4（第2段階 / T2.8 で §2・§3.2・§4.3・§9.1・§11 に実装の補足。0.4.0 の契約の意味は変えていない）**。0.4.0 は第1段階 / T1.10 で確定した設計契約。infra の `docs/CONTRACTS.md` §2 の差異 D1〜D12 をすべて取り込んだ（対応表は §12）。実装・実リソースで確かめる必要がある箇所は「検証ゲート」として ID を書いている（一覧は `STAGE2_HANDOFF.md` §13）。
+状態: **0.4.5（第2段階 / T2.5 後半で §1・§10 にイメージの形式と manifest の検証規則を補足。T2.8 の 0.4.4 は §2・§3.2・§4.3・§9.1・§11。0.4.0 の契約の意味は変えていない）**。0.4.0 は第1段階 / T1.10 で確定した設計契約。infra の `docs/CONTRACTS.md` §2 の差異 D1〜D12 をすべて取り込んだ（対応表は §12）。実装・実リソースで確かめる必要がある箇所は「検証ゲート」として ID を書いている（一覧は `STAGE2_HANDOFF.md` §13）。
 - 正本はこのファイル。infra 側は版番号を参照し、変更点を同期する。infra の文書を直す必要がある箇所は `PROGRESS.md` の「infra への引継ぎ」に記録する。web のセッションから infra を直接変更しない。
 - 用語: **mode** は現在のフェーズ（`NORMAL | STARTING | STOPPING | STOPPED`）。**desired** は利用者の意図（`NORMAL | STOPPED`）。アプリが読み取りに失敗したときや、内容が不正なときの判定値は **`UNKNOWN`** とする。UNKNOWN はアプリ内部だけの値で、正本には書かない。旧版の `phase` は廃止して `mode` に統一した（実装はまだ無いため互換フィールドは置かない）。
 
@@ -341,7 +341,8 @@ STOPPED 中の `ingest` 503、ビーコンのみ STOPPED、両方不達（UNKNOW
 | `rollback.min_app_release` | **このリリースのスキーマ上で動くことを CI で確認した、最も古いアプリのリリース**。旧イメージ × 新スキーマの統合テストで決める。破壊的な変更（contract）を含むリリースでは、自分自身にする |
 | ロールバック規則 | アプリだけを旧リリース O に戻すのは `O.release ≥ 現在の rollback.min_app_release` のときだけ。**DB スキーマは戻さない**（前進修正のみ）。バックアップからの復元は障害復旧手順として扱う（infra OPERATIONS） |
 | `contract_version` | infra は自分が対応する範囲（メジャー版が一致）を検査する。一致しなければ deploy を拒否する |
-| 生成 | web の CI（release workflow）が生成し、GitHub Release に添付する。手で編集しない。JSON Schema（`docs/schemas/release-manifest.v1.json`）は第2段階の T2.5 で追加する |
+| 生成 | web の CI（release workflow）が生成し、GitHub Release に添付する。手で編集しない。JSON Schema は `docs/schemas/release-manifest.v1.json`（**0.4.5 で追加**） |
+- **0.4.5 の補足（T2.5 後半 / D-094・D-095）**: ① `images.*` の形式は `asia-northeast1-docker.pkg.dev/<project>/jra-bot/<name>@sha256:<64桁>`（`<name>` はキーと同じ）。**5 つすべて必須**（`ml-train` を含む。ml-train が無い間は本番 manifest を生成できない）。② `docs/schemas/release-manifest-preview.v1.json` の**プレビュー**（`manifest-preview.json`: `kind=release-manifest-preview`・`deployable:false`・`blockers`・`registry_digest:null`・ローカル image ID は digest ではない）はドライラン専用で、**本番スキーマに適合しない**。infra はプレビューを入力にしてはならない（`deployable` や `kind` を持つ文書は拒否する）。③ 検証: `contract_version` は `0.4.x` かつ web の `docs/CONTRACTS.md` と一致、`required_schema_version` は各アプリの jar に焼き込まれた値と一致、`flyway.latest_version` は同梱マイグレーションの最新版と一致、`rollback.min_app_release` は release 自身か検証記録のある値だけ。④ イメージの規約（§1 の補足）: uid/gid 10001 の non-root、`ENTRYPOINT` は `java …` の exec 形式で `CMD` なし（Cloud Run の `args` に `--task=…`/`--mode=…` を渡す）、web アプリは `PORT`（既定 8080）で待受け、`TZ=Asia/Tokyo` 設定済み、`HEALTHCHECK` なし（プローブは infra がサービスに設定する）、OCI ラベル `org.opencontainers.image.revision` = Git SHA。
 
 ## 11. 内部 API・人の認証（D3）
 ### 11.1 dashboard（直接 IAP）
@@ -390,3 +391,5 @@ STOPPED 中の `ingest` 503、ビーコンのみ STOPPED、両方不達（UNKNOW
 0.4.3（第2段階 / T2.7）: §5.2 に実装の補足（任意項目・同一 seq の扱い・巻き戻り検知の寿命・タイムアウトの強制・ローカルファイルの条件）を追加。契約の意味は変えていない（infra への影響: 復元手順にアプリの再起動を含める）。
 
 0.4.4（第2段階 / T2.8）: §2（`APP_ENV` 必須、`REQUIRED_SCHEMA_VERSION` は jar 焼き込み）、§3.2（`/internal/ops/mode` の診断の意味、`source:"file"`）、§4.3（スキーマ版の検証規則と ready の理由）、§9.1（設定不正=2、想定外=1、スタブの扱い、`--task` の引数）、§11（401/403 の区別、検証項目）に実装の補足。契約の意味は変えていない。infra への影響: ① `APP_ENV` を全アプリに必ず渡す、② `REQUIRED_SCHEMA_VERSION` を環境変数で渡す必要は無い、③ ready の本文に理由が入る、④ `INTERNAL_ID_TOKEN_AUDIENCE`/`IAP_AUDIENCE`/`OPS_SA_EMAIL` が無いとアプリは起動しない（T5.0 の確認項目）。
+
+0.4.5（第2段階 / T2.5 後半）: §10 に release-manifest の JSON Schema・プレビュー（ドライラン）の区別・検証規則、イメージの形式（`images.*` の形、ml-train 必須）、§1 のイメージの規約（non-root・ENTRYPOINT・PORT・HEALTHCHECK なし）を補足。契約の意味は変えていない。infra への影響: ① manifest を読むときは本番スキーマで検証し、`kind`/`deployable` を持つプレビューを拒否する、② Cloud Run のプローブ（startup / liveness）は infra 側で設定する、③ コンテナの `command` は上書きせず `args` だけを渡す（PROGRESS の I-H9）。

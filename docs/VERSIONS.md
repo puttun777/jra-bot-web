@@ -27,7 +27,7 @@
 | JUnit Jupiter | **6.0.3**（Boot BOM） | 6.1.3 | Boot 4.1.2 が検証済み。6.1.x へは T2.1 で通れば引き上げ | https://repo1.maven.org/maven2/org/junit/jupiter/junit-jupiter/maven-metadata.xml |
 | MockK | **1.14.11** | 1.14.11 | — | https://repo1.maven.org/maven2/io/mockk/mockk/maven-metadata.xml |
 | KSP（Kotlin Symbol Processing） | 使用しない | 2.3.12（symbol-processing-api） | Doma が非対応（§2）。他に必要なライブラリが出れば再検討 | https://repo1.maven.org/maven2/com/google/devtools/ksp/symbol-processing-api/maven-metadata.xml |
-| Docker Engine | CI ランナー既定（GitHub-hosted の Docker）。参考: 最新 29.9.2 | 29.9.2（2026-10-20） | ランナー側で決まるため固定しない。ベースイメージは `eclipse-temurin:25-jre` を **digest 固定**（T2.5） | https://github.com/moby/moby/releases |
+| Docker Engine | CI ランナー既定（GitHub-hosted の Docker）。参考: 最新 29.9.2 | 29.9.2（2026-10-20） | ランナー側で決まるため固定しない。ベースイメージは `eclipse-temurin:25-jdk-noble`（build）/ `25-jre-noble`（実行）を **digest 固定**（T2.5 後半で実施。§13） | https://github.com/moby/moby/releases |
 | Terraform | **1.17.0**（`required_version` で固定） | 1.17.0 | — | https://releases.hashicorp.com/terraform/ |
 | Terraform Google provider | **~> 8.8**（lock file で固定） | 8.8.0 | メジャー 8 の破壊的変更は T5.1 で確認 | https://releases.hashicorp.com/terraform-provider-google/ |
 | GitHub Actions | `actions/checkout` **v7.0.1**、`actions/setup-java` **v6.1.0**、`google-github-actions/auth` **v3.0.0**（Node 24）、`gradle/actions`(setup-gradle) **v6.4.0** | 同左 | **コミット SHA でピン留め**し Dependabot で更新（T2.5）。`upload-artifact` / `download-artifact` / `docker/*` / `setup-terraform` / `deploy-cloudrun` は未確認 → T2.5/T5.x | https://github.com/actions/checkout/releases ; https://github.com/actions/setup-java/releases ; https://github.com/google-github-actions/auth/releases ; https://github.com/gradle/actions/releases |
@@ -178,3 +178,15 @@ GitHub Actions（`db-integration` 8.4 / 9.7、ubuntu-24.04、Temurin 25、PR #8�
 - 確認したこと: 署名（ES256/RS256）・kid 不明・audience/issuer/期限の違い・alg=none・鍵の取得失敗の拒否が、ローカルの偽 JWKS サーバとテスト用の鍵で動く（GoogleSignedTokenVerifierTest 23 件）。**実 Google の鍵・実トークンでは未検証**（G-AUTH-1）。ライブラリは `exp` の検査に許容を持つが、`GoogleSignedTokenVerifier` が `exp`/`iat` を 30 秒で再検査する。
 - MySQL 8.4 / 9.7 での結果は PROGRESS の Stage 2-F。
 
+## 13. T2.5 後半での追加（2026-10-23, Stage 2-H）
+| 項目 | 版・値 | 根拠・備考 |
+|---|---|---|
+| 実行イメージのベース | `eclipse-temurin:25-jre-noble@sha256:3f2223fe04b750aa5a8179e29b5c9a1ddf7665fc9bb08bfe11ad01d143bc13a5`（JDK 25.0.4.1+1、Ubuntu 24.04） | Docker Hub のレジストリ API で取得したマルチアーキのインデックス digest（amd64 含む）。タグ + digest 固定。更新は Dependabot（docker）の PR |
+| ビルドのベース | `eclipse-temurin:25-jdk-noble@sha256:ba0f0e1a33864105e1d454e88105c617ab40f71062db1f306bf58be32a3f8e5e` | 同上。実行イメージには入らない |
+| `actions/upload-artifact` | **v7.0.2**（`cf430e030ddbb5b0abf93d22962f4752f3646cd9`） | 公式リポジトリのタグ（`git ls-remote`）から SHA を取得してピン留め。リリース日は未確認（Dependabot が更新） |
+| MySQL（スモーク用） | `mysql:8.4`（CI 専用の使い捨て） | DB 統合テストの暫定本番基準と同じ。9.7 でのスモークはしない（9.7 は DB 統合テストで検証） |
+| Python（tools/ci・tools/release） | 標準ライブラリだけ（追加依存なし） | JSON Schema 検証は自前のサブセット（未対応キーワードは拒否） |
+| Dependabot | `.github/dependabot.yml`（D-100） | Boot minor/major・Connector/J major・eclipse-temurin major・numpy major は自動提案しない |
+- **Connector/J 26.x の過去の検証結果（削除していない）**: §10。`26.10.0` × MySQL 8.4・9.7 で `:persistence:integrationTest` 86 件すべて合格（CI run 39898663936、Temurin 25）。T2.6 の run 39921807006 でも同ジョブが 8.4・9.7 で成功。**採否は未決**（D-070）。毎 PR の実行はやめ、手動・月次・関連依存の変更時に実行する（D-098）。
+- **MySQL 9.7**: 暫定の本番基準は 8.4 のまま。9.7 は D-069（複合の自己参照 FK を検査しない）が残るため、**本番採用を自動決定しない**。互換性確認は DB・JDBC・スキーマ・依存の変更時と月次/手動のフル検証で続ける。
+- **未確認**: Docker Hub のレート制限（429）はクラウドセッションで発生した（Docker Hub / Maven Central）。GitHub-hosted ランナーでの影響は CI の結果で確認する（PROGRESS）。Dockerfile の `HEALTHCHECK` を Cloud Run が使うかどうかは公式文書で明記を確認できていない（付けない: D-093）。
