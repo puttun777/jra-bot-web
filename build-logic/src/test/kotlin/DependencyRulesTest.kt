@@ -85,6 +85,62 @@ class DependencyRulesTest {
     }
 
     @Test
+    fun `domain は HTTP クライアント JSON JPA 他クラウドにも依存できない`() {
+        val groups =
+            listOf(
+                "com.fasterxml.jackson.core",
+                "io.ktor",
+                "com.squareup.okhttp3",
+                "org.apache.httpcomponents",
+                "org.apache.hc.client5",
+                "org.hibernate.orm",
+                "jakarta.persistence",
+                "software.amazon.awssdk",
+                "com.azure",
+                "io.grpc",
+            )
+        assertEquals(groups.size, DependencyRules.checkDomainExternalGroups(groups).size)
+        val imports =
+            listOf(
+                "java.net.http.HttpClient",
+                "okhttp3.OkHttpClient",
+                "io.ktor.client.HttpClient",
+                "com.fasterxml.jackson.databind.ObjectMapper",
+                "jakarta.persistence.Entity",
+                "org.hibernate.Session",
+                "com.google.api.client.http.HttpTransport",
+                "org.flywaydb.core.Flyway",
+                "software.amazon.awssdk.services.s3.S3Client",
+                "java.net.HttpURLConnection",
+            )
+        assertEquals(imports.size, DependencyRules.checkDomainImports(mapOf("A.kt" to imports)).size)
+    }
+
+    @Test
+    fun `domain で許す標準 API は違反にならない`() {
+        val ok = listOf("java.time.Instant", "java.io.InputStream", "java.util.UUID", "java.net.URI", "kotlin.math.abs", "java.security.MessageDigest")
+        assertEquals(emptyList(), DependencyRules.checkDomainImports(mapOf("A.kt" to ok)))
+    }
+
+    @Test
+    fun `domain の import 無しの完全修飾名による参照も検知する`() {
+        val lines =
+            mapOf(
+                "A.kt" to
+                    listOf(
+                        1 to "import java.time.Instant",
+                        2 to "val c: java.sql.Connection? = null",
+                        3 to "    // java.sql.Connection はコメントなので対象外",
+                        4 to "     * org.springframework.stereotype.Component の KDoc",
+                        5 to "val h = java.net.http.HttpClient.newHttpClient()",
+                    ),
+            )
+        val v = DependencyRules.checkDomainQualifiedReferences(lines)
+        assertEquals(2, v.size, v.toString())
+        assertTrue(v[0].startsWith("A.kt:2:") && v[1].startsWith("A.kt:5:"), v.toString())
+    }
+
+    @Test
     fun `BOM は検査対象外`() {
         assertTrue(DependencyRules.isBom("org.springframework.boot", "spring-boot-dependencies"))
         assertEquals(false, DependencyRules.isBom("org.springframework.boot", "spring-boot-starter"))

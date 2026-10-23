@@ -29,13 +29,15 @@ abstract class CheckModuleDependenciesTask : DefaultTask() {
         val graph = mutableMapOf<String, Set<String>>()
         val domainGroups = mutableSetOf<String>()
         val importsByFile = mutableMapOf<String, List<String>>()
+        val codeLinesByFile = mutableMapOf<String, List<Pair<Int, String>>>()
 
         for (sub in project.subprojects) {
             val deps = mutableSetOf<String>()
             // すべての構成（テスト用を含む）の宣言済み依存を見る。解決はしない（ネットワーク不要）。
             for (conf in sub.configurations) {
                 for (d in conf.dependencies) {
-                    if (d is ProjectDependency) deps += d.path
+                    // java-test-fixtures などが付ける自分自身への依存は除く
+                    if (d is ProjectDependency && d.path != sub.path) deps += d.path
                     if (sub.path == DependencyRules.DOMAIN && d is ExternalModuleDependency && !DependencyRules.isBom(d.group, d.name)) {
                         domainGroups += d.group
                     }
@@ -47,12 +49,14 @@ abstract class CheckModuleDependenciesTask : DefaultTask() {
                     .walkTopDown()
                     .filter { it.isFile && it.extension == "kt" && !it.path.contains("/build/") }
                     .forEach { f ->
-                        importsByFile[f.relativeTo(project.projectDir).path] =
-                            f
-                                .readLines()
+                        val key = f.relativeTo(project.projectDir).path
+                        val lines = f.readLines()
+                        importsByFile[key] =
+                            lines
                                 .map { it.trim() }
                                 .filter { it.startsWith("import ") }
                                 .map { it.removePrefix("import ") }
+                        codeLinesByFile[key] = lines.mapIndexed { i, l -> (i + 1) to l }
                     }
             }
         }
@@ -61,6 +65,7 @@ abstract class CheckModuleDependenciesTask : DefaultTask() {
             DependencyRules.checkProjectDependencies(graph) +
                 DependencyRules.checkDomainExternalGroups(domainGroups) +
                 DependencyRules.checkDomainImports(importsByFile) +
+                DependencyRules.checkDomainQualifiedReferences(codeLinesByFile) +
                 (DependencyRules.modules.filter { it !in moduleNames }.map { "$it が settings.gradle.kts に無い" })
         if (violations.isNotEmpty()) {
             throw GradleException("モジュール依存の違反 ${violations.size} 件:\n" + violations.joinToString("\n") { " - $it" })

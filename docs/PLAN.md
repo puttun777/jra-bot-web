@@ -40,7 +40,7 @@
 
 ## 第2段階 ― 基盤（W）
 - [x] T2.1 Gradle KTS マルチプロジェクト雛形、Version Catalog、依存検査（bot⇄dashboard禁止）← T1.4,T1.10 — 根拠: PR #5 の CI（run 39826288899）が Temurin 25.0.4.1 で成功（build/ktlint/checkModuleDependencies/単体 11 件/build-logic の依存規則テスト）。違反検知は単体 9 + TestKit 4 で確認。詳細は PROGRESS
-- [ ] T2.2 :domain 値オブジェクト（Odds, Probability, Money 等）・Repository interface
+- [x] T2.2 :domain 値オブジェクト（Odds, Probability, Money 等）・Repository interface — 根拠: PR #6（claude/stage2-domain-vo）。単体 214 件 + build-logic 18 件（ローカル JDK 21 のスモーク）、CI（JDK 25）の結果は PROGRESS。D-060〜D-062。Horse/RaceHorse/Tenant の Repository 等は後続（PROGRESS「次のタスク」）
 - [ ] T2.3 :db-migration Flyway V1/V2/`R__grants.sql`（範囲は ARCHITECTURE §5.1）+ CLI `--mode`（CONTRACTS §4.2）。G-DB-0 ← T1.10
 - [ ] T2.4 :persistence Doma DAO/Entity/変換（Testcontainers 統合テスト）← T2.2,T2.3
 - [ ] T2.5 CI（build/lint/unit/DB統合/イメージ）、Renovate/Dependabot ← T2.1

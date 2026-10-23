@@ -40,11 +40,44 @@ object DependencyRules {
             "com.google.api",
             "com.google.apis",
             "io.grpc",
+            "software.amazon", // AWS SDK
+            "com.azure",
+            "com.fasterxml.jackson", // DTO・JSON はアプリ側（ARCHITECTURE §2.1）
+            "io.ktor", // HTTP クライアント
+            "com.squareup.okhttp3",
+            "org.apache.httpcomponents",
+            "org.apache.hc",
+            "org.hibernate", // JPA / Entity
+            "jakarta.persistence",
+            "javax.persistence",
         )
 
     /** `:domain` から見て JDBC は標準ライブラリ（java.sql）なので、ソース側は別途ソース走査で検査する。 */
     val domainForbiddenImports: List<String> =
-        listOf("org.springframework.", "org.seasar.doma.", "java.sql.", "javax.sql.", "com.google.cloud.", "com.mysql.")
+        listOf(
+            "org.springframework.",
+            "org.seasar.doma.",
+            "java.sql.",
+            "javax.sql.",
+            "com.mysql.",
+            "org.flywaydb.",
+            "com.google.cloud.",
+            "com.google.auth.",
+            "com.google.api.",
+            "io.grpc.",
+            "software.amazon.",
+            "com.azure.",
+            "java.net.http.", // HTTP クライアント（JDK 標準）
+            "java.net.HttpURLConnection",
+            "okhttp3.",
+            "org.apache.http.",
+            "org.apache.hc.",
+            "io.ktor.",
+            "com.fasterxml.jackson.",
+            "jakarta.persistence.",
+            "javax.persistence.",
+            "org.hibernate.",
+        )
 
     /** バージョン管理だけを行う BOM（クラスを持ち込まない）は検査から除く。 */
     fun isBom(
@@ -74,6 +107,21 @@ object DependencyRules {
             .sorted()
             .filter { g -> domainForbiddenGroups.any { g == it || g.startsWith("$it.") } }
             .map { ":domain → 外部ライブラリ $it は禁止" }
+
+    /**
+     * `:domain` のソースで、import を使わずに完全修飾名で直接参照している違反（例: `val c: java.sql.Connection`）。
+     * 入力は `ファイル -> (行番号, 行)` の一覧（import 行・コメント行は呼び出し側で除く必要はない）。
+     */
+    fun checkDomainQualifiedReferences(codeLinesByFile: Map<String, List<Pair<Int, String>>>): List<String> =
+        codeLinesByFile.toSortedMap().flatMap { (file, lines) ->
+            lines
+                .filter { (_, line) ->
+                    val t = line.trim()
+                    !t.startsWith("import ") && !t.startsWith("//") && !t.startsWith("*") && !t.startsWith("/*")
+                }.flatMap { (no, line) ->
+                    domainForbiddenImports.filter { line.contains(it) }.map { "$file:$no: $it を完全修飾名で参照しているのは :domain では禁止" }
+                }
+        }
 
     /** `:domain` のソース内の import の違反。 */
     fun checkDomainImports(importsByFile: Map<String, List<String>>): List<String> =
