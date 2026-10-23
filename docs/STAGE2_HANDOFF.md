@@ -123,10 +123,10 @@ db-migration（単独）
 | ID | 内容 | 段階 | 文書 |
 |---|---|---|---|
 | G-VER-1〜5 | 版の組合せ（Kotlin/Gradle/JDK/Boot、Doma kapt、時刻・JSON・UPSERT、Thymeleaf+Security+htmx、Actions の Docker） | 2（G-VER-4 は 4 の冒頭） | VERSIONS §6 |
-| G-DB-0 / 0b | MySQL 8.4/9.7 × Flyway × Connector/J（9.7.0 / 26.x）× Doma | 2 | VERSIONS §6 |
+| G-DB-0 / 0b | MySQL 8.4/9.7 × Flyway × Connector/J（9.7.0 / 26.x）× Doma | 2 | VERSIONS §6・§9。**T2.3: 8.4・9.7.4 × Flyway 13.11.1 × Connector/J 9.7.0 は CI で合格（D-069 の対処後）。26.x と Doma は T2.4** |
 | G-DB-4 | 負荷の目安（オッズの書込・集計クエリ） | 2（ローカル MySQL） | infra PLAN |
 | G-DB-5 | IAM DB 認証を JDBC で使えるか | 2（調査）/ 5（実環境） | CONTRACTS §8.1 |
-| G-DB-6 | Cloud SQL のユーザーの既定権限と、`R__grants.sql` による REVOKE/GRANT | 2（MySQL で）/ 5（Cloud SQL で） | CONTRACTS §8.2 |
+| G-DB-6 | Cloud SQL のユーザーの既定権限と、`R__grants.sql` による REVOKE/GRANT | 2（MySQL で）/ 5（Cloud SQL で） | CONTRACTS §8.2。**MySQL コンテナ（8.4/9.7）では T2.3 で合格。Cloud SQL は未検証** |
 | G-DB-7 | プライベート IP での TLS 検証（`VERIFY_CA`）か Java Connector か | 5 | CONTRACTS §8.1 |
 | G-DB-1 / G-COST-1 | 東京で db-g1-small を選べるか、`max_connections`、正式な単価 | 5 の前（ユーザー） | infra CLOUD_COSTS §10 |
 | G-OPS-1〜9 | ingress=internal、停止と起動、メンテナンス、cancel のシグナル、Jobs の上限 14h、CAS、IAP のプログラム通過・`aud` の形式、組織なし IAP、apply 前ガード | 5 | infra OPERATIONS_DESIGN §12 |
@@ -162,3 +162,19 @@ Reader/Writer は分かれており、`XxxRepository` は両方を継承する�
 - 時刻は UTC `DATETIME(6)` ⇔ `Instant`（マイクロ秒に切り捨て済み）。変換は `:persistence` の中だけ。
 - 実装は T2.4 で `XxxRepository` を実装し、**ポートの契約（冪等性・楽観ロック・テナント必須）を越境テストで検証**する。
 
+
+### 14.2 T2.3 の結果と T2.4 への引き継ぎ（実装済みの DDL）
+正本は `db-migration/src/main/resources/db/migration/`（`V1__baseline.sql` `V2__ops_calendar_ingest_ml.sql` `R__grants.sql`）。判断は DECISIONS D-063〜D-068。
+- **§14.1 の反映**: `bot_run.state` に `INTERRUPTED`（8 状態＝domain の `BotRunState`）、`signals.notify_state`（4 値）、`bot_run`/`race_schedule`/`race_day` に `version INT NOT NULL DEFAULT 0`、`app_user(role VIEWER|ADMIN, enabled)`、`race_id CHAR(12) ascii_bin`（日付・場・R との一致を CHECK）、場コードは `code_venue` の FK（01〜10）、`race_no`/`umaban` は CHECK 1〜99、`odds > 0`（DOUBLE は NaN/Infinity を保存できない）、時刻は `DATETIME(6)`（UTC）。
+- **T2.4 が守ること**
+  - 全 SQL の `WHERE`/`INSERT` に `tenant_id`。子表の FK は `(tenant_id, 親キー)` なので、DAO が別テナントの親 ID を渡しても DB が拒否する（それでも越境テストを書く）。
+  - `AppUserRepository.findByEmail`: `email` は小文字に正規化して保存・検索（`EmailAddress` が正規化済み）。DB は `utf8mb4_0900_bin`＝完全一致、**全体で一意**（D-063）。大文字を含む値の INSERT は CHECK で失敗する。
+  - `SignalWriter.insertIfAbsent`: 自然キー `(tenant_id, race_id, market, umaban, observed_at)` の UNIQUE。`INSERT … ON DUPLICATE KEY UPDATE id = id`（既存の行を変えない）か、重複エラーの明示処理。`claim` は `UPDATE … SET notify_state='CLAIMED' WHERE tenant_id=? AND id=? AND notify_state='UNSENT'` の影響行数で判定（`notify_updated_at` は Clock の値）。`SENT`/`SEND_UNKNOWN` への遷移は `CLAIMED` からだけ。
+  - `BotRunWriter.tryStart`: `INSERT`（`state` が実行中なら `active_slot=1`、それ以外は `NULL`。食い違いは CHECK が拒否）。`UNIQUE(tenant_id, run_date, active_slot)` の重複（1062）を `AlreadyActive` に変換し、`findActive` で `runId` を返す。`update` は `WHERE version = ?` + `version = version + 1`。`INTERRUPTED` など実行中でない状態にするときは **`active_slot = NULL` を同時に設定**（リース解放）。
+  - `RaceScheduleWriter.update` も同じ楽観ロック。`race_schedule` は `races` への FK を持たない。
+  - 時刻: `Instant` → UTC の `LocalDateTime`（マイクロ秒に切り捨て。DB は 7 桁目以降を丸める）。接続は `time_zone='+00:00'`（`FlywayEngine` と同じ `SET time_zone`）。
+  - `odds_snapshots` の PK は `(tenant_id, race_id, market, observed_at, umaban)`（D-064）。`market` は ENUM（`Market.code`）。
+  - ENUM と domain の列挙の一致（`BotRunState`・`NotificationState`・`AppUserRole`・`RaceScheduleStatus`・`Market`）は `:persistence` の契約テストで照合する（`:db-migration` は `:domain` に依存できない）。
+  - 権限: dashboard=`app`、ingest=`ingest`、bot=`bot` の各接続ユーザーの範囲を超える SQL（例: bot が `races` を書く）は `R__grants.sql` で拒否される。DAO を作るときに必要な権限が足りなければ、**強い権限を足さず** `R__grants.sql` を最小限で変更し、`GrantsIntegrationTest` を更新する。
+- **未確認のまま**: G-DB-6（Cloud SQL で migrate が GRANT/REVOKE できるか、新規ユーザーの既定権限）、G-DB-5/7、G-DB-1、G-DB-4（負荷）。CI の MySQL コンテナでの成功を Cloud SQL の検証とは扱わない。
+- **Docker**: クラウドセッションでは Docker デーモンを起動できなかった（`dockerd` の起動はサンドボックスの判定で許可されなかったため試行を止めた）。DB 統合テストは GitHub Actions（`db-integration`）が正。

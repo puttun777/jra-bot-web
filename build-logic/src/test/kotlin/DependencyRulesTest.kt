@@ -145,4 +145,31 @@ class DependencyRulesTest {
         assertTrue(DependencyRules.isBom("org.springframework.boot", "spring-boot-dependencies"))
         assertEquals(false, DependencyRules.isBom("org.springframework.boot", "spring-boot-starter"))
     }
+
+    @Test
+    fun `Flyway は db-migration だけが持てる`() {
+        val ok =
+            mapOf(
+                ":db-migration" to setOf("org.flywaydb:flyway-core", "org.flywaydb:flyway-mysql"),
+                ":bot" to setOf("org.springframework.boot:spring-boot-starter"),
+            )
+        assertEquals(emptyList(), DependencyRules.checkFlywayOnlyInDbMigration(ok))
+        val bad =
+            mapOf(
+                ":bot" to setOf("org.flywaydb:flyway-core"),
+                ":ingest" to setOf("org.springframework.boot:spring-boot-starter-flyway"),
+                ":dashboard" to setOf("org.springframework.boot:spring-boot-flyway"),
+                ":persistence" to setOf("org.flywaydb:flyway-mysql"),
+            )
+        assertEquals(4, DependencyRules.checkFlywayOnlyInDbMigration(bad).size)
+    }
+
+    @Test
+    fun `db-migration は Spring と Doma に依存しない`() {
+        assertEquals(emptyList(), DependencyRules.checkDbMigrationExternal(listOf("org.flywaydb:flyway-core", "com.mysql:mysql-connector-j")))
+        assertEquals(
+            2,
+            DependencyRules.checkDbMigrationExternal(listOf("org.springframework.boot:spring-boot-starter", "org.seasar.doma:doma-core")).size,
+        )
+    }
 }

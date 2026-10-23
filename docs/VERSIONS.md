@@ -133,3 +133,19 @@ Dependabot（D-012）が 4.2.x の PR を出したら、本計画に従って処
 | `checkModuleDependencies` / `ktlintCheck` | 成功（7 モジュール） |
 | repo-hygiene | 成功 |
 | Docker / Testcontainers | **未実施**（対象のテストがまだ無い） |
+
+## 9. T2.3 での実測結果（2026-10-23, Stage 2-C。G-DB-0）
+GitHub Actions（`db-integration` ジョブ、ubuntu-24.04、Docker 28.0.4、Temurin 25、PR #7）で、`mysql:8.4` と `mysql:9.7` の使い捨てコンテナ（Testcontainers 2.0.5）に Flyway 13.11.1 + Connector/J 9.7.0 で V1/V2/`R__grants.sql` を適用して検証した。クラウドセッションでは Docker デーモンを起動できず実行していない。
+| 組合せ | 結果 | 根拠 |
+|---|---|---|
+| MySQL 8.4 × Flyway 13.11.1 × Connector/J 9.7.0（JDK 25） | **合格**: 統合テスト 44 件（実行 44・スキップ 0・失敗 0） | run 39882827525（head 13ccf21）。イメージ `mysql:8.4` の digest `sha256:76f035…` |
+| MySQL 9.7（9.7.4）× Flyway 13.11.1 × Connector/J 9.7.0（JDK 25） | **合格（D-069 の対処後）**: 同じ 44 件 | 同上。初回は 3 件失敗: ① `ml_model` の自己参照複合 FK が検査されない（D-069。DDL を変更して解消）、②③ は 8.4 と共通のテスト期待値の誤り（修正） |
+| Flyway 13.11.1 の MySQL 対応 | 8.4・9.7.4 の両方で V1/V2/R__ の適用、validate、migrate の再実行、失敗版の記録が動作 | 同上 |
+| Connector/J 26.x（G-DB-0b） | **未実施** | T2.4 で版だけ差し替えて検証する |
+| Doma × MySQL（G-DB-0 の後半） | **未実施** | T2.4 |
+| Cloud SQL 上の MySQL 8.4 / 9.7 | **未検証**（コンテナの成功を Cloud SQL の検証とは扱わない） | G-DB-1/5/6/7 は第5段階 |
+- **MySQL の採否**: 8.4 LTS を暫定の基準のまま維持する（D-046）。9.7 は上記のとおり実行できたが、D-069 の挙動（自己参照 FK の未検査）の原因確認が済むまで採用を判断しない。
+- Flyway 13.11.1 の community の jar にはテレメトリ送信の実装が無い（`NullFlywayTelemetryManager` のみ）ことを jar で確認した。
+- Boot の BOM が管理する Flyway は 12.4.0 だが、`:db-migration` は 13.11.1 を直接指定（BOM は制約なので高い方が選ばれる）。
+- テストで使った MySQL サーバの版: 9.7 は 9.7.4。8.4 のマイナー版はログに出していない（digest のみ記録）。
+

@@ -1,6 +1,50 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-10-22（第2段階 / Stage 2-B: T2.2）
+最終更新: 2026-10-23（第2段階 / Stage 2-C: T2.3）
+
+## Stage 2-C（claude/stage2-db-migration, PR #7）
+### 結果
+- **T2.3 実装完了**（`:db-migration`: Flyway V1/V2/`R__grants.sql`、CLI `--mode=info|validate|migrate`、単体・統合テスト、CI）。T2.4 以降には進んでいない。
+- **CI（GitHub Actions、Temurin 25）の結果**: run 39882827525（head 13ccf21、T2.3 の全コード）で **build (Temurin 25) / repo hygiene / db integration (MySQL 8.4) / db integration (MySQL 9.7) の 4 つがすべて成功**。統合テストは 44 件（実行 44・スキップ 0・失敗 0）を両バージョンで確認（ジョブ内の検証ステップが「0 件・スキップ・失敗」を失敗にする）。その後の docs だけのコミットで CI が再実行される（結果は PR のチェックを参照）。
+- 途中の失敗（隠さず記録）: 初回の統合テストは 8.4 で 2 件、9.7 で 3 件失敗した。共通の 2 件はテストの期待値の誤りと CLI の不具合（変更された Repeatable が `pending` に 2 回出る → `distinct()`、履歴の無い非空スキーマの validate は 10 が正）。9.7 だけの 1 件は **MySQL 9.7.4 が複合の自己参照 FK を検査しない**という実際の差（D-069、DDL の列順を変更して両方で検査されるようにした）。
+### セッションの環境（CLAUDE.md の記録義務）
+`java -version` = OpenJDK 21.0.12（JDK 25 なし。`-PjdkVersion=21` のスモークのみ）、Gradle 9.7.1 は動作、Docker は CLI のみでデーモン無し。`dockerd` を起動しようとしたがサンドボックスの判定で許可されなかったため、**クラウドセッションでは DB を起動していない**。したがって DB を使うテストの結果はすべて GitHub Actions のもの。Maven Central の 429 は前回と同じく GCS ミラーを `~/.gradle/init.d`（Git 外）に置いて回避。
+### 実装したもの
+| 区分 | ファイル（`db-migration/`） |
+|---|---|
+| SQL | `src/main/resources/db/migration/V1__baseline.sql`（20 表）・`V2__ops_calendar_ingest_ml.sql`（13 表）・`R__grants.sql`（4 ユーザー: リセット → 付与） |
+| CLI | `Cli.kt` `CliArgs.kt` `DbConfig.kt`（`Redactor`）`ErrorClassifier.kt` `ExitCodes.kt` `Json.kt` `MigrationEngine.kt` `FlywayEngine.kt` `DbMigrationMain.kt` |
+| 単体テスト（Docker 不要、57 件） | `CliArgsTest` `CliTest`（フェイクエンジンで全モードの終了コード・JSON・秘密の非出力）`DbConfigTest` `JsonTest` `ErrorClassifierTest` `ProcessExitCodeTest`（実プロセスで 2 / 75）`MigrationScriptsTest`（SQL の静的検査: 表の一覧、tenant_id 先頭、複合 FK、権限の範囲） |
+| 統合テスト（Testcontainers、44 件） | `MigrationApplyIntegrationTest` `SchemaConstraintsIntegrationTest` `GrantsIntegrationTest` `CliIntegrationTest` `MigrationFailureIntegrationTest`（+ `MySqlSupport` `CliHarness`） |
+| ビルド・CI | `build.gradle.kts`（`integrationTest` タスク）、`gradle/libs.versions.toml`（Flyway 13.11.1）、`build-logic`（Flyway は `:db-migration` だけ、`:db-migration` は Spring/Doma に依存しない）、`.github/workflows/ci.yml`（`db-integration` ジョブ 8.4/9.7。既存ジョブは変更なし）、`.editorconfig`（統合テストの SQL 文字列の行長） |
+### テスト結果の一覧（どこで実行したか）
+| テスト | 実行場所 | 結果 |
+|---|---|---|
+| `:db-migration:test` 57 件、`:build-logic:test`、`:domain:test`、`ktlintCheck`、`checkModuleDependencies` | クラウドセッション（JDK 21 のスモーク） | 成功。JDK 25 の結果ではない |
+| 同上 + `./gradlew build`（全モジュール） | GitHub Actions（JDK 25） | **成功**（run 39882827525） |
+| 統合テスト 44 件 × MySQL 8.4 | GitHub Actions | **成功**（スキップ 0） |
+| 統合テスト 44 件 × MySQL 9.7（9.7.4） | GitHub Actions | **成功**（D-069 の対処後。初回は 3 件失敗） |
+| 統合テストのクラウドセッションでの実行 | — | **未実施**（Docker デーモンを起動できない） |
+統合テストの確認項目（依頼の 1〜18）: 空 DB への V1/V2/R__ 適用、表・列・型・索引、複合 FK による越境拒否（主要な子表のすべて）、UNIQUE（app_user のメール全体一意、signals 自然キー、bot_run の二重実行、ml_model の ACTIVE、取込の冪等キー）、bot_run の 8 状態（INTERRUPTED 含む）と version の楽観ロック、signals の通知 4 状態と claim の原子性、マイクロ秒の往復、validate 0 / 10 / 1、DB 不達 75（実プロセス）、引数エラー 2、migrate 再実行の冪等、権限（許可・拒否・DDL 拒否・余分な権限の除去）、失敗版の記録と repair しないこと、GRANT 先ユーザー不在、migrate の GRANT 権限不足。
+### 判断（DECISIONS D-063〜D-069）
+D-063 app_user のメールは全体で UNIQUE / D-064 キー設計（odds の PK 順、signals の自然キーに cycle_id 列を設けない、通知 4 状態）/ D-065 設計案との差分と権限の範囲 / D-066 未決定のまま残したもの / D-067 技術構成 / D-068 CLI の出力と 75 の範囲 / D-069 MySQL 9.7.4 の自己参照 FK。
+### 未解決・注意（引き継ぎ。完了扱いにしない）
+- **MySQL 9.7 の採否**: 実行できたが、D-069 の挙動の原因（MySQL の不具合か仕様か）を確認していない。8.4 を暫定基準のまま維持（D-046）。Connector/J 26.x（G-DB-0b）・Doma（G-VER-2/3）は T2.4。
+- **Cloud SQL は未検証**: G-DB-6（migrate が GRANT/REVOKE できるか、新規ユーザーの既定権限）、G-DB-5、G-DB-7、G-DB-1、G-COST-1、G-DB-4（負荷）。MySQL コンテナの成功を Cloud SQL の検証とは扱わない。
+- T1.16 / T1.17 / T1.20 / T1.21 は**未完了のまま**。馬番・レース番号の上限 99（D-060）、`bets.status` の値、`race_evaluations` の一意キー（D-066）は保留。
+- T2.5 の残り（イメージ・Dependabot・release-manifest）、T2.7、T2.8、T5.0（infra 契約同期）、infra I-H1〜I-H7 は未着手。
+### infra への引継ぎ（追加。infra のセッションで反映）
+1. DB ユーザー `app` `ingest` `bot` `mltrain` は infra が**先に**作る（無いユーザーへの GRANT で migrate は失敗する）。`migrate` には `GRANT ALL PRIVILEGES ON <schema>.* TO migrate WITH GRANT OPTION` まで付ける（`R__grants.sql` は migrate の権限に触れない）。Cloud SQL で可能かは G-DB-6。
+2. `db-migration` の終了コード: **75 は接続系だけ**（認証失敗・DB 不在は 1）。`validate` の 10 には変更された `R__grants.sql` も含まれる。標準出力は JSON 1 行（CONTRACTS §4.2 の補足、0.4.1）。
+3. start の S4 で `validate` が 10 のとき、履歴の無い非空スキーマでも 10 になる（migrate が 1 で拒否する）。
+4. 観察（T3.4 で確定すべき）: CONTRACTS §3.3 は「トークンはハッシュだけ保存」と「HMAC-SHA256(token, …) で署名」を両方書いており、サーバがトークンを持たないと HMAC を検証できない。HMAC の鍵をどう導出するか（例: トークンから導いた別のハッシュ）を決める必要がある。DB 側は `agent.token_hash CHAR(64)` で足りる。
+5. `mltrain` は `flyway_schema_history` を読めないので、ml-train の `REQUIRED_SCHEMA_VERSION` 検査（§4.3）をどうするか要決定（T3.x）。
+### 次のタスク
+**T2.4**（`:persistence` の Doma DAO。引き継ぎは STAGE2_HANDOFF §14.2）。T2.7（`ModeProvider`）は並行して着手できる。ブランチは main から作り直す（PR #7 のマージ後）。
+### Git
+ブランチ `claude/stage2-db-migration`、PR #7（main 向け、マージはユーザー）。
+
+---
 
 ## Stage 2-B（claude/stage2-domain-vo, PR #6）
 ### 結果

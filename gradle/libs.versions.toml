@@ -3,6 +3,7 @@
 kotlin = "2.4.21"
 spring-boot = "4.1.2"
 ktlint = "1.8.0"
+flyway = "13.11.1"
 
 [libraries]
 # Boot の BOM（JUnit・Spring 系・mysql-connector-j などの版をここに従わせる）
@@ -10,6 +11,11 @@ spring-boot-dependencies = { module = "org.springframework.boot:spring-boot-depe
 spring-boot-starter = { module = "org.springframework.boot:spring-boot-starter" }
 spring-boot-starter-webmvc = { module = "org.springframework.boot:spring-boot-starter-webmvc" }
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
+# :db-migration だけが使う（D-067）。mysql-connector-j・testcontainers の版は Boot の BOM に従う
+flyway-core = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
+flyway-mysql = { module = "org.flywaydb:flyway-mysql", version.ref = "flyway" }
+mysql-connector-j = { module = "com.mysql:mysql-connector-j" }
+testcontainers-mysql = { module = "org.testcontainers:testcontainers-mysql" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 kotlin-test-junit5 = { module = "org.jetbrains.kotlin:kotlin-test-junit5" }

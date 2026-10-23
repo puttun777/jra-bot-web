@@ -24,7 +24,10 @@ bash .github/scripts/check-repo-hygiene.sh   # 秘密・実データの混入チ
 
 ## CI
 `.github/workflows/ci.yml`（main 向け PR と main への push）。Temurin 25 / Gradle Wrapper / 権限は `contents: read` のみ / Secrets 不使用。
-DB を使う統合テスト（Docker / Testcontainers）は対象のテストが入る T2.3 以降に追加する（**現時点は未実施**）。
+DB 統合テスト（`db-integration` ジョブ）: `:db-migration:integrationTest` が Testcontainers で使い捨ての **MySQL 8.4 と 9.7** を起動し、Flyway V1/V2/`R__grants.sql` と CLI を検証する（Docker が無ければ失敗し、スキップしない）。手元で実行するには Docker が必要: `MYSQL_IMAGE=mysql:8.4 ./gradlew :db-migration:integrationTest`。通常の `./gradlew build` は Docker 不要の単体テストだけ。
+
+## db-migration（Flyway）
+`java -jar`（または `./gradlew :db-migration:run --args=--mode=info`）に `DB_URL` `DB_USER` `DB_PASSWORD`（`migrate` ユーザー）を環境変数で渡す。`--mode=info|validate|migrate` は必須。終了コードは 0 / 1 / 2 / 10（validate: 未適用あり）/ 75（DB 不達）。契約は `docs/CONTRACTS.md` §4.2。アプリの起動時には実行しない。
 
 ## Git に含めないもの
 実データ（JV-Data・SQLite・DB ダンプ）、学習済みモデル（`*.pkl` 等）、秘密情報、JV-Link SDK の資料、ビルド生成物（`.gitignore` と `repo-hygiene` ジョブで防ぐ）。テストデータは合成データだけを使う。

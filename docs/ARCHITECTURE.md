@@ -100,6 +100,7 @@ dashboard ─読取（DTO）─▶ MySQL        export-dataset ─▶ GCS datase
 | `V2__ops_calendar_ingest_ml.sql` | 開催: `race_day`、`race_schedule`、`race_schedule_event`、`calendar_override`、`bot_run`。取込: `agent`、`agent_registration_code`、`agent_heartbeat`、`agent_nonce`、`ingest_batch`、`ingest_raw`（生レコード。保持期間は規約回答後）、`ingest_gap`。ML: `ml_model`。通知の claim は `signals` の UNIQUE と送信状態列で行う（別の表は作らない） |
 | `R__grants.sql` | 用途別ユーザーの REVOKE/GRANT（CONTRACTS §8.2。G-DB-6 で成立するか確認） |
 | V3 以降 | 追加だけ（expand/contract）。V1/V2 は運用を始めた後は変更しない（運用前の第2〜4段階は、PR の中でなら作り直してよい。最初の本番 migrate で凍結する） |
+- **実装済み（T2.3、DECISIONS D-063〜D-069）**: 正本は `db-migration/src/main/resources/db/migration/`。設計案からの差分は D-064/D-065（odds の PK 順、`app_user` のメールは全体 UNIQUE、`signals.notify_state`、`bot_run` の 8 状態、`ml_model.signature_sha256` など）。
 - 共通の規約: `utf8mb4`、コード列は `ascii_bin`、`DATETIME(6)` は UTC、`DOUBLE`（確率・オッズ）、複合 FK は `(tenant_id, …)`、予約語は改名する（`combo_key`、`rank_no`、`sample_count`、`race_date`）。V1 では `tenant` に行を入れない。
 
 ## 6. セキュリティ
