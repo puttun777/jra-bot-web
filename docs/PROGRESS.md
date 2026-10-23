@@ -38,7 +38,10 @@
 ### 未解決のまま保持（このセッションでは変更していない）
 T1.16（JRA-VAN 利用条件）、T1.17（JV-Link 公式仕様）、T1.20（実 SQLite・設定・モデル）、T1.21（数値挙動の承認: E6/E12/E14/H4/H10）、T3.0（Windows 実機 PoC）、infra I-H1〜I-H9、T5.0（infra 契約同期）、Cloud SQL・GCS 等の実環境検証（G-*）、MySQL 9.7 の本番採否、Connector/J 26.x の採否、bot-run の checkpoint・SIGTERM、本番 release-manifest、ml-train イメージ。branch protection の required checks を `ci gate` のみにする作業（ユーザー作業）も未確認。
 ### CI・PR
-（PR 作成後に追記）
+- **PR #17**（main 向け。マージはユーザー）: https://github.com/puttun777/jra-bot-web/pull/17
+- コード・テスト・docs を含むコミット 35f9e79 の CI run **39946864540**: **ci gate 成功**。全ジョブ成功 — changes and repo hygiene / build (Temurin 25)（`Kotlin vs legacy golden comparison` ステップを含む）/ release tools and ci scripts / golden tests (Python 3.12) / db integration (MySQL 8.4)・(9.7) / images (build + smoke, no push)。`connectorj26` は設計どおり skipped（未実施。Connector/J 26.x の変更なし）。
+- 本コミット（この記録）自体も、PR 全体の差分で判定されるため同じジョブが走る。その run の結果は PR のチェックを参照（ここには追記しない）。
+- CI で未確認: ステップ内の比較出力（`GITHUB_STEP_SUMMARY`）の中身の目視。ジョブ全体の成功（比較不一致・申告と対応表の不一致・件数不足ならステップが失敗する）で確認した。
 ### 次の作業（T3.2 への引き継ぎ）
 - T3.2 はワイド/三連複: `BetStrategyBuilder` の見送りエントリの部分を、Plackett–Luce の確率（`_wide_pair_prob`/`_top3_set_prob`、重みは `p^α` で α を [0.1, 5] にクリップ、p は [1e-12, 0.99]）・実オッズ・流し/BOX・`*_max_prob`/`*_max_over_market`/`*_min_prob`・`ticket_allocation` に置き換える。`WinDecisionConfig.requireRealOddsForCombo=false`・実オッズ受け渡しの `UnsupportedDecisionScopeException` を外す。ゴールデンは `GD05-COMBO-001`（33 呼び出し、単純推定関数）を `KOTLIN_PORT` の supported に移し、GD05/GD06 の Plackett–Luce 経路（E8〜E11）のケースを `generate --add-new` で追加する（既存フィクスチャは書き換えない）。
 - `StrategyEntry.tickets`（現在は見送りエントリの空配列のみ）と、`BetSignal`/`SkipSignal` のワイド/三連複の経路、`hit_rate_bet_type_priority` の賭式順序のテストを足す。`max_total_bet_per_race` の tickets の stake 縮小も T3.2。
