@@ -9,12 +9,11 @@ LEGACY = os.environ.get("GOLDEN_LEGACY_PATH")
 
 @unittest.skipUnless(LEGACY, "GOLDEN_LEGACY_PATH 未設定（旧実装なし）")
 class RegenerationTest(unittest.TestCase):
-    def test_regenerated_files_equal_committed_bytes(self):
+    def test_regenerated_files_match_committed(self):
+        """バイト完全一致ではなく、各ケースの許容誤差内の一致（CPU による末尾桁の差を許す。D-101）。"""
         files = generate.generate_files(LEGACY)
         committed = {p.name: p.read_bytes() for p in C.FIXTURE_DIR.glob("*.json")}
-        self.assertEqual(set(files), set(committed))
-        for name in files:
-            self.assertEqual(files[name], committed[name], name)
+        self.assertEqual(generate.regeneration_problems(committed, files), [])
 
     def test_two_runs_identical(self):
         self.assertEqual(generate.generate_files(LEGACY), generate.generate_files(LEGACY))

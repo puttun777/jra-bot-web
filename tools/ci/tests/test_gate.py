@@ -10,7 +10,8 @@ from tools.ci import classify, gate
 
 def needs_for(plan: classify.Plan, results: dict | None = None, changes_result: str = "success") -> dict:
     """plan に従って『正しく実行された』needs を作る。results で上書き。"""
-    o = plan.outputs()
+    # GitHub は値が空文字のジョブ出力を needs から落とす（実 CI で db_suites='' が欠落した: D-102）。それを再現する
+    o = {k: v for k, v in plan.outputs().items() if v != ""}
     expected = {
         "build": plan.run_build, "release-tools": plan.run_release, "golden": plan.run_golden,
         "db-integration": bool(plan.db_matrix), "images": plan.run_images, "connectorj26": plan.run_connectorj26,
@@ -94,6 +95,27 @@ class GateTest(unittest.TestCase):
         n["changes"]["outputs"]["mode"] = "code"
         ok, problems = self.ok(n)
         self.assertFalse(ok)
+
+    def test_empty_outputs_are_dropped_by_github_and_still_pass(self):
+        """docs だけ・golden だけ等は db_suites が空 → GitHub は出力ごと落とす。それを欠落として落とさない。"""
+        golden_only = classify.classify(["tools/golden/generate.py"])
+        for plan in (DOCS, golden_only):
+            n = needs_for(plan)
+            self.assertNotIn("db_suites", n["changes"]["outputs"])
+            self.assertTrue(self.ok(n)[0], plan.reason)
+
+    def test_db_jobs_expected_but_suites_missing_fails_closed(self):
+        n = needs_for(PERSISTENCE)
+        del n["changes"]["outputs"]["db_suites"]
+        self.assertFalse(self.ok(n)[0])
+        n = needs_for(PERSISTENCE)
+        n["changes"]["outputs"]["db_suites"] = ""
+        self.assertFalse(self.ok(n)[0])
+
+    def test_missing_db_matrix_fails_closed(self):
+        n = needs_for(DOCS)
+        del n["changes"]["outputs"]["db_matrix"]
+        self.assertFalse(self.ok(n)[0])
 
     def test_missing_job_in_needs_fails(self):
         n = needs_for(KOTLIN)
