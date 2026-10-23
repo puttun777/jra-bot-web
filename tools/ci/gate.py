@@ -21,7 +21,8 @@ REQUIRED = {
     "images": lambda o: o["run_images"] == "true",
 }
 INFORMATIONAL = ("connectorj26",)
-OUTPUT_KEYS = ("mode", "reason", "run_build", "run_golden", "run_release", "run_images", "run_connectorj26", "db_matrix", "db_suites")
+# 常に値がある出力。db_suites は DB ジョブが無いとき空文字で、GitHub は空文字の出力を needs から落とす（D-102）ので別扱い
+OUTPUT_KEYS = ("mode", "reason", "run_build", "run_golden", "run_release", "run_images", "run_connectorj26", "db_matrix")
 
 
 def evaluate(needs: dict) -> tuple[bool, list[str], list[str]]:
@@ -33,6 +34,8 @@ def evaluate(needs: dict) -> tuple[bool, list[str], list[str]]:
         return False, ["変更判定ジョブ(changes)が成功していない。スキップされたジョブを信用できない"], ["| changes | - | " + str((changes or {}).get("result")) + " | NG |"]
     outputs = changes.get("outputs") or {}
     missing = [k for k in OUTPUT_KEYS if k not in outputs]
+    if outputs.get("db_matrix") not in (None, "[]", "") and not outputs.get("db_suites"):
+        missing.append("db_suites")  # DB ジョブを走らせるのにスイートが分からない → 安全側で失敗
     if missing or outputs.get("mode") not in ("docs", "code", "full"):
         return False, [f"変更判定の出力が不正: 欠落={missing} mode={outputs.get('mode')!r}"], []
     expected_any = False

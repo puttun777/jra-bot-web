@@ -17,7 +17,7 @@
 
 ## 環境構築
 
-Python 3.12 系（`requires-python >=3.12,<3.14`。CI は 3.12。3.12.3 と 3.13 で同一バイトの再生成を確認）。依存は numpy 1 つだけ（`requirements.txt`、版は固定）。`verify` / `compare` / テスト（旧実装を使わないもの）は標準ライブラリのみ。
+Python 3.12 系（`requires-python >=3.12,<3.14`。CI は 3.12。3.12.3 と 3.13 の手元では同一バイト。ただし CI のランナー間では浮動小数の最後の 1〜2 桁が変わり得るため、再生成の判定はバイト一致ではなく許容誤差内の一致: D-101）。依存は numpy 1 つだけ（`requirements.txt`、版は固定）。`verify` / `compare` / テスト（旧実装を使わないもの）は標準ライブラリのみ。
 
 ```bash
 python3 -m venv .venv-golden && .venv-golden/bin/pip install -r tools/golden/requirements.txt
@@ -36,7 +36,7 @@ git -C /path/to/jra-bot checkout --detach f7dbf69fd8940121782870de902e8c449e6ca1
 リポジトリのルートで実行する。
 
 ```bash
-# 再生成して、コミット済みと完全一致するか確認（書き込まない。CI はこれを使う）
+# 再生成して、コミット済みと一致するか確認（書き込まない。CI はこれを使う。浮動小数は各ケースの許容誤差内、他は完全一致）
 .venv-golden/bin/python -m tools.golden.generate --legacy-path /path/to/jra-bot --check
 # 明示的な更新（fixtures/ を上書き。git diff を PR で確認すること。CI は絶対に実行しない）
 .venv-golden/bin/python -m tools.golden.generate --legacy-path /path/to/jra-bot --update
