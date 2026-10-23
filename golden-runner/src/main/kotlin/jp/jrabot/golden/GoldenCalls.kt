@@ -4,18 +4,30 @@ import jp.jrabot.domain.decision.BetSignal
 import jp.jrabot.domain.decision.BetStrategyBundle
 import jp.jrabot.domain.decision.BetType
 import jp.jrabot.domain.decision.BetTypeMode
+import jp.jrabot.domain.decision.BetStrategyBuilder
+import jp.jrabot.domain.decision.ComboOdds
+import jp.jrabot.domain.decision.ComboOddsEstimate
+import jp.jrabot.domain.decision.ComboRaceContext
+import jp.jrabot.domain.decision.ComboSettings
+import jp.jrabot.domain.decision.ComboTicket
 import jp.jrabot.domain.decision.DecisionHorse
 import jp.jrabot.domain.decision.DecisionSignal
 import jp.jrabot.domain.decision.EvMath
 import jp.jrabot.domain.decision.KellyMath
+import jp.jrabot.domain.decision.LegacySimpleComboProbability
 import jp.jrabot.domain.decision.LegacyZeroDivisionException
 import jp.jrabot.domain.decision.MarketProbability
 import jp.jrabot.domain.decision.OddsPopularitySnapshot
 import jp.jrabot.domain.decision.PriorityMode
+import jp.jrabot.domain.decision.ProbRaw
 import jp.jrabot.domain.decision.SkipSignal
 import jp.jrabot.domain.decision.SnapshotFilters
+import jp.jrabot.domain.decision.SanrenpukuKey
 import jp.jrabot.domain.decision.SnapshotsNewestFirst
 import jp.jrabot.domain.decision.StrategyEntry
+import jp.jrabot.domain.decision.WideKey
+import jp.jrabot.domain.decision.WideOddsRange
+import jp.jrabot.domain.decision.WinStake
 import jp.jrabot.domain.decision.WinDecisionConfig
 import jp.jrabot.domain.decision.WinDecisionEvaluator
 import tools.jackson.databind.JsonNode
@@ -38,6 +50,11 @@ object GoldenCalls {
             "estimate_prob_normalized",
             "check_odds_drop",
             "check_popularity_surge",
+            "estimate_wide_odds",
+            "estimate_trifecta_odds",
+            "calculate_wide_prob",
+            "calculate_trifecta_prob",
+            "suggest_multiple_bet_strategies",
             "evaluate_odds",
         )
 
@@ -122,6 +139,28 @@ object GoldenCalls {
                 SnapshotFilters.checkPopularitySurge(snapshots(a.get("recent_snapshots")), a.int("current_popularity"), threshold)
             }
 
+            "estimate_wide_odds" -> {
+                kwargs(a, setOf("num_horses")) // 旧実装は num_horses を使わない
+                ComboOddsEstimate.wide(a.double("win_odds"))
+            }
+
+            "estimate_trifecta_odds" -> {
+                kwargs(a, setOf("num_horses"))
+                ComboOddsEstimate.trifecta(a.double("win_odds"))
+            }
+
+            "calculate_wide_prob" -> {
+                LegacySimpleComboProbability.wide(a.double("win_prob"), a.get("odds_list").size() == 0)
+            }
+
+            "calculate_trifecta_prob" -> {
+                LegacySimpleComboProbability.trifecta(a.double("win_prob"), a.get("odds_list").size() == 0)
+            }
+
+            "suggest_multiple_bet_strategies" -> {
+                suggestMultipleBetStrategies(a)
+            }
+
             "evaluate_odds" -> {
                 evaluateOdds(a)
             }
@@ -191,7 +230,129 @@ object GoldenCalls {
             "win_odds_max",
             "win_prob_min",
             "win_ratio_min",
+            "top_k_partners",
+            "max_tickets_per_type",
+            "box_size",
+            "wide_min_prob",
+            "wide_max_prob",
+            "sanrenpuku_min_prob",
+            "sanrenpuku_max_prob",
+            "plackett_luce_alpha",
+            "wide_max_over_market",
+            "sanrenpuku_max_over_market",
+            "wide_odds_map",
+            "sanrenpuku_odds_map",
         )
+
+    /** 組合せ生成の引数（`ComboSettings`）。無い引数は [base] の値。 */
+    private fun comboSettings(
+        k: JsonNode?,
+        base: ComboSettings,
+    ): ComboSettings {
+        fun d(name: String): Double? = k?.get(name)?.takeUnless { it.isNull }?.asDouble(name)
+
+        fun i(name: String): Int? = k?.get(name)?.takeUnless { it.isNull }?.asInt(name)
+        return ComboSettings(
+            topKPartners = i("top_k_partners") ?: base.topKPartners,
+            maxTicketsPerType = i("max_tickets_per_type") ?: base.maxTicketsPerType,
+            boxSize = i("box_size") ?: base.boxSize,
+            wideMinProb = d("wide_min_prob") ?: base.wideMinProb,
+            wideMaxProb = d("wide_max_prob") ?: base.wideMaxProb,
+            sanrenpukuMinProb = d("sanrenpuku_min_prob") ?: base.sanrenpukuMinProb,
+            sanrenpukuMaxProb = d("sanrenpuku_max_prob") ?: base.sanrenpukuMaxProb,
+            plackettLuceAlpha = d("plackett_luce_alpha") ?: base.plackettLuceAlpha,
+            wideMaxOverMarket = d("wide_max_over_market") ?: base.wideMaxOverMarket,
+            sanrenpukuMaxOverMarket = d("sanrenpuku_max_over_market") ?: base.sanrenpukuMaxOverMarket,
+        )
+    }
+
+    /**
+     * 実オッズの注入。JSON ではタプルのキーを表せないので、ワイドは `[[馬番, 馬番, 下限, 上限], …]`、三連複は `[[馬番, 馬番, 馬番, オッズ], …]`
+     * （`tools/golden/adapter.py` が旧実装の辞書 `{(a, b): (low, high)}` / `{(a, b, c): odds}` に直す）。キーは昇順で与える（旧実装は昇順のキーで検索する）。
+     */
+    private fun comboOdds(k: JsonNode?): ComboOdds {
+        val wide = LinkedHashMap<WideKey, WideOddsRange>()
+        k?.get("wide_odds_map")?.takeUnless { it.isNull }?.values()?.forEach { r ->
+            wide[WideKey.of(r[0].asInt("wide_odds_map[0]"), r[1].asInt("wide_odds_map[1]"))] =
+                WideOddsRange(r[2].asDouble("wide_odds_map[2]"), r[3].asDouble("wide_odds_map[3]"))
+        }
+        val sanrenpuku = LinkedHashMap<SanrenpukuKey, Double>()
+        k?.get("sanrenpuku_odds_map")?.takeUnless { it.isNull }?.values()?.forEach { r ->
+            sanrenpuku[SanrenpukuKey.of(r[0].asInt("sanrenpuku_odds_map[0]"), r[1].asInt("sanrenpuku_odds_map[1]"), r[2].asInt("sanrenpuku_odds_map[2]"))] =
+                r[3].asDouble("sanrenpuku_odds_map[3]")
+        }
+        return ComboOdds(wide, sanrenpuku)
+    }
+
+    private val SUGGEST_KWARGS =
+        setOf(
+            "bankroll",
+            "allowed_bet_types",
+            "probs_by_umaban",
+            "wide_odds_map",
+            "sanrenpuku_odds_map",
+            "top_k_partners",
+            "max_tickets_per_type",
+            "box_size",
+            "wide_min_prob",
+            "wide_max_prob",
+            "sanrenpuku_min_prob",
+            "sanrenpuku_max_prob",
+            "ev_shrink_factor",
+            "plackett_luce_alpha",
+            "wide_payout_rate",
+            "sanrenpuku_payout_rate",
+            "wide_max_over_market",
+            "sanrenpuku_max_over_market",
+            "kelly_fraction",
+            "min_bet",
+            "max_bet",
+            "require_real_odds_for_combo",
+            "ticket_allocation",
+            "prob_source",
+        )
+
+    /**
+     * 旧 `suggest_multiple_bet_strategies` の直接呼び出し（`evaluate_odds` と同じ経路: 賭けの方式の引数は `None`）。確率は `probs_by_umaban`
+     * （`{"馬番": 確率}`）で**全馬分**を与える（無い馬の 1/オッズ近似は未対応）。戻り値は `evaluate_odds` のシグナルの `bet_strategy` と同じ形。
+     */
+    private fun suggestMultipleBetStrategies(a: JsonNode): JsonNode {
+        val k = kwargs(a, SUGGEST_KWARGS)
+        val horses =
+            a.get("odds_list").values().map {
+                DecisionHorse(umaban = it.int("umaban"), odds = it.double("odds"), popularity = it.int("popularity"))
+            }
+        val pm = k?.get("probs_by_umaban")?.takeUnless { it.isNull } ?: throw UnsupportedGoldenCall("probs_by_umaban が必要（1/オッズ近似は未対応）")
+        val probs = horses.map { h -> (pm.get(h.umaban.toString()) ?: throw UnsupportedGoldenCall("probs_by_umaban に馬${h.umaban}が無い")).asDouble("probs_by_umaban") }
+        val d = WinDecisionConfig.legacyFunctionDefaults()
+
+        fun optD(name: String): Double? = k.get(name)?.takeUnless { it.isNull }?.asDouble(name)
+        val betTypes =
+            k.get("allowed_bet_types")?.takeUnless { it.isNull }?.values()?.map { t ->
+                BetType.fromLabelOrNull(t.stringValue()) ?: throw UnsupportedGoldenCall("未知の賭式: ${t.stringValue()}")
+            }?.toSet()
+        val config =
+            d.copy(
+                bankroll = optD("bankroll") ?: d.bankroll,
+                betTypes = betTypes,
+                evShrinkFactor = optD("ev_shrink_factor") ?: d.evShrinkFactor,
+                widePayoutRate = optD("wide_payout_rate") ?: d.widePayoutRate,
+                sanrenpukuPayoutRate = optD("sanrenpuku_payout_rate") ?: d.sanrenpukuPayoutRate,
+                kellyFraction = optD("kelly_fraction") ?: d.kellyFraction,
+                minBet = optD("min_bet") ?: d.minBet,
+                maxBet = optD("max_bet") ?: d.maxBet,
+                requireRealOddsForCombo = k.get("require_real_odds_for_combo")?.let { it.booleanValue() } ?: d.requireRealOddsForCombo,
+                ticketAllocation = k.get("ticket_allocation")?.takeUnless { it.isNull }?.stringValue() ?: d.ticketAllocation,
+                probSource = k.get("prob_source")?.takeUnless { it.isNull }?.stringValue() ?: "unknown", // 旧関数の既定ラベル
+                combo = comboSettings(k, d.combo),
+            )
+        val stake = WinStake(config.evShrinkFactor, config.kellyFraction, config.bankroll, config.minBet, config.maxBet, config.probSource)
+        val race = ComboRaceContext(horses, probs, comboOdds(k), config.combo)
+        val bundle =
+            BetStrategyBuilder.build(a.int("umaban"), ProbRaw(a.double("win_prob")), a.double("win_odds"), config, stake, race)
+                ?: throw UnsupportedGoldenCall("戦略が空になる呼び出しは未対応（旧実装は sum([]) = 0 の int を返す）")
+        return strategyJson(bundle)
+    }
 
     private fun evaluateOdds(a: JsonNode): JsonNode {
         val k = kwargs(a, EVALUATE_KWARGS)
@@ -256,6 +417,7 @@ object GoldenCalls {
                 winOddsMax = optD("win_odds_max"),
                 winProbMin = optD("win_prob_min"),
                 winRatioMin = optD("win_ratio_min"),
+                combo = comboSettings(k, d.combo),
             )
 
         val horses =
@@ -269,7 +431,7 @@ object GoldenCalls {
                     snapshots(s.get(u.toString()) ?: nodes.arrayNode())
                 }
             }
-        val result = WinDecisionEvaluator(config, provider).evaluate(horses)
+        val result = WinDecisionEvaluator(config, provider).evaluate(horses, comboOdds(k))
 
         val rc = result.legacyRejectCounts
         return obj(
@@ -395,10 +557,30 @@ object GoldenCalls {
                 "skip_reason" to e.skipReason,
                 "strategy" to e.strategy,
             )
-        if (e.isComboSkip) {
+        if (e.type != BetType.WIN) {
+            // ワイド/三連複: 見送りエントリは note と空の tickets、買い目があるときは kumi / combo_key も付く（旧実装の dict のとおり）
             o.set("note", node(e.note))
-            o.set("tickets", nodes.arrayNode())
+            o.set("tickets", arr(e.tickets.map { ticketJson(it) }))
+            if (e.kumi != null) {
+                o.set("kumi", node(e.kumi))
+                o.set("combo_key", node(e.kumi))
+            }
         }
+        return o
+    }
+
+    private fun ticketJson(t: ComboTicket): JsonNode {
+        val o =
+            obj(
+                "kumi" to t.kumi,
+                "odds" to t.odds,
+                "odds_note" to t.oddsNote,
+                "prob" to t.probRaw.value,
+                "prob_used" to t.probUsed.value,
+                "ev" to t.ev.value,
+                "source" to t.source.label,
+            )
+        t.stake?.let { o.set("stake", node(it)) }
         return o
     }
 }

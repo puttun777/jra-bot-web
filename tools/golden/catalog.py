@@ -56,11 +56,13 @@ KOTLIN_PORT = {
     "supported": [
         "GD01-EV-001", "GD01-KELLY-002", "GD02-PROB-001", "GD02-NORM-002", "GD03-FILTER-001", "GD09-EVAL-001",   # T3.1 の対象（既存）
         "GD03-SNAPSHOT-002", "GD04-WIN-HITRATE-003", "GD07-SIZING-004", "GD08-SELECT-003",                         # T3.1 で追加（evaluate_odds の単勝判定）
+        "GD05-COMBO-001",                                                                                          # T3.2: 単純推定関数（推定オッズ・旧 calculate_*_prob）。既存フィクスチャ
+        "GD05-PL-005", "GD05-FLOW-006", "GD05-BOX-007", "GD05-REAL-008", "GD05-FILTER-009",                        # T3.2 で追加: suggest_multiple_bet_strategies（直接）
+        "GD07-COMBO-STAKE-010", "GD06-EVAL-011",                                                                   # T3.2 で追加: 賭け額・配分 / evaluate_odds のワイド・三連複
     ],
     "unsupported": {
         "G1-MODEL-001": "ML の線形+Platt+市場ブレンド推論（T3.6）",
         "G2-HASH-001": "特徴量ハッシュ（T3.6）",
-        "GD05-COMBO-001": "ワイド/三連複の推定オッズ・確率（T3.2）",
         "GD10-DEFAULTS-001": "旧関数のシグネチャ既定値の突合。運用の既定値は T1.20/T3.8 で決める（D-016）",
     },
 }
