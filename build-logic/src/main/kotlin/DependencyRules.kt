@@ -52,6 +52,18 @@ object DependencyRules {
             "javax.persistence",
         )
 
+    /**
+     * Flyway は `:db-migration` だけが持つ（CONTRACTS §4.1: アプリの起動時にマイグレーションを実行しない。アプリのイメージに Flyway を入れない）。
+     * Spring Boot の Flyway 自動構成（`spring-boot-flyway` / `spring-boot-starter-flyway`）もアーティファクト名で禁止する。
+     */
+    fun isFlyway(
+        group: String?,
+        name: String,
+    ): Boolean = group?.startsWith("org.flywaydb") == true || name.contains("flyway", ignoreCase = true)
+
+    /** `:db-migration` は他の実行単位と独立し、Spring に依存しない。 */
+    val dbMigrationForbiddenGroups: List<String> = listOf("org.springframework", "org.seasar.doma")
+
     /** `:domain` から見て JDBC は標準ライブラリ（java.sql）なので、ソース側は別途ソース走査で検査する。 */
     val domainForbiddenImports: List<String> =
         listOf(
@@ -130,4 +142,23 @@ object DependencyRules {
                 .filter { imp -> domainForbiddenImports.any { imp.startsWith(it) } }
                 .map { "$file: import $it は :domain では禁止" }
         }
+
+    /** 入力は `モジュール -> 宣言された外部依存("group:name")`。Flyway が `:db-migration` 以外にあれば違反。 */
+    fun checkFlywayOnlyInDbMigration(externalByModule: Map<String, Set<String>>): List<String> =
+        externalByModule
+            .toSortedMap()
+            .filterKeys { it != DB_MIGRATION }
+            .flatMap { (module, deps) ->
+                deps
+                    .sorted()
+                    .filter { isFlyway(it.substringBefore(':'), it.substringAfter(':')) }
+                    .map { dep -> "$module → $dep は禁止（Flyway は :db-migration だけ）" }
+            }
+
+    /** `:db-migration` の外部依存の違反（Spring・Doma に依存しない）。 */
+    fun checkDbMigrationExternal(deps: Collection<String>): List<String> =
+        deps
+            .sorted()
+            .filter { dep -> dbMigrationForbiddenGroups.any { dep.substringBefore(':') == it || dep.substringBefore(':').startsWith("$it.") } }
+            .map { ":db-migration → 外部ライブラリ $it は禁止" }
 }

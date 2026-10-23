@@ -28,6 +28,7 @@ abstract class CheckModuleDependenciesTask : DefaultTask() {
         val moduleNames = project.subprojects.map { it.path }.toSet()
         val graph = mutableMapOf<String, Set<String>>()
         val domainGroups = mutableSetOf<String>()
+        val externalByModule = mutableMapOf<String, MutableSet<String>>()
         val importsByFile = mutableMapOf<String, List<String>>()
         val codeLinesByFile = mutableMapOf<String, List<Pair<Int, String>>>()
 
@@ -38,6 +39,9 @@ abstract class CheckModuleDependenciesTask : DefaultTask() {
                 for (d in conf.dependencies) {
                     // java-test-fixtures などが付ける自分自身への依存は除く
                     if (d is ProjectDependency && d.path != sub.path) deps += d.path
+                    if (d is ExternalModuleDependency && !DependencyRules.isBom(d.group, d.name)) {
+                        externalByModule.getOrPut(sub.path) { mutableSetOf() } += "${d.group}:${d.name}"
+                    }
                     if (sub.path == DependencyRules.DOMAIN && d is ExternalModuleDependency && !DependencyRules.isBom(d.group, d.name)) {
                         domainGroups += d.group
                     }
@@ -66,6 +70,8 @@ abstract class CheckModuleDependenciesTask : DefaultTask() {
                 DependencyRules.checkDomainExternalGroups(domainGroups) +
                 DependencyRules.checkDomainImports(importsByFile) +
                 DependencyRules.checkDomainQualifiedReferences(codeLinesByFile) +
+                DependencyRules.checkFlywayOnlyInDbMigration(externalByModule) +
+                DependencyRules.checkDbMigrationExternal(externalByModule[DependencyRules.DB_MIGRATION].orEmpty()) +
                 (DependencyRules.modules.filter { it !in moduleNames }.map { "$it が settings.gradle.kts に無い" })
         if (violations.isNotEmpty()) {
             throw GradleException("モジュール依存の違反 ${violations.size} 件:\n" + violations.joinToString("\n") { " - $it" })

@@ -15,3 +15,7 @@ ktlint_function_naming_ignore_when_annotated_with = Test, ParameterizedTest
 
 [*.{yml,yaml,toml,json}]
 indent_size = 2
+
+# 統合テストは SQL の文字列リテラルが長いので行長を制限しない
+[db-migration/src/test/kotlin/**/integration/*.kt]
+max_line_length = off
