@@ -9,7 +9,7 @@
 - **登録のみ（planned）**: G4, G5, G6, G7。**一部のみ生成（partial）**: GD02〜GD10, G2, G3（範囲と残作業は `tools/golden/catalog.py`）。implemented は GD01, G1 のみ。
 - **検証できた範囲**: 旧実装を固定コミットで 2 回実行して一致 → `--check` でコミット済みフィクスチャとバイト一致（Python 3.12.3 と 3.13、numpy 2.5.3）。manifest の sha256 で手編集を検知。比較器は正常/型/キー/順序/許容誤差/NaN/例外/未提供ケースを単体テストで確認。**未検証**: Kotlin 出力との比較（Kotlin 未実装）、実データ・実 config・実モデルでの挙動（T1.20）、時刻依存経路。
 - **テスト**: Python 単体テスト 51 件（旧実装あり: 51 実行/0 スキップ、なし: 4 スキップ）。ローカル成功。CI 結果は下記。
-- **CI**: （追記予定）
+- **CI（GitHub Actions）**: run 39921807006（head 6f24519、PR #11）で **7 ジョブすべて成功** — build (Temurin 25) / repo hygiene / db integration (MySQL 8.4) / db integration (MySQL 9.7) / connector/j 26.x check (MySQL 8.4) / connector/j 26.x check (MySQL 9.7) / **golden tests (Python 3.12)**（新規。verify・単体テスト 51 件（スキップ 0）・旧実装からの再生成の完全一致・比較器スモークを含む）。
 ### セッションの環境
 `java -version`/Gradle/Docker は今回の作業では未使用（Kotlin は変更していない。既存 6 ジョブの回帰は GitHub Actions で確認）。Python 3.13.16（ローカル）/ 3.12.3（互換確認）、numpy 2.5.3。参照元は `git clone` で取得でき、固定コミットを checkout 可能だった（公開リポジトリ）。
 ### 判断
