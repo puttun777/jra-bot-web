@@ -54,10 +54,10 @@ CI の実行範囲の決め方、分岐保護の設定、イメージのビル�
 | 7 | ゴールデンフィクスチャだけ | golden | 同上 |
 | 8 | 複数領域 | 各領域の和集合（DB は広い方に合わせる） | 同上 |
 | 9 | 変更判定失敗 | **全部**（fail closed。判定ジョブ自体が落ちれば gate が失敗） | 一時 git 以外のディレクトリで差分取得を失敗させて確認 |
-| 10 | 必須テスト失敗 | gate が失敗 → PR は赤 | gate の単体テスト（実 CI での故意の失敗は未実施） |
+| 10 | 必須テスト失敗 | gate が失敗 → PR は赤 | gate の単体テスト + **実 CI で確認**（マージ後の main の run 39931233623 と Dependabot の numpy PR の run 39931387962 で golden が失敗 → `ci gate` が失敗。D-101 の事象。故意の失敗ではない） |
 | 11 | 非必須の互換性テスト（connector/j 26.x）失敗 | gate は成功のまま（表に失敗を表示） | gate の単体テスト。ジョブ内も `continue-on-error` |
-| 12 | Dependabot の PR | 変更ファイルで決まる（gradle の版 → build + DB 全 + images + connector/j、Dockerfile → images、actions → 全、pip → golden） | classify の単体テスト。**実際の Dependabot PR は未検証**（有効化後の最初の PR で確認） |
-| 13 | main へのマージ後 | push の差分（`before..HEAD`）で同じ判定。月次のフル検証もある（D-099） | classify の単体テスト + 実 git での差分取得テスト。**実際の main push は PR のマージ後に確認** |
+| 12 | Dependabot の PR | 変更ファイルで決まる（gradle の版 → build + DB 全 + images + connector/j、Dockerfile → images、actions → 全、pip → golden） | classify の単体テスト。**実 PR で確認**（2026-10-23）: gradle-wrapper PR #14（run 39931421037）は build + db 8.4/9.7 + images が走り connector/j・Python は skipped、`ci gate` 成功（約 25 分）。numpy PR #13（run 39931387962）は hygiene + golden のみ（約 3 分）。グループ化（`gradle-minor-patch`・`python-minor-patch`）も確認。未確認: github-actions・docker の PR |
+| 13 | main へのマージ後 | push の差分（`before..HEAD`）で同じ判定。月次のフル検証もある（D-099） | classify の単体テスト + 実 git での差分取得テスト。**実 main push を確認**（run 39931233623、PR #12 のマージ）: CI 設定の変更を含むため全 10 ジョブが走った（課金約 35 分: 1+1+3+1+7+6+7+4+4+1）。docs だけの main push は未観測 |
 | 14 | `workflow_dispatch` でフル検証 | 全ジョブ + connector/j 26.x | classify の単体テスト。**実行は未実施**（ユーザーが Actions から手動実行） |
 
 ## 2. キャッシュ

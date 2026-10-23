@@ -1,6 +1,28 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-10-23（第2段階 / Stage 2-H: T2.5 後半）
+最終更新: 2026-10-23（第2段階 / Stage 2-H 追補: マージ後の実測と golden 再生成のフレーク修正）
+
+## Stage 2-H 追補（マージ後の実測と golden 再生成の修正。claude/stage2-images-ci を main から作り直し）
+### 経緯
+- T2.5 後半は PR #12 として 2026-10-23 09:21 に main へマージ済み。本追補は、**マージ後に判明した不具合の修正**と実測の記録だけ（Stage 3 には進んでいない）。
+- **不具合**: マージ後の main の CI（run 39931233623、head 97a063d）と、Dependabot の numpy PR #13（run 39931387962）で `golden tests (Python 3.12)` が失敗 → `ci gate` も失敗。原因は `tools/golden` の再生成テストがバイト完全一致を要求していたこと。`G1-MODEL-001` の `0.05767062618090029` が CI のランナーで `…027` に再生成された（2 ULP、CPU・libm の違いによる浮動小数の揺れ）。PR #11・#12 の CI と手元では同一バイトだったため、PR 時には見えなかった。T2.5 後半の変更とは無関係（T2.6 で入った検査の誤検知）。
+- **修正（D-101）**: 再生成の判定を「`expected_output` だけ、そのフィクスチャ自身の `comparison_rules` の許容誤差内。他（入力・出典・メタデータ・ルール）・型・キー・順序・件数・manifest（sha256 以外）は完全一致」に変更。完全一致のケース（ハッシュ・既定値）は完全一致のまま。新しい許容値は作らない。`verify`（コミット済みの sha256）と、同一環境内で 2 回実行して完全一致を要求する検査は不変。
+### テスト結果
+- golden の Python 単体テスト **62 件成功**（旧 51 件 + 許容の境界 11 件: 2 ULP の揺れは許容／ケースの許容超え・型変更・入力/出典/ルール/メタデータの変更・欠落/余分・manifest の sha256 以外・例外メッセージの変更・完全一致ケースは拒否）。旧実装（固定コミット f7dbf69、numpy 2.5.3）での再生成と `generate --check` も成功（ローカル、Python 3.13）。CI の実結果は下の「最新 CI」。
+- **この修正で CI の揺れが解消したかは、CI（別の CPU のランナー）で確認するまで未確認**。揺れは再現できていない（手元では常に同一バイト）ため、効果の確認は CI の golden ジョブの成功で行う。
+### マージ後の実測（これまで『未検証』だったもの）
+| 項目 | 結果 |
+|---|---|
+| main への push（run 39931233623） | CI 設定の変更を含むため全 10 ジョブが実行（課金 約 35 分: hygiene 1 / release-tools 1 / build 3 / golden 1 / db 8.4 7 / db 9.7 7 / images 6 / connector/j 8.4 4・9.7 4 / gate 1）。golden の失敗で `ci gate` が失敗（**必須テスト失敗でゲートが赤になることを実 CI で確認**）。docs だけの main push は未観測 |
+| Dependabot Gradle PR #14（run 39931421037） | `gradle-wrapper 9.7.1 → 9.8.2`（`gradle-minor-patch` グループ）。build + db 8.4/9.7 + images が実行、connector/j と Python は skipped、`ci gate` 成功（課金 約 25 分）。**マージしない**（Gradle の版はユーザー判断。VERSIONS のゲートに沿って確認してから） |
+| Dependabot pip PR #13（run 39931387962） | `numpy 2.5.3 → 2.5.4`（`python-minor-patch`）。hygiene + golden のみ実行（約 3 分）。golden は上記の不具合で失敗。**本修正を取り込んでから Dependabot に rebase させて確認する**（numpy を上げると『固定 numpy』の前提（D-090）が変わるため、マージ前にフィクスチャの再生成差分を人が見る） |
+| Dependabot の動作 | 変更ファイルの分類どおりにジョブが選択され、skipped は gate で『未実施』として扱われ成功に見えない。github-actions・docker の PR は未観測 |
+### 未解決・維持
+従前どおり（上の Stage 2-H の一覧）。追加: branch protection の required checks を `ci gate` だけにする作業は、ユーザー作業として残っている（未確認）。
+### 最新 CI
+（本追補の push 後の run を PR で確認し、結果を追記する）
+### ブランチ
+`claude/stage2-images-ci`（PR #12 のマージ後に main から作り直し。追補の PR は main 向け、マージはユーザー）。
 
 ## Stage 2-H（claude/stage2-images-ci, PR #12）
 ### 結果
