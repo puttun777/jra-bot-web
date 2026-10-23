@@ -25,7 +25,8 @@
 ### 最新 CI
 - run **39937556877**（head 703a100、PR #15。`tools/ci` の変更のため connector/j 以外の全ジョブ）: **8 ジョブすべて成功、`ci gate` 成功**、connector/j は設計どおり skipped（未実施）— changes and repo hygiene / release tools and ci scripts / golden tests (Python 3.12) / build (Temurin 25) / db integration (MySQL 8.4・9.7) / images (build + smoke, no push) / ci gate。課金の目安（ジョブごと分単位切り上げの合計）約 20 分: 1+1+1+2+4+5+5+1。
 - 先行 run 39937331660（head 75bda39、golden だけの変更）: golden は成功、`ci gate` が D-102 の不具合で失敗 → 703a100 で修正。
-- この追記コミットは docs だけなので、docs だけの経路（changes + gate のみ）の実 CI 結果は次の行に追記する。
+- docs だけの追記コミット（f476361）の run 39938260679 も同じ 8 ジョブが成功。**PR の変更判定は『コミット単位』ではなく『PR 全体（base との差分）』**なので、`tools/ci` を含む本 PR では docs だけの push でも全ジョブが走る（約 20 分/push）。したがって **docs だけの経路（changes + gate のみ）の実 CI での成功は、本 PR では確認できない**（未確認。マージ後の最初の docs だけ・golden だけの PR で確認する）。CI 設定を含む PR は push を少なくまとめること。
+- この記録のコミット自体も同じ理由で全ジョブが走る。その run の結果は PR のチェックを参照（ここには追記しない）。
 ### ブランチ
 `claude/stage2-images-ci`（PR #12 のマージ後に main から作り直し。追補の PR は main 向け、マージはユーザー）。
 
