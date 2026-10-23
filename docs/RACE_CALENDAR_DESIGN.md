@@ -1,6 +1,6 @@
 # RACE_CALENDAR_DESIGN（T1.3 開催日・発走予定・変更検知・bot 起動方式）
 
-設計のみ（実装は第3段階）。**識別子の更新（T1.11/D-040）**: レース識別は `race_id CHAR(12)`（+ `kai`/`nichime` NULL 可、`rt_key16` 導出）に統一した（旧データと互換）。前提: `JVLINK_DESIGN.md`（取得）、`CONTRACTS.md`（モード/プロトコル）、`DATA_SOURCE_COMPLIANCE.md`（データ取扱い）。タイムゾーンは常に **Asia/Tokyo**。単純な曜日・祝日判定は**使わない**。
+設計（実装は第3段階）。**T3.3 で §2〜§9 の開催日判定・calendar-check・手動補正・履歴・bot-run リースを実装した（結果と C01〜C28 の対応は末尾の §11）**。実際の DDL は `V2__ops_calendar_ingest_ml.sql`（§4 の DDL 案より優先）。**識別子の更新（T1.11/D-040）**: レース識別は `race_id CHAR(12)`（+ `kai`/`nichime` NULL 可、`rt_key16` 導出）に統一した（旧データと互換）。前提: `JVLINK_DESIGN.md`（取得）、`CONTRACTS.md`（モード/プロトコル）、`DATA_SOURCE_COMPLIANCE.md`（データ取扱い）。タイムゾーンは常に **Asia/Tokyo**。単純な曜日・祝日判定は**使わない**。
 
 ## 0. 検出能力の確度（実現済みとして扱わない）
 | 能力 | 想定ソース | 確度 | 扱い |
@@ -329,3 +329,43 @@ Scheduler は「固定間隔で `app --task=calendar-check` を起動するだ�
 | D-027 | 起動判定(calendar-check)と本処理(bot-run)を分離。Scheduler は固定間隔、判断はアプリ内 | 案 |
 | D-028 | クラウド依存は `JobLauncher/ModeProvider/Clock` ポートの背後に隔離 | 案 |
 | 未確認 | YS/TC/AV/CC/WE/JC の項目位置、RA の発走時刻が出馬表前に入るか、延期/代替開催の表現、0B14 の更新遅延、データ区分9 の運用実態 | T1.17 |
+
+## 11. 実装状況（T3.3 / 2026-10-23。判断は DECISIONS D-122〜D-129）
+**実装済み**（`:domain` の `jp.jrabot.domain.calendar`・`bot`、`:persistence`、`:bot`）:
+| 領域 | 実装 | 設計との差・補足 |
+|---|---|---|
+| 有効予定の導出 | `EffectiveCalendar.derive`（純粋関数）。結果 `CONFIRMED / NO_RACE_CONFIRMED / UNKNOWN / STALE / UNCONFIRMED / CANCELLED / POSTPONED` + 根拠 `SOURCE / MANUAL` | 曜日・祝日は使わない（構造検査 `CalendarSourceGuardTest`）。行が無い日は UNKNOWN。開催なしの確認には新しい**取得の事実**が必要で、T3.4/T3.5 まで存在しない（本番は `NoScheduleFetchFacts`） |
+| 状態遷移 | `RaceScheduleTransitions`（§2.2）・`RaceDayTransitions`（§2.1）・`BotRunStateMachine`（§6.3 + CONTRACTS §9.2） | 図に無い辺は拒否。ANNOUNCED→DELETED は拡張（一次未確認）。MONITORING 以降の進行の DB 反映は T3.8/T3.9 |
+| 版の比較 | `SourceVersion`（作成日 → 区分。9/0 は強い値、同日の 9 と 0 は決めない） | 一次確認は T1.17（暫定） |
+| 更新と履歴 | `RaceScheduleUpdater`・`RaceDayUpdater` + 各 Repository（更新と `race_schedule_event` を同一トランザクション、`dedup_hash` で冪等、競合・不在では履歴なし） | 状態遷移だけの変化は履歴の種類が DDL に無いので保存しない（D-125）。履歴の生成元で未実装: SCRATCH・JOCKEY_CHANGE・COURSE_CHANGE・WEATHER（0B14 差分: T3.4）、STALE・FETCH_FAILURE の**生成**（追記 API は実装済み。呼ぶのは取込側 T3.4・reconcile） |
+| 手動補正 | `CalendarOverrideService`・`CalendarOverrideRepository`（追記と取消。同一トランザクションで MANUAL_OVERRIDE・MANUAL_REVOKE）。優先順位は D-124 | 管理 API・認可は Stage 4。DB 権限は `app` のみ書込み（`bot` は読取り） |
+| calendar-check | `CalendarCheckService`・`CalendarCheckPolicy`・`CalendarCheckTaskHandler`（`--task=calendar-check`）。理由は enum、終了コードは D-128 | 起動要求は重複し得る。本番の起動基盤は未実装（`UnconfiguredJobLauncher`=exit 1） |
+| bot-run リース | `BotRunRepository.acquire / heartbeat / transition / saveCheckpoint`（DB の UNIQUE・行ロック・版）。D-127 | 業務ループ・SIGTERM の業務 checkpoint は T3.8 |
+| 手動起動の検証 | `ManualStartPolicy`（DENY_RUN・ALLOW_RUN・NOT_A_RACE_DAY） | API は Stage 4 |
+
+**C01〜C28 の対応**（自動テストの場所: D=`:domain` 単体、P=`:persistence` 統合、B=`:bot` 単体/統合）:
+| ID | 状況 | 確認した範囲 / 残り |
+|---|---|---|
+| C01 | 一部 | 判定・窓の境界（開始・終了の前後 1 秒）・起動要求（D,B）。**全レース SETTLED → COMPLETED までの業務は T3.8/T3.9** |
+| C02・C03 | 完了 | 曜日・祝日（2026-11-03・元日）に依らない同一結果（D,B） |
+| C04 | 完了（合成の事実） | 新しい取得の事実 + 予定なし → 開催なし、事実なし → UNKNOWN、古い → STALE（D,B）。**実際の取得は T3.4/T3.5** |
+| C05 | 完了 | STOPPED → NORMAL でも非開催日は起動しない（D,B） |
+| C06 | 完了 | 延期の当日は起動せず、振替先の日は起動（D,B） |
+| C07 | 一部 | 全レース中止 → CANCELLED・起動しない（D,B）。**実行中の DRAINING は T3.8** |
+| C08 | 完了 | 一部中止は当該レースだけ除外（D,B） |
+| C09 | 完了（導出まで） | 延期先不明 → exit 75、手動 POSTPONE_TO で解消（D,B）。アラートの通知本体は T3.7/T5 |
+| C10 | 一部 | TC の時刻変更 → TIME_CHANGE 履歴・窓の更新・古い取得時刻の拒否（D,P,B）。**実行中 run が次サイクルで反映は T3.8** |
+| C11 | 完了 | TC の取消 → REVOKED と元の時刻へ復元（D。履歴の永続化は P の一般経路） |
+| C12・C13 | 完了 | 臨時レースの追加（ADDED）、区分 0 は DELETED として保持し再読込・新しい版でも復活しない（D,B） |
+| C14・C15 | 完了 | 朝に RA 無し → UNCONFIRMED → 到着後に起動、確認が古い → STALE（D,B）。鮮度の境界（ちょうどは新鮮） |
+| C16 | **未対応**（スケジュールの鮮度のみ） | エージェント停止・ハートビート・オッズ鮮度・`ingest_gap` は T3.4/T3.5/T3.8 |
+| C17〜C19 | 完了 | 手動の開催日・時刻、開催なし、DENY_RUN は ALLOW_RUN に勝つ、取消・期限（P,D,B）。手動起動 API は Stage 4（判断は `ManualStartPolicy`） |
+| C20 | 完了 | 連続実行（起動要求の重複はあり得ると明記）と、bot-run の同時 2/8 本の取得で勝者 1 つ（P,B） |
+| C21 | 一部 | 期限切れ → 奪取、旧行 ABORTED、checkpoint を新しい実行へ引継ぎ（P,B）。**状態の再導出・二重通知なしは T3.8** |
+| C22 | **一部**（契約のみ） | STOPPED_BY_MODE・INTERRUPTED への遷移と checkpoint 同時保存（P）。**次サイクルでの検知・SIGTERM の業務処理は T3.8** |
+| C23 | 完了 | 起動時・実行中の DB 不達 → exit 75、再試行ループなし、起動要求なし（B,P） |
+| C24 | 完了 | JST 0 時の前後で評価する日が切り替わる。JVM の TZ が UTC・Asia/Tokyo・America/New_York でも同じ。DB は UTC のマイクロ秒（D,P,B） |
+| C25 | **未対応** | 確定成績の照合・再決済は T3.9 |
+| C26 | 完了 | 新しい版の後に古い版を再読込しても反映しない（D） |
+| C27 | **一部**（遷移表のみ） | SETTLING→INCOMPLETE→COMPLETED の遷移表と INCOMPLETE の日は bot-run を起動しない。reconcile の補完は T3.9 |
+| C28 | **未対応** | 14 時間の最大稼働の ABORT は T3.8 |

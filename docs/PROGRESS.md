@@ -1,6 +1,54 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-10-23（第3段階 / Stage 3-B: T3.2 ワイド・三連複の Plackett–Luce 確率・推定/実オッズ・流し/BOX・ticket_allocation の Kotlin 移植と旧 Python とのゴールデン比較）
+最終更新: 2026-10-23（第3段階 / Stage 3-C: T3.3 開催日制御・calendar-check・bot-run の DB リース・手動補正）
+
+## Stage 3-C（claude/stage3-calendar-lease）: T3.3 開催日制御・calendar-check・bot-run リース・手動補正
+### 結果（T3.3 の範囲で完了。**本番で動作する Bot ではない**。bot-run の業務ループは T3.8、実データ取込は T3.4）
+- **着手前の確認**: main は PR #18（T3.2）マージ後の 5cb4c3a（ci gate 成功を確認済みの f7f0048 を含む）。V1/V2 は**書き換えていない**、**V3 も作っていない**（理由は D-125）。参照元・infra は未変更。作業ブランチは `claude/stage3-calendar-lease`。
+- **実装したクラス**
+  | 層 | クラス | 内容 |
+  |---|---|---|
+  | `:domain` calendar | `EffectiveCalendar`・`EffectiveDay`・`DayVerdict` | DB の予定 + 取得の事実 + 手動補正から有効な開催日を導出（曜日・祝日なし。UNKNOWN と開催なしの確認を区別。D-123） |
+  | | `RaceScheduleTransitions`・`RaceDayTransitions`・`BotRunStateMachine` | 状態遷移表（無効な遷移・終端からの復活を拒否） |
+  | | `SourceVersion`・`RaceDataKubun` | 取得元の版の比較（作成日 → 区分。0/9 は強い値。D-126） |
+  | | `ScheduleEvent`・`EventJson`・`ChangeResult` | 履歴（種類と race_id の整合・決定的な dedup_hash） |
+  | | `RaceScheduleUpdater`・`RaceDayUpdater`・`RaceScheduleObservation` | 取得内容の反映（古い版の拒否・遷移検証・TC・TC 取消・競合の再判定） |
+  | | `CalendarOverride`・`CalendarOverrideService`・`OverrideValue` | 手動補正（監査情報必須・期限・取消・追記と取消だけ。認可はしない） |
+  | | `WatchSettings`・`WatchWindow`・`CalendarSettings`・`CalendarCheckPolicy`・`CalendarCheckService`・`CalendarCheckReason` | 監視ウィンドウ（設定は既定なし）と起動判断・理由の enum・起動要求（モード再確認つき） |
+  | | `ManualStartPolicy`・`ScheduleFetchFactReader`（`NoScheduleFetchFacts`・合成用 `FixedScheduleFetchFacts`） | 手動起動の検証、取得の事実の口 |
+  | `:domain` bot | `BotRunLease.kt`（`LeaseRequest`・`LeaseSettings`・`AcquireResult` ほか）・`BotRunRepository` の拡張 | `acquire`・`heartbeat`・`transition`・`saveCheckpoint`（`tryStart`・`update` は削除） |
+  | `:persistence` | `RaceDayDao/RepositoryImpl`、`ScheduleEventDao/ScheduleEventStore/RepositoryImpl`、`CalendarOverrideDao/RepositoryImpl`、`BotRunRepositoryImpl`（書換え）、`RaceScheduleRepositoryImpl`（履歴つき）、`inTransactionRetryingDeadlock` | 追加 SQL: `RaceDayDao`（selectById/selectByDate/insert/updateIfVersion/advanceConfirmed）・`ScheduleEventDao`（selectByHash/selectByRace/selectByDate/insert）・`CalendarOverrideDao`（selectById/selectByDate/revoke。insert は自動生成）・`BotRunDao`（selectByIdForUpdate/selectByDate） |
+  | `:bot` | `CalendarCheckTaskHandler`・`UnconfiguredJobLauncher`・`CalendarSettingsParser`・`DbFailures` | `--task=calendar-check`（D-128）。他タスクは引き続きスタブ |
+  | `:db-migration` | `R__grants.sql` | `app` に `race_schedule_event` の INSERT だけを追加（手動補正の履歴を同一トランザクションで残すため。D-125） |
+- **イベント履歴の実装範囲**: 実装・検証した種類: ADDED・DELETED・CANCELLED・TIME_CHANGE・REVOKED（予定の更新）、DAY_STATUS・POSTPONED（開催日）、MANUAL_OVERRIDE・MANUAL_REVOKE（手動補正）、STALE・FETCH_FAILURE（追記 API のみ。**生成元は T3.4/reconcile**）。型だけ: SCRATCH・JOCKEY_CHANGE・COURSE_CHANGE・WEATHER。更新と履歴は同一トランザクション（履歴が失敗したら更新も戻る: FK 違反で実測）、`(tenant_id, dedup_hash)` で冪等、競合・不在では履歴なし、追記専用（更新・削除 API なし、DB 権限は INSERT のみ）。**レース状態の MONITORING 以降の進行は履歴の種類が DDL に無く、T3.3 では DB へ反映しない**。
+- **リース処理方式**（D-127）: INSERT（UNIQUE）→ 拒否されたら別トランザクションで稼働中の行を**主キーで行ロック**→ 有効なら AlreadyActive、`now >= lease_expires_at` なら旧行を ABORTED にして新行を挿入（奪取）。heartbeat・遷移・checkpoint は行ロックの下で所有者・状態・期限を検証して版つきで更新（奪取された旧実行は全操作が Lost）。デッドロック 1213 は取得だけ・有限回（3）・トランザクション単位で再試行し、他のエラーと上限超過は投げる。**並行テストで実際に見つけた欠陥**: 副インデックスで先にロックする実装は、主キーから更新する遷移とロック順が逆でデッドロックした → 順序を「主キー → 副インデックス」にそろえて解消（その後 3 回連続で全件成功）。
+- **実装した C01〜C28**: 完了 19（C02〜C06・C08・C09・C11〜C15・C17〜C20・C23・C24・C26）、一部 7（C01・C07・C10・C16・C21・C22・C27）、**未対応 2（C25・C28）**。内訳と残りは RACE_CALENDAR_DESIGN §11。**完成扱いにしていないもの**: 全レース SETTLED までの業務（C01）、実行中の DRAINING（C07）、実行中 run の次サイクル反映（C10）、エージェント停止と実データ鮮度（C16）、状態の再導出・二重通知なし（C21）、実行中の STOPPED・SIGTERM の業務処理（C22）、確定成績の照合（C25）、結果欠損の reconcile（C27）、14 時間の最大稼働（C28）。
+### テスト
+| 区分 | 結果（ローカル、JDK 21） |
+|---|---|
+| `:domain` 単体 | **632 件成功**（T3.2 の 488 + 144。新規: `SourceVersionTest`・`TransitionsTest`・`ScheduleEventTest`・`CalendarOverrideTest`・`WatchWindowTest`・`EffectiveCalendarTest`・`ScheduleUpdaterTest`・`CalendarCheckPolicyTest`/`CalendarCheckServiceTest`・`CalendarSourceGuardTest`・`LeaseAndDayModelTest` ほか。T3.1/T3.2 の計算・ゴールデンは**未変更**） |
+| `:persistence` 単体 | 33 件成功（`DeadlockRetryTest`・`BotRunAcquireContentionTest` など DB なし） |
+| `:persistence` 統合（**ローカルの MySQL 8.0.46。8.4/9.7 ではない**） | **153 件成功**（RaceDay・ScheduleEvent・CalendarOverride・BotRun のリースと並行・DeadlockRetry・越境・権限・Enum 契約・時刻の往復を含む） |
+| `:db-migration` 統合（同上） | 44 件成功（`app` の履歴 INSERT の許可と UPDATE/DELETE の拒否を追加） |
+| `:bot` 単体 / 統合（統合は同上） | 67 件 / 31 件成功（`CalendarCheckIntegrationTest` 22 件: C01〜C24 の導出と起動要求を本物の DB・本番の Spring 配線で確認。起動基盤・時計・取得の事実だけ合成の Fake） |
+| ktlint・`checkModuleDependencies` | 成功 |
+| Python `tools/ci` | 109 件成功（CI の下限と期待クラスの更新に合わせて `test_workflows` を更新） |
+| **未実施（ローカル）** | **MySQL 8.4 / 9.7 の統合テスト（Docker 不可。CI で実行）**、Kotlin ゴールデン比較・Python ゴールデン（変更なし。CI の `build`/`golden` が実行）、ingest/dashboard/cloud-gcp のテスト（未変更。CI）、イメージのビルド。完了判定の正は GitHub Actions（D-056） |
+### 並行実行テストの結果（ローカルの MySQL 8.0.46）
+2 本・8 本の同時取得（各 10 ラウンド）で勝者は常に 1 つ、期限切れのリースへ 8 本が同時に奪取して勝者 1 つ（旧行は ABORTED 1 行）、期限ちょうどの heartbeat と奪取の同時実行（40 ラウンド）は片方だけが勝つ、終了と新規取得の同時実行（40 ラウンド）で実行中の行は常に 1 つ以下、別テナント・別日付 8 本は全員成功、DB 切断中は例外（取得できたことにしない）で復旧後は動く、実際のデッドロック 2 本は再試行で両方成功。リース・デッドロックの 2 クラスは 3 回連続で成功。**8.4/9.7 での並行テストは CI の結果が正**（未確認）。補足: ingest/dashboard の統合テスト（今回未変更。ingest 9・dashboard 9）も同じローカルの MySQL で実行し、dashboard の『NORMAL 以外の書込みの拒否では DB 接続が増えない』（サーバの接続数の差が 1 であること）が 1 回だけ 2 になって失敗した（同じローカルサーバに別の JVM の接続が混ざった可能性が高く、再実行 2 回は成功。今回の変更とは無関係に見えるが、原因は未特定の再現なしの揺らぎとして記録）。
+### 環境・セッション
+`java -version`: OpenJDK 21（JDK 25 なし。ローカルは `-PjdkVersion=21`）。`./gradlew`: 9.7.1（Maven Central の 429 を再試行）。`docker info`: クライアントのみでデーモンなし（使えない）。そのため apt の MySQL 8.0.46 を直接起動してローカルの事前確認に使い、テスト支援クラスに**ローカル専用**の外部 MySQL モードを追加した（D-129。CI では使わない）。本番 GCP・Cloud SQL・実 JRA-VAN データには接続していない（合成データのみ）。
+### 未解決のまま保持（変更なし）＋ T3.3 で増えたもの
+- 変更なし: T1.16・T1.17・T1.20・T1.21・T3.0・infra I-H1〜I-H9・T5.0・実 GCP の検証ゲート・MySQL 9.7 の本番採否・Connector/J 26.x の採否・`0<odds<1` の取込境界・T3.8 の本格 checkpoint・SIGTERM・本番 release-manifest・ml-train イメージ・branch protection の required checks。
+- **新規（ユーザー確認が要る）**: ①`CALENDAR_WATCH_START_MINUTES`（120/240 の食い違い）・`PRESTART`・`SETTLE_DEADLINE`・`STALE_AFTER`・リース期限/heartbeat 間隔の運用値と、`prestart` の解釈（D-122）。②同一作成日の区分の順位・9 と 0 の優先・TC の版（T1.17 の一次確認。D-126）。③取得の事実（YSCH 成功）を DB のどこに持つか（T3.4）。④MONITORING 以降の履歴の種類（V3 の要否。T3.8）。⑤`app` への `race_schedule_event` INSERT の付与の承認（契約 0.4.6。T5.0 で infra と同期）。⑥`JobLauncher` の GCP 実装（T5 系）。
+### CI・PR
+- **PR**: （作成後に追記）
+- **CI**: （最新コミットの結果を確認後に追記）
+### 次の作業（T3.4 への引き継ぎ。今回は着手していない）
+- T3.4（取込 API・実データ取得）が使う入口と未決事項は `docs/STAGE2_HANDOFF.md` §14.9。取込側が `RaceScheduleUpdater`・`RaceDayUpdater`・`ScheduleEventWriter` を呼び、**取得の事実**（`ScheduleFetchFactReader` の実装）と `race_day.last_confirmed_at` の更新（`RaceDayUpdater.confirm`）を必ず行う（さもないと全日が UNKNOWN/STALE になり calendar-check は起動しない = fail closed）。
+- T3.8 が使う `BotRunRepository` の操作と、残りの C ケース（C07・C10・C16・C21・C22・C27・C28）は同ファイル。
+### ブランチ
+`claude/stage3-calendar-lease`（main の 5cb4c3a から作成。PR は main 向け、マージはユーザー）。
 
 ## Stage 3-B（claude/stage3-combo-strategy）: T3.2 ワイド・三連複の確率計算・買い目戦略
 ### 結果（T3.2 の範囲で完了。本番で動作する Bot ではない）

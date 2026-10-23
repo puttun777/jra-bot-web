@@ -97,7 +97,7 @@ class WorkflowRulesTest(unittest.TestCase):
         for needle in (":golden-runner:run", "tools.golden.kotlin_compare", "tools.golden.verify", "kotlin_coverage.json"):
             self.assertIn(needle, b)
         d = job_blocks(CI)["db-integration"]
-        for needle in ("integrationTest", ":persistence:integrationTest", ":bot:integrationTest :ingest:integrationTest :dashboard:integrationTest", "tests < 30", "tests < 98"):
+        for needle in ("integrationTest", ":persistence:integrationTest", ":bot:integrationTest :ingest:integrationTest :dashboard:integrationTest", "tests < 44", "tests < 153"):
             self.assertIn(needle, d)
         self.assertIn("check-repo-hygiene.sh", job_blocks(CI)["changes"])
         g = job_blocks(CI)["golden"]

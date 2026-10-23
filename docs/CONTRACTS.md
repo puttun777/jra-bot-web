@@ -37,6 +37,7 @@ web→Artifact Registry の push 権限と、infra 側の manifest 取得権限�
 | `MODEL_VERIFY_PUBKEY` | Terraform（公開値） | bot | 署名検証 |
 | `INGEST_TOKEN_PEPPER` | **Secret Manager**（`ingest-token-pepper`） | ingest / dashboard（発行） | エージェントトークンのハッシュ用ペッパー（§3.3） |
 | `DISCORD_WEBHOOK_URL` / `DISCORD_ERROR_WEBHOOK_URL` | **Secret Manager** | bot（通知）/ 全（エラー） | 通知 |
+| `CALENDAR_WATCH_START_MINUTES` / `CALENDAR_PRESTART_MINUTES` / `CALENDAR_SETTLE_DEADLINE_MINUTES` / `CALENDAR_STALE_AFTER_MINUTES` | Terraform（**運用値は未確定: D-016・D-122。既定値を置かない**） | bot（`--task=calendar-check` のみ必須） | 監視ウィンドウ（最初の発走の何分前から監視するか=1〜1440、さらに前の起動余裕=0〜1440、最後の発走の何分後まで起動してよいか=1〜1440）と、開催日の確認の鮮度（何分を超えたら古い=1〜10080）。**1 つでも欠落・不正なら calendar-check は exit 2**（DB にもモード確認にも進まない）。他のタスクでは不要。**0.4.6（T3.3 / D-122）** |
 | `RELEASE_ID` / `REQUIRED_SCHEMA_VERSION` | イメージに焼き込み（ビルド時） | 全 | 版の表示と ready 判定（§4.3）。**0.4.4**: `REQUIRED_SCHEMA_VERSION` は実行 jar の `jrabot-app.properties`（Gradle が生成）に焼き込まれ、**環境変数では上書きしない**（infra が渡す必要は無い）。`RELEASE_ID` は環境変数があれば表示用に使う |
 
 - 秘密は Secret Manager だけに置く。GitHub、イメージ、ログ、Terraform の state に秘密の値を置かない。値が state に載る Terraform リソースは使わない（第5段階）。
@@ -266,7 +267,7 @@ STOPPED 中の `ingest` 503、ビーコンのみ STOPPED、両方不達（UNKNOW
 | ユーザー | Secret | 使う実行単位 | 権限（`R__grants.sql` で定義、Flyway が適用） |
 |---|---|---|---|
 | `migrate` | `db-migrate-password` | db-migration | DDL と、他ユーザーへの GRANT/REVOKE |
-| `app` | `db-app-password` | dashboard | 全テナント表の SELECT。書込は管理操作の表（`calendar_override`、`agent`、`audit_log`、`ml_model.status` の昇格、`bot_run` への手動起動要求）だけ |
+| `app` | `db-app-password` | dashboard | 全テナント表の SELECT。書込は管理操作の表（`calendar_override`、`agent`、`audit_log`、`ml_model.status` の昇格、`bot_run` への手動起動要求）と、手動補正の履歴（`race_schedule_event` への **INSERT のみ**。補正の追記・取消と同じトランザクションで MANUAL_OVERRIDE・MANUAL_REVOKE を残すため。0.4.6 / D-125）だけ |
 | `ingest` | `db-ingest-password` | ingest | 取込先の表（`races` 系、`odds_snapshots`、`results`、`payouts`、`ingest_batch`、`ingest_raw`、`agent_heartbeat`、`agent_nonce` など）の SELECT/INSERT/UPDATE。DELETE は `agent_nonce` の期限切れだけ |
 | `bot` | `db-bot-password` | bot（全 `--task`） | 業務表の SELECT。判定・成績・実行管理の表（`signals`、`bets`、`bet_legs`、`race_evaluations`、`ticket_evaluations`、`bot_run`、`race_schedule` の状態など）の INSERT/UPDATE。DELETE は保持ポリシー対象の表だけ（`retention` 用。ドライランと管理者承認: D-043） |
 | `mltrain` | `db-mltrain-password` | ml-train | `ml_model` の SELECT/INSERT だけ（§5.1、D12） |
@@ -298,6 +299,7 @@ STOPPED 中の `ingest` 503、ビーコンのみ STOPPED、両方不達（UNKNOW
 | 1・その他 | 失敗（バグ・検証 NG・スキーマ版不足） | 例外、`REQUIRED_SCHEMA_VERSION` 未満 | 通知する |
 - `db-migration` だけは `10`（validate で未適用あり）を追加で使う（§4.2）。通常の Job（bot）は 10 を使わない。
 - **0.4.4 の補足（T2.8 / D-085）**: 設定不正（`OPS_MODE_SOURCE` の未設定・不正、`APP_ENV` の誤り、DB の環境変数の不足、本番での `bot` 以外の DB ユーザー）は **2**。想定外の例外は **1**（75 にしない）。Job の順序は 引数 → 設定 → モード（DB に触れない）→（NORMAL のみ）スキーマ版 → タスク。**スタブ（業務処理が未実装のタスク）は本番(`APP_ENV=prod`)で exit 1・理由 `TASK_NOT_IMPLEMENTED`**（成功に見せない）。`--task` ごとの引数: 共通 `--task`・`--tenant-id`（必須）、`bot-run` `--date` `--trigger`、`calendar-check`/`reconcile` `--date`、`retention` `--dry-run`、`export-dataset` なし（暫定）。
+- **0.4.6 の補足（T3.3 / D-122〜D-127）**: ① **`calendar-check` は実装済み**（他のタスクは引き続きスタブ。本番で exit 1）。終了コード: 起動を要求して受け付けられた=0（`LAUNCH_REQUESTED`。bot-run が始まったことではない）／起動しないのが正常（開催なし・窓の外・実行中・中止・延期・DENY_RUN・完了済み・確定した非 NORMAL）=0／**要確認（予定が不明・古い・未確認、延期先不明、発走時刻なし、モード UNKNOWN）=75**（起動しない=fail closed。通知して次の定期起動に任せる）／起動要求の一時失敗=75／起動要求の失敗（**起動基盤が未設定の本番の配線を含む**）=1／実行途中の DB 不達=75。② 起動要求（`JobLauncher.launch`）は冪等でなく、連続実行・手動との競合で**重複し得る**。二重処理は起動された bot-run の DB リース（`bot_run` の UNIQUE(active_slot)・行ロック・版）が阻止する（`AlreadyActive` は正常な終了で、異常ではない）。③ リースの期限・heartbeat 間隔は設定可能な値として設計し、運用値は T3.8 で確定する（D-122）。
 - infra の OPERATIONS_DESIGN §2.4 は「UNKNOWN なら exit 0」と書いている。web は **UNKNOWN を 75** にした（D-048）。開催日に GCS 障害で何もしなかったことに気付けないのを防ぐため。infra への引継ぎ事項として記録した。
 
 ### 9.2 SIGTERM（cancel）と checkpoint、再実行
@@ -393,3 +395,5 @@ STOPPED 中の `ingest` 503、ビーコンのみ STOPPED、両方不達（UNKNOW
 0.4.4（第2段階 / T2.8）: §2（`APP_ENV` 必須、`REQUIRED_SCHEMA_VERSION` は jar 焼き込み）、§3.2（`/internal/ops/mode` の診断の意味、`source:"file"`）、§4.3（スキーマ版の検証規則と ready の理由）、§9.1（設定不正=2、想定外=1、スタブの扱い、`--task` の引数）、§11（401/403 の区別、検証項目）に実装の補足。契約の意味は変えていない。infra への影響: ① `APP_ENV` を全アプリに必ず渡す、② `REQUIRED_SCHEMA_VERSION` を環境変数で渡す必要は無い、③ ready の本文に理由が入る、④ `INTERNAL_ID_TOKEN_AUDIENCE`/`IAP_AUDIENCE`/`OPS_SA_EMAIL` が無いとアプリは起動しない（T5.0 の確認項目）。
 
 0.4.5（第2段階 / T2.5 後半）: §10 に release-manifest の JSON Schema・プレビュー（ドライラン）の区別・検証規則、イメージの形式（`images.*` の形、ml-train 必須）、§1 のイメージの規約（non-root・ENTRYPOINT・PORT・HEALTHCHECK なし）を補足。契約の意味は変えていない。infra への影響: ① manifest を読むときは本番スキーマで検証し、`kind`/`deployable` を持つプレビューを拒否する、② Cloud Run のプローブ（startup / liveness）は infra 側で設定する、③ コンテナの `command` は上書きせず `args` だけを渡す（PROGRESS の I-H9）。
+
+0.4.6（第3段階 / T3.3）: §2 に calendar-check の設定の環境変数（既定なし）、§8.2 に `app` の `race_schedule_event` への INSERT（履歴の追記のみ）、§9.1 に calendar-check の終了コードと起動要求の重複の扱い。契約の意味は変えていない（追加のみ）。infra への影響: ① `bot` の calendar-check に `CALENDAR_*` の 4 つの環境変数を渡す（値はユーザー確認後。無いと exit 2）、② 起動基盤（Cloud Run Jobs の `JobLauncher`）は未実装で、calendar-check が起動を要求しても本番では `LAUNCHER_NOT_CONFIGURED`（exit 1）になる（T5 系）、③ 取得の事実（YSCH の成功）は T3.4/T3.5 まで存在しないので、行の無い日は `SCHEDULE_UNKNOWN`（exit 75）のまま、④ `R__grants.sql` の変更（`app` へ `race_schedule_event` の INSERT）は次回の migrate で適用される（T5.0 で同期）。

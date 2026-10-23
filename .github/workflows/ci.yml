@@ -122,13 +122,13 @@ jobs:
       # 偽の JWKS（ループバック）による署名検証。実 GCP・実 DB には接続しない。0 件・スキップ・失敗・期待クラスの欠落を許さない。
       - name: Verify that the app and persistence unit tests actually ran
         run: |
-          python3 .github/scripts/verify_test_results.py "persistence unit" persistence/build/test-results/test 23 \
-            "SchemaVersionTest,SchemaCheckClassificationTest,DbSettingsTest,MappingTest,PersistenceModuleTest,SqlTemplateTenantGuardTest"
-          python3 .github/scripts/verify_test_results.py "domain unit (incl. decision logic, T3.1)" domain/build/test-results/test 387 \
-            "EvMathTest,KellyMathTest,PythonCompatTest,MarketProbabilityTest,SnapshotFiltersTest,MarketBlendTest,WinStakeTest,WinDecisionEvaluatorTest"
+          python3 .github/scripts/verify_test_results.py "persistence unit" persistence/build/test-results/test 33 \
+            "SchemaVersionTest,SchemaCheckClassificationTest,DbSettingsTest,MappingTest,PersistenceModuleTest,SqlTemplateTenantGuardTest,DeadlockRetryTest,BotRunAcquireContentionTest"
+          python3 .github/scripts/verify_test_results.py "domain unit (incl. decision logic T3.1/T3.2, calendar T3.3)" domain/build/test-results/test 632 \
+            "EvMathTest,KellyMathTest,PythonCompatTest,MarketProbabilityTest,SnapshotFiltersTest,MarketBlendTest,WinStakeTest,WinDecisionEvaluatorTest,PlackettLuceTest,ComboOddsTest,ComboStrategyTest,WinDecisionComboTest,SourceVersionTest,TransitionsTest,ScheduleEventTest,CalendarOverrideTest,WatchWindowTest,EffectiveCalendarTest,ScheduleUpdaterTest,CalendarCheckPolicyTest,CalendarCheckServiceTest,CalendarSourceGuardTest,LeaseAndDayModelTest"
           python3 .github/scripts/verify_test_results.py "golden-runner unit" golden-runner/build/test-results/test 9 "GoldenRunnerTest"
-          python3 .github/scripts/verify_test_results.py "bot unit" bot/build/test-results/test 54 \
-            "BotArgsParserTest,BotLauncherTest,BotJobExecutorTest,BotProcessTest,BotSpringWiringTest,JobGateTest,CycleGateTest"
+          python3 .github/scripts/verify_test_results.py "bot unit" bot/build/test-results/test 67 \
+            "BotArgsParserTest,BotLauncherTest,BotJobExecutorTest,BotProcessTest,BotSpringWiringTest,JobGateTest,CycleGateTest,CalendarCheckTaskHandlerTest,CalendarSettingsParserTest"
           python3 .github/scripts/verify_test_results.py "ingest unit" ingest/build/test-results/test 28 \
             "IngestInternalApiTest,AgentApiOpsGuardTest,IngestStartupConfigTest"
           python3 .github/scripts/verify_test_results.py "dashboard unit" dashboard/build/test-results/test 30 \
@@ -247,7 +247,7 @@ jobs:
               r = ET.parse(f).getroot()
               tests += int(r.get("tests")); skipped += int(r.get("skipped")); failures += int(r.get("failures")); errors += int(r.get("errors"))
           print(f"tests={tests} skipped={skipped} failures={failures} errors={errors}")
-          if tests < 30 or skipped or failures or errors:
+          if tests < 44 or skipped or failures or errors:
               sys.exit("integration tests did not all run and pass")
           PY
       # :persistence の統合テスト（T2.4）。8.4 / 9.7 の両ジョブで必ず実行する（db-migration のテストが失敗しても実行して結果を両方残す）。
@@ -266,6 +266,8 @@ jobs:
               "BotRunRepositoryIntegrationTest", "SignalRepositoryIntegrationTest", "RaceScheduleRepositoryIntegrationTest",
               "AppUserRepositoryIntegrationTest", "TenantIsolationIntegrationTest", "TimeConversionIntegrationTest",
               "EnumContractIntegrationTest", "PermissionsIntegrationTest", "SchemaVersionVerifierIntegrationTest",
+              "RaceDayRepositoryIntegrationTest", "ScheduleEventRepositoryIntegrationTest", "CalendarOverrideRepositoryIntegrationTest",
+              "BotRunLeaseConcurrencyIntegrationTest", "DeadlockRetryIntegrationTest",
           }
           seen = set()
           tests = skipped = failures = errors = 0
@@ -277,7 +279,7 @@ jobs:
           missing = expected - seen
           if missing:
               sys.exit(f"integration test classes missing from the results: {sorted(missing)}")
-          if tests < 98 or skipped or failures or errors:
+          if tests < 153 or skipped or failures or errors:
               sys.exit("persistence integration tests did not all run and pass")
           PY
       # 実行アプリの統合テスト（T2.8）: /internal/ready のスキーマ版・DB 停止/復旧、Job の終了コード（DB 不達 75 とスキーマ不足 1 の区別）、
@@ -288,7 +290,7 @@ jobs:
       - name: Verify that the app integration tests actually ran
         if: always() && contains(env.DB_SUITES, 'apps')
         run: |
-          python3 .github/scripts/verify_test_results.py "bot integration" bot/build/test-results/integrationTest 8 "BotJobIntegrationTest"
+          python3 .github/scripts/verify_test_results.py "bot integration" bot/build/test-results/integrationTest 31 "BotJobIntegrationTest,CalendarCheckIntegrationTest"
           python3 .github/scripts/verify_test_results.py "ingest integration" ingest/build/test-results/integrationTest 9 "IngestReadyIntegrationTest"
           python3 .github/scripts/verify_test_results.py "dashboard integration" dashboard/build/test-results/integrationTest 9 "DashboardReadyIntegrationTest"
 
