@@ -1,7 +1,49 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-10-23（第2段階 / Stage 2-D: T2.4）
+最終更新: 2026-10-23（第2段階 / Stage 2-E: T2.7）
 
+## Stage 2-E（claude/stage2-gcp-mode-provider）
+### 結果
+- **T2.7 実装完了**（`:cloud-gcp` の `ModeProvider`: GCS 実装 + ローカルファイル実装、単体テスト、CI の件数検証）。T2.8 には進んでいない。**実 GCP には一度も接続していない**（単体テストの成功を実 GCP のアクセス成功とは扱わない）。
+- **PR / CI**: （PR 作成後に追記）
+### セッションの環境（CLAUDE.md の記録義務）
+`java -version` = OpenJDK 21.0.12（JDK 25 なし。`-PjdkVersion=21` のスモーク）、Gradle 9.7.1 動作、Docker 29.9.1 CLI あり（今回の範囲では未使用。DB 統合テストは変更していない）。Maven Central が IP 単位で 429 を返し、ビルドは待って再試行した（GCS ミラーを init script で置こうとしたが、パッケージレジストリの迂回として拒否されたので**削除し使っていない**）。ローカルのロケールが POSIX だと日本語のテスト名でレポート生成が失敗するため `LC_ALL=C.UTF-8` で実行した（CI は影響なし）。ローカルの結果は JDK 21 のスモークで、JDK 25 の結果ではない。
+### 実装したクラスと責務（`cloud-gcp/src/main/kotlin/jp/jrabot/cloudgcp/ops/`）
+| クラス | 責務 |
+|---|---|
+| `CachingModeProvider` | `ModeProvider` の実装。成功の 15 秒キャッシュ、失敗後 5 秒は再取得しない、seq の単調性検査、単一飛行（1 つの `ReentrantLock`）、ログ（変化時のみ INFO / 理由が変わったとき WARN）、読取り・検証の失敗を UNKNOWN に変換 |
+| `OpsStateParser` / `OpsState` / `OpsFailureReason` | JSON の構文解析とスキーマ検証（Jackson 3、重複キー・末尾トークン拒否）。GCS 版・ローカル版で共通。失敗理由は固定語彙（入力の値を含めない） |
+| `OpsStateSource`（`fun interface`）/ `OpsStateReadException` | 生のバイト列を読む口。ここがテストで差し替わる（フェイク） |
+| `GcsOpsStateSource` / `GcsLocation` / `GcsStorageFactory` | `gs://` の解析と、google-cloud-storage による**読取りのみ**の取得。ADC、接続・読取り 3 秒、リトライ全体 2.4 秒、呼び出し側の上限 3 秒を専用スレッドで強制。404/401/403/タイムアウト/その他を分類 |
+| `FileOpsStateSource` | ローカルファイル（GCP・DB・認証情報不要）。ファイル不在・権限・大きさの分類 |
+| `OpsModeProviders` / `OpsModeConfigurationException` | `fromEnvironment(env, clock)`。`gs://` は GCS 実装、ファイルは `APP_ENV=local` のときだけ、それ以外・未設定・不正は起動失敗 |
+### 使用したライブラリ・キャッシュ・seq（詳細は DECISIONS D-076〜D-080、VERSIONS §11）
+- GCP ライブラリ: `com.google.cloud:google-cloud-storage:2.75.0`（`Storage.readAllBytes` だけを使用）。ほか Jackson 3・slf4j-api（Boot の BOM）。`:domain` には何も追加していない。
+- キャッシュ: 成功値を `fetchedAt + 15s` 未満の間だけ使う（ちょうど 15 秒で再取得）。失敗は保存せず、失敗時刻から 5 秒は取得せず UNKNOWN。時計が戻ったらキャッシュを使わない。取得は単一飛行。
+- seq: 受理した最新の状態をキャッシュと独立に保持（プロセス存続中）。`seq` が小さい → UNKNOWN（`SEQ_ROLLBACK`）、同じ `seq` で `mode` / `desired.mode` が違う → UNKNOWN（`SEQ_CONFLICT`。契約への追加の厳格化で D-079 に根拠を記録）、同じ `seq` で内容が同じ → 正常。
+### 追加した単体テスト（`:cloud-gcp:test` 56 件 = 既存のマーカー 1 + 新規 55。実 GCP・エミュレータなし）
+| クラス | 件数 | 内容（依頼の番号） |
+|---|---|---|
+| `OpsStateParserTest` | 12 | 4 モード(1-4)・追加フィールド(7)・任意項目・schema_version(10)・JSON 不正(11)・必須不足(12)・mode 不正(13)・desired 不正(14)・型不正・入力値をログに出さない |
+| `CachingModeProviderTest` | 20 | seq 増加(5)・同じ seq(6)・15 秒境界(8,9)・巻き戻り(15)・巻き戻り検知がキャッシュ切れ/失敗をまたぐ・読取り失敗が全部 UNKNOWN(16-19 の分類)・期限切れ後の障害(20)・5 秒の再試行抑制(21)・復旧(22)・UNKNOWN で allowsWork=false(25)・時計の逆行・ログ(変化時のみ INFO、WARN の重複抑制と再掲、JSON を出さない、スタックなし)・不具合の伝播 |
+| `CachingModeProviderConcurrencyTest` | 3 | 32 スレッドの同時呼び出しで取得 1 回・全員同じ結果、失敗中も 1 回、期限切れの同時更新と seq 巻き戻りの整合(26) |
+| `GcsOpsStateSourceTest` | 10 | **実際の SDK** を 127.0.0.1 のフェイク HTTP サーバに向け、200 / 404(18) / 403・401(17) / 500 と接続拒否(19) / 遅延(16) / クライアント生成失敗 / 大きすぎる応答 / **GET しか送らないこと** / メッセージに内容を含めない / 結合 / `GcsLocation` |
+| `LocalFileModeProviderTest` | 10 | ファイル判定(NORMAL 以外)・不在(23)・不正 JSON(24)・ディレクトリ/大きすぎる・キャッシュと seq 検査が GCS 版と同じ・`APP_ENV=local` のみ許可・本番/未設定で起動失敗・`OPS_MODE_SOURCE` の不正・`gs://` は生成時に通信しない・設定値をメッセージに出さない |
+- 変異テスト（手動）: seq 巻き戻りの検査・再試行間隔・失敗時のキャッシュ破棄をそれぞれ壊すとテストが失敗することを確認し、元に戻した。
+### ローカルの結果（JDK 21 スモーク。JDK 25 ではない）
+`:cloud-gcp:test` 56 件・スキップ 0・失敗 0、`ktlintCheck`、`checkModuleDependencies` 成功。全体の `./gradlew build` は Maven Central の 429 で他モジュールの依存を取得できず、**ローカルでは完了を確認できていない**（CI が正）。
+### 実 GCP で未検証の項目（完了扱いにしない）
+ADC（Cloud Run のランタイム SA）での認証、実バケットの IAM（`storage.objects.get` だけで足りること）、レイテンシ、SDK のリトライと 3 秒の上限が実環境で意図どおり働くこと、メタデータサーバ不達時の挙動。既存の検証ゲート G-OPS-1〜9 に該当項目が無いので、infra の T5.0 で追加する。
+### T2.8 への引き継ぎ
+STAGE2_HANDOFF §14.4（`OpsModeProviders.fromEnvironment` を Bean にする、起動失敗の扱い、Job は DB 接続前に判定、ingest の 503、bot-run の連続 UNKNOWN の数え上げは呼び出し側）。T2.4 の除外（`DataSourceAutoConfiguration`）は **そのまま**（T2.8 で外す）。
+### 未解決・注意（引き継ぎ。完了扱いにしない）
+- T1.16 / T1.17 / T1.20 / T1.21、I-H1〜I-H7、T5.0（infra 契約同期。**今回の追加: 巻き戻りの検知はプロセス存続中有効なので、正本を意図して巻き戻す復元手順にアプリの再起動を含める**）、MySQL 9.7 の採否、Connector/J 26.x の採否、Cloud SQL の実環境検証、デッドロック（1213）の再試行設計、T3.4 の HMAC とトークンハッシュの整合は**未完了のまま**。
+- T2.5 の残り（イメージ・Dependabot・release-manifest）、T2.6（ゴールデン）、T2.8 は未着手。`:cloud-gcp` の `ModelStore` などの他のポート実装も未着手。
+- `desired.set_at` / `operation.*` は契約が「使う」としつつ検証対象に挙げていないため任意にした（D-077）。infra が将来これらを必須にしたくなったら契約で合わせる。
+### Git
+ブランチ `claude/stage2-gcp-mode-provider`（main 向け PR、マージはユーザー）。コミット: 本体+テスト+CI の件数検証 → 本 docs。
+
+---
 ## Stage 2-D（claude/stage2-persistence-doma, PR #8）
 ### 結果
 - **T2.4 実装完了**（`:persistence` の Doma DAO・Entity・SQL・Repository、統合テスト、CI）。T2.7 以降には進んでいない。

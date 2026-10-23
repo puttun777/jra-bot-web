@@ -29,6 +29,9 @@ DB 統合テスト（`db-integration` ジョブ）: `:db-migration:integrationTe
 ## persistence（Doma）
 `:persistence` が domain の Repository ポート（Race / OddsSnapshot / BotRun / AppUser / RaceSchedule / Signal）を実装する。Doma（kapt）の DAO・Entity・SQL テンプレートは `internal` で、公開するのは `DbSettings`・`DataSourceFactory`・`PersistenceConfiguration` だけ。SQL は全て `tenant_id` を必須にし（`SqlTemplateTenantGuardTest` が静的に検査）、時刻は UTC の `DATETIME(6)`。起動設定はアプリ側（T2.8）で組み立てる。判断は `docs/DECISIONS.md` D-070〜D-075。
 
+## cloud-gcp（ModeProvider）
+`:cloud-gcp` が domain の `ModeProvider` を実装する（CONTRACTS §5.2）。GCS の `ops-state.json`（`OPS_MODE_SOURCE=gs://…`、ADC、**読取りのみ**）を 3 秒以内に読み、成功を 15 秒キャッシュ、失敗後 5 秒は再取得せず、`seq` の巻き戻りは UNKNOWN。読めない・検証できないときは必ず UNKNOWN（NORMAL にしない）。ローカル開発・テストでは `OPS_MODE_SOURCE=/path/to/ops-state.json` と **`APP_ENV=local`**（明示したときだけ）でファイル実装を使える（GCP・認証情報不要、合成データのみ）。`APP_ENV` が `local` 以外でファイルを指定すると起動失敗（本番で黙ってフォールバックしない）。生成は `OpsModeProviders.fromEnvironment(env, clock)`。判断は D-076〜D-080、T2.8 への引き継ぎは `docs/STAGE2_HANDOFF.md` §14.4。単体テストは GCP に接続しない（`./gradlew :cloud-gcp:test`）。
+
 ## db-migration（Flyway）
 `java -jar`（または `./gradlew :db-migration:run --args=--mode=info`）に `DB_URL` `DB_USER` `DB_PASSWORD`（`migrate` ユーザー）を環境変数で渡す。`--mode=info|validate|migrate` は必須。終了コードは 0 / 1 / 2 / 10（validate: 未適用あり）/ 75（DB 不達）。契約は `docs/CONTRACTS.md` §4.2。アプリの起動時には実行しない。
 

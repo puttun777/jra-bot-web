@@ -46,7 +46,7 @@
 - [ ] T2.5 CI（build/lint/unit/DB統合/イメージ）、Renovate/Dependabot ← T2.1
   - 前半 **完了**（`ci.yml`: build/ktlint/依存方向/単体/JDK25/repo-hygiene、PR #5 で緑）。**DB 統合（MySQL 8.4/9.7 の `db-integration`）は T2.3 で追加済み（PR #7 で緑）**。イメージ・Dependabot・manifest は**未着手**（T2.5 は未完了のまま）
 - [ ] T2.6 ゴールデンテスト基盤（旧実装出力フィクスチャ生成スクリプト、実データ非含有）
-- [ ] T2.7 :cloud-gcp `ModeProvider`（GCS, CONTRACTS §5.2）+ ローカル実装 ← T2.2
+- [x] T2.7 :cloud-gcp `ModeProvider`（GCS, CONTRACTS §5.2）+ ローカル実装 ← T2.2 — 根拠: PR（claude/stage2-gcp-mode-provider。番号と CI は PROGRESS）。`CachingModeProvider`（15 秒キャッシュ・5 秒の再試行間隔・seq 単調性・fail closed）、GCS 実装（google-cloud-storage 2.75.0・読取りのみ）、ローカルファイル実装（`APP_ENV=local` のみ）、単体 55 件（実 GCP なし）。**実 GCP での動作は未検証**（第5段階の実環境検証で確認。既存の G-OPS-1〜9 に該当項目が無いので infra で追加が必要）
 - [ ] T2.8 各実行アプリの最小起動（`/internal/health|ready`、`--task`、終了コード、CONTRACTS §4.3・§9）← T2.4,T2.7
 - 実装順・完了条件・クラウドで実行できる/できないテストは `STAGE2_HANDOFF.md`
 

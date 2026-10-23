@@ -161,3 +161,12 @@ GitHub Actions（`db-integration` 8.4 / 9.7、ubuntu-24.04、Temurin 25、PR #8�
 - Connector/J の `useAffectedRows` は既定 false で、**この設定が無いと upsert の UNCHANGED/UPDATED を区別できない**（CONTRACTS §8.1 0.4.2）。26.x でも同じ挙動で動いた。
 - MySQL 9.7 の採否は保留のまま（D-069 の原因確認が未了）。今回の成功だけで本番採用を決めない。
 
+## 11. T2.7 での追加（2026-10-23, Stage 2-E）
+| 依存 | 版 | 使うモジュール | 根拠 |
+|---|---|---|---|
+| `com.google.cloud:google-cloud-storage` | **2.75.0** | `:cloud-gcp` だけ | Maven Central の `maven-metadata.xml` の最新安定版（lastUpdated 2026-09-30）。`com.google.cloud:libraries-bom` の 26.90.0 は別の版番号体系なので取り違えない。BOM は使わず単体で固定（推移依存は Boot の BOM の制約に従う）。Alpha/Beta/RC ではない |
+| `tools.jackson.core:jackson-databind` | Boot 4.1.2 の BOM（Jackson 3） | `:cloud-gcp` | `ops-state.json` の厳密な解析（重複キー検出・末尾トークン拒否）。`:domain` には入れない（`checkModuleDependencies` が強制） |
+| `org.slf4j:slf4j-api` | Boot の BOM | `:cloud-gcp` | ログ。実装（Logback）はアプリ側 |
+- 確認したこと: コンパイル・単体テストが JDK 21（ローカルのスモーク）で成功。JDK 25 は CI。SDK の挙動（404/403/401/500/遅延/接続拒否の変換、読取り（GET）だけを送ること）は**ローカルのフェイク HTTP サーバ**で確認した。**実 GCP（ADC・ランタイム SA・実バケット）は未確認**。
+- 注意: ADC を取得できない環境では SDK は認証なしで要求する（非公開バケットは 401/403 → UNKNOWN）。Cloud Run 上の ADC によるメタデータサーバ経由の認証、実バケットの IAM（`storage.objects.get` のみ）は infra の実環境で確認する（第5段階の実環境検証。既存の G-OPS-1〜9 に「ModeProvider が実 GCS から ADC で読めること」は含まれていないので、infra の T5.0 で項目を足す）。
+

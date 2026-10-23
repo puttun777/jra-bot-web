@@ -188,3 +188,11 @@ Reader/Writer は分かれており、`XxxRepository` は両方を継承する�
 - **未実装・未確認**: Connector/J 26.x の採否、MySQL 9.7 の採否、Cloud SQL（IAM 認証・TLS・`wait_timeout`・`max_connections`）、`odds_snapshots` の大量書込み性能（G-DB-4）、`combo_odds_snapshots` / `results` / `payouts` / `bets` などの Repository（必要になる Stage 3 で、同じ型（Entity + SQL + 越境テスト）で追加する）。
 - **テストの足し方**: 新しい DAO の SQL は `tenant_id` を束縛で必須にする（`SqlTemplateTenantGuardTest`）。表を増やしたら `TenantSqlGuard.TENANT_TABLES` に足す。統合テストのクラスを増やしたら `ci.yml` の期待クラスの一覧に足す。
 
+### 14.4 T2.7 の結果と T2.8 への引き継ぎ（実装済みの `:cloud-gcp` の ModeProvider）
+- **実装**: `jp.jrabot.cloudgcp.ops` — `CachingModeProvider`（`ModeProvider` 実装。15 秒キャッシュ・5 秒の再試行間隔・seq 検査・単一飛行）、`OpsStateParser`（検証）、`OpsStateSource`（読取り口）の実装 `GcsOpsStateSource`（google-cloud-storage、読取りのみ）と `FileOpsStateSource`（ローカル）、`OpsModeProviders`（生成）。判断は DECISIONS D-076〜D-080。
+- **T2.8 が行うこと**: ① `OpsModeProviders.fromEnvironment(System.getenv(), SystemClock)` を `ModeProvider` の Bean にする（`OPS_MODE_SOURCE`・`APP_ENV` を渡す）。設定不足で `OpsModeConfigurationException` が出たら**起動を失敗**させる（Job は終了コードの割当を CONTRACTS §9 に合わせる）。② Job（calendar-check / reconcile / retention / export-dataset / ml-train）は **DB に接続する前に** `current()` を呼び、`allowsWork` でなければ終了する（確定した非 NORMAL は exit 0 `MODE_<mode>`、UNKNOWN は exit 75: CONTRACTS §5.3）。③ bot-run は各サイクルの開始時に再確認し、UNKNOWN の連続回数（3 回で DRAINING）は呼び出し側で数える（`ModeProvider` は状態を持たない）。④ ingest は NORMAL 以外で DB に触れず 503（STARTING/STOPPING/STOPPED は `X-Ops-Mode`、UNKNOWN はヘッダなし）。⑤ ready の判定に `current()` を使うときは、取得が最大 3 秒かかり得ること（失敗直後 5 秒は即 UNKNOWN）に注意する。
+- **呼び出し側の約束**: `current()` は例外を投げない（読取り・検証の失敗は UNKNOWN）が、実装の不具合は例外で伝播する。ブロックする（取得中は他の呼び出しも最大 3 秒待つ）ので、リクエストスレッドの多い箇所ではキャッシュ有効期間内の呼び出しが大半になるよう、1 リクエストで何度も呼ばず結果を使い回す。
+- **ローカル実行**: `OPS_MODE_SOURCE=/path/to/ops-state.json APP_ENV=local`（合成データだけ。サンプルは `cloud-gcp/src/test` の `opsStateJson()`）。`APP_ENV` が `local` 以外でファイルを指定すると起動失敗。
+- **未検証（実 GCP が要る）**: ADC（Cloud Run のランタイム SA）での認証、実バケットの IAM（読取りのみで足りること）、リージョン間のレイテンシ、SDK のリトライ設定が 3 秒の上限内で働くこと、メタデータサーバ不達時の挙動。単体テストの成功を実 GCP のアクセス成功とは扱わない。T2.8 の後 / T5 で infra と一緒に確認する（第5段階の実環境検証。既存の G-OPS-1〜9 に「ModeProvider が実 GCS から ADC で読めること」は含まれていないので、infra の T5.0 で項目を足す）。
+- **未実装（範囲外）**: `ModelStore`・`DatasetStore`・`HeartbeatMirror`・`JobLauncher`・Google の ID トークン検証（`:cloud-gcp` の残り。必要になる段階で追加）、ヘルス/ready、bot-run の連続 UNKNOWN の数え上げ。
+
