@@ -1,0 +1,452 @@
+{
+  "case_id": "GD02-NORM-002",
+  "comparison_rules": {
+    "default": {
+      "float": {
+        "abs_tol": 1e-12,
+        "mode": "abs_tol"
+      }
+    },
+    "overrides": [],
+    "strict": {
+      "key_set": true,
+      "list_order": true,
+      "nonfinite": "reject",
+      "types": true
+    }
+  },
+  "data_classification": "synthetic",
+  "description": "estimate_prob_normalized（use_ml=False の市場確率のみ。頭数 0/1/2/18、全 0、負値、補正制限）",
+  "execution_parameters": {
+    "clock": "not_used (対象関数は現在時刻を読まない。datetime.now を使う経路は対象外)",
+    "cwd": "empty temporary directory",
+    "fixed_time": "2026-01-01T00:00:00+09:00",
+    "libraries": {
+      "numpy": "2.5.3"
+    },
+    "ml_cfg": {
+      "enabled": false
+    },
+    "network": "blocked",
+    "seed": 20260101,
+    "timezone": "Asia/Tokyo"
+  },
+  "expected_output": {
+    "results": [
+      {
+        "call_id": "n-000",
+        "outcome": {
+          "status": "ok",
+          "value": []
+        }
+      },
+      {
+        "call_id": "n-001",
+        "outcome": {
+          "status": "ok",
+          "value": [
+            1.0
+          ]
+        }
+      },
+      {
+        "call_id": "n-002",
+        "outcome": {
+          "status": "ok",
+          "value": [
+            0.6,
+            0.4
+          ]
+        }
+      },
+      {
+        "call_id": "n-003",
+        "outcome": {
+          "status": "ok",
+          "value": [
+            0.05555555555555556,
+            0.05555555555555556,
+            0.05555555555555556,
+            0.05555555555555556,
+            0.05555555555555556,
+            0.05555555555555556,
+            0.05555555555555556,
+            0.05555555555555556,
+            0.05555555555555556,
+            0.05555555555555556,
+            0.05555555555555556,
+            0.05555555555555556,
+            0.05555555555555556,
+            0.05555555555555556,
+            0.05555555555555556,
+            0.05555555555555556,
+            0.05555555555555556,
+            0.05555555555555556
+          ]
+        }
+      },
+      {
+        "call_id": "n-004",
+        "outcome": {
+          "status": "ok",
+          "value": [
+            0.3936638860249321,
+            0.262442590683288,
+            0.16871309401068516,
+            0.09841597150623302,
+            0.04723966632299185,
+            0.029524791451869904
+          ]
+        }
+      },
+      {
+        "call_id": "n-005",
+        "outcome": {
+          "status": "ok",
+          "value": [
+            0.9486915961736105,
+            0.020871215115819432,
+            0.013044509447387146,
+            0.00869633963159143,
+            0.005217803778954858,
+            0.0034785358526365725
+          ]
+        }
+      },
+      {
+        "call_id": "n-006",
+        "outcome": {
+          "status": "ok",
+          "value": [
+            0.7142857142857143,
+            0.0,
+            0.28571428571428575
+          ]
+        }
+      },
+      {
+        "call_id": "n-007",
+        "outcome": {
+          "status": "ok",
+          "value": [
+            0.3333333333333333,
+            0.3333333333333333,
+            0.3333333333333333
+          ]
+        }
+      },
+      {
+        "call_id": "n-008",
+        "outcome": {
+          "status": "ok",
+          "value": [
+            0.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "call_id": "n-009",
+        "outcome": {
+          "status": "ok",
+          "value": [
+            0.5,
+            0.5
+          ]
+        }
+      },
+      {
+        "call_id": "n-010",
+        "outcome": {
+          "status": "ok",
+          "value": [
+            0.5035559861068449,
+            0.25177799305342247,
+            0.12588899652671123,
+            0.06294449826335562,
+            0.03147224913167781,
+            0.015736124565838904,
+            0.007868062282919452,
+            0.000756090069229497
+          ]
+        }
+      },
+      {
+        "call_id": "nl-000",
+        "outcome": {
+          "status": "ok",
+          "value": [
+            0.3936638860249321,
+            0.262442590683288,
+            0.16871309401068516,
+            0.09841597150623302,
+            0.04723966632299185,
+            0.029524791451869908
+          ]
+        }
+      },
+      {
+        "call_id": "nl-001",
+        "outcome": {
+          "status": "ok",
+          "value": [
+            0.3936638860249321,
+            0.262442590683288,
+            0.16871309401068513,
+            0.09841597150623302,
+            0.04723966632299184,
+            0.029524791451869904
+          ]
+        }
+      },
+      {
+        "call_id": "nl-002",
+        "outcome": {
+          "status": "ok",
+          "value": [
+            0.3936638860249321,
+            0.262442590683288,
+            0.16871309401068516,
+            0.09841597150623302,
+            0.04723966632299185,
+            0.029524791451869904
+          ]
+        }
+      },
+      {
+        "call_id": "nl-003",
+        "outcome": {
+          "status": "ok",
+          "value": [
+            0.3936638860249321,
+            0.262442590683288,
+            0.16871309401068516,
+            0.09841597150623302,
+            0.04723966632299185,
+            0.029524791451869908
+          ]
+        }
+      }
+    ]
+  },
+  "fixture_id": "golden/GD02-NORM-002/v1",
+  "generator": {
+    "tool": "tools/golden",
+    "tool_version": "0.1.0"
+  },
+  "input": {
+    "calls": [
+      {
+        "args": {
+          "odds_list": []
+        },
+        "call_id": "n-000",
+        "function": "estimate_prob_normalized"
+      },
+      {
+        "args": {
+          "odds_list": [
+            5.0
+          ]
+        },
+        "call_id": "n-001",
+        "function": "estimate_prob_normalized"
+      },
+      {
+        "args": {
+          "odds_list": [
+            2.0,
+            3.0
+          ]
+        },
+        "call_id": "n-002",
+        "function": "estimate_prob_normalized"
+      },
+      {
+        "args": {
+          "odds_list": [
+            4.0,
+            4.0,
+            4.0,
+            4.0,
+            4.0,
+            4.0,
+            4.0,
+            4.0,
+            4.0,
+            4.0,
+            4.0,
+            4.0,
+            4.0,
+            4.0,
+            4.0,
+            4.0,
+            4.0,
+            4.0
+          ]
+        },
+        "call_id": "n-003",
+        "function": "estimate_prob_normalized"
+      },
+      {
+        "args": {
+          "odds_list": [
+            3.0,
+            4.5,
+            7.0,
+            12.0,
+            25.0,
+            40.0
+          ]
+        },
+        "call_id": "n-004",
+        "function": "estimate_prob_normalized"
+      },
+      {
+        "args": {
+          "odds_list": [
+            1.1,
+            50.0,
+            80.0,
+            120.0,
+            200.0,
+            300.0
+          ]
+        },
+        "call_id": "n-005",
+        "function": "estimate_prob_normalized"
+      },
+      {
+        "args": {
+          "odds_list": [
+            2.0,
+            0.0,
+            5.0
+          ]
+        },
+        "call_id": "n-006",
+        "function": "estimate_prob_normalized"
+      },
+      {
+        "args": {
+          "odds_list": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "call_id": "n-007",
+        "function": "estimate_prob_normalized"
+      },
+      {
+        "args": {
+          "odds_list": [
+            -1.0,
+            4.0
+          ]
+        },
+        "call_id": "n-008",
+        "function": "estimate_prob_normalized"
+      },
+      {
+        "args": {
+          "odds_list": [
+            1.0,
+            1.0
+          ]
+        },
+        "call_id": "n-009",
+        "function": "estimate_prob_normalized"
+      },
+      {
+        "args": {
+          "odds_list": [
+            1.5,
+            3.0,
+            6.0,
+            12.0,
+            24.0,
+            48.0,
+            96.0,
+            999.0
+          ]
+        },
+        "call_id": "n-010",
+        "function": "estimate_prob_normalized"
+      },
+      {
+        "args": {
+          "correction_limit": 0.0,
+          "odds_list": [
+            3.0,
+            4.5,
+            7.0,
+            12.0,
+            25.0,
+            40.0
+          ]
+        },
+        "call_id": "nl-000",
+        "function": "estimate_prob_normalized"
+      },
+      {
+        "args": {
+          "correction_limit": 0.01,
+          "odds_list": [
+            3.0,
+            4.5,
+            7.0,
+            12.0,
+            25.0,
+            40.0
+          ]
+        },
+        "call_id": "nl-001",
+        "function": "estimate_prob_normalized"
+      },
+      {
+        "args": {
+          "correction_limit": 0.1,
+          "odds_list": [
+            3.0,
+            4.5,
+            7.0,
+            12.0,
+            25.0,
+            40.0
+          ]
+        },
+        "call_id": "nl-002",
+        "function": "estimate_prob_normalized"
+      },
+      {
+        "args": {
+          "correction_limit": 0.5,
+          "odds_list": [
+            3.0,
+            4.5,
+            7.0,
+            12.0,
+            25.0,
+            40.0
+          ]
+        },
+        "call_id": "nl-003",
+        "function": "estimate_prob_normalized"
+      }
+    ]
+  },
+  "known_defects": [
+    "E13"
+  ],
+  "legacy_behavior_note": "expected_output は旧実装が実際に返した値（欠陥候補を含む）。新仕様の期待値ではない。",
+  "scenario_ids": [
+    "GD02"
+  ],
+  "schema_version": 1,
+  "source_commit": "f7dbf69fd8940121782870de902e8c449e6ca149",
+  "source_function": [
+    "jraev.ev.probability.estimate_prob_normalized"
+  ],
+  "source_repository": "puttun777/jra-bot"
+}

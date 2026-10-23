@@ -41,5 +41,8 @@ DB 統合テスト（`db-integration` ジョブ）: `:db-migration:integrationTe
 ## db-migration（Flyway）
 `java -jar`（または `./gradlew :db-migration:run --args=--mode=info`）に `DB_URL` `DB_USER` `DB_PASSWORD`（`migrate` ユーザー）を環境変数で渡す。`--mode=info|validate|migrate` は必須。終了コードは 0 / 1 / 2 / 10（validate: 未適用あり）/ 75（DB 不達）。契約は `docs/CONTRACTS.md` §4.2。アプリの起動時には実行しない。
 
+## ゴールデンテスト基盤（T2.6）
+`tools/golden/`: 旧 JRA Bot を**固定コミット f7dbf69** で実行して得た結果を、**合成入力**の JSON フィクスチャとして保存・検証・比較する Python ツール（Gradle 外）。検証: `python3 -m tools.golden.verify`、比較: `python3 -m tools.golden.compare --actual <kotlin出力.json>`、再生成の確認: `python -m tools.golden.generate --legacy-path <jra-bot> --check`。手順・フィクスチャ形式・未実装ケースは `tools/golden/README.md`。CI は `golden tests (Python 3.12)` ジョブ。合成データでの一致は実データでの正確性を意味しない。
+
 ## Git に含めないもの
 実データ（JV-Data・SQLite・DB ダンプ）、学習済みモデル（`*.pkl` 等）、秘密情報、JV-Link SDK の資料、ビルド生成物（`.gitignore` と `repo-hygiene` ジョブで防ぐ）。テストデータは合成データだけを使う。

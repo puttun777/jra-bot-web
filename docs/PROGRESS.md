@@ -1,6 +1,25 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-10-23（第2段階 / Stage 2-F: T2.8）
+最終更新: 2026-10-23（第2段階 / Stage 2-G: T2.6）
+
+## Stage 2-G（claude/stage2-golden-tests）
+### 結果
+- **T2.6 実装完了**（ゴールデンテスト基盤）。T2.5 後半・Stage 3 には進んでいない。Kotlin 業務ロジックは未実装。
+- **旧コードを実際に実行して生成できたケース（10 ケース / 447 呼び出し、固定コミット `f7dbf69fd8940121782870de902e8c449e6ca149`）**: GD01-EV-001, GD01-KELLY-002（E5: odds=1.0 の ZeroDivisionError を実測）, GD02-PROB-001, GD02-NORM-002, G2-HASH-001, G1-MODEL-001, GD03-FILTER-001, GD05-COMBO-001, GD09-EVAL-001（evaluate_odds 全体）, GD10-DEFAULTS-001。
+- **登録のみ（planned）**: G4, G5, G6, G7。**一部のみ生成（partial）**: GD02〜GD10, G2, G3（範囲と残作業は `tools/golden/catalog.py`）。implemented は GD01, G1 のみ。
+- **検証できた範囲**: 旧実装を固定コミットで 2 回実行して一致 → `--check` でコミット済みフィクスチャとバイト一致（Python 3.12.3 と 3.13、numpy 2.5.3）。manifest の sha256 で手編集を検知。比較器は正常/型/キー/順序/許容誤差/NaN/例外/未提供ケースを単体テストで確認。**未検証**: Kotlin 出力との比較（Kotlin 未実装）、実データ・実 config・実モデルでの挙動（T1.20）、時刻依存経路。
+- **テスト**: Python 単体テスト 51 件（旧実装あり: 51 実行/0 スキップ、なし: 4 スキップ）。ローカル成功。CI 結果は下記。
+- **CI**: （追記予定）
+### セッションの環境
+`java -version`/Gradle/Docker は今回の作業では未使用（Kotlin は変更していない。既存 6 ジョブの回帰は GitHub Actions で確認）。Python 3.13.16（ローカル）/ 3.12.3（互換確認）、numpy 2.5.3。参照元は `git clone` で取得でき、固定コミットを checkout 可能だった（公開リポジトリ）。
+### 判断
+D-089〜D-092（参照元の固定、フィクスチャ原則、実装方針、カタログ）。契約（CONTRACTS）の変更なし。
+### 未解決・維持（完了扱いにしていない）
+T1.16 / T1.17 / T1.20 / T1.21、infra I-H1〜I-H8、T5.0、実 GCP 検証、MySQL 9.7 本番採否、Connector/J 26.x 採否、デッドロック 1213 再試行、bot の checkpoint・SIGTERM、本番認証・Cloud Run の実環境検証。合成ゴールデンの成功は実データでの正確性・収益性の証明ではない。
+### 次の作業
+**T2.5 後半**（Docker イメージ、Dependabot、release-manifest）。その後 Stage 3（T3.1 は T2.6 の `catalog.py` の partial/planned を埋めながら Kotlin 移植と比較）。
+### ブランチ
+`claude/stage2-golden-tests`（PR は main 向け、マージはユーザー）。
 
 ## Stage 2-F（claude/stage2-app-bootstrap）
 ### 結果

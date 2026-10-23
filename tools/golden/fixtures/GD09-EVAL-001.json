@@ -1,0 +1,1113 @@
+{
+  "case_id": "GD09-EVAL-001",
+  "comparison_rules": {
+    "default": {
+      "float": {
+        "abs_tol": 1e-09,
+        "mode": "abs_tol"
+      }
+    },
+    "overrides": [],
+    "strict": {
+      "key_set": true,
+      "list_order": true,
+      "nonfinite": "reject",
+      "types": true
+    }
+  },
+  "data_classification": "synthetic",
+  "description": "evaluate_odds 全体（ML 無効=市場フォールバック、DB なし、合成 6 頭。閾値・max_signals・odds=1.0・空・1 頭）",
+  "execution_parameters": {
+    "clock": "not_used (対象関数は現在時刻を読まない。datetime.now を使う経路は対象外)",
+    "cwd": "empty temporary directory",
+    "fixed_time": "2026-01-01T00:00:00+09:00",
+    "libraries": {
+      "numpy": "2.5.3"
+    },
+    "ml_cfg": {
+      "enabled": false
+    },
+    "network": "blocked",
+    "seed": 20260101,
+    "timezone": "Asia/Tokyo"
+  },
+  "expected_output": {
+    "results": [
+      {
+        "call_id": "ev-000",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "reject_counts": {
+              "drop_filtered": 0,
+              "ev_below": 0,
+              "kelly_below_minbet": 4,
+              "odds_cap": 0,
+              "other": 0,
+              "prob_below": 0,
+              "ratio_below": 0
+            },
+            "return_shape": "tuple",
+            "signals": [
+              {
+                "_calc_ev": 0.18165696849645063,
+                "_calc_expected_return": 1.1816569684964506,
+                "_calc_p_mkt": 0.3333333333333333,
+                "_calc_ratio": 1.1816569684964506,
+                "bet_amount": 1.8165696849645065,
+                "bet_strategy": {
+                  "best_strategy": {
+                    "clipped": false,
+                    "ev": 0.18165696849645063,
+                    "expected_profit": 0.3299925420332046,
+                    "kelly_adjusted": 0.018165696849645065,
+                    "kelly_bet_before_clip": 1.8165696849645065,
+                    "kelly_fraction": 0.018165696849645065,
+                    "kelly_raw": 0.09082848424822532,
+                    "odds": 3.0,
+                    "prob": 0.39388565616548354,
+                    "prob_used_for_bet": 0.39388565616548354,
+                    "skip_reason": null,
+                    "strategy": "投資戦略: None (Kelly分数=0.25)",
+                    "suggested_bet": 1.8165696849645065,
+                    "type": "単勝",
+                    "umaban": 1
+                  },
+                  "meta": {
+                    "ev_shrink_factor": 1.0,
+                    "kelly_fraction_effective": 0.2,
+                    "kelly_fraction_input": 0.25,
+                    "prob_source": "market:fallback(ml_disabled)",
+                    "require_real_odds_for_combo": true,
+                    "ticket_allocation": "best_only"
+                  },
+                  "strategies": {
+                    "ワイド": {
+                      "clipped": false,
+                      "ev": 0.0,
+                      "expected_profit": 0.0,
+                      "kelly_adjusted": 0.0,
+                      "kelly_bet_before_clip": 0.0,
+                      "kelly_fraction": 0.0,
+                      "kelly_raw": 0.0,
+                      "note": "※ 実オッズが取れた場合のみ判定/投資します",
+                      "odds": 0.0,
+                      "prob": 0.0,
+                      "prob_used_for_bet": 0.0,
+                      "skip_reason": "実オッズ未取得のため見送り（推定オッズは使用しない設定）",
+                      "strategy": "ワイド: 見送り",
+                      "suggested_bet": 0.0,
+                      "tickets": [],
+                      "type": "ワイド",
+                      "umaban": 1
+                    },
+                    "三連複": {
+                      "clipped": false,
+                      "ev": 0.0,
+                      "expected_profit": 0.0,
+                      "kelly_adjusted": 0.0,
+                      "kelly_bet_before_clip": 0.0,
+                      "kelly_fraction": 0.0,
+                      "kelly_raw": 0.0,
+                      "note": "※ 実オッズが取れた場合のみ判定/投資します",
+                      "odds": 0.0,
+                      "prob": 0.0,
+                      "prob_used_for_bet": 0.0,
+                      "skip_reason": "実オッズ未取得のため見送り（推定オッズは使用しない設定）",
+                      "strategy": "三連複: 見送り",
+                      "suggested_bet": 0.0,
+                      "tickets": [],
+                      "type": "三連複",
+                      "umaban": 1
+                    },
+                    "単勝": {
+                      "clipped": false,
+                      "ev": 0.18165696849645063,
+                      "expected_profit": 0.3299925420332046,
+                      "kelly_adjusted": 0.018165696849645065,
+                      "kelly_bet_before_clip": 1.8165696849645065,
+                      "kelly_fraction": 0.018165696849645065,
+                      "kelly_raw": 0.09082848424822532,
+                      "odds": 3.0,
+                      "prob": 0.39388565616548354,
+                      "prob_used_for_bet": 0.39388565616548354,
+                      "skip_reason": null,
+                      "strategy": "投資戦略: None (Kelly分数=0.25)",
+                      "suggested_bet": 1.8165696849645065,
+                      "type": "単勝",
+                      "umaban": 1
+                    }
+                  },
+                  "total_expected_profit": 0.3299925420332046,
+                  "total_suggested_bet": 1.8165696849645065
+                },
+                "bet_type": "単勝",
+                "beta_eff": 0.35,
+                "coverage_score": 1.0,
+                "ev": 0.18165696849645063,
+                "expected_return": 1.1816569684964506,
+                "has_horse_master": false,
+                "has_past_runs": false,
+                "market": "win",
+                "odds": 3.0,
+                "p_final": 0.39388565616548354,
+                "p_market": 0.3333333333333333,
+                "p_mkt": 0.3333333333333333,
+                "p_model": 0.39388565616548354,
+                "past_n": 0,
+                "popularity": 1,
+                "prob": 0.39388565616548354,
+                "prob_source": "market:fallback(ml_disabled)",
+                "ratio": 1.1816569684964506,
+                "reason": "最推奨=単勝（軸: 馬1） EV=18.2% / 参考: 単勝EV=18.2%（odds=3.0, p=39.4%）",
+                "umaban": 1
+              },
+              {
+                "_calc_ev": 0.18088976041672766,
+                "_calc_expected_return": 1.1808897604167277,
+                "_calc_p_mkt": 0.2222222222222222,
+                "_calc_ratio": 1.1808897604167279,
+                "bet_amount": 1.033655773809873,
+                "bet_strategy": {
+                  "best_strategy": {
+                    "clipped": false,
+                    "ev": 0.18088976041672766,
+                    "expected_profit": 0.18697774527783517,
+                    "kelly_adjusted": 0.010336557738098731,
+                    "kelly_bet_before_clip": 1.033655773809873,
+                    "kelly_fraction": 0.010336557738098731,
+                    "kelly_raw": 0.05168278869049365,
+                    "odds": 4.5,
+                    "prob": 0.2624199467592728,
+                    "prob_used_for_bet": 0.2624199467592728,
+                    "skip_reason": null,
+                    "strategy": "投資戦略: None (Kelly分数=0.25)",
+                    "suggested_bet": 1.033655773809873,
+                    "type": "単勝",
+                    "umaban": 2
+                  },
+                  "meta": {
+                    "ev_shrink_factor": 1.0,
+                    "kelly_fraction_effective": 0.2,
+                    "kelly_fraction_input": 0.25,
+                    "prob_source": "market:fallback(ml_disabled)",
+                    "require_real_odds_for_combo": true,
+                    "ticket_allocation": "best_only"
+                  },
+                  "strategies": {
+                    "ワイド": {
+                      "clipped": false,
+                      "ev": 0.0,
+                      "expected_profit": 0.0,
+                      "kelly_adjusted": 0.0,
+                      "kelly_bet_before_clip": 0.0,
+                      "kelly_fraction": 0.0,
+                      "kelly_raw": 0.0,
+                      "note": "※ 実オッズが取れた場合のみ判定/投資します",
+                      "odds": 0.0,
+                      "prob": 0.0,
+                      "prob_used_for_bet": 0.0,
+                      "skip_reason": "実オッズ未取得のため見送り（推定オッズは使用しない設定）",
+                      "strategy": "ワイド: 見送り",
+                      "suggested_bet": 0.0,
+                      "tickets": [],
+                      "type": "ワイド",
+                      "umaban": 2
+                    },
+                    "三連複": {
+                      "clipped": false,
+                      "ev": 0.0,
+                      "expected_profit": 0.0,
+                      "kelly_adjusted": 0.0,
+                      "kelly_bet_before_clip": 0.0,
+                      "kelly_fraction": 0.0,
+                      "kelly_raw": 0.0,
+                      "note": "※ 実オッズが取れた場合のみ判定/投資します",
+                      "odds": 0.0,
+                      "prob": 0.0,
+                      "prob_used_for_bet": 0.0,
+                      "skip_reason": "実オッズ未取得のため見送り（推定オッズは使用しない設定）",
+                      "strategy": "三連複: 見送り",
+                      "suggested_bet": 0.0,
+                      "tickets": [],
+                      "type": "三連複",
+                      "umaban": 2
+                    },
+                    "単勝": {
+                      "clipped": false,
+                      "ev": 0.18088976041672766,
+                      "expected_profit": 0.18697774527783517,
+                      "kelly_adjusted": 0.010336557738098731,
+                      "kelly_bet_before_clip": 1.033655773809873,
+                      "kelly_fraction": 0.010336557738098731,
+                      "kelly_raw": 0.05168278869049365,
+                      "odds": 4.5,
+                      "prob": 0.2624199467592728,
+                      "prob_used_for_bet": 0.2624199467592728,
+                      "skip_reason": null,
+                      "strategy": "投資戦略: None (Kelly分数=0.25)",
+                      "suggested_bet": 1.033655773809873,
+                      "type": "単勝",
+                      "umaban": 2
+                    }
+                  },
+                  "total_expected_profit": 0.18697774527783517,
+                  "total_suggested_bet": 1.033655773809873
+                },
+                "bet_type": "単勝",
+                "beta_eff": 0.35,
+                "coverage_score": 1.0,
+                "ev": 0.18088976041672766,
+                "expected_return": 1.1808897604167277,
+                "has_horse_master": false,
+                "has_past_runs": false,
+                "market": "win",
+                "odds": 4.5,
+                "p_final": 0.2624199467592728,
+                "p_market": 0.2222222222222222,
+                "p_mkt": 0.2222222222222222,
+                "p_model": 0.2624199467592728,
+                "past_n": 0,
+                "popularity": 2,
+                "prob": 0.2624199467592728,
+                "prob_source": "market:fallback(ml_disabled)",
+                "ratio": 1.1808897604167279,
+                "reason": "最推奨=単勝（軸: 馬2） EV=18.1% / 参考: 単勝EV=18.1%（odds=4.5, p=26.2%）",
+                "umaban": 2
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-001",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "reject_counts": {
+              "drop_filtered": 0,
+              "ev_below": 0,
+              "kelly_below_minbet": 4,
+              "odds_cap": 0,
+              "other": 0,
+              "prob_below": 0,
+              "ratio_below": 0
+            },
+            "return_shape": "tuple",
+            "signals": [
+              {
+                "_calc_ev": 0.18165696849645063,
+                "_calc_expected_return": 1.1816569684964506,
+                "_calc_p_mkt": 0.3333333333333333,
+                "_calc_ratio": 1.1816569684964506,
+                "bet_amount": 1.8165696849645065,
+                "bet_strategy": {
+                  "best_strategy": {
+                    "clipped": false,
+                    "ev": 0.18165696849645063,
+                    "expected_profit": 0.3299925420332046,
+                    "kelly_adjusted": 0.018165696849645065,
+                    "kelly_bet_before_clip": 1.8165696849645065,
+                    "kelly_fraction": 0.018165696849645065,
+                    "kelly_raw": 0.09082848424822532,
+                    "odds": 3.0,
+                    "prob": 0.39388565616548354,
+                    "prob_used_for_bet": 0.39388565616548354,
+                    "skip_reason": null,
+                    "strategy": "投資戦略: None (Kelly分数=0.25)",
+                    "suggested_bet": 1.8165696849645065,
+                    "type": "単勝",
+                    "umaban": 1
+                  },
+                  "meta": {
+                    "ev_shrink_factor": 1.0,
+                    "kelly_fraction_effective": 0.2,
+                    "kelly_fraction_input": 0.25,
+                    "prob_source": "market:fallback(ml_disabled)",
+                    "require_real_odds_for_combo": true,
+                    "ticket_allocation": "best_only"
+                  },
+                  "strategies": {
+                    "ワイド": {
+                      "clipped": false,
+                      "ev": 0.0,
+                      "expected_profit": 0.0,
+                      "kelly_adjusted": 0.0,
+                      "kelly_bet_before_clip": 0.0,
+                      "kelly_fraction": 0.0,
+                      "kelly_raw": 0.0,
+                      "note": "※ 実オッズが取れた場合のみ判定/投資します",
+                      "odds": 0.0,
+                      "prob": 0.0,
+                      "prob_used_for_bet": 0.0,
+                      "skip_reason": "実オッズ未取得のため見送り（推定オッズは使用しない設定）",
+                      "strategy": "ワイド: 見送り",
+                      "suggested_bet": 0.0,
+                      "tickets": [],
+                      "type": "ワイド",
+                      "umaban": 1
+                    },
+                    "三連複": {
+                      "clipped": false,
+                      "ev": 0.0,
+                      "expected_profit": 0.0,
+                      "kelly_adjusted": 0.0,
+                      "kelly_bet_before_clip": 0.0,
+                      "kelly_fraction": 0.0,
+                      "kelly_raw": 0.0,
+                      "note": "※ 実オッズが取れた場合のみ判定/投資します",
+                      "odds": 0.0,
+                      "prob": 0.0,
+                      "prob_used_for_bet": 0.0,
+                      "skip_reason": "実オッズ未取得のため見送り（推定オッズは使用しない設定）",
+                      "strategy": "三連複: 見送り",
+                      "suggested_bet": 0.0,
+                      "tickets": [],
+                      "type": "三連複",
+                      "umaban": 1
+                    },
+                    "単勝": {
+                      "clipped": false,
+                      "ev": 0.18165696849645063,
+                      "expected_profit": 0.3299925420332046,
+                      "kelly_adjusted": 0.018165696849645065,
+                      "kelly_bet_before_clip": 1.8165696849645065,
+                      "kelly_fraction": 0.018165696849645065,
+                      "kelly_raw": 0.09082848424822532,
+                      "odds": 3.0,
+                      "prob": 0.39388565616548354,
+                      "prob_used_for_bet": 0.39388565616548354,
+                      "skip_reason": null,
+                      "strategy": "投資戦略: None (Kelly分数=0.25)",
+                      "suggested_bet": 1.8165696849645065,
+                      "type": "単勝",
+                      "umaban": 1
+                    }
+                  },
+                  "total_expected_profit": 0.3299925420332046,
+                  "total_suggested_bet": 1.8165696849645065
+                },
+                "bet_type": "単勝",
+                "beta_eff": 0.35,
+                "coverage_score": 1.0,
+                "ev": 0.18165696849645063,
+                "expected_return": 1.1816569684964506,
+                "has_horse_master": false,
+                "has_past_runs": false,
+                "market": "win",
+                "odds": 3.0,
+                "p_final": 0.39388565616548354,
+                "p_market": 0.3333333333333333,
+                "p_mkt": 0.3333333333333333,
+                "p_model": 0.39388565616548354,
+                "past_n": 0,
+                "popularity": 1,
+                "prob": 0.39388565616548354,
+                "prob_source": "market:fallback(ml_disabled)",
+                "ratio": 1.1816569684964506,
+                "reason": "最推奨=単勝（軸: 馬1） EV=18.2% / 参考: 単勝EV=18.2%（odds=3.0, p=39.4%）",
+                "umaban": 1
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-002",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "reject_counts": {
+              "drop_filtered": 0,
+              "ev_below": 6,
+              "kelly_below_minbet": 0,
+              "odds_cap": 0,
+              "other": 0,
+              "prob_below": 0,
+              "ratio_below": 0
+            },
+            "return_shape": "tuple",
+            "signals": []
+          }
+        }
+      },
+      {
+        "call_id": "ev-003",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "reject_counts": {
+              "drop_filtered": 0,
+              "ev_below": 0,
+              "kelly_below_minbet": 3,
+              "odds_cap": 0,
+              "other": 0,
+              "prob_below": 0,
+              "ratio_below": 0
+            },
+            "return_shape": "tuple",
+            "signals": [
+              {
+                "_calc_ev": 0.18165696849645063,
+                "_calc_expected_return": 1.1816569684964506,
+                "_calc_p_mkt": 0.3333333333333333,
+                "_calc_ratio": 1.1816569684964506,
+                "bet_amount": 1.0,
+                "bet_strategy": {
+                  "best_strategy": {
+                    "clipped": true,
+                    "ev": 0.18165696849645063,
+                    "expected_profit": 0.18165696849645063,
+                    "kelly_adjusted": 0.03633139369929013,
+                    "kelly_bet_before_clip": 3.633139369929013,
+                    "kelly_fraction": 0.03633139369929013,
+                    "kelly_raw": 0.09082848424822532,
+                    "odds": 3.0,
+                    "prob": 0.39388565616548354,
+                    "prob_used_for_bet": 0.39388565616548354,
+                    "skip_reason": null,
+                    "strategy": "投資戦略: None (Kelly分数=0.50)",
+                    "suggested_bet": 1.0,
+                    "type": "単勝",
+                    "umaban": 1
+                  },
+                  "meta": {
+                    "ev_shrink_factor": 1.0,
+                    "kelly_fraction_effective": 0.4,
+                    "kelly_fraction_input": 0.5,
+                    "prob_source": "market:fallback(ml_disabled)",
+                    "require_real_odds_for_combo": true,
+                    "ticket_allocation": "best_only"
+                  },
+                  "strategies": {
+                    "ワイド": {
+                      "clipped": false,
+                      "ev": 0.0,
+                      "expected_profit": 0.0,
+                      "kelly_adjusted": 0.0,
+                      "kelly_bet_before_clip": 0.0,
+                      "kelly_fraction": 0.0,
+                      "kelly_raw": 0.0,
+                      "note": "※ 実オッズが取れた場合のみ判定/投資します",
+                      "odds": 0.0,
+                      "prob": 0.0,
+                      "prob_used_for_bet": 0.0,
+                      "skip_reason": "実オッズ未取得のため見送り（推定オッズは使用しない設定）",
+                      "strategy": "ワイド: 見送り",
+                      "suggested_bet": 0.0,
+                      "tickets": [],
+                      "type": "ワイド",
+                      "umaban": 1
+                    },
+                    "三連複": {
+                      "clipped": false,
+                      "ev": 0.0,
+                      "expected_profit": 0.0,
+                      "kelly_adjusted": 0.0,
+                      "kelly_bet_before_clip": 0.0,
+                      "kelly_fraction": 0.0,
+                      "kelly_raw": 0.0,
+                      "note": "※ 実オッズが取れた場合のみ判定/投資します",
+                      "odds": 0.0,
+                      "prob": 0.0,
+                      "prob_used_for_bet": 0.0,
+                      "skip_reason": "実オッズ未取得のため見送り（推定オッズは使用しない設定）",
+                      "strategy": "三連複: 見送り",
+                      "suggested_bet": 0.0,
+                      "tickets": [],
+                      "type": "三連複",
+                      "umaban": 1
+                    },
+                    "単勝": {
+                      "clipped": true,
+                      "ev": 0.18165696849645063,
+                      "expected_profit": 0.18165696849645063,
+                      "kelly_adjusted": 0.03633139369929013,
+                      "kelly_bet_before_clip": 3.633139369929013,
+                      "kelly_fraction": 0.03633139369929013,
+                      "kelly_raw": 0.09082848424822532,
+                      "odds": 3.0,
+                      "prob": 0.39388565616548354,
+                      "prob_used_for_bet": 0.39388565616548354,
+                      "skip_reason": null,
+                      "strategy": "投資戦略: None (Kelly分数=0.50)",
+                      "suggested_bet": 1.0,
+                      "type": "単勝",
+                      "umaban": 1
+                    }
+                  },
+                  "total_expected_profit": 0.18165696849645063,
+                  "total_suggested_bet": 1.0
+                },
+                "bet_type": "単勝",
+                "beta_eff": 0.35,
+                "coverage_score": 1.0,
+                "ev": 0.18165696849645063,
+                "expected_return": 1.1816569684964506,
+                "has_horse_master": false,
+                "has_past_runs": false,
+                "market": "win",
+                "odds": 3.0,
+                "p_final": 0.39388565616548354,
+                "p_market": 0.3333333333333333,
+                "p_mkt": 0.3333333333333333,
+                "p_model": 0.39388565616548354,
+                "past_n": 0,
+                "popularity": 1,
+                "prob": 0.39388565616548354,
+                "prob_source": "market:fallback(ml_disabled)",
+                "ratio": 1.1816569684964506,
+                "reason": "最推奨=単勝（軸: 馬1） EV=18.2% / 参考: 単勝EV=18.2%（odds=3.0, p=39.4%）",
+                "umaban": 1
+              },
+              {
+                "_calc_ev": 0.18088976041672766,
+                "_calc_expected_return": 1.1808897604167277,
+                "_calc_p_mkt": 0.2222222222222222,
+                "_calc_ratio": 1.1808897604167279,
+                "bet_amount": 1.0,
+                "bet_strategy": {
+                  "best_strategy": {
+                    "clipped": true,
+                    "ev": 0.18088976041672766,
+                    "expected_profit": 0.18088976041672766,
+                    "kelly_adjusted": 0.020673115476197462,
+                    "kelly_bet_before_clip": 2.067311547619746,
+                    "kelly_fraction": 0.020673115476197462,
+                    "kelly_raw": 0.05168278869049365,
+                    "odds": 4.5,
+                    "prob": 0.2624199467592728,
+                    "prob_used_for_bet": 0.2624199467592728,
+                    "skip_reason": null,
+                    "strategy": "投資戦略: None (Kelly分数=0.50)",
+                    "suggested_bet": 1.0,
+                    "type": "単勝",
+                    "umaban": 2
+                  },
+                  "meta": {
+                    "ev_shrink_factor": 1.0,
+                    "kelly_fraction_effective": 0.4,
+                    "kelly_fraction_input": 0.5,
+                    "prob_source": "market:fallback(ml_disabled)",
+                    "require_real_odds_for_combo": true,
+                    "ticket_allocation": "best_only"
+                  },
+                  "strategies": {
+                    "ワイド": {
+                      "clipped": false,
+                      "ev": 0.0,
+                      "expected_profit": 0.0,
+                      "kelly_adjusted": 0.0,
+                      "kelly_bet_before_clip": 0.0,
+                      "kelly_fraction": 0.0,
+                      "kelly_raw": 0.0,
+                      "note": "※ 実オッズが取れた場合のみ判定/投資します",
+                      "odds": 0.0,
+                      "prob": 0.0,
+                      "prob_used_for_bet": 0.0,
+                      "skip_reason": "実オッズ未取得のため見送り（推定オッズは使用しない設定）",
+                      "strategy": "ワイド: 見送り",
+                      "suggested_bet": 0.0,
+                      "tickets": [],
+                      "type": "ワイド",
+                      "umaban": 2
+                    },
+                    "三連複": {
+                      "clipped": false,
+                      "ev": 0.0,
+                      "expected_profit": 0.0,
+                      "kelly_adjusted": 0.0,
+                      "kelly_bet_before_clip": 0.0,
+                      "kelly_fraction": 0.0,
+                      "kelly_raw": 0.0,
+                      "note": "※ 実オッズが取れた場合のみ判定/投資します",
+                      "odds": 0.0,
+                      "prob": 0.0,
+                      "prob_used_for_bet": 0.0,
+                      "skip_reason": "実オッズ未取得のため見送り（推定オッズは使用しない設定）",
+                      "strategy": "三連複: 見送り",
+                      "suggested_bet": 0.0,
+                      "tickets": [],
+                      "type": "三連複",
+                      "umaban": 2
+                    },
+                    "単勝": {
+                      "clipped": true,
+                      "ev": 0.18088976041672766,
+                      "expected_profit": 0.18088976041672766,
+                      "kelly_adjusted": 0.020673115476197462,
+                      "kelly_bet_before_clip": 2.067311547619746,
+                      "kelly_fraction": 0.020673115476197462,
+                      "kelly_raw": 0.05168278869049365,
+                      "odds": 4.5,
+                      "prob": 0.2624199467592728,
+                      "prob_used_for_bet": 0.2624199467592728,
+                      "skip_reason": null,
+                      "strategy": "投資戦略: None (Kelly分数=0.50)",
+                      "suggested_bet": 1.0,
+                      "type": "単勝",
+                      "umaban": 2
+                    }
+                  },
+                  "total_expected_profit": 0.18088976041672766,
+                  "total_suggested_bet": 1.0
+                },
+                "bet_type": "単勝",
+                "beta_eff": 0.35,
+                "coverage_score": 1.0,
+                "ev": 0.18088976041672766,
+                "expected_return": 1.1808897604167277,
+                "has_horse_master": false,
+                "has_past_runs": false,
+                "market": "win",
+                "odds": 4.5,
+                "p_final": 0.2624199467592728,
+                "p_market": 0.2222222222222222,
+                "p_mkt": 0.2222222222222222,
+                "p_model": 0.2624199467592728,
+                "past_n": 0,
+                "popularity": 2,
+                "prob": 0.2624199467592728,
+                "prob_source": "market:fallback(ml_disabled)",
+                "ratio": 1.1808897604167279,
+                "reason": "最推奨=単勝（軸: 馬2） EV=18.1% / 参考: 単勝EV=18.1%（odds=4.5, p=26.2%）",
+                "umaban": 2
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-004",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "reject_counts": {
+              "drop_filtered": 0,
+              "ev_below": 0,
+              "kelly_below_minbet": 5,
+              "odds_cap": 0,
+              "other": 0,
+              "prob_below": 0,
+              "ratio_below": 0
+            },
+            "return_shape": "tuple",
+            "signals": []
+          }
+        }
+      },
+      {
+        "call_id": "ev-005",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "reject_counts": null,
+            "return_shape": "list",
+            "signals": []
+          }
+        }
+      },
+      {
+        "call_id": "ev-006",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "reject_counts": {
+              "drop_filtered": 0,
+              "ev_below": 0,
+              "kelly_below_minbet": 0,
+              "odds_cap": 0,
+              "other": 0,
+              "prob_below": 0,
+              "ratio_below": 0
+            },
+            "return_shape": "tuple",
+            "signals": [
+              {
+                "_calc_ev": 2.0,
+                "_calc_expected_return": 3.0,
+                "_calc_p_mkt": 0.3333333333333333,
+                "_calc_ratio": 3.0,
+                "bet_amount": 10.0,
+                "bet_strategy": {
+                  "best_strategy": {
+                    "clipped": true,
+                    "ev": 1.9699999999999998,
+                    "expected_profit": 19.699999999999996,
+                    "kelly_adjusted": 0.197,
+                    "kelly_bet_before_clip": 19.7,
+                    "kelly_fraction": 0.197,
+                    "kelly_raw": 0.985,
+                    "odds": 3.0,
+                    "prob": 1.0,
+                    "prob_used_for_bet": 0.99,
+                    "skip_reason": null,
+                    "strategy": "投資戦略: None (Kelly分数=0.25)",
+                    "suggested_bet": 10.0,
+                    "type": "単勝",
+                    "umaban": 1
+                  },
+                  "meta": {
+                    "ev_shrink_factor": 1.0,
+                    "kelly_fraction_effective": 0.2,
+                    "kelly_fraction_input": 0.25,
+                    "prob_source": "market:fallback(ml_disabled)",
+                    "require_real_odds_for_combo": true,
+                    "ticket_allocation": "best_only"
+                  },
+                  "strategies": {
+                    "ワイド": {
+                      "clipped": false,
+                      "ev": 0.0,
+                      "expected_profit": 0.0,
+                      "kelly_adjusted": 0.0,
+                      "kelly_bet_before_clip": 0.0,
+                      "kelly_fraction": 0.0,
+                      "kelly_raw": 0.0,
+                      "note": "※ 実オッズが取れた場合のみ判定/投資します",
+                      "odds": 0.0,
+                      "prob": 0.0,
+                      "prob_used_for_bet": 0.0,
+                      "skip_reason": "実オッズ未取得のため見送り（推定オッズは使用しない設定）",
+                      "strategy": "ワイド: 見送り",
+                      "suggested_bet": 0.0,
+                      "tickets": [],
+                      "type": "ワイド",
+                      "umaban": 1
+                    },
+                    "三連複": {
+                      "clipped": false,
+                      "ev": 0.0,
+                      "expected_profit": 0.0,
+                      "kelly_adjusted": 0.0,
+                      "kelly_bet_before_clip": 0.0,
+                      "kelly_fraction": 0.0,
+                      "kelly_raw": 0.0,
+                      "note": "※ 実オッズが取れた場合のみ判定/投資します",
+                      "odds": 0.0,
+                      "prob": 0.0,
+                      "prob_used_for_bet": 0.0,
+                      "skip_reason": "実オッズ未取得のため見送り（推定オッズは使用しない設定）",
+                      "strategy": "三連複: 見送り",
+                      "suggested_bet": 0.0,
+                      "tickets": [],
+                      "type": "三連複",
+                      "umaban": 1
+                    },
+                    "単勝": {
+                      "clipped": true,
+                      "ev": 1.9699999999999998,
+                      "expected_profit": 19.699999999999996,
+                      "kelly_adjusted": 0.197,
+                      "kelly_bet_before_clip": 19.7,
+                      "kelly_fraction": 0.197,
+                      "kelly_raw": 0.985,
+                      "odds": 3.0,
+                      "prob": 1.0,
+                      "prob_used_for_bet": 0.99,
+                      "skip_reason": null,
+                      "strategy": "投資戦略: None (Kelly分数=0.25)",
+                      "suggested_bet": 10.0,
+                      "type": "単勝",
+                      "umaban": 1
+                    }
+                  },
+                  "total_expected_profit": 19.699999999999996,
+                  "total_suggested_bet": 10.0
+                },
+                "bet_type": "単勝",
+                "beta_eff": 0.35,
+                "coverage_score": 1.0,
+                "ev": 1.9699999999999998,
+                "expected_return": 3.0,
+                "has_horse_master": false,
+                "has_past_runs": false,
+                "market": "win",
+                "odds": 3.0,
+                "p_final": 1.0,
+                "p_market": 0.3333333333333333,
+                "p_mkt": 0.3333333333333333,
+                "p_model": 1.0,
+                "past_n": 0,
+                "popularity": 1,
+                "prob": 1.0,
+                "prob_source": "market:fallback(ml_disabled)",
+                "ratio": 3.0,
+                "reason": "最推奨=単勝（軸: 馬1） EV=197.0% / 参考: 単勝EV=200.0%（odds=3.0, p=100.0%）",
+                "umaban": 1
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "fixture_id": "golden/GD09-EVAL-001/v1",
+  "generator": {
+    "tool": "tools/golden",
+    "tool_version": "0.1.0"
+  },
+  "input": {
+    "calls": [
+      {
+        "args": {
+          "kwargs": {
+            "ev_shrink_factor": 1.0,
+            "ev_threshold": -0.5
+          },
+          "odds": [
+            {
+              "odds": 3.0,
+              "popularity": 1,
+              "umaban": 1
+            },
+            {
+              "odds": 4.5,
+              "popularity": 2,
+              "umaban": 2
+            },
+            {
+              "odds": 7.0,
+              "popularity": 3,
+              "umaban": 3
+            },
+            {
+              "odds": 12.0,
+              "popularity": 4,
+              "umaban": 4
+            },
+            {
+              "odds": 25.0,
+              "popularity": 5,
+              "umaban": 5
+            },
+            {
+              "odds": 40.0,
+              "popularity": 6,
+              "umaban": 6
+            }
+          ]
+        },
+        "call_id": "ev-000",
+        "function": "evaluate_odds"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "ev_shrink_factor": 1.0,
+            "ev_threshold": -0.5,
+            "max_signals": 1
+          },
+          "odds": [
+            {
+              "odds": 3.0,
+              "popularity": 1,
+              "umaban": 1
+            },
+            {
+              "odds": 4.5,
+              "popularity": 2,
+              "umaban": 2
+            },
+            {
+              "odds": 7.0,
+              "popularity": 3,
+              "umaban": 3
+            },
+            {
+              "odds": 12.0,
+              "popularity": 4,
+              "umaban": 4
+            },
+            {
+              "odds": 25.0,
+              "popularity": 5,
+              "umaban": 5
+            },
+            {
+              "odds": 40.0,
+              "popularity": 6,
+              "umaban": 6
+            }
+          ]
+        },
+        "call_id": "ev-001",
+        "function": "evaluate_odds"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "ev_shrink_factor": 1.0,
+            "ev_threshold": 0.5
+          },
+          "odds": [
+            {
+              "odds": 3.0,
+              "popularity": 1,
+              "umaban": 1
+            },
+            {
+              "odds": 4.5,
+              "popularity": 2,
+              "umaban": 2
+            },
+            {
+              "odds": 7.0,
+              "popularity": 3,
+              "umaban": 3
+            },
+            {
+              "odds": 12.0,
+              "popularity": 4,
+              "umaban": 4
+            },
+            {
+              "odds": 25.0,
+              "popularity": 5,
+              "umaban": 5
+            },
+            {
+              "odds": 40.0,
+              "popularity": 6,
+              "umaban": 6
+            }
+          ]
+        },
+        "call_id": "ev-002",
+        "function": "evaluate_odds"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "ev_shrink_factor": 1.0,
+            "ev_threshold": -0.5,
+            "kelly_fraction": 0.5,
+            "max_bet": 1.0
+          },
+          "odds": [
+            {
+              "odds": 3.0,
+              "popularity": 1,
+              "umaban": 1
+            },
+            {
+              "odds": 4.5,
+              "popularity": 2,
+              "umaban": 2
+            },
+            {
+              "odds": 7.0,
+              "popularity": 3,
+              "umaban": 3
+            },
+            {
+              "odds": 12.0,
+              "popularity": 4,
+              "umaban": 4
+            },
+            {
+              "odds": 25.0,
+              "popularity": 5,
+              "umaban": 5
+            },
+            {
+              "odds": 40.0,
+              "popularity": 6,
+              "umaban": 6
+            }
+          ]
+        },
+        "call_id": "ev-003",
+        "function": "evaluate_odds"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "ev_shrink_factor": 1.0,
+            "ev_threshold": -0.5
+          },
+          "odds": [
+            {
+              "odds": 1.0,
+              "popularity": 1,
+              "umaban": 1
+            },
+            {
+              "odds": 4.5,
+              "popularity": 2,
+              "umaban": 2
+            },
+            {
+              "odds": 7.0,
+              "popularity": 3,
+              "umaban": 3
+            },
+            {
+              "odds": 12.0,
+              "popularity": 4,
+              "umaban": 4
+            },
+            {
+              "odds": 25.0,
+              "popularity": 5,
+              "umaban": 5
+            },
+            {
+              "odds": 40.0,
+              "popularity": 6,
+              "umaban": 6
+            }
+          ]
+        },
+        "call_id": "ev-004",
+        "function": "evaluate_odds"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "ev_shrink_factor": 1.0,
+            "ev_threshold": -0.5
+          },
+          "odds": []
+        },
+        "call_id": "ev-005",
+        "function": "evaluate_odds"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "ev_shrink_factor": 1.0,
+            "ev_threshold": -0.5
+          },
+          "odds": [
+            {
+              "odds": 3.0,
+              "popularity": 1,
+              "umaban": 1
+            }
+          ]
+        },
+        "call_id": "ev-006",
+        "function": "evaluate_odds"
+      }
+    ]
+  },
+  "known_defects": [
+    "E1",
+    "E3",
+    "E5"
+  ],
+  "legacy_behavior_note": "expected_output は旧実装が実際に返した値（欠陥候補を含む）。新仕様の期待値ではない。",
+  "scenario_ids": [
+    "GD04",
+    "GD07",
+    "GD08",
+    "GD09"
+  ],
+  "schema_version": 1,
+  "source_commit": "f7dbf69fd8940121782870de902e8c449e6ca149",
+  "source_function": [
+    "jraev.ev.decision.evaluate_odds"
+  ],
+  "source_repository": "puttun777/jra-bot"
+}

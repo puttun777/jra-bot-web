@@ -45,7 +45,7 @@
 - [x] T2.4 :persistence Doma DAO/Entity/変換（Testcontainers 統合テスト）← T2.2,T2.3 — 根拠: PR #8（claude/stage2-persistence-doma）。6 Repository、単体 15 件（Docker 不要）+ 統合 86 件 × MySQL 8.4 / 9.7 が GitHub Actions（run 39898663936、Temurin 25）で緑。Connector/J 26.10.0 も 8.4 / 9.7 で 86 件合格（非ゲート）。判断 D-070〜D-075、VERSIONS §10
 - [ ] T2.5 CI（build/lint/unit/DB統合/イメージ）、Renovate/Dependabot ← T2.1
   - 前半 **完了**（`ci.yml`: build/ktlint/依存方向/単体/JDK25/repo-hygiene、PR #5 で緑）。**DB 統合（MySQL 8.4/9.7 の `db-integration`）は T2.3 で追加済み（PR #7 で緑）**。イメージ・Dependabot・manifest は**未着手**（T2.5 は未完了のまま）
-- [ ] T2.6 ゴールデンテスト基盤（旧実装出力フィクスチャ生成スクリプト、実データ非含有）
+- [x] T2.6 ゴールデンテスト基盤（旧実装出力フィクスチャ生成スクリプト、実データ非含有）— **完了**（`tools/golden/`、固定コミット f7dbf69、10 ケース/447 呼び出しを旧実装から生成、CI `golden tests (Python 3.12)`。GD/G の大半は partial/planned で Stage 3 に引き継ぎ: `tools/golden/catalog.py`、D-089〜D-092）
 - [x] T2.7 :cloud-gcp `ModeProvider`（GCS, CONTRACTS §5.2）+ ローカル実装 ← T2.2 — 根拠: PR（claude/stage2-gcp-mode-provider。番号と CI は PROGRESS）。`CachingModeProvider`（15 秒キャッシュ・5 秒の再試行間隔・seq 単調性・fail closed）、GCS 実装（google-cloud-storage 2.75.0・読取りのみ）、ローカルファイル実装（`APP_ENV=local` のみ）、単体 55 件（実 GCP なし）。**実 GCP での動作は未検証**（第5段階の実環境検証で確認。既存の G-OPS-1〜9 に該当項目が無いので infra で追加が必要）
 - [x] T2.8 各実行アプリの最小起動（`/internal/health|ready`、`--task`、終了コード、CONTRACTS §4.3・§9）← T2.4,T2.7 — 根拠: PR（claude/stage2-app-bootstrap。番号と CI は PROGRESS）。3 アプリが独立起動、`/internal` は署名付きトークン認証（実 Google 鍵では未検証: G-AUTH-1）、スキーマ版検証（75/1 の区別）、bot の `--task` 振り分けと Job 契約（非 NORMAL で DB に触れない）、ingest 503/dashboard 409 のガード。**業務処理は未実装のスタブ**（本番は exit 1）。判断 D-081〜D-088、契約 0.4.4、STAGE2_HANDOFF §14.5
 - 実装順・完了条件・クラウドで実行できる/できないテストは `STAGE2_HANDOFF.md`

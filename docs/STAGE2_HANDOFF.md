@@ -218,3 +218,10 @@ Reader/Writer は分かれており、`XxxRepository` は両方を継承する�
   | G-APP-1 | Cloud Run 上で `/internal/health` が DB 停止中も 200、`/internal/ready` が STARTING 中に DB を確認できること（start の S8）。Cloud SQL の IAM/TLS の下での `flyway_schema_history` の読取り（`app`/`ingest`/`bot` の SELECT）と `SchemaVersionVerifier` の分類（Connector/J の例外が実環境でも想定どおりか） | 5 |
   | G-JOB-1 | Cloud Run Jobs で `--task` の引数が渡ること、終了コード 0/75/2/1 が Scheduler/通知で意図どおり扱われること | 5 |
 
+### 14.6 T2.6 の結果と T2.5 後半 / Stage 3 への引き継ぎ（ゴールデンテスト基盤）
+- `tools/golden/`（Python、Gradle 外）。使い方・形式・未実装は `tools/golden/README.md`、判断は D-089〜D-092。CI ジョブ `golden tests (Python 3.12)`（既存 6 ジョブは不変）。
+- **生成済み 10 ケース / 447 呼び出し**（固定コミット f7dbf69）。Kotlin 側は未実装で、`compare` の自己比較は比較器の検査にすぎない。
+- **Stage 3 の入口**: Kotlin ランナーは `fixtures/*.json` の `input.calls` を読み、`adapter.CALLS` と同名の関数（calc_ev, calc_kelly_fraction, estimate_prob_normalized, hash_bucket, model_predict, check_odds_drop, evaluate_odds ほか）を実行して `{"schema_version":1,"results":{case_id:{results:[…]}}}` を出力 → `compare`。E5（odds=1.0 の ZeroDivisionError）等は「旧挙動」として記録されており、新仕様（`ODDS_AT_PAR` 等）の期待値は別ケースとして追加する。
+- **未実装（catalog.py の planned / partial）**: ワイド・三連複の Plackett–Luce（E8〜E11）、hit_rate モード、max_total_bet_per_race 縮小（E6）、ML 例外ラベル（E1）、ensemble（G4）、decision 側ブレンド（G5）、合成 SQLite の特徴量ベクトル（G6）、時間帯スケジュール/adaptive_relaxation（run_daemon.py 側。時刻依存）、config.example.yaml 全キーの突合（T1.20）。
+- **次**: T2.5 後半（Docker イメージ・Dependabot・release-manifest）。T2.6 では未着手。
+

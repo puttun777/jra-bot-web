@@ -1,0 +1,1097 @@
+{
+  "case_id": "G2-HASH-001",
+  "comparison_rules": {
+    "default": {
+      "float": {
+        "abs_tol": 0.0,
+        "mode": "abs_tol"
+      }
+    },
+    "overrides": [
+      {
+        "mode": "ignore",
+        "path": "results.*.outcome.message"
+      }
+    ],
+    "strict": {
+      "key_set": true,
+      "list_order": true,
+      "nonfinite": "reject",
+      "types": true
+    }
+  },
+  "data_classification": "synthetic",
+  "description": "ハッシュ特徴（_hash_bucket / _hash_sign）。全角・結合文字・空・重複・不正サロゲート",
+  "execution_parameters": {
+    "clock": "not_used (対象関数は現在時刻を読まない。datetime.now を使う経路は対象外)",
+    "cwd": "empty temporary directory",
+    "fixed_time": "2026-01-01T00:00:00+09:00",
+    "libraries": {
+      "numpy": "2.5.3"
+    },
+    "ml_cfg": {
+      "enabled": false
+    },
+    "network": "blocked",
+    "seed": 20260101,
+    "timezone": "Asia/Tokyo"
+  },
+  "expected_output": {
+    "results": [
+      {
+        "call_id": "hb-000",
+        "outcome": {
+          "status": "ok",
+          "value": 4
+        }
+      },
+      {
+        "call_id": "hb-001",
+        "outcome": {
+          "status": "ok",
+          "value": 0
+        }
+      },
+      {
+        "call_id": "hb-002",
+        "outcome": {
+          "status": "ok",
+          "value": 20
+        }
+      },
+      {
+        "call_id": "hb-003",
+        "outcome": {
+          "status": "ok",
+          "value": 12
+        }
+      },
+      {
+        "call_id": "hb-004",
+        "outcome": {
+          "status": "ok",
+          "value": 0
+        }
+      },
+      {
+        "call_id": "hb-005",
+        "outcome": {
+          "status": "ok",
+          "value": 12
+        }
+      },
+      {
+        "call_id": "hb-006",
+        "outcome": {
+          "status": "ok",
+          "value": 1
+        }
+      },
+      {
+        "call_id": "hb-007",
+        "outcome": {
+          "status": "ok",
+          "value": 0
+        }
+      },
+      {
+        "call_id": "hb-008",
+        "outcome": {
+          "status": "ok",
+          "value": 33
+        }
+      },
+      {
+        "call_id": "hb-009",
+        "outcome": {
+          "status": "ok",
+          "value": 12
+        }
+      },
+      {
+        "call_id": "hb-010",
+        "outcome": {
+          "status": "ok",
+          "value": 0
+        }
+      },
+      {
+        "call_id": "hb-011",
+        "outcome": {
+          "status": "ok",
+          "value": 44
+        }
+      },
+      {
+        "call_id": "hb-012",
+        "outcome": {
+          "status": "ok",
+          "value": 12
+        }
+      },
+      {
+        "call_id": "hb-013",
+        "outcome": {
+          "status": "ok",
+          "value": 0
+        }
+      },
+      {
+        "call_id": "hb-014",
+        "outcome": {
+          "status": "ok",
+          "value": 28
+        }
+      },
+      {
+        "call_id": "hb-015",
+        "outcome": {
+          "status": "ok",
+          "value": 0
+        }
+      },
+      {
+        "call_id": "hb-016",
+        "outcome": {
+          "status": "ok",
+          "value": 0
+        }
+      },
+      {
+        "call_id": "hb-017",
+        "outcome": {
+          "status": "ok",
+          "value": 16
+        }
+      },
+      {
+        "call_id": "hb-018",
+        "outcome": {
+          "status": "ok",
+          "value": 3
+        }
+      },
+      {
+        "call_id": "hb-019",
+        "outcome": {
+          "status": "ok",
+          "value": 0
+        }
+      },
+      {
+        "call_id": "hb-020",
+        "outcome": {
+          "status": "ok",
+          "value": 3
+        }
+      },
+      {
+        "call_id": "hb-021",
+        "outcome": {
+          "status": "ok",
+          "value": 4
+        }
+      },
+      {
+        "call_id": "hb-022",
+        "outcome": {
+          "status": "ok",
+          "value": 0
+        }
+      },
+      {
+        "call_id": "hb-023",
+        "outcome": {
+          "status": "ok",
+          "value": 20
+        }
+      },
+      {
+        "call_id": "hb-024",
+        "outcome": {
+          "status": "ok",
+          "value": 11
+        }
+      },
+      {
+        "call_id": "hb-025",
+        "outcome": {
+          "status": "ok",
+          "value": 0
+        }
+      },
+      {
+        "call_id": "hb-026",
+        "outcome": {
+          "status": "ok",
+          "value": 59
+        }
+      },
+      {
+        "call_id": "hb-027",
+        "outcome": {
+          "status": "ok",
+          "value": 14
+        }
+      },
+      {
+        "call_id": "hb-028",
+        "outcome": {
+          "status": "ok",
+          "value": 0
+        }
+      },
+      {
+        "call_id": "hb-029",
+        "outcome": {
+          "status": "ok",
+          "value": 30
+        }
+      },
+      {
+        "call_id": "hb-030",
+        "outcome": {
+          "status": "ok",
+          "value": 3
+        }
+      },
+      {
+        "call_id": "hb-031",
+        "outcome": {
+          "status": "ok",
+          "value": 0
+        }
+      },
+      {
+        "call_id": "hb-032",
+        "outcome": {
+          "status": "ok",
+          "value": 51
+        }
+      },
+      {
+        "call_id": "hb-033",
+        "outcome": {
+          "status": "ok",
+          "value": 5
+        }
+      },
+      {
+        "call_id": "hb-034",
+        "outcome": {
+          "status": "ok",
+          "value": 0
+        }
+      },
+      {
+        "call_id": "hb-035",
+        "outcome": {
+          "status": "ok",
+          "value": 37
+        }
+      },
+      {
+        "call_id": "hb-036",
+        "outcome": {
+          "status": "ok",
+          "value": 14
+        }
+      },
+      {
+        "call_id": "hb-037",
+        "outcome": {
+          "status": "ok",
+          "value": 0
+        }
+      },
+      {
+        "call_id": "hb-038",
+        "outcome": {
+          "status": "ok",
+          "value": 14
+        }
+      },
+      {
+        "call_id": "hb-039",
+        "outcome": {
+          "status": "ok",
+          "value": 14
+        }
+      },
+      {
+        "call_id": "hb-040",
+        "outcome": {
+          "status": "ok",
+          "value": 0
+        }
+      },
+      {
+        "call_id": "hb-041",
+        "outcome": {
+          "status": "ok",
+          "value": 14
+        }
+      },
+      {
+        "call_id": "hb-042",
+        "outcome": {
+          "status": "ok",
+          "value": 10
+        }
+      },
+      {
+        "call_id": "hb-043",
+        "outcome": {
+          "status": "ok",
+          "value": 0
+        }
+      },
+      {
+        "call_id": "hb-044",
+        "outcome": {
+          "status": "ok",
+          "value": 10
+        }
+      },
+      {
+        "call_id": "hb-045",
+        "outcome": {
+          "status": "ok",
+          "value": 13
+        }
+      },
+      {
+        "call_id": "hb-046",
+        "outcome": {
+          "status": "ok",
+          "value": 0
+        }
+      },
+      {
+        "call_id": "hb-047",
+        "outcome": {
+          "status": "ok",
+          "value": 61
+        }
+      },
+      {
+        "call_id": "hb-048",
+        "outcome": {
+          "status": "ok",
+          "value": 3
+        }
+      },
+      {
+        "call_id": "hb-049",
+        "outcome": {
+          "status": "ok",
+          "value": 0
+        }
+      },
+      {
+        "call_id": "hb-050",
+        "outcome": {
+          "status": "ok",
+          "value": 19
+        }
+      },
+      {
+        "call_id": "hs-000",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "hs-001",
+        "outcome": {
+          "status": "ok",
+          "value": 1.0
+        }
+      },
+      {
+        "call_id": "hs-002",
+        "outcome": {
+          "status": "ok",
+          "value": 1.0
+        }
+      },
+      {
+        "call_id": "hs-003",
+        "outcome": {
+          "status": "ok",
+          "value": 1.0
+        }
+      },
+      {
+        "call_id": "hs-004",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "hs-005",
+        "outcome": {
+          "status": "ok",
+          "value": 1.0
+        }
+      },
+      {
+        "call_id": "hs-006",
+        "outcome": {
+          "status": "ok",
+          "value": 1.0
+        }
+      },
+      {
+        "call_id": "hs-007",
+        "outcome": {
+          "status": "ok",
+          "value": 1.0
+        }
+      },
+      {
+        "call_id": "hs-008",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "hs-009",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "hs-010",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "hs-011",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "hs-012",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "hs-013",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "hs-014",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "hs-015",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "hs-016",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "hz-000",
+        "outcome": {
+          "status": "ok",
+          "value": 0
+        }
+      },
+      {
+        "call_id": "hz-001",
+        "outcome": {
+          "status": "ok",
+          "value": 0
+        }
+      }
+    ]
+  },
+  "fixture_id": "golden/G2-HASH-001/v1",
+  "generator": {
+    "tool": "tools/golden",
+    "tool_version": "0.1.0"
+  },
+  "input": {
+    "calls": [
+      {
+        "args": {
+          "dim": 16,
+          "s": ""
+        },
+        "call_id": "hb-000",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 1,
+          "s": ""
+        },
+        "call_id": "hb-001",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 64,
+          "s": ""
+        },
+        "call_id": "hb-002",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 16,
+          "s": "a"
+        },
+        "call_id": "hb-003",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 1,
+          "s": "a"
+        },
+        "call_id": "hb-004",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 64,
+          "s": "a"
+        },
+        "call_id": "hb-005",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 16,
+          "s": "Alpha"
+        },
+        "call_id": "hb-006",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 1,
+          "s": "Alpha"
+        },
+        "call_id": "hb-007",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 64,
+          "s": "Alpha"
+        },
+        "call_id": "hb-008",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 16,
+          "s": "alpha"
+        },
+        "call_id": "hb-009",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 1,
+          "s": "alpha"
+        },
+        "call_id": "hb-010",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 64,
+          "s": "alpha"
+        },
+        "call_id": "hb-011",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 16,
+          "s": "ＡＢＣ"
+        },
+        "call_id": "hb-012",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 1,
+          "s": "ＡＢＣ"
+        },
+        "call_id": "hb-013",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 64,
+          "s": "ＡＢＣ"
+        },
+        "call_id": "hb-014",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 16,
+          "s": "ABC"
+        },
+        "call_id": "hb-015",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 1,
+          "s": "ABC"
+        },
+        "call_id": "hb-016",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 64,
+          "s": "ABC"
+        },
+        "call_id": "hb-017",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 16,
+          "s": "シンセティックサイアー001"
+        },
+        "call_id": "hb-018",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 1,
+          "s": "シンセティックサイアー001"
+        },
+        "call_id": "hb-019",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 64,
+          "s": "シンセティックサイアー001"
+        },
+        "call_id": "hb-020",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 16,
+          "s": "合成母父　テスト"
+        },
+        "call_id": "hb-021",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 1,
+          "s": "合成母父　テスト"
+        },
+        "call_id": "hb-022",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 64,
+          "s": "合成母父　テスト"
+        },
+        "call_id": "hb-023",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 16,
+          "s": "ひらがなのなまえ"
+        },
+        "call_id": "hb-024",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 1,
+          "s": "ひらがなのなまえ"
+        },
+        "call_id": "hb-025",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 64,
+          "s": "ひらがなのなまえ"
+        },
+        "call_id": "hb-026",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 16,
+          "s": "漢字名称"
+        },
+        "call_id": "hb-027",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 1,
+          "s": "漢字名称"
+        },
+        "call_id": "hb-028",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 64,
+          "s": "漢字名称"
+        },
+        "call_id": "hb-029",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 16,
+          "s": " leading"
+        },
+        "call_id": "hb-030",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 1,
+          "s": " leading"
+        },
+        "call_id": "hb-031",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 64,
+          "s": " leading"
+        },
+        "call_id": "hb-032",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 16,
+          "s": "trailing "
+        },
+        "call_id": "hb-033",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 1,
+          "s": "trailing "
+        },
+        "call_id": "hb-034",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 64,
+          "s": "trailing "
+        },
+        "call_id": "hb-035",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 16,
+          "s": "dup"
+        },
+        "call_id": "hb-036",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 1,
+          "s": "dup"
+        },
+        "call_id": "hb-037",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 64,
+          "s": "dup"
+        },
+        "call_id": "hb-038",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 16,
+          "s": "dup"
+        },
+        "call_id": "hb-039",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 1,
+          "s": "dup"
+        },
+        "call_id": "hb-040",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 64,
+          "s": "dup"
+        },
+        "call_id": "hb-041",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 16,
+          "s": "emoji🐎x"
+        },
+        "call_id": "hb-042",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 1,
+          "s": "emoji🐎x"
+        },
+        "call_id": "hb-043",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 64,
+          "s": "emoji🐎x"
+        },
+        "call_id": "hb-044",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 16,
+          "s": "NFCé"
+        },
+        "call_id": "hb-045",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 1,
+          "s": "NFCé"
+        },
+        "call_id": "hb-046",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 64,
+          "s": "NFCé"
+        },
+        "call_id": "hb-047",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 16,
+          "s": "NFD é"
+        },
+        "call_id": "hb-048",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 1,
+          "s": "NFD é"
+        },
+        "call_id": "hb-049",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": 64,
+          "s": "NFD é"
+        },
+        "call_id": "hb-050",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "s": ""
+        },
+        "call_id": "hs-000",
+        "function": "hash_sign"
+      },
+      {
+        "args": {
+          "s": "a"
+        },
+        "call_id": "hs-001",
+        "function": "hash_sign"
+      },
+      {
+        "args": {
+          "s": "Alpha"
+        },
+        "call_id": "hs-002",
+        "function": "hash_sign"
+      },
+      {
+        "args": {
+          "s": "alpha"
+        },
+        "call_id": "hs-003",
+        "function": "hash_sign"
+      },
+      {
+        "args": {
+          "s": "ＡＢＣ"
+        },
+        "call_id": "hs-004",
+        "function": "hash_sign"
+      },
+      {
+        "args": {
+          "s": "ABC"
+        },
+        "call_id": "hs-005",
+        "function": "hash_sign"
+      },
+      {
+        "args": {
+          "s": "シンセティックサイアー001"
+        },
+        "call_id": "hs-006",
+        "function": "hash_sign"
+      },
+      {
+        "args": {
+          "s": "合成母父　テスト"
+        },
+        "call_id": "hs-007",
+        "function": "hash_sign"
+      },
+      {
+        "args": {
+          "s": "ひらがなのなまえ"
+        },
+        "call_id": "hs-008",
+        "function": "hash_sign"
+      },
+      {
+        "args": {
+          "s": "漢字名称"
+        },
+        "call_id": "hs-009",
+        "function": "hash_sign"
+      },
+      {
+        "args": {
+          "s": " leading"
+        },
+        "call_id": "hs-010",
+        "function": "hash_sign"
+      },
+      {
+        "args": {
+          "s": "trailing "
+        },
+        "call_id": "hs-011",
+        "function": "hash_sign"
+      },
+      {
+        "args": {
+          "s": "dup"
+        },
+        "call_id": "hs-012",
+        "function": "hash_sign"
+      },
+      {
+        "args": {
+          "s": "dup"
+        },
+        "call_id": "hs-013",
+        "function": "hash_sign"
+      },
+      {
+        "args": {
+          "s": "emoji🐎x"
+        },
+        "call_id": "hs-014",
+        "function": "hash_sign"
+      },
+      {
+        "args": {
+          "s": "NFCé"
+        },
+        "call_id": "hs-015",
+        "function": "hash_sign"
+      },
+      {
+        "args": {
+          "s": "NFD é"
+        },
+        "call_id": "hs-016",
+        "function": "hash_sign"
+      },
+      {
+        "args": {
+          "dim": 0,
+          "s": "x"
+        },
+        "call_id": "hz-000",
+        "function": "hash_bucket"
+      },
+      {
+        "args": {
+          "dim": -3,
+          "s": "x"
+        },
+        "call_id": "hz-001",
+        "function": "hash_bucket"
+      }
+    ]
+  },
+  "known_defects": [],
+  "legacy_behavior_note": "expected_output は旧実装が実際に返した値（欠陥候補を含む）。新仕様の期待値ではない。",
+  "scenario_ids": [
+    "G2"
+  ],
+  "schema_version": 1,
+  "source_commit": "f7dbf69fd8940121782870de902e8c449e6ca149",
+  "source_function": [
+    "jraev.ml.features._hash_bucket",
+    "jraev.ml.features._hash_sign"
+  ],
+  "source_repository": "puttun777/jra-bot"
+}

@@ -1,0 +1,2124 @@
+{
+  "case_id": "GD01-EV-001",
+  "comparison_rules": {
+    "default": {
+      "float": {
+        "abs_tol": 1e-09,
+        "mode": "abs_tol"
+      }
+    },
+    "overrides": [],
+    "strict": {
+      "key_set": true,
+      "list_order": true,
+      "nonfinite": "reject",
+      "types": true
+    }
+  },
+  "data_classification": "synthetic",
+  "description": "calc_ev / calc_expected_return / calc_expected_profit の境界グリッド",
+  "execution_parameters": {
+    "clock": "not_used (対象関数は現在時刻を読まない。datetime.now を使う経路は対象外)",
+    "cwd": "empty temporary directory",
+    "fixed_time": "2026-01-01T00:00:00+09:00",
+    "libraries": {
+      "numpy": "2.5.3"
+    },
+    "ml_cfg": {
+      "enabled": false
+    },
+    "network": "blocked",
+    "seed": 20260101,
+    "timezone": "Asia/Tokyo"
+  },
+  "expected_output": {
+    "results": [
+      {
+        "call_id": "ev-000",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "ev-001",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "ev-002",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "ev-003",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "ev-004",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "ev-005",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "ev-006",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "ev-007",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "ev-008",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "ev-009",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "ev-010",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "ev-011",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "ev-012",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "ev-013",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "ev-014",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "ev-015",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "ev-016",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "ev-017",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "ev-018",
+        "outcome": {
+          "status": "ok",
+          "value": -0.9999999
+        }
+      },
+      {
+        "call_id": "ev-019",
+        "outcome": {
+          "status": "ok",
+          "value": -0.999999
+        }
+      },
+      {
+        "call_id": "ev-020",
+        "outcome": {
+          "status": "ok",
+          "value": -0.99999899
+        }
+      },
+      {
+        "call_id": "ev-021",
+        "outcome": {
+          "status": "ok",
+          "value": -0.999998
+        }
+      },
+      {
+        "call_id": "ev-022",
+        "outcome": {
+          "status": "ok",
+          "value": -0.99999
+        }
+      },
+      {
+        "call_id": "ev-023",
+        "outcome": {
+          "status": "ok",
+          "value": -0.999001
+        }
+      },
+      {
+        "call_id": "ev-024",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "ev-025",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "ev-026",
+        "outcome": {
+          "status": "ok",
+          "value": -0.99
+        }
+      },
+      {
+        "call_id": "ev-027",
+        "outcome": {
+          "status": "ok",
+          "value": -0.9
+        }
+      },
+      {
+        "call_id": "ev-028",
+        "outcome": {
+          "status": "ok",
+          "value": -0.899
+        }
+      },
+      {
+        "call_id": "ev-029",
+        "outcome": {
+          "status": "ok",
+          "value": -0.8
+        }
+      },
+      {
+        "call_id": "ev-030",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "ev-031",
+        "outcome": {
+          "status": "ok",
+          "value": 98.9
+        }
+      },
+      {
+        "call_id": "ev-032",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "ev-033",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "ev-034",
+        "outcome": {
+          "status": "ok",
+          "value": -0.975
+        }
+      },
+      {
+        "call_id": "ev-035",
+        "outcome": {
+          "status": "ok",
+          "value": -0.75
+        }
+      },
+      {
+        "call_id": "ev-036",
+        "outcome": {
+          "status": "ok",
+          "value": -0.7475
+        }
+      },
+      {
+        "call_id": "ev-037",
+        "outcome": {
+          "status": "ok",
+          "value": -0.5
+        }
+      },
+      {
+        "call_id": "ev-038",
+        "outcome": {
+          "status": "ok",
+          "value": 1.5
+        }
+      },
+      {
+        "call_id": "ev-039",
+        "outcome": {
+          "status": "ok",
+          "value": 248.75
+        }
+      },
+      {
+        "call_id": "ev-040",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "ev-041",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "ev-042",
+        "outcome": {
+          "status": "ok",
+          "value": -0.95
+        }
+      },
+      {
+        "call_id": "ev-043",
+        "outcome": {
+          "status": "ok",
+          "value": -0.5
+        }
+      },
+      {
+        "call_id": "ev-044",
+        "outcome": {
+          "status": "ok",
+          "value": -0.495
+        }
+      },
+      {
+        "call_id": "ev-045",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "ev-046",
+        "outcome": {
+          "status": "ok",
+          "value": 4.0
+        }
+      },
+      {
+        "call_id": "ev-047",
+        "outcome": {
+          "status": "ok",
+          "value": 498.5
+        }
+      },
+      {
+        "call_id": "ev-048",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "ev-049",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "ev-050",
+        "outcome": {
+          "status": "ok",
+          "value": -0.901
+        }
+      },
+      {
+        "call_id": "ev-051",
+        "outcome": {
+          "status": "ok",
+          "value": -0.010000000000000009
+        }
+      },
+      {
+        "call_id": "ev-052",
+        "outcome": {
+          "status": "ok",
+          "value": -9.999999999998899e-05
+        }
+      },
+      {
+        "call_id": "ev-053",
+        "outcome": {
+          "status": "ok",
+          "value": 0.98
+        }
+      },
+      {
+        "call_id": "ev-054",
+        "outcome": {
+          "status": "ok",
+          "value": 8.9
+        }
+      },
+      {
+        "call_id": "ev-055",
+        "outcome": {
+          "status": "ok",
+          "value": 988.01
+        }
+      },
+      {
+        "call_id": "ev-056",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "ev-057",
+        "outcome": {
+          "status": "ok",
+          "value": -1.0
+        }
+      },
+      {
+        "call_id": "ev-058",
+        "outcome": {
+          "status": "ok",
+          "value": -0.9
+        }
+      },
+      {
+        "call_id": "ev-059",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "ev-060",
+        "outcome": {
+          "status": "ok",
+          "value": 0.010000000000000009
+        }
+      },
+      {
+        "call_id": "ev-061",
+        "outcome": {
+          "status": "ok",
+          "value": 1.0
+        }
+      },
+      {
+        "call_id": "ev-062",
+        "outcome": {
+          "status": "ok",
+          "value": 9.0
+        }
+      },
+      {
+        "call_id": "ev-063",
+        "outcome": {
+          "status": "ok",
+          "value": 998.0
+        }
+      },
+      {
+        "call_id": "er-000",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "er-001",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "er-002",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "er-003",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "er-004",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "er-005",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "er-006",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "er-007",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "er-008",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "er-009",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "er-010",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "er-011",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "er-012",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "er-013",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "er-014",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "er-015",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "er-016",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "er-017",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "er-018",
+        "outcome": {
+          "status": "ok",
+          "value": 1e-07
+        }
+      },
+      {
+        "call_id": "er-019",
+        "outcome": {
+          "status": "ok",
+          "value": 1e-06
+        }
+      },
+      {
+        "call_id": "er-020",
+        "outcome": {
+          "status": "ok",
+          "value": 1.0099999999999999e-06
+        }
+      },
+      {
+        "call_id": "er-021",
+        "outcome": {
+          "status": "ok",
+          "value": 2e-06
+        }
+      },
+      {
+        "call_id": "er-022",
+        "outcome": {
+          "status": "ok",
+          "value": 9.999999999999999e-06
+        }
+      },
+      {
+        "call_id": "er-023",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0009989999999999999
+        }
+      },
+      {
+        "call_id": "er-024",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "er-025",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "er-026",
+        "outcome": {
+          "status": "ok",
+          "value": 0.010000000000000002
+        }
+      },
+      {
+        "call_id": "er-027",
+        "outcome": {
+          "status": "ok",
+          "value": 0.1
+        }
+      },
+      {
+        "call_id": "er-028",
+        "outcome": {
+          "status": "ok",
+          "value": 0.101
+        }
+      },
+      {
+        "call_id": "er-029",
+        "outcome": {
+          "status": "ok",
+          "value": 0.2
+        }
+      },
+      {
+        "call_id": "er-030",
+        "outcome": {
+          "status": "ok",
+          "value": 1.0
+        }
+      },
+      {
+        "call_id": "er-031",
+        "outcome": {
+          "status": "ok",
+          "value": 99.9
+        }
+      },
+      {
+        "call_id": "er-032",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "er-033",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "er-034",
+        "outcome": {
+          "status": "ok",
+          "value": 0.025
+        }
+      },
+      {
+        "call_id": "er-035",
+        "outcome": {
+          "status": "ok",
+          "value": 0.25
+        }
+      },
+      {
+        "call_id": "er-036",
+        "outcome": {
+          "status": "ok",
+          "value": 0.2525
+        }
+      },
+      {
+        "call_id": "er-037",
+        "outcome": {
+          "status": "ok",
+          "value": 0.5
+        }
+      },
+      {
+        "call_id": "er-038",
+        "outcome": {
+          "status": "ok",
+          "value": 2.5
+        }
+      },
+      {
+        "call_id": "er-039",
+        "outcome": {
+          "status": "ok",
+          "value": 249.75
+        }
+      },
+      {
+        "call_id": "er-040",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "er-041",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "er-042",
+        "outcome": {
+          "status": "ok",
+          "value": 0.05
+        }
+      },
+      {
+        "call_id": "er-043",
+        "outcome": {
+          "status": "ok",
+          "value": 0.5
+        }
+      },
+      {
+        "call_id": "er-044",
+        "outcome": {
+          "status": "ok",
+          "value": 0.505
+        }
+      },
+      {
+        "call_id": "er-045",
+        "outcome": {
+          "status": "ok",
+          "value": 1.0
+        }
+      },
+      {
+        "call_id": "er-046",
+        "outcome": {
+          "status": "ok",
+          "value": 5.0
+        }
+      },
+      {
+        "call_id": "er-047",
+        "outcome": {
+          "status": "ok",
+          "value": 499.5
+        }
+      },
+      {
+        "call_id": "er-048",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "er-049",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "er-050",
+        "outcome": {
+          "status": "ok",
+          "value": 0.099
+        }
+      },
+      {
+        "call_id": "er-051",
+        "outcome": {
+          "status": "ok",
+          "value": 0.99
+        }
+      },
+      {
+        "call_id": "er-052",
+        "outcome": {
+          "status": "ok",
+          "value": 0.9999
+        }
+      },
+      {
+        "call_id": "er-053",
+        "outcome": {
+          "status": "ok",
+          "value": 1.98
+        }
+      },
+      {
+        "call_id": "er-054",
+        "outcome": {
+          "status": "ok",
+          "value": 9.9
+        }
+      },
+      {
+        "call_id": "er-055",
+        "outcome": {
+          "status": "ok",
+          "value": 989.01
+        }
+      },
+      {
+        "call_id": "er-056",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "er-057",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "er-058",
+        "outcome": {
+          "status": "ok",
+          "value": 0.1
+        }
+      },
+      {
+        "call_id": "er-059",
+        "outcome": {
+          "status": "ok",
+          "value": 1.0
+        }
+      },
+      {
+        "call_id": "er-060",
+        "outcome": {
+          "status": "ok",
+          "value": 1.01
+        }
+      },
+      {
+        "call_id": "er-061",
+        "outcome": {
+          "status": "ok",
+          "value": 2.0
+        }
+      },
+      {
+        "call_id": "er-062",
+        "outcome": {
+          "status": "ok",
+          "value": 10.0
+        }
+      },
+      {
+        "call_id": "er-063",
+        "outcome": {
+          "status": "ok",
+          "value": 999.0
+        }
+      },
+      {
+        "call_id": "ep-000",
+        "outcome": {
+          "status": "ok",
+          "value": -10.0
+        }
+      },
+      {
+        "call_id": "ep-001",
+        "outcome": {
+          "status": "ok",
+          "value": -10.0
+        }
+      },
+      {
+        "call_id": "ep-002",
+        "outcome": {
+          "status": "ok",
+          "value": -10.0
+        }
+      },
+      {
+        "call_id": "ep-003",
+        "outcome": {
+          "status": "ok",
+          "value": -10.0
+        }
+      },
+      {
+        "call_id": "ep-004",
+        "outcome": {
+          "status": "ok",
+          "value": -7.0
+        }
+      },
+      {
+        "call_id": "ep-005",
+        "outcome": {
+          "status": "ok",
+          "value": -2.5
+        }
+      },
+      {
+        "call_id": "ep-006",
+        "outcome": {
+          "status": "ok",
+          "value": -10.0
+        }
+      },
+      {
+        "call_id": "ep-007",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "ep-008",
+        "outcome": {
+          "status": "ok",
+          "value": 15.0
+        }
+      }
+    ]
+  },
+  "fixture_id": "golden/GD01-EV-001/v1",
+  "generator": {
+    "tool": "tools/golden",
+    "tool_version": "0.1.0"
+  },
+  "input": {
+    "calls": [
+      {
+        "args": {
+          "odds": -1.0,
+          "prob": -0.1
+        },
+        "call_id": "ev-000",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 0.0,
+          "prob": -0.1
+        },
+        "call_id": "ev-001",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 0.1,
+          "prob": -0.1
+        },
+        "call_id": "ev-002",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 1.0,
+          "prob": -0.1
+        },
+        "call_id": "ev-003",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 1.01,
+          "prob": -0.1
+        },
+        "call_id": "ev-004",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 2.0,
+          "prob": -0.1
+        },
+        "call_id": "ev-005",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 10.0,
+          "prob": -0.1
+        },
+        "call_id": "ev-006",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 999.0,
+          "prob": -0.1
+        },
+        "call_id": "ev-007",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": -1.0,
+          "prob": 0.0
+        },
+        "call_id": "ev-008",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 0.0,
+          "prob": 0.0
+        },
+        "call_id": "ev-009",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 0.1,
+          "prob": 0.0
+        },
+        "call_id": "ev-010",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 1.0,
+          "prob": 0.0
+        },
+        "call_id": "ev-011",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 1.01,
+          "prob": 0.0
+        },
+        "call_id": "ev-012",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 2.0,
+          "prob": 0.0
+        },
+        "call_id": "ev-013",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 10.0,
+          "prob": 0.0
+        },
+        "call_id": "ev-014",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 999.0,
+          "prob": 0.0
+        },
+        "call_id": "ev-015",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": -1.0,
+          "prob": 1e-06
+        },
+        "call_id": "ev-016",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 0.0,
+          "prob": 1e-06
+        },
+        "call_id": "ev-017",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 0.1,
+          "prob": 1e-06
+        },
+        "call_id": "ev-018",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 1.0,
+          "prob": 1e-06
+        },
+        "call_id": "ev-019",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 1.01,
+          "prob": 1e-06
+        },
+        "call_id": "ev-020",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 2.0,
+          "prob": 1e-06
+        },
+        "call_id": "ev-021",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 10.0,
+          "prob": 1e-06
+        },
+        "call_id": "ev-022",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 999.0,
+          "prob": 1e-06
+        },
+        "call_id": "ev-023",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": -1.0,
+          "prob": 0.1
+        },
+        "call_id": "ev-024",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 0.0,
+          "prob": 0.1
+        },
+        "call_id": "ev-025",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 0.1,
+          "prob": 0.1
+        },
+        "call_id": "ev-026",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 1.0,
+          "prob": 0.1
+        },
+        "call_id": "ev-027",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 1.01,
+          "prob": 0.1
+        },
+        "call_id": "ev-028",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 2.0,
+          "prob": 0.1
+        },
+        "call_id": "ev-029",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 10.0,
+          "prob": 0.1
+        },
+        "call_id": "ev-030",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 999.0,
+          "prob": 0.1
+        },
+        "call_id": "ev-031",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": -1.0,
+          "prob": 0.25
+        },
+        "call_id": "ev-032",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 0.0,
+          "prob": 0.25
+        },
+        "call_id": "ev-033",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 0.1,
+          "prob": 0.25
+        },
+        "call_id": "ev-034",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 1.0,
+          "prob": 0.25
+        },
+        "call_id": "ev-035",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 1.01,
+          "prob": 0.25
+        },
+        "call_id": "ev-036",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 2.0,
+          "prob": 0.25
+        },
+        "call_id": "ev-037",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 10.0,
+          "prob": 0.25
+        },
+        "call_id": "ev-038",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 999.0,
+          "prob": 0.25
+        },
+        "call_id": "ev-039",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": -1.0,
+          "prob": 0.5
+        },
+        "call_id": "ev-040",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 0.0,
+          "prob": 0.5
+        },
+        "call_id": "ev-041",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 0.1,
+          "prob": 0.5
+        },
+        "call_id": "ev-042",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 1.0,
+          "prob": 0.5
+        },
+        "call_id": "ev-043",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 1.01,
+          "prob": 0.5
+        },
+        "call_id": "ev-044",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 2.0,
+          "prob": 0.5
+        },
+        "call_id": "ev-045",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 10.0,
+          "prob": 0.5
+        },
+        "call_id": "ev-046",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 999.0,
+          "prob": 0.5
+        },
+        "call_id": "ev-047",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": -1.0,
+          "prob": 0.99
+        },
+        "call_id": "ev-048",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 0.0,
+          "prob": 0.99
+        },
+        "call_id": "ev-049",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 0.1,
+          "prob": 0.99
+        },
+        "call_id": "ev-050",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 1.0,
+          "prob": 0.99
+        },
+        "call_id": "ev-051",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 1.01,
+          "prob": 0.99
+        },
+        "call_id": "ev-052",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 2.0,
+          "prob": 0.99
+        },
+        "call_id": "ev-053",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 10.0,
+          "prob": 0.99
+        },
+        "call_id": "ev-054",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 999.0,
+          "prob": 0.99
+        },
+        "call_id": "ev-055",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": -1.0,
+          "prob": 1.0
+        },
+        "call_id": "ev-056",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 0.0,
+          "prob": 1.0
+        },
+        "call_id": "ev-057",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 0.1,
+          "prob": 1.0
+        },
+        "call_id": "ev-058",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 1.0,
+          "prob": 1.0
+        },
+        "call_id": "ev-059",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 1.01,
+          "prob": 1.0
+        },
+        "call_id": "ev-060",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 2.0,
+          "prob": 1.0
+        },
+        "call_id": "ev-061",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 10.0,
+          "prob": 1.0
+        },
+        "call_id": "ev-062",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": 999.0,
+          "prob": 1.0
+        },
+        "call_id": "ev-063",
+        "function": "calc_ev"
+      },
+      {
+        "args": {
+          "odds": -1.0,
+          "prob": -0.1
+        },
+        "call_id": "er-000",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 0.0,
+          "prob": -0.1
+        },
+        "call_id": "er-001",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 0.1,
+          "prob": -0.1
+        },
+        "call_id": "er-002",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 1.0,
+          "prob": -0.1
+        },
+        "call_id": "er-003",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 1.01,
+          "prob": -0.1
+        },
+        "call_id": "er-004",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 2.0,
+          "prob": -0.1
+        },
+        "call_id": "er-005",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 10.0,
+          "prob": -0.1
+        },
+        "call_id": "er-006",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 999.0,
+          "prob": -0.1
+        },
+        "call_id": "er-007",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": -1.0,
+          "prob": 0.0
+        },
+        "call_id": "er-008",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 0.0,
+          "prob": 0.0
+        },
+        "call_id": "er-009",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 0.1,
+          "prob": 0.0
+        },
+        "call_id": "er-010",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 1.0,
+          "prob": 0.0
+        },
+        "call_id": "er-011",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 1.01,
+          "prob": 0.0
+        },
+        "call_id": "er-012",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 2.0,
+          "prob": 0.0
+        },
+        "call_id": "er-013",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 10.0,
+          "prob": 0.0
+        },
+        "call_id": "er-014",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 999.0,
+          "prob": 0.0
+        },
+        "call_id": "er-015",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": -1.0,
+          "prob": 1e-06
+        },
+        "call_id": "er-016",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 0.0,
+          "prob": 1e-06
+        },
+        "call_id": "er-017",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 0.1,
+          "prob": 1e-06
+        },
+        "call_id": "er-018",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 1.0,
+          "prob": 1e-06
+        },
+        "call_id": "er-019",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 1.01,
+          "prob": 1e-06
+        },
+        "call_id": "er-020",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 2.0,
+          "prob": 1e-06
+        },
+        "call_id": "er-021",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 10.0,
+          "prob": 1e-06
+        },
+        "call_id": "er-022",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 999.0,
+          "prob": 1e-06
+        },
+        "call_id": "er-023",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": -1.0,
+          "prob": 0.1
+        },
+        "call_id": "er-024",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 0.0,
+          "prob": 0.1
+        },
+        "call_id": "er-025",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 0.1,
+          "prob": 0.1
+        },
+        "call_id": "er-026",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 1.0,
+          "prob": 0.1
+        },
+        "call_id": "er-027",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 1.01,
+          "prob": 0.1
+        },
+        "call_id": "er-028",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 2.0,
+          "prob": 0.1
+        },
+        "call_id": "er-029",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 10.0,
+          "prob": 0.1
+        },
+        "call_id": "er-030",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 999.0,
+          "prob": 0.1
+        },
+        "call_id": "er-031",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": -1.0,
+          "prob": 0.25
+        },
+        "call_id": "er-032",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 0.0,
+          "prob": 0.25
+        },
+        "call_id": "er-033",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 0.1,
+          "prob": 0.25
+        },
+        "call_id": "er-034",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 1.0,
+          "prob": 0.25
+        },
+        "call_id": "er-035",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 1.01,
+          "prob": 0.25
+        },
+        "call_id": "er-036",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 2.0,
+          "prob": 0.25
+        },
+        "call_id": "er-037",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 10.0,
+          "prob": 0.25
+        },
+        "call_id": "er-038",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 999.0,
+          "prob": 0.25
+        },
+        "call_id": "er-039",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": -1.0,
+          "prob": 0.5
+        },
+        "call_id": "er-040",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 0.0,
+          "prob": 0.5
+        },
+        "call_id": "er-041",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 0.1,
+          "prob": 0.5
+        },
+        "call_id": "er-042",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 1.0,
+          "prob": 0.5
+        },
+        "call_id": "er-043",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 1.01,
+          "prob": 0.5
+        },
+        "call_id": "er-044",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 2.0,
+          "prob": 0.5
+        },
+        "call_id": "er-045",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 10.0,
+          "prob": 0.5
+        },
+        "call_id": "er-046",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 999.0,
+          "prob": 0.5
+        },
+        "call_id": "er-047",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": -1.0,
+          "prob": 0.99
+        },
+        "call_id": "er-048",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 0.0,
+          "prob": 0.99
+        },
+        "call_id": "er-049",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 0.1,
+          "prob": 0.99
+        },
+        "call_id": "er-050",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 1.0,
+          "prob": 0.99
+        },
+        "call_id": "er-051",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 1.01,
+          "prob": 0.99
+        },
+        "call_id": "er-052",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 2.0,
+          "prob": 0.99
+        },
+        "call_id": "er-053",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 10.0,
+          "prob": 0.99
+        },
+        "call_id": "er-054",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 999.0,
+          "prob": 0.99
+        },
+        "call_id": "er-055",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": -1.0,
+          "prob": 1.0
+        },
+        "call_id": "er-056",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 0.0,
+          "prob": 1.0
+        },
+        "call_id": "er-057",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 0.1,
+          "prob": 1.0
+        },
+        "call_id": "er-058",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 1.0,
+          "prob": 1.0
+        },
+        "call_id": "er-059",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 1.01,
+          "prob": 1.0
+        },
+        "call_id": "er-060",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 2.0,
+          "prob": 1.0
+        },
+        "call_id": "er-061",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 10.0,
+          "prob": 1.0
+        },
+        "call_id": "er-062",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 999.0,
+          "prob": 1.0
+        },
+        "call_id": "er-063",
+        "function": "calc_expected_return"
+      },
+      {
+        "args": {
+          "odds": 0.0,
+          "prob": 0.0,
+          "stake": 10.0
+        },
+        "call_id": "ep-000",
+        "function": "calc_expected_profit"
+      },
+      {
+        "args": {
+          "odds": 1.0,
+          "prob": 0.0,
+          "stake": 10.0
+        },
+        "call_id": "ep-001",
+        "function": "calc_expected_profit"
+      },
+      {
+        "args": {
+          "odds": 2.5,
+          "prob": 0.0,
+          "stake": 10.0
+        },
+        "call_id": "ep-002",
+        "function": "calc_expected_profit"
+      },
+      {
+        "args": {
+          "odds": 0.0,
+          "prob": 0.3,
+          "stake": 10.0
+        },
+        "call_id": "ep-003",
+        "function": "calc_expected_profit"
+      },
+      {
+        "args": {
+          "odds": 1.0,
+          "prob": 0.3,
+          "stake": 10.0
+        },
+        "call_id": "ep-004",
+        "function": "calc_expected_profit"
+      },
+      {
+        "args": {
+          "odds": 2.5,
+          "prob": 0.3,
+          "stake": 10.0
+        },
+        "call_id": "ep-005",
+        "function": "calc_expected_profit"
+      },
+      {
+        "args": {
+          "odds": 0.0,
+          "prob": 1.0,
+          "stake": 10.0
+        },
+        "call_id": "ep-006",
+        "function": "calc_expected_profit"
+      },
+      {
+        "args": {
+          "odds": 1.0,
+          "prob": 1.0,
+          "stake": 10.0
+        },
+        "call_id": "ep-007",
+        "function": "calc_expected_profit"
+      },
+      {
+        "args": {
+          "odds": 2.5,
+          "prob": 1.0,
+          "stake": 10.0
+        },
+        "call_id": "ep-008",
+        "function": "calc_expected_profit"
+      }
+    ]
+  },
+  "known_defects": [],
+  "legacy_behavior_note": "expected_output は旧実装が実際に返した値（欠陥候補を含む）。新仕様の期待値ではない。",
+  "scenario_ids": [
+    "GD01"
+  ],
+  "schema_version": 1,
+  "source_commit": "f7dbf69fd8940121782870de902e8c449e6ca149",
+  "source_function": [
+    "jraev.ev.ev_calc.calc_ev",
+    "jraev.ev.ev_calc.calc_expected_return",
+    "jraev.ev.ev_calc.calc_expected_profit"
+  ],
+  "source_repository": "puttun777/jra-bot"
+}

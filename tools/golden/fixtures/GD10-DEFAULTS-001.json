@@ -1,0 +1,239 @@
+{
+  "case_id": "GD10-DEFAULTS-001",
+  "comparison_rules": {
+    "default": {
+      "float": {
+        "abs_tol": 0.0,
+        "mode": "abs_tol"
+      }
+    },
+    "overrides": [],
+    "strict": {
+      "key_set": true,
+      "list_order": true,
+      "nonfinite": "reject",
+      "types": true
+    }
+  },
+  "data_classification": "synthetic",
+  "description": "関数シグネチャの既定値（D-016: 関数既定と example config の食い違い確認用）",
+  "execution_parameters": {
+    "clock": "not_used (対象関数は現在時刻を読まない。datetime.now を使う経路は対象外)",
+    "cwd": "empty temporary directory",
+    "fixed_time": "2026-01-01T00:00:00+09:00",
+    "libraries": {
+      "numpy": "2.5.3"
+    },
+    "ml_cfg": {
+      "enabled": false
+    },
+    "network": "blocked",
+    "seed": 20260101,
+    "timezone": "Asia/Tokyo"
+  },
+  "expected_output": {
+    "results": [
+      {
+        "call_id": "sd-000",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bankroll": 100.0,
+            "bet_strategy": "kelly",
+            "bet_type_mode": "multi",
+            "bet_types": null,
+            "box_size": 4,
+            "db": null,
+            "drop_threshold": 0.2,
+            "enable_prob_clip": true,
+            "ev_shrink_factor": 0.7,
+            "ev_threshold": 0.08,
+            "fixed_bet_amount": 1.0,
+            "hit_rate_bet_type_priority": null,
+            "hit_rate_min_ev": null,
+            "include_bet_strategy": true,
+            "kelly_fraction": 0.25,
+            "max_bet": 10.0,
+            "max_signals": 2,
+            "max_tickets_per_type": 6,
+            "max_total_bet_per_race": null,
+            "min_bet": 1.0,
+            "ml_cfg": null,
+            "ml_market_blend_alpha": null,
+            "ml_model_path": null,
+            "notify_skips": false,
+            "plackett_luce_alpha": 1.0,
+            "priority_mode": "edge",
+            "race_id": null,
+            "recent_snapshots_func": null,
+            "require_real_odds_for_combo": true,
+            "return_debug": false,
+            "sanrenpuku_max_over_market": 0.0,
+            "sanrenpuku_max_prob": 0.2,
+            "sanrenpuku_min_prob": 0.0,
+            "sanrenpuku_odds_map": null,
+            "sanrenpuku_payout_rate": 0.75,
+            "show_adjusted_mkt": false,
+            "surge_threshold": 3,
+            "ticket_allocation": "best_only",
+            "top_k_partners": 6,
+            "wide_max_over_market": 0.0,
+            "wide_max_prob": 0.35,
+            "wide_min_prob": 0.0,
+            "wide_odds_map": null,
+            "wide_payout_rate": 0.775,
+            "win_max_over_market": 0.0,
+            "win_odds_max": null,
+            "win_payout_rate": 0.8,
+            "win_prob_clip_max": null,
+            "win_prob_min": null,
+            "win_ratio_min": null
+          }
+        }
+      },
+      {
+        "call_id": "sd-001",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "allowed_bet_types": null,
+            "bankroll": 100.0,
+            "bet_strategy": "kelly",
+            "box_size": 4,
+            "ev_shrink_factor": 0.7,
+            "fixed_bet_amount": 1.0,
+            "kelly_fraction": 0.25,
+            "max_bet": 10.0,
+            "max_fraction": 0.25,
+            "max_tickets_per_type": 6,
+            "min_bet": 1.0,
+            "odds_data": null,
+            "plackett_luce_alpha": 1.0,
+            "prob_source": "unknown",
+            "probs_by_umaban": null,
+            "require_real_odds_for_combo": true,
+            "sanrenpuku_max_over_market": 0.0,
+            "sanrenpuku_max_prob": 0.2,
+            "sanrenpuku_min_prob": 0.0,
+            "sanrenpuku_odds_map": null,
+            "sanrenpuku_payout_rate": 0.75,
+            "ticket_allocation": "best_only",
+            "top_k_partners": 6,
+            "wide_max_over_market": 0.0,
+            "wide_max_prob": 0.35,
+            "wide_min_prob": 0.0,
+            "wide_odds_map": null,
+            "wide_payout_rate": 0.775
+          }
+        }
+      },
+      {
+        "call_id": "sd-002",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "max_fraction": 0.25
+          }
+        }
+      },
+      {
+        "call_id": "sd-003",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bankroll": 100.0,
+            "max_bet": 10.0,
+            "max_fraction": 0.25,
+            "min_bet": 1.0
+          }
+        }
+      },
+      {
+        "call_id": "sd-004",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "drop_threshold": 0.2
+          }
+        }
+      },
+      {
+        "call_id": "sd-005",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "surge_threshold": 3
+          }
+        }
+      }
+    ]
+  },
+  "fixture_id": "golden/GD10-DEFAULTS-001/v1",
+  "generator": {
+    "tool": "tools/golden",
+    "tool_version": "0.1.0"
+  },
+  "input": {
+    "calls": [
+      {
+        "args": {
+          "function": "evaluate_odds",
+          "module": "decision"
+        },
+        "call_id": "sd-000",
+        "function": "signature_defaults"
+      },
+      {
+        "args": {
+          "function": "suggest_multiple_bet_strategies",
+          "module": "bet_strategy"
+        },
+        "call_id": "sd-001",
+        "function": "signature_defaults"
+      },
+      {
+        "args": {
+          "function": "calc_kelly_fraction",
+          "module": "ev_calc"
+        },
+        "call_id": "sd-002",
+        "function": "signature_defaults"
+      },
+      {
+        "args": {
+          "function": "suggest_bet_amount",
+          "module": "ev_calc"
+        },
+        "call_id": "sd-003",
+        "function": "signature_defaults"
+      },
+      {
+        "args": {
+          "function": "check_odds_drop",
+          "module": "decision"
+        },
+        "call_id": "sd-004",
+        "function": "signature_defaults"
+      },
+      {
+        "args": {
+          "function": "check_popularity_surge",
+          "module": "decision"
+        },
+        "call_id": "sd-005",
+        "function": "signature_defaults"
+      }
+    ]
+  },
+  "known_defects": [],
+  "legacy_behavior_note": "expected_output は旧実装が実際に返した値（欠陥候補を含む）。新仕様の期待値ではない。",
+  "scenario_ids": [
+    "GD10"
+  ],
+  "schema_version": 1,
+  "source_commit": "f7dbf69fd8940121782870de902e8c449e6ca149",
+  "source_function": [
+    "inspect.signature(jraev.ev.decision.evaluate_odds ほか)"
+  ],
+  "source_repository": "puttun777/jra-bot"
+}
