@@ -36,7 +36,9 @@ class TestSigner(
     fun jwk(): String =
         when (val pub = keyPair.public) {
             is ECPublicKey -> {
-                """{"alg":"ES256","crv":"P-256","kid":"$kid","kty":"EC","use":"sig","x":"${b64(fixed(pub.w.affineX, 32))}","y":"${b64(fixed(pub.w.affineY, 32))}"}"""
+                """{"alg":"ES256","crv":"P-256","kid":"$kid","kty":"EC","use":"sig","x":"${b64(
+                    fixed(pub.w.affineX, 32),
+                )}","y":"${b64(fixed(pub.w.affineY, 32))}"}"""
             }
 
             is RSAPublicKey -> {
@@ -72,7 +74,8 @@ class TestSigner(
                 KeyPairGenerator.getInstance("EC").apply { initialize(ECGenParameterSpec("secp256r1")) }.generateKeyPair(),
             )
 
-        fun rs256(kid: String = "rsa-1"): TestSigner = TestSigner(kid, "RS256", KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.generateKeyPair())
+        fun rs256(kid: String = "rsa-1"): TestSigner =
+            TestSigner(kid, "RS256", KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.generateKeyPair())
 
         private fun b64(bytes: ByteArray): String = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
 

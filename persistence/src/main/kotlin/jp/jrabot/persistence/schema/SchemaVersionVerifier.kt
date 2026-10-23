@@ -109,7 +109,10 @@ class SchemaVersionVerifier(
         chain: List<Throwable>,
         sql: List<SQLException>,
     ): Boolean =
-        chain.any { it is SQLTransientConnectionException || it is SQLRecoverableException || it is SocketException || it is SocketTimeoutException || it is UnknownHostException } ||
+        chain.any {
+            it is SQLTransientConnectionException || it is SQLRecoverableException || it is SocketException || it is SocketTimeoutException ||
+                it is UnknownHostException
+        } ||
             sql.any { it.sqlState == SQLSTATE_COMMUNICATION_FAILURE || it.errorCode == MYSQL_TOO_MANY_CONNECTIONS }
 
     companion object {

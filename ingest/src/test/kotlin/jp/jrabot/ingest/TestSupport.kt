@@ -84,7 +84,11 @@ class Resp(
     val body: String,
     private val headers: Map<String, List<String>>,
 ) {
-    fun header(name: String): String? = headers.entries.firstOrNull { it.key.equals(name, ignoreCase = true) }?.value?.firstOrNull()
+    fun header(name: String): String? =
+        headers.entries
+            .firstOrNull { it.key.equals(name, ignoreCase = true) }
+            ?.value
+            ?.firstOrNull()
 }
 
 /** 実際のサーバ（ランダムポート）への HTTP クライアント。パスは正規化せずそのまま送る。 */
@@ -125,7 +129,8 @@ fun writeOpsState(
     dir.resolve("ops-state.json").also {
         Files.writeString(
             it,
-            """{"schema_version":1,"seq":$seq,"mode":"$mode","desired":{"mode":"$desired","set_by":"github:synthetic","set_at":"2026-11-01T10:00:00Z","reason":"test"},""" +
+            """{"schema_version":1,"seq":$seq,"mode":"$mode","desired":{"mode":"$desired","set_by":"github:synthetic",""" +
+                """"set_at":"2026-11-01T10:00:00Z","reason":"test"},""" +
                 """"operation":{"id":"op-1","type":"stop","status":"SUCCEEDED","force":false}}""",
         )
     }

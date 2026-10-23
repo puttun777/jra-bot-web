@@ -60,7 +60,8 @@ class SchemaVersionVerifierIntegrationTest {
         assertEquals(SchemaCheck.Satisfied(SchemaVersion.parse("2")), verifier("bot", required = "1").check())
         val newer = MySqlSupport.migratedDatabase()
         newer.exec(
-            "INSERT INTO flyway_schema_history (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) " +
+            "INSERT INTO flyway_schema_history (installed_rank, version, description, type, script, checksum, " +
+                "installed_by, installed_on, execution_time, success) " +
                 "VALUES (99, '10', 'future', 'SQL', 'V10__future.sql', 0, 'migrate', NOW(), 1, 1)",
         )
         val ds = track(DataSourceFactory.createLazy(DbSettings(MySqlSupport.jdbcUrl(newer.name), "app", MySqlSupport.PASSWORDS.getValue("app"), 1), "newer"))
@@ -71,7 +72,8 @@ class SchemaVersionVerifierIntegrationTest {
     fun `失敗した版（success=0）は数えない`() {
         val d = MySqlSupport.migratedDatabase()
         d.exec(
-            "INSERT INTO flyway_schema_history (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) " +
+            "INSERT INTO flyway_schema_history (installed_rank, version, description, type, script, checksum, " +
+                "installed_by, installed_on, execution_time, success) " +
                 "VALUES (99, '3', 'broken', 'SQL', 'V3__broken.sql', 0, 'migrate', NOW(), 1, 0)",
         )
         val ds = track(DataSourceFactory.createLazy(DbSettings(MySqlSupport.jdbcUrl(d.name), "bot", MySqlSupport.PASSWORDS.getValue("bot"), 1), "failedver"))
@@ -82,7 +84,8 @@ class SchemaVersionVerifierIntegrationTest {
     fun `Repeatable（版なし）の行は無視し、10 は 9 より新しい（数値比較）`() {
         val d = MySqlSupport.migratedDatabase()
         d.exec(
-            "INSERT INTO flyway_schema_history (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) " +
+            "INSERT INTO flyway_schema_history (installed_rank, version, description, type, script, checksum, " +
+                "installed_by, installed_on, execution_time, success) " +
                 "VALUES (98, '9', 'nine', 'SQL', 'V9__nine.sql', 0, 'migrate', NOW(), 1, 1), (99, '10', 'ten', 'SQL', 'V10__ten.sql', 0, 'migrate', NOW(), 1, 1)",
         )
         val ds = track(DataSourceFactory.createLazy(DbSettings(MySqlSupport.jdbcUrl(d.name), "bot", MySqlSupport.PASSWORDS.getValue("bot"), 1), "numeric"))
@@ -91,7 +94,13 @@ class SchemaVersionVerifierIntegrationTest {
 
     @Test
     fun `履歴の表が無い空の DB は Insufficient（現在版なし）で、マイグレーションを実行しない`() {
-        val name = "jrempty" + UUID.randomUUID().toString().replace("-", "").take(8)
+        val name =
+            "jrempty" +
+                UUID
+                    .randomUUID()
+                    .toString()
+                    .replace("-", "")
+                    .take(8)
         MySqlSupport.rootConnection(null).use { c ->
             c.createStatement().use {
                 it.execute("CREATE DATABASE `$name`")

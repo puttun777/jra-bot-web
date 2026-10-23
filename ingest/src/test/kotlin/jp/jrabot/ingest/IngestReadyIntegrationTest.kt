@@ -29,8 +29,7 @@ class IngestReadyIntegrationTest {
         @AfterAll
         fun stop() = proxy.close()
 
-        private fun dbUrl(viaProxy: Boolean = true) =
-            if (viaProxy) "jdbc:mysql://127.0.0.1:${proxy.port}/${db.name}" else MySqlSupport.jdbcUrl(db.name)
+        private fun dbUrl(viaProxy: Boolean = true) = if (viaProxy) "jdbc:mysql://127.0.0.1:${proxy.port}/${db.name}" else MySqlSupport.jdbcUrl(db.name)
 
         private fun run(
             vararg extra: String,
@@ -41,7 +40,16 @@ class IngestReadyIntegrationTest {
             val props =
                 baseProperties(ops).filterNot { it.startsWith("DB_URL=") || it.startsWith("DB_PASSWORD=") } +
                     listOf("DB_URL=$url", "DB_PASSWORD=$password", "server.port=0") + extra
-            val sources = if (guardConfig) arrayOf(IngestApplication::class.java, TestAuthConfig::class.java, AgentGuardTestConfig::class.java) else arrayOf(IngestApplication::class.java, TestAuthConfig::class.java)
+            val sources =
+                if (guardConfig) {
+                    arrayOf(
+                        IngestApplication::class.java,
+                        TestAuthConfig::class.java,
+                        AgentGuardTestConfig::class.java,
+                    )
+                } else {
+                    arrayOf(IngestApplication::class.java, TestAuthConfig::class.java)
+                }
             val ctx = SpringApplicationBuilder(*sources).run(*props.map { "--$it" }.toTypedArray())
             return ctx to Http(ctx.environment.serverPort())
         }
@@ -53,7 +61,8 @@ class IngestReadyIntegrationTest {
             version: String,
             success: Int = 1,
         ) = setHistory(
-            "INSERT INTO flyway_schema_history (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) " +
+            "INSERT INTO flyway_schema_history (installed_rank, version, description, type, script, checksum, " +
+                "installed_by, installed_on, execution_time, success) " +
                 "VALUES ($rank, '$version', 'synthetic', 'SQL', 'V$version.sql', 0, 'migrate', NOW(), 1, $success)",
         )
     }
@@ -139,7 +148,13 @@ class IngestReadyIntegrationTest {
 
     @Test
     fun `接続はできるが履歴の表が無い DB は ready=503 SCHEMA_INSUFFICIENT`() {
-        val empty = "jrnohist" + java.util.UUID.randomUUID().toString().replace("-", "").take(8)
+        val empty =
+            "jrnohist" +
+                java.util.UUID
+                    .randomUUID()
+                    .toString()
+                    .replace("-", "")
+                    .take(8)
         MySqlSupport.rootConnection(null).use { c ->
             c.createStatement().use {
                 it.execute("CREATE DATABASE `$empty`")
@@ -190,7 +205,12 @@ class IngestReadyIntegrationTest {
         ctx.use {
             val ds = ctx.getBean(javax.sql.DataSource::class.java)
             ds.connection.use { c ->
-                c.createStatement().use { s -> s.executeQuery("SELECT CURRENT_USER()").use { rs -> rs.next(); assertTrue(rs.getString(1).startsWith("ingest@")) } }
+                c.createStatement().use { s ->
+                    s.executeQuery("SELECT CURRENT_USER()").use { rs ->
+                        rs.next()
+                        assertTrue(rs.getString(1).startsWith("ingest@"))
+                    }
+                }
                 val e = runCatching { c.createStatement().use { it.execute("CREATE TABLE should_not_exist (x INT)") } }.exceptionOrNull()
                 assertTrue(e != null, "ingest ユーザーで DDL が実行できてしまった")
             }

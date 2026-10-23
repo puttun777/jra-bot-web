@@ -74,7 +74,15 @@ class GoogleSignedTokenVerifierTest {
 
     @Test
     fun `別の鍵で署名されたトークンは同じ kid でも拒否される`() {
-        val forged = TestSigner(ec.kid, "ES256", java.security.KeyPairGenerator.getInstance("EC").apply { initialize(256) }.generateKeyPair())
+        val forged =
+            TestSigner(
+                ec.kid,
+                "ES256",
+                java.security.KeyPairGenerator
+                    .getInstance("EC")
+                    .apply { initialize(256) }
+                    .generateKeyPair(),
+            )
         assertRejected(RejectReason.INVALID, iap().verify(forged.token(Claims.iap())))
     }
 
@@ -92,7 +100,12 @@ class GoogleSignedTokenVerifierTest {
     @Test
     fun `alg が none のトークン・署名なしは拒否される`() {
         val header = """{"alg":"none","typ":"JWT"}"""
-        val b64 = { s: String -> java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(s.toByteArray()) }
+        val b64 = { s: String ->
+            java.util.Base64
+                .getUrlEncoder()
+                .withoutPadding()
+                .encodeToString(s.toByteArray())
+        }
         assertRejected(null, iap().verify("${b64(header)}.${b64("{${Claims.iap()}}")}."))
         assertRejected(null, iap().verify(ec.token(Claims.iap(), header = header)))
     }
@@ -140,7 +153,12 @@ class GoogleSignedTokenVerifierTest {
 
     @Test
     fun `exp が無いトークンは拒否される`() {
-        val claims = Claims.iap().split(",").filterNot { it.startsWith("\"exp\"") }.joinToString(",")
+        val claims =
+            Claims
+                .iap()
+                .split(",")
+                .filterNot { it.startsWith("\"exp\"") }
+                .joinToString(",")
         assertRejected(null, iap().verify(ec.token(claims)))
     }
 

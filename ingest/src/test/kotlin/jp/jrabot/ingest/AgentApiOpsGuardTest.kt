@@ -88,7 +88,15 @@ class AgentApiOpsGuardTest {
     @Test
     fun `パスの書き換えでガードを迂回できない`() {
         mode.mode = OpsMode.STOPPED
-        for (path in listOf("//v1/agent/plan", "/V1/AGENT/plan", "/v1/agent;x=1/plan", "/v1/./agent/plan", "/x/../v1/agent/plan", "/v1/agent/plan/", "/%76%31/agent/plan")) {
+        for (path in listOf(
+            "//v1/agent/plan",
+            "/V1/AGENT/plan",
+            "/v1/agent;x=1/plan",
+            "/v1/./agent/plan",
+            "/x/../v1/agent/plan",
+            "/v1/agent/plan/",
+            "/%76%31/agent/plan",
+        )) {
             assertNotEquals(200, http.get(path).status, path)
         }
         assertEquals(0, probe.reached.get())

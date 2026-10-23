@@ -25,7 +25,14 @@ class DashboardSettings(
             val appEnv =
                 AppEnv.parseOrNull(get("APP_ENV"))
                     ?: throw IllegalStateException("APP_ENV は local または prod を指定してください")
-            val db = DbSettings.fromEnv(listOf("DB_URL", "DB_USER", "DB_PASSWORD", "DB_POOL_MAX").mapNotNull { k -> get(k)?.let { k to it } }.toMap(), DEFAULT_POOL_MAX)
+            val db =
+                DbSettings.fromEnv(
+                    listOf("DB_URL", "DB_USER", "DB_PASSWORD", "DB_POOL_MAX")
+                        .mapNotNull { k ->
+                            get(k)?.let { k to it }
+                        }.toMap(),
+                    DEFAULT_POOL_MAX,
+                )
             // 最小権限: 本番では dashboard 用（app）のユーザー以外（migrate など強い権限）で動かさない。ローカルは任意のユーザーを許す
             check(appEnv == AppEnv.LOCAL || db.user == DB_USER) { "DB_USER が dashboard 用のユーザー($DB_USER)ではない" }
             val opsEnv = listOf(OpsModeProviders.ENV_SOURCE, OpsModeProviders.ENV_APP).mapNotNull { k -> get(k)?.let { k to it } }.toMap()

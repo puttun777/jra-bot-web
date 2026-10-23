@@ -21,9 +21,7 @@ class DashboardStartupConfigTest {
             .properties(*props)
             .run(*props.map { "--$it" }.toTypedArray())
 
-    private fun base(
-        vararg override: Pair<String, String?>,
-    ): Array<String> {
+    private fun base(vararg override: Pair<String, String?>): Array<String> {
         val m = baseProperties(ops).associate { it.substringBefore('=') to it.substringAfter('=') }.toMutableMap()
         override.forEach { (k, v) -> if (v == null) m.remove(k) else m[k] = v }
         return m.map { "${it.key}=${it.value}" }.toTypedArray()

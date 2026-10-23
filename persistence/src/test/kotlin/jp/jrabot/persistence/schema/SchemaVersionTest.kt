@@ -53,7 +53,10 @@ class SchemaCheckClassificationTest {
 
     @Test
     fun `接続系の例外は Unreachable`() {
-        assertEquals(SchemaCheck.Unreachable, checkFailingWith(SQLTransientConnectionException("pool timeout", SQLException("x", "08S01", 0, ConnectException("refused")))))
+        assertEquals(
+            SchemaCheck.Unreachable,
+            checkFailingWith(SQLTransientConnectionException("pool timeout", SQLException("x", "08S01", 0, ConnectException("refused")))),
+        )
         assertEquals(SchemaCheck.Unreachable, checkFailingWith(SQLException("Communications link failure", "08S01", 0)))
         assertEquals(SchemaCheck.Unreachable, checkFailingWith(SQLRecoverableException("lost")))
         assertEquals(SchemaCheck.Unreachable, checkFailingWith(SQLException("outer", "HY000", 0, SocketTimeoutException("read timed out"))))

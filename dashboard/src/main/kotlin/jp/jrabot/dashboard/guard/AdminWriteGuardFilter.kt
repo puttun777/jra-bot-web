@@ -26,7 +26,8 @@ import org.springframework.web.filter.OncePerRequestFilter
 class AdminWriteGuardFilter(
     private val modeProvider: ModeProvider,
 ) : OncePerRequestFilter() {
-    override fun shouldNotFilter(request: HttpServletRequest): Boolean = request.method.uppercase() in SAFE_METHODS || RequestPaths.isUnder(request.requestURI, "/internal")
+    override fun shouldNotFilter(request: HttpServletRequest): Boolean =
+        request.method.uppercase() in SAFE_METHODS || RequestPaths.isUnder(request.requestURI, "/internal")
 
     override fun doFilterInternal(
         request: HttpServletRequest,

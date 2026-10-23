@@ -47,7 +47,12 @@ class ReadinessController(
                 }
 
                 is SchemaCheck.Insufficient -> {
-                    mapOf("status" to "NOT_READY", "reason" to "SCHEMA_INSUFFICIENT", "schemaVersion" to check.current?.toString(), "requiredSchemaVersion" to required)
+                    mapOf(
+                        "status" to "NOT_READY",
+                        "reason" to "SCHEMA_INSUFFICIENT",
+                        "schemaVersion" to check.current?.toString(),
+                        "requiredSchemaVersion" to required,
+                    )
                 }
 
                 SchemaCheck.Unreachable -> {
@@ -55,7 +60,18 @@ class ReadinessController(
                 }
 
                 is SchemaCheck.Failed -> {
-                    mapOf("status" to "NOT_READY", "reason" to if (check.reason == SchemaFailure.AUTHENTICATION) "DB_AUTH_FAILED" else "DB_ERROR", "requiredSchemaVersion" to required)
+                    mapOf(
+                        "status" to "NOT_READY",
+                        "reason" to
+                            if (check.reason ==
+                                SchemaFailure.AUTHENTICATION
+                            ) {
+                                "DB_AUTH_FAILED"
+                            } else {
+                                "DB_ERROR"
+                            },
+                        "requiredSchemaVersion" to required,
+                    )
                 }
             }
         return noStore(body, if (check is SchemaCheck.Satisfied) 200 else 503)

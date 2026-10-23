@@ -53,7 +53,12 @@ class SpringBootAppPlugin : Plugin<Project> {
             t.environment("MYSQL_IMAGE", System.getenv("MYSQL_IMAGE") ?: "mysql:8.4")
             t.systemProperty(
                 "dbmigration.install.dir",
-                target.project(":db-migration").layout.buildDirectory.dir("install/db-migration").get().asFile.path,
+                target
+                    .project(":db-migration")
+                    .layout.buildDirectory
+                    .dir("install/db-migration")
+                    .get()
+                    .asFile.path,
             )
             t.outputs.upToDateWhen { false } // テストの再利用（キャッシュ）で DB 検証を飛ばさない
         }
