@@ -100,6 +100,13 @@ class MigrationScriptsTest {
                 val (childCols, parent, parentCols) = m.destructured
                 if (parent == "code_venue" || parent == "tenant") continue
                 checked++
+                if (name == "ml_model" && parent == "ml_model") {
+                    // 自己参照 FK だけは列順を変える（MySQL 9.7.4 が (tenant_id, x) → (tenant_id, y) の自己参照 FK を検査しないため: D-069）
+                    assertTrue("tenant_id" in childCols && "tenant_id" in parentCols, "$name → $parent: tenant_id を含む ($childCols / $parentCols)")
+                    assertEquals(childCols.split(", ").indexOf("tenant_id"), parentCols.split(", ").indexOf("tenant_id"), "tenant_id の位置が一致する")
+                    assertFalse(childCols.startsWith("tenant_id,"), "自己参照 FK は tenant_id を先頭にしない（D-069）")
+                    continue
+                }
                 assertTrue(childCols.startsWith("tenant_id,"), "$name → $parent: 子の FK 列は tenant_id から始まる ($childCols)")
                 assertTrue(parentCols.startsWith("tenant_id,"), "$name → $parent: 親の参照列は tenant_id から始まる ($parentCols)")
             }

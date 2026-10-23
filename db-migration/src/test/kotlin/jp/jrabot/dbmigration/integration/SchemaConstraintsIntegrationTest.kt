@@ -168,6 +168,7 @@ class SchemaConstraintsIntegrationTest {
         expectFk("INSERT INTO race_evaluations (tenant_id, race_id, snapshot_at, model_id, created_at) VALUES (2, '$race2', '2026-11-01 04:00:00', 'm1', $now)")
         ok("INSERT INTO race_evaluations (tenant_id, race_id, snapshot_at, model_id, created_at) VALUES (2, '$race2', '2026-11-01 04:00:00', 'm2', $now)")
         expectFk(modelSql(2, "m3", previous = "m1"))
+        expectFk(modelSql(2, "m4", previous = "no-such-model")) // 存在しない親（MySQL 9.7.4 の自己参照 FK の未検査に対する回帰テスト: D-069）
         ok(modelSql(2, "m3", previous = "m2"))
     }
 

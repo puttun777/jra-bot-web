@@ -289,6 +289,9 @@ CREATE TABLE bot_run (
 -- ---------------------------------------------------------------------------
 -- ML モデルのレジストリ（ML_DESIGN §6）。モデル本体は GCS で、ここには参照と整合性の情報だけを置く。
 -- model_id は domain の ModelId（[A-Za-z0-9_-]{1,64}）に合わせて VARCHAR(64)（設計案の CHAR(36) より広い: D-065）。
+-- previous_model_id の自己参照 FK は (previous_model_id, tenant_id) → (model_id, tenant_id) の順にする。MySQL 9.7.4 は、子と親で同じ位置に
+-- 同じ列（tenant_id）が重なる複合の自己参照 FK（(tenant_id, prev) → (tenant_id, model_id)）を**検査しない**ことを CI で確認した
+-- （8.4 は検査する。単一列の自己参照・別表への複合 FK は 9.7.4 でも検査される）。D-069。
 -- 有効なモデルは (tenant_id, kind) ごとに 1 つ: ACTIVE のときだけ active_flag = 1（CHECK）で、UNIQUE が 2 つ目の ACTIVE を拒否する。
 -- signature_sha256 は GCS の .sig の SHA-256（署名そのものと鍵は保存しない。署名の検証は bot が行う）。
 -- ---------------------------------------------------------------------------
@@ -313,9 +316,10 @@ CREATE TABLE ml_model (
   previous_model_id   VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
   PRIMARY KEY (tenant_id, model_id),
   UNIQUE KEY uq_ml_model_active (tenant_id, kind, active_flag),
-  KEY ix_ml_model_previous (tenant_id, previous_model_id),
+  UNIQUE KEY uq_ml_model_id_tenant (model_id, tenant_id),
+  KEY ix_ml_model_previous (previous_model_id, tenant_id),
   CONSTRAINT fk_ml_model_tenant FOREIGN KEY (tenant_id) REFERENCES tenant (tenant_id),
-  CONSTRAINT fk_ml_model_previous FOREIGN KEY (tenant_id, previous_model_id) REFERENCES ml_model (tenant_id, model_id),
+  CONSTRAINT fk_ml_model_previous FOREIGN KEY (previous_model_id, tenant_id) REFERENCES ml_model (model_id, tenant_id),
   CONSTRAINT ck_ml_model_id_form CHECK (model_id REGEXP '^[A-Za-z0-9_-]{1,64}$'),
   CONSTRAINT ck_ml_model_schema_version CHECK (schema_version >= 1),
   CONSTRAINT ck_ml_model_sha256 CHECK (sha256 REGEXP '^[0-9a-f]{64}$'),

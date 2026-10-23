@@ -235,7 +235,7 @@ class MigrationApplyIntegrationTest {
         val tenantScopedFkWithoutTenant =
             db.query(
                 "SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = '${db.name}' AND ORDINAL_POSITION = 1 " +
-                    "AND REFERENCED_TABLE_NAME IS NOT NULL AND REFERENCED_TABLE_NAME NOT IN ('tenant', 'code_venue') AND COLUMN_NAME <> 'tenant_id'",
+                    "AND REFERENCED_TABLE_NAME IS NOT NULL AND REFERENCED_TABLE_NAME NOT IN ('tenant', 'code_venue') AND COLUMN_NAME <> 'tenant_id' AND CONSTRAINT_NAME <> 'fk_ml_model_previous'",
             ) { it.getString(1) }
         assertEquals(emptyList(), tenantScopedFkWithoutTenant)
         assertTrue(db.scalar("SELECT COUNT(*) FROM information_schema.REFERENTIAL_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = '${db.name}'")!!.toInt() >= 40)
