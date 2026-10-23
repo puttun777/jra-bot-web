@@ -58,5 +58,8 @@ python3 -m tools.release.cli preview --git-sha $SHA --built-at "$(date -u -d @$(
 ## ゴールデンテスト基盤（T2.6）
 `tools/golden/`: 旧 JRA Bot を**固定コミット f7dbf69** で実行して得た結果を、**合成入力**の JSON フィクスチャとして保存・検証・比較する Python ツール（Gradle 外）。検証: `python3 -m tools.golden.verify`、比較: `python3 -m tools.golden.compare --actual <kotlin出力.json>`、再生成の確認: `python -m tools.golden.generate --legacy-path <jra-bot> --check`。手順・フィクスチャ形式・未実装ケースは `tools/golden/README.md`。CI は `golden tests (Python 3.12)` ジョブ。合成データでの一致は実データでの正確性を意味しない。
 
+## 判定ロジックの Kotlin 移植（T3.1 単勝 / T3.2 ワイド・三連複）
+`:domain` の `jp.jrabot.domain.decision`（純粋 Kotlin）。EV・Kelly・市場確率・急落フィルタ・単勝の判定（T3.1）に加え、ワイド/三連複の Plackett–Luce 確率（`PlackettLuce`）・推定オッズ（`ComboOddsEstimate`）・実オッズの注入（`ComboOdds`）・流し/BOX・`ticket_allocation`・`StrategyEntry.tickets`（T3.2）。`WinDecisionEvaluator.evaluate(horses, realOdds)` が旧 `evaluate_odds` と同じ順序で判定する。金額は旧実装の「点」（`Double`）。旧実装との比較は検証専用の `:golden-runner` と `tools/golden/kotlin_compare.py`（CI の `build` ジョブ）で、21 ケース/810 呼び出しのうち Kotlin が検証したのは 18 ケース/661 呼び出し（全一致。ML・特徴量ハッシュ・旧関数既定値の 3 ケース/149 呼び出しは未対応で、成功に数えない）。未承認の数値変更（E6/E12/E14/H4/H10 の改善案）は未実装で、`pipeline_version=legacy`・`fixes.*=false` のみ。本番で動作する Bot ではない（`StubTaskHandler` は未置換）。
+
 ## Git に含めないもの
 実データ（JV-Data・SQLite・DB ダンプ）、学習済みモデル（`*.pkl` 等）、秘密情報、JV-Link SDK の資料、ビルド生成物（`.gitignore` と `repo-hygiene` ジョブで防ぐ）。テストデータは合成データだけを使う。

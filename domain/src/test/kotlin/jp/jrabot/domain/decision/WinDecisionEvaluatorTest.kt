@@ -419,10 +419,13 @@ class WinDecisionEvaluatorTest {
     }
 
     @Test
-    fun `推定オッズでワイド三連複を判定する経路は未対応（T3_2）で、黙って単勝だけにしない`() {
-        assertFailsWith<UnsupportedDecisionScopeException> { evaluate(loose.copy(requireRealOddsForCombo = false), race6) }
-        // 単勝だけを対象にするなら、その設定でも問題ない
-        assertEquals(2, bets(evaluate(loose.copy(requireRealOddsForCombo = false, betTypes = setOf(BetType.WIN)), race6)).size)
+    fun `推定オッズでワイド三連複を判定する経路（require_real_odds_for_combo=false） - 例外にならず、単勝の結果は変わらない`() {
+        val requireReal = evaluate(loose, race6)
+        val estimated = evaluate(loose.copy(requireRealOddsForCombo = false), race6)
+        // 6 頭の市場確率では推定オッズのワイド/三連複は EV が正にならず、単勝が最推奨のまま
+        assertEquals(bets(requireReal).map { it.umaban to it.betAmount }, bets(estimated).map { it.umaban to it.betAmount })
+        assertEquals(listOf(BetType.WIN, BetType.WIDE, BetType.SANRENPUKU), bets(requireReal)[0].betStrategy!!.strategies.map { it.type })
+        assertEquals(listOf(BetType.WIN), bets(estimated)[0].betStrategy!!.strategies.map { it.type }, "買い目が無ければ見送りエントリは作らない")
     }
 
     @Test

@@ -1,7 +1,9 @@
 package jp.jrabot.domain.decision
 
 /**
- * 単勝の判定。参照元 `ev/decision.py` の `evaluate_odds` のうち、**ML 無効（市場フォールバック）・DB なし・単勝**の経路を同じ分岐順で再現する。
+ * 単勝・ワイド・三連複の判定。参照元 `ev/decision.py` の `evaluate_odds` のうち、**ML 無効（市場フォールバック）・DB なし**の経路を同じ分岐順で再現する。
+ * ワイド・三連複の買い目は [BetStrategyBuilder]（Plackett–Luce・実オッズ・流し/BOX・`ticket_allocation`）が作り、最推奨になった賭式がそのままシグナルになる。
+ * 実オッズは [evaluate] の引数 [ComboOdds] で渡す（DB 取得は T3.4 以降）。
  *
  * 流れ（旧実装と同順）:
  * 1. 入力なしなら空（旧実装は入力が空のとき `return_debug` でも配列だけを返すので、[WinDecisionResult.legacyRejectCounts] は null）。
@@ -24,13 +26,17 @@ class WinDecisionEvaluator(
     private val stake =
         WinStake(config.evShrinkFactor, config.kellyFraction, config.bankroll, config.minBet, config.maxBet, config.probSource)
 
-    fun evaluate(horses: List<DecisionHorse>): WinDecisionResult {
+    fun evaluate(
+        horses: List<DecisionHorse>,
+        realOdds: ComboOdds = ComboOdds.EMPTY,
+    ): WinDecisionResult {
         if (horses.isEmpty()) return WinDecisionResult(emptyList(), null, emptyList(), config.probSource)
 
         val oddsValues = horses.map { it.odds }
         val normalized = MarketProbability.estimateProbNormalized(oddsValues)
         val probs = MarketBlend.apply(normalized, oddsValues, config.marketBlendAlpha, config.enableProbClip, config.probClipMax)
 
+        val race = ComboRaceContext(horses, probs, realOdds, config.combo)
         val counts = Counter()
         val rejections = mutableListOf<Rejection>()
         val snapshotErrors = mutableListOf<Int>()
@@ -88,7 +94,7 @@ class WinDecisionEvaluator(
 
             val bundle =
                 try {
-                    BetStrategyBuilder.build(horse.umaban, ProbRaw(prob), odds, config, stake)
+                    BetStrategyBuilder.build(horse.umaban, ProbRaw(prob), odds, config, stake, race)
                 } catch (e: LegacyZeroDivisionException) {
                     reject(horse, DecisionReason.ODDS_AT_PAR)
                     continue
@@ -207,10 +213,66 @@ class WinDecisionEvaluator(
         )
     }
 
-    private fun sortSignals(signals: List<DecisionSignal>): List<DecisionSignal> {
+    private fun sortSignals(signals: List<DecisionSignal>): List<DecisionSignal> =
+        SignalOrdering.sorted(signals, config.priorityMode, config.hitRateBetTypePriority)
+
+    private fun applyRaceCap(selected: List<DecisionSignal>): List<DecisionSignal> {
+        val cap = config.maxTotalBetPerRace
+        if (cap == null || !(cap > 0)) return selected
+        var total = 0.0
+        for (s in selected) {
+            total +=
+                when (s) {
+                    is BetSignal -> s.betAmount
+                    is SkipSignal -> s.betAmount ?: 0.0
+                }
+        }
+        if (!(total > cap && total > 0)) return selected
+
+        val scale = cap / total
+        return selected.map { s ->
+            when (s) {
+                is BetSignal -> s.copy(betAmount = s.betAmount * scale, betStrategy = s.betStrategy?.withRaceCap(cap, scale))
+                is SkipSignal -> s.copy(betAmount = (s.betAmount ?: 0.0) * scale, betStrategy = s.betStrategy.withRaceCap(cap, scale))
+            }
+        }
+    }
+
+    private class Counter {
+        private val counts = HashMap<String, Int>()
+
+        fun add(reason: DecisionReason) {
+            reason.legacyCounter?.let { counts.merge(it, 1, Int::plus) }
+        }
+
+        fun toLegacy() =
+            LegacyRejectCounts(
+                evBelow = counts["ev_below"] ?: 0,
+                oddsCap = counts["odds_cap"] ?: 0,
+                probBelow = counts["prob_below"] ?: 0,
+                ratioBelow = counts["ratio_below"] ?: 0,
+                dropFiltered = counts["drop_filtered"] ?: 0,
+                kellyBelowMinbet = counts["kelly_below_minbet"] ?: 0,
+            )
+    }
+}
+
+/**
+ * シグナルの並び（旧 `evaluate_odds` の末尾のソート）。
+ * - edge: EV の降順。
+ * - hit_rate: (確率 `p_final`（見送りシグナルは `prob`）, EV, −賭式優先の番号) の降順。賭式優先は `hit_rate_bet_type_priority`（null/空は [ワイド, 三連複]）の
+ *   添字（昇順が優先）で、リストに無い賭式（単勝を含む）は 999。
+ * 同点は入力順（Python の `sort(reverse=True)` も安定）。複数の賭式が同点になったときの優先順位をここで検証できるよう、独立した部品にしてある。
+ */
+internal object SignalOrdering {
+    fun sorted(
+        signals: List<DecisionSignal>,
+        mode: PriorityMode,
+        hitRateBetTypePriority: List<String>?,
+    ): List<DecisionSignal> {
         val comparator: Comparator<DecisionSignal> =
-            if (config.priorityMode == PriorityMode.HIT_RATE) {
-                val priority = config.hitRateBetTypePriority?.takeIf { it.isNotEmpty() } ?: listOf(BetType.WIDE.label, BetType.SANRENPUKU.label)
+            if (mode == PriorityMode.HIT_RATE) {
+                val priority = hitRateBetTypePriority?.takeIf { it.isNotEmpty() } ?: listOf(BetType.WIDE.label, BetType.SANRENPUKU.label)
                 Comparator { a, b ->
                     val byProb = descending(hitRateProb(a), hitRateProb(b))
                     if (byProb != 0) {
@@ -253,44 +315,4 @@ class WinDecisionEvaluator(
         } else {
             0
         }
-
-    private fun applyRaceCap(selected: List<DecisionSignal>): List<DecisionSignal> {
-        val cap = config.maxTotalBetPerRace
-        if (cap == null || !(cap > 0)) return selected
-        var total = 0.0
-        for (s in selected) {
-            total +=
-                when (s) {
-                    is BetSignal -> s.betAmount
-                    is SkipSignal -> s.betAmount ?: 0.0
-                }
-        }
-        if (!(total > cap && total > 0)) return selected
-
-        val scale = cap / total
-        return selected.map { s ->
-            when (s) {
-                is BetSignal -> s.copy(betAmount = s.betAmount * scale, betStrategy = s.betStrategy?.withRaceCap(cap, scale))
-                is SkipSignal -> s.copy(betAmount = (s.betAmount ?: 0.0) * scale, betStrategy = s.betStrategy.withRaceCap(cap, scale))
-            }
-        }
-    }
-
-    private class Counter {
-        private val counts = HashMap<String, Int>()
-
-        fun add(reason: DecisionReason) {
-            reason.legacyCounter?.let { counts.merge(it, 1, Int::plus) }
-        }
-
-        fun toLegacy() =
-            LegacyRejectCounts(
-                evBelow = counts["ev_below"] ?: 0,
-                oddsCap = counts["odds_cap"] ?: 0,
-                probBelow = counts["prob_below"] ?: 0,
-                ratioBelow = counts["ratio_below"] ?: 0,
-                dropFiltered = counts["drop_filtered"] ?: 0,
-                kellyBelowMinbet = counts["kelly_below_minbet"] ?: 0,
-            )
-    }
 }

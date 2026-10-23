@@ -46,9 +46,44 @@
       "sha256": "8845906a8c1679d35ac7ee5a60c38d5b2345513754b6a0a937df1765afc8881f"
     },
     {
+      "case_id": "GD05-BOX-007",
+      "path": "GD05-BOX-007.json",
+      "sha256": "99ec3b42709b15fcacc3d69fadad7a11bf402130387f91f6477deb6cf7b6786f"
+    },
+    {
       "case_id": "GD05-COMBO-001",
       "path": "GD05-COMBO-001.json",
       "sha256": "0e87142c256c0cae6ec49fba9ae6645dbb48f229c6dcce30a9c2c12e95721022"
+    },
+    {
+      "case_id": "GD05-FILTER-009",
+      "path": "GD05-FILTER-009.json",
+      "sha256": "1b3f1bcd8e6ec20c095fc0e2d551c64b5dacb38f645a7ab8dc49c19a07da6054"
+    },
+    {
+      "case_id": "GD05-FLOW-006",
+      "path": "GD05-FLOW-006.json",
+      "sha256": "86b5cc1c198e83953c3f6694072211845272e928c5eb0c8b329555c3eca23fb5"
+    },
+    {
+      "case_id": "GD05-PL-005",
+      "path": "GD05-PL-005.json",
+      "sha256": "adfadecb2490177d9f70099588b712dcc278a47711dc1294a0367760a8112dae"
+    },
+    {
+      "case_id": "GD05-REAL-008",
+      "path": "GD05-REAL-008.json",
+      "sha256": "13245fa00e94875092d3bbd72f05380defb467d7d43566f6e2e2985ff1017ef0"
+    },
+    {
+      "case_id": "GD06-EVAL-011",
+      "path": "GD06-EVAL-011.json",
+      "sha256": "7c204a3ec8a8f1a6107e76c4c2243a4b63489f3e159c64f4db5f98fed9d1b66b"
+    },
+    {
+      "case_id": "GD07-COMBO-STAKE-010",
+      "path": "GD07-COMBO-STAKE-010.json",
+      "sha256": "5fc5c079978768223d5de9616dcfea83a5188e80afa435e4f0926960078f8a8d"
     },
     {
       "case_id": "GD07-SIZING-004",

@@ -7,7 +7,7 @@ enum class PriorityMode { EDGE, HIT_RATE }
 enum class BetTypeMode { MULTI, BEST_ONLY }
 
 /**
- * 単勝の判定（[WinDecisionEvaluator]）の設定。旧 `evaluate_odds` の引数のうち T3.1 の範囲（単勝と、それに付随する見送り）のもの。
+ * 判定（[WinDecisionEvaluator]）の設定。旧 `evaluate_odds` の引数のうち、ML・DB を使わない範囲（単勝・ワイド・三連複の判定と、それに付随する見送り）のもの。
  *
  * **運用の既定値は持たない**（全項目が必須）。旧実装は関数の既定値と `config.example.yaml` が食い違う（D-016、MIGRATION_MATRIX §7.2）ので、
  * どちらを運用の既定にするかは T1.20（実 config の確認）・T3.8（bot-run の設定）で決める。[legacyFunctionDefaults] は**旧関数のシグネチャの既定値**で、
@@ -19,8 +19,8 @@ enum class BetTypeMode { MULTI, BEST_ONLY }
  * - [probSource] は確率源のラベル。ML 無効の市場フォールバックでは `market:fallback(ml_disabled)`。Kelly 係数（H10）とメタ情報に使う。
  * - [ensembleBeta] は ML 特徴量カバレッジ表示（`beta_eff`）の既定にだけ使う。ML 経路は T3.6 で、ここでは判定に影響しない。
  *
- * 未対応（設定できない）: ML（`db` / `race_id` 付きの特徴量推定・ensemble）、ワイド/三連複の買い目（T3.2。[requireRealOddsForCombo]=false と
- * 実オッズの受け渡しは [UnsupportedDecisionScopeException]）、固定額賭け（旧実装でも実質無効: [WinStake]）。
+ * ワイド・三連複の買い目は T3.2 で実装した（[combo]・実オッズは [WinDecisionEvaluator.evaluate] の引数 [ComboOdds]）。
+ * 未対応（設定できない）: ML（`db` / `race_id` 付きの特徴量推定・ensemble）、固定額賭け（旧実装でも実質無効: [WinStake]）。
  */
 data class WinDecisionConfig(
     val evThreshold: Double,
@@ -47,6 +47,8 @@ data class WinDecisionConfig(
     val maxBet: Double,
     val requireRealOddsForCombo: Boolean,
     val ticketAllocation: String,
+    /** ワイド・三連複の買い目生成の設定（流し・BOX・確率の上下限・Plackett–Luce の α など）。 */
+    val combo: ComboSettings,
     val betTypeMode: BetTypeMode,
     val maxTotalBetPerRace: Double?,
     val raceId: String?,
@@ -121,6 +123,7 @@ data class WinDecisionConfig(
                 maxBet = 10.0,
                 requireRealOddsForCombo = true,
                 ticketAllocation = "best_only",
+                combo = ComboSettings.legacyFunctionDefaults(),
                 betTypeMode = BetTypeMode.MULTI,
                 maxTotalBetPerRace = null,
                 raceId = null,

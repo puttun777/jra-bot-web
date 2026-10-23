@@ -53,7 +53,7 @@ Python の 3 つ（`agent/`、`ml/`、`tools/`）は依存を別々に管理す�
 - **実行アプリ（bot/ingest/dashboard）同士は依存しない**。ルート build の検査タスクで、`project(":bot")` などへの依存があれば失敗させ、CI で強制する（T2.1）。
 - 共通の処理は責務名のモジュール（`:domain`、`:persistence`、`:cloud-gcp`）に置く。`common` や `util` という名前のモジュールは作らない。マイクロサービスも増やさない。
 - ローカル・テスト用のポート実装は、各モジュールの `testFixtures` に置く。ファイルのモード、固定 `Clock`、メモリの `ModelStore` など。`APP_ENV=local` では、アプリの起動クラスがファイル実装を組み立てる。
-- `:domain` の `jp.jrabot.domain.decision`（T3.1）は、旧 Python と同じ式・同じ分岐順の**素の `Double`** で計算する（値オブジェクト `Odds`/`Probability`/`Money` は旧実装の境界挙動を再現できないので使わない。変換は呼び出し側）。設定は運用の既定値を持たない。D-104〜D-111。
+- `:domain` の `jp.jrabot.domain.decision`（T3.1）は、旧 Python と同じ式・同じ分岐順の**素の `Double`** で計算する（値オブジェクト `Odds`/`Probability`/`Money` は旧実装の境界挙動を再現できないので使わない。変換は呼び出し側）。設定は運用の既定値を持たない。D-104〜D-111。T3.2 でワイド/三連複を追加: Plackett–Luce（`PlackettLuce`）・実オッズの注入（`ComboOdds`。DB に依存せず、取得と鮮度は T3.4 の責務）・流し/BOX・`ticket_allocation`・`StrategyEntry.tickets`。D-112〜D-121。
 - fat jar（Spring Boot の実行可能 jar）を作るのは `:bot`・`:ingest`・`:dashboard`・`:db-migration` だけ。
 
 ### 2.1 レイヤ（各実行アプリの中）

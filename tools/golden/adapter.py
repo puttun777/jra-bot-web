@@ -24,8 +24,32 @@ def _sig_defaults(L, mod, name):
             if p.default is not p.empty}
 
 
+def _decode_odds_maps(kwargs):
+    """JSON はタプルのキーを表せないので、実オッズは配列で受け取り、旧実装の辞書に直す（T3.2）。
+    wide_odds_map: [[馬番, 馬番, 下限, 上限], …] → {(a, b): (low, high)} / sanrenpuku_odds_map: [[a, b, c, オッズ], …] → {(a, b, c): odds}。
+    キーは入力のまま（旧実装は昇順のキーで検索するので、シナリオは昇順で与える）。"""
+    w = kwargs.get("wide_odds_map")
+    if w is not None:
+        kwargs["wide_odds_map"] = {(int(r[0]), int(r[1])): (r[2], r[3]) for r in w}
+    t = kwargs.get("sanrenpuku_odds_map")
+    if t is not None:
+        kwargs["sanrenpuku_odds_map"] = {(int(r[0]), int(r[1]), int(r[2])): r[3] for r in t}
+    return kwargs
+
+
+def _suggest(L, a):
+    """suggest_multiple_bet_strategies の直接呼び出し。evaluate_odds と同じく賭けの方式の引数は None（旧実装の隠れ変数 bet_strategy=None を再現）。
+    確率は probs_by_umaban（{"馬番": 確率}）で与える。"""
+    kwargs = _decode_odds_maps(dict(a.get("kwargs", {})))
+    pm = kwargs.get("probs_by_umaban")
+    if pm is not None:
+        kwargs["probs_by_umaban"] = {int(k): v for k, v in pm.items()}
+    return L.bet_strategy.suggest_multiple_bet_strategies(
+        a["umaban"], a["win_prob"], a["win_odds"], _odds_list(L, a["odds_list"]), bet_strategy=None, **kwargs)
+
+
 def _eval(L, a):
-    kwargs = dict(a.get("kwargs", {}))
+    kwargs = _decode_odds_maps(dict(a.get("kwargs", {})))
     snaps = a.get("snapshots")  # {"<umaban>": [{"odds","popularity"}…]}（新しい順）。recent_snapshots_func の代わりにデータで渡す
     if snaps is not None:
         kwargs["recent_snapshots_func"] = lambda umaban: snaps.get(str(umaban), [])
@@ -65,6 +89,7 @@ CALLS = {
         a["win_prob"], _odds_list(L, a["odds_list"]), a["target_umaban"]),
     "calculate_trifecta_prob": lambda L, a: L.bet_strategy.calculate_trifecta_prob(
         a["win_prob"], _odds_list(L, a["odds_list"]), a["target_umaban"]),
+    "suggest_multiple_bet_strategies": _suggest,
     "evaluate_odds": _eval,
     "signature_defaults": lambda L, a: _sig_defaults(L, getattr(L, a["module"]), a["function"]),
 }

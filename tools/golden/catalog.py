@@ -14,14 +14,20 @@ CATALOG = [
          remaining="DB のスナップショット取得（odds_snapshots の降順読み）は T3.4。連続変化を見る案（E14 の C）は旧実装に無いので対象外"),
     dict(id="GD04", title="閾値・時間帯境界", status="partial", case_ids=["GD09-EVAL-001", "GD04-WIN-HITRATE-003"],
          remaining="ev_threshold・hit_rate_min_ev は生成済み（T3.1）。時間帯スケジュール・adaptive_relaxation は run_daemon.py 側（時刻依存・設定依存）で未実施（T3.8）"),
-    dict(id="GD05", title="ワイド", status="partial", case_ids=["GD05-COMBO-001"],
-         remaining="単純推定関数のみ。suggest_multiple_bet_strategies 内の Plackett–Luce・実オッズ・流し/BOX（E8〜E11）は未実施（Stage 3 T3.2）"),
-    dict(id="GD06", title="三連複", status="partial", case_ids=["GD05-COMBO-001"],
-         remaining="GD05 と同じ。_top3_set_prob・流し/BOX の重複は未実施（Stage 3 T3.2）"),
-    dict(id="GD07", title="賭け額・予算制限", status="partial", case_ids=["GD01-KELLY-002", "GD09-EVAL-001", "GD07-SIZING-004", "GD08-SELECT-003"],
-         remaining="suggest_bet_amount・単勝の賭け額・max_total_bet_per_race の比例縮小（E6 の旧挙動）・bet_type_mode=best_only は生成済み（T3.1）。ワイド/三連複の ticket_allocation は未実施（T3.2）"),
-    dict(id="GD08", title="候補選別・ソート", status="partial", case_ids=["GD09-EVAL-001", "GD08-SELECT-003", "GD04-WIN-HITRATE-003"],
-         remaining="単勝の edge/hit_rate ソート・同点・max_signals・notify_skips は生成済み（T3.1）。ワイド/三連複の信号を含む賭式優先の順序は未実施（T3.2）"),
+    dict(id="GD05", title="ワイド", status="implemented",
+         case_ids=["GD05-COMBO-001", "GD05-PL-005", "GD05-FLOW-006", "GD05-BOX-007", "GD05-REAL-008", "GD05-FILTER-009", "GD06-EVAL-011"],
+         remaining="合成入力のみ（実オッズ・実馬場の分布は T1.20/T3.4 以降）。suggest_multiple_bet_strategies は evaluate_odds と同じ経路（賭けの方式の引数は None）で直接呼ぶ。"
+                   "実オッズの鮮度・欠測の扱いは旧実装に無く対象外。旧欠陥 E8〜E10 は旧挙動のまま記録（T3.2）。実オッズの辞書は昇順のキーだけ（逆順キーは旧実装が一致しない）"),
+    dict(id="GD06", title="三連複", status="implemented",
+         case_ids=["GD05-COMBO-001", "GD05-PL-005", "GD05-FLOW-006", "GD05-BOX-007", "GD05-REAL-008", "GD05-FILTER-009", "GD06-EVAL-011"],
+         remaining="GD05 と同じ（三連複の流し・BOX・重複・頭数 3 未満を含む）。三連複の『実オッズ 0.0』は旧実装で『無い』扱い"),
+    dict(id="GD07", title="賭け額・予算制限", status="implemented",
+         case_ids=["GD01-KELLY-002", "GD09-EVAL-001", "GD07-SIZING-004", "GD08-SELECT-003", "GD07-COMBO-STAKE-010", "GD06-EVAL-011"],
+         remaining="suggest_bet_amount・単勝の賭け額・max_total_bet_per_race の比例縮小（E6 の旧挙動。買い目の stake の縮小を含む）・bet_type_mode=best_only・ワイド/三連複の ticket_allocation（T3.2）は生成済み。"
+                   "E6 の改善案（縮小後の min_bet 再判定）は未承認で対象外"),
+    dict(id="GD08", title="候補選別・ソート", status="partial", case_ids=["GD09-EVAL-001", "GD08-SELECT-003", "GD04-WIN-HITRATE-003", "GD06-EVAL-011"],
+         remaining="edge/hit_rate ソート・同点・max_signals・notify_skips は生成済み（単勝は T3.1、ワイド/三連複を含む並びは T3.2 の GD06-EVAL-011）。"
+                   "賭式をまたぐ完全な同点（確率・EV が一致）は合成入力で作れないため、旧実装の比較は Kotlin の単体テスト（SignalOrdering）で固定している"),
     dict(id="GD09", title="異常系・フォールバック", status="partial", case_ids=["GD01-KELLY-002", "GD09-EVAL-001", "GD07-SIZING-004"],
          remaining="odds=1.0（E5）・odds 0・人気 0・ML 無効時の市場フォールバックは生成済み。ML 例外時のラベル（E1）、bet_strategy 例外（ワイド/三連複）は未実施（T3.2/T3.6）"),
     dict(id="GD10", title="設定値・デフォルト", status="partial", case_ids=["GD10-DEFAULTS-001"],
@@ -56,11 +62,13 @@ KOTLIN_PORT = {
     "supported": [
         "GD01-EV-001", "GD01-KELLY-002", "GD02-PROB-001", "GD02-NORM-002", "GD03-FILTER-001", "GD09-EVAL-001",   # T3.1 の対象（既存）
         "GD03-SNAPSHOT-002", "GD04-WIN-HITRATE-003", "GD07-SIZING-004", "GD08-SELECT-003",                         # T3.1 で追加（evaluate_odds の単勝判定）
+        "GD05-COMBO-001",                                                                                          # T3.2: 単純推定関数（推定オッズ・旧 calculate_*_prob）。既存フィクスチャ
+        "GD05-PL-005", "GD05-FLOW-006", "GD05-BOX-007", "GD05-REAL-008", "GD05-FILTER-009",                        # T3.2 で追加: suggest_multiple_bet_strategies（直接）
+        "GD07-COMBO-STAKE-010", "GD06-EVAL-011",                                                                   # T3.2 で追加: 賭け額・配分 / evaluate_odds のワイド・三連複
     ],
     "unsupported": {
         "G1-MODEL-001": "ML の線形+Platt+市場ブレンド推論（T3.6）",
         "G2-HASH-001": "特徴量ハッシュ（T3.6）",
-        "GD05-COMBO-001": "ワイド/三連複の推定オッズ・確率（T3.2）",
         "GD10-DEFAULTS-001": "旧関数のシグネチャ既定値の突合。運用の既定値は T1.20/T3.8 で決める（D-016）",
     },
 }
