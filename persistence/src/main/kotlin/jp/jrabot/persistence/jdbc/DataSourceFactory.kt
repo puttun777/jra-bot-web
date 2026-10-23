@@ -2,6 +2,7 @@ package jp.jrabot.persistence.jdbc
 
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
+import javax.sql.DataSource
 
 /**
  * HikariCP の DataSource を作る（CONTRACTS §8.1・§8.3）。接続の約束事:
@@ -27,11 +28,14 @@ object DataSourceFactory {
      * 最初の `getConnection` まで**接続もプールの起動もしない** DataSource（設定は [create] と同じ）。アプリの起動時に DB へ触れず、
      * DB が停止していてもプロセスを起動でき（`/internal/health`）、DB を使わない経路（Job の非 NORMAL の終了など）では接続が発生しない。
      * 最初の接続に失敗したときはプールを作らず例外を投げ、次の呼び出しで再試行する（HikariCP の既定の動き）。
+     *
+     * 戻り値の実体は [HikariDataSource]（`AutoCloseable`。Spring の Bean にすれば終了時に `close` が推論される）。アプリのモジュールは
+     * HikariCP を直接参照しないので、型は [DataSource] で返す。
      */
     fun createLazy(
         settings: DbSettings,
         poolName: String = "jrabot-db",
-    ): HikariDataSource = HikariDataSource().also { hikariConfig(settings, poolName).copyStateTo(it) }
+    ): DataSource = HikariDataSource().also { hikariConfig(settings, poolName).copyStateTo(it) }
 
     internal fun hikariConfig(
         settings: DbSettings,

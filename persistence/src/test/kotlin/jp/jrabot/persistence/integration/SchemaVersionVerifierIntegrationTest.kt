@@ -22,11 +22,13 @@ class SchemaVersionVerifierIntegrationTest {
         private val db = MySqlSupport.migratedDatabase()
         private val opened = mutableListOf<HikariDataSource>()
 
+        private fun track(ds: javax.sql.DataSource): HikariDataSource = (ds as HikariDataSource).also { opened += it }
+
         private fun lazyPool(
             user: String,
             password: String = MySqlSupport.PASSWORDS.getValue(user),
             url: String = MySqlSupport.jdbcUrl(db.name),
-        ) = DataSourceFactory.createLazy(DbSettings(url, user, password, 2), "schema-test-$user").also { opened += it }
+        ) = track(DataSourceFactory.createLazy(DbSettings(url, user, password, 2), "schema-test-$user"))
 
         private fun verifier(
             user: String,
@@ -61,7 +63,7 @@ class SchemaVersionVerifierIntegrationTest {
             "INSERT INTO flyway_schema_history (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) " +
                 "VALUES (99, '10', 'future', 'SQL', 'V10__future.sql', 0, 'migrate', NOW(), 1, 1)",
         )
-        val ds = DataSourceFactory.createLazy(DbSettings(MySqlSupport.jdbcUrl(newer.name), "app", MySqlSupport.PASSWORDS.getValue("app"), 1), "newer").also { opened += it }
+        val ds = track(DataSourceFactory.createLazy(DbSettings(MySqlSupport.jdbcUrl(newer.name), "app", MySqlSupport.PASSWORDS.getValue("app"), 1), "newer"))
         assertEquals(SchemaCheck.Satisfied(SchemaVersion.parse("10")), SchemaVersionVerifier(ds, SchemaVersion.parse("2")).check())
     }
 
@@ -72,7 +74,7 @@ class SchemaVersionVerifierIntegrationTest {
             "INSERT INTO flyway_schema_history (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) " +
                 "VALUES (99, '3', 'broken', 'SQL', 'V3__broken.sql', 0, 'migrate', NOW(), 1, 0)",
         )
-        val ds = DataSourceFactory.createLazy(DbSettings(MySqlSupport.jdbcUrl(d.name), "bot", MySqlSupport.PASSWORDS.getValue("bot"), 1), "failedver").also { opened += it }
+        val ds = track(DataSourceFactory.createLazy(DbSettings(MySqlSupport.jdbcUrl(d.name), "bot", MySqlSupport.PASSWORDS.getValue("bot"), 1), "failedver"))
         assertEquals(SchemaCheck.Insufficient(SchemaVersion.parse("2"), SchemaVersion.parse("3")), SchemaVersionVerifier(ds, SchemaVersion.parse("3")).check())
     }
 
@@ -83,7 +85,7 @@ class SchemaVersionVerifierIntegrationTest {
             "INSERT INTO flyway_schema_history (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) " +
                 "VALUES (98, '9', 'nine', 'SQL', 'V9__nine.sql', 0, 'migrate', NOW(), 1, 1), (99, '10', 'ten', 'SQL', 'V10__ten.sql', 0, 'migrate', NOW(), 1, 1)",
         )
-        val ds = DataSourceFactory.createLazy(DbSettings(MySqlSupport.jdbcUrl(d.name), "bot", MySqlSupport.PASSWORDS.getValue("bot"), 1), "numeric").also { opened += it }
+        val ds = track(DataSourceFactory.createLazy(DbSettings(MySqlSupport.jdbcUrl(d.name), "bot", MySqlSupport.PASSWORDS.getValue("bot"), 1), "numeric"))
         assertEquals(SchemaCheck.Satisfied(SchemaVersion.parse("10")), SchemaVersionVerifier(ds, SchemaVersion.parse("10")).check())
     }
 
@@ -96,7 +98,7 @@ class SchemaVersionVerifierIntegrationTest {
                 it.execute("GRANT SELECT ON `$name`.* TO 'bot'@'%'")
             }
         }
-        val ds = DataSourceFactory.createLazy(DbSettings(MySqlSupport.jdbcUrl(name), "bot", MySqlSupport.PASSWORDS.getValue("bot"), 1), "empty").also { opened += it }
+        val ds = track(DataSourceFactory.createLazy(DbSettings(MySqlSupport.jdbcUrl(name), "bot", MySqlSupport.PASSWORDS.getValue("bot"), 1), "empty"))
         val r = SchemaVersionVerifier(ds, SchemaVersion.parse("2")).check()
         assertEquals(SchemaCheck.Insufficient(null, SchemaVersion.parse("2")), r)
         // 何も作られていない
