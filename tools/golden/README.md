@@ -23,6 +23,14 @@ Python 3.12 系（`requires-python >=3.12,<3.14`。CI は 3.12。3.12.3 と 3.13
 python3 -m venv .venv-golden && .venv-golden/bin/pip install -r tools/golden/requirements.txt
 ```
 
+### numpy を更新するとき（固定版は 2.5.3。Dependabot の自動更新は対象外: D-103）
+
+`requirements.txt` の `numpy==2.5.3`、`constants.py` の `PINNED_NUMPY`、フィクスチャ・manifest に記録された numpy の版（メタデータ）と sha256 は**一体**で、片方だけ上げると `golden tests` が失敗する（Dependabot PR #13 の事象）。更新は手動で、次をまとめて 1 つの PR にする。
+
+1. 公式情報で版を確認して固定する（Alpha/Beta/RC は不可）。`requirements.txt` と `constants.py` の `PINNED_NUMPY` を同時に更新する。
+2. 固定コミットの旧実装で `--update` により全フィクスチャを再生成し、`git diff` で値の差分を人が見る（許容誤差内の揺れか、挙動の変化か）。メタデータの numpy 版と manifest の sha256 も更新される。
+3. 再生成テスト（`GOLDEN_LEGACY_PATH` 指定）・`generate --check`・`verify`・`docs/CI_AND_IMAGES.md` の golden ジョブが通ることを確認し、理由を `docs/DECISIONS.md` に記録する（旧 Python との一致が基準なので、Kotlin 側の期待値が変わる場合は Stage 3 の比較も見直す）。
+
 ## 参照元の取得
 
 ```bash

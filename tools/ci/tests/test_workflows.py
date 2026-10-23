@@ -147,6 +147,8 @@ class DependabotTest(unittest.TestCase):
         docker = [e for e in self.entries() if e.startswith("docker")][0]
         self.assertIn('dependency-name: "eclipse-temurin"', docker)  # JDK 25 LTS 固定。メジャーは VERSIONS で判断
         self.assertIn("version-update:semver-major", docker)
+        pip = [e for e in self.entries() if e.startswith("pip")][0]
+        self.assertRegex(pip, r'(?m)^      - dependency-name: "numpy"\n(?!\s+update-types:)')  # numpy は全版を ignore（D-103。golden の固定版と一体）
 
     def test_no_automerge_and_no_prerelease_opt_in(self):
         code = "\n".join(l for l in self.TEXT.splitlines() if not l.lstrip().startswith("#"))
