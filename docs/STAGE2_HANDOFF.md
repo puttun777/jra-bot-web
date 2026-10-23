@@ -237,7 +237,7 @@ Reader/Writer は分かれており、`XxxRepository` は両方を継承する�
 - **実装**: `:domain` の `jp.jrabot.domain.ingest`（封筒検証 `EnvelopeValidator`、認証 `AgentAuthenticator`・`AgentSigning`・`SigningKeyCipher`、バッチ処理 `BatchIngestor`、取得セッション `FetchPolicy`、適用 `ObservationApplier`、`RecordParser`、バックフィル `BackfillService`、ハートビート）、`:persistence`（V3、Doma DAO、`SpringUnitOfWork`、`DbScheduleFetchFactReader`）、`:ingest`（`AgentAuthFilter`・`AgentApiController`・合成の正規化 JSON パーサ）。
 - **T3.5 が前提にすること**: ① 署名は**提案 P-1**（`K=HMAC(token,"jra-bot/agent-sign/v1")` で `method|requestUri|timestamp|nonce|sha256(送信した本文)` を署名。承認待ち）② 蓄積系の取得は**提案 P-2** の `fetch`（id・seq・targetFrom/To・origin・backfillId）を付けて送る（無いと取得の事実もカーソルも作られない）③ 409 は `Retry-After` を見て同一バッチを再送、422 は DEAD ④ 応答の `cursor` が出たらローカルの `acked_ts` を前進 ⑤ 実データのレコード形式はサーバ側でまだ解析できない（保留）。
 - **未実装（T3.5 / 後続）**: `plan`・`mode`・`update`・`register` の HTTP、`HeartbeatMirror` の GCS 実装、実データ形式のパーサ（T1.17）、reconcile（STALE）、KEK の発行と運用。
-- **検証の状況**: ローカルは MySQL 8.0.46（Docker 不可）で domain 667・persistence 統合 161（うち 8.4 固定の `WiringIntegrationTest` 1 件は環境差で失敗）・ingest 単体 31／統合 44・bot 67／31・db-migration 統合 44 を実行。**8.4 / 9.7 の合否は CI が正**。
+- **検証の状況**: ローカルは MySQL 8.0.46（Docker 不可）で domain 667・persistence 統合 161（うち 8.4 固定の `WiringIntegrationTest` 1 件は環境差で失敗）・ingest 単体 31／統合 46・bot 67／31・db-migration 統合 44 を実行。**8.4 / 9.7 の合否は CI が正**。
 - **infra への引継ぎ（T5.0）**: ingest に `AGENT_KEK_KEYS`・`AGENT_KEK_ACTIVE_KID`（Secret Manager）と `INGEST_*`、V3 の GRANT（`R__grants.sql`）、bot の必要スキーマ版 3（3 アプリとも 3 に統一）。
 
 ### 14.9 T3.3 の結果と T3.4〜T3.9 への引き継ぎ（開催日制御）

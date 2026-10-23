@@ -13,16 +13,16 @@
   |---|---|
   | `:db-migration` | **V3**（V1/V2 は不変）: `agent` の署名鍵列＋`agent_id` 全体 UNIQUE、`ingest_batch` の取得セッション列、`ingest_fetch`、`ingest_backfill`、`combo_odds_snapshots.odds_high`、複合 FK 用 UNIQUE。`R__grants.sql` に新表の権限（app は署名鍵の列を読めない） |
   | `:domain` `ingest` | `EnvelopeValidator`（JSON 木から検証。未知キー・`tenantId` 拒否、UUIDv7、Base64/SHA-256、件数・サイズ、時刻）、`AgentSigning`/`SigningKeyCipher`/`AgentAuthenticator`/`AgentCredentialIssuer`、`BatchIngestor`（claim→1 トランザクション処理→完了の印）、`FetchPolicy`（取得の事実の条件）、`ObservationApplier`（`RaceDayUpdater`・`RaceScheduleUpdater`・オッズ・combo）、`RecordParser`（実データは Unsupported=保留）、`BackfillService`、ハートビート検証、`ComboKeys` |
-  | `:persistence` | 8 つの DAO/Repository（Agent・Nonce・Heartbeat・Batch・Raw・Fetch・Cursor・Gap・Backfill・ComboOdds）、`SpringUnitOfWork`（READ COMMITTED、デッドロックは全体再実行）、`DbScheduleFetchFactReader` |
+  | `:persistence` | DAO/Repository 10 組（Agent・Nonce・Heartbeat・Batch・Raw・Fetch・Cursor・Gap・Backfill・ComboOdds）、`SpringUnitOfWork`（READ COMMITTED、デッドロックは全体再実行）、`DbScheduleFetchFactReader` |
   | `:ingest` | `AgentAuthFilter`（モードガードの後）、`AgentApiController`（`POST /v1/agent/ingest`・`heartbeat`）、gzip/JSON の上限、合成の正規化 JSON パーサ（**ローカルのみ**）、`UnavailableHeartbeatMirror`（GCS への写しは未実装） |
   | `:bot` | `ScheduleFetchFactReader` を DB 実装に（`NoScheduleFetchFacts` の本番配線を廃止）。必要スキーマ版 3 |
-- **実測で見つけた欠陥（テストで検出して修正）**: ① 同一 batchId の 8 並行送信で 1 本が 500（重複キーの S ロック→`FOR UPDATE` の X ロック待ち合いでデッドロック）→ `INSERT … ON DUPLICATE KEY UPDATE` に変更 ② 先走りバッチが失敗行で連番を占有して別の batchId での再送を妨げた → 事前の `peek` で行を作らず 409 ③ `FetchStore` と `ScheduleFetchFactReader` を 1 クラスで実装すると Bean が曖昧になった → 分離 ④ 3 アプリの `requiredSchemaVersion` が揃わないと release-manifest の検証が失敗する（`tools/release`）→ dashboard も 3 に統一 ⑤ ingest の本番起動に KEK が要るため image smoke を更新。
+- **実測で見つけた欠陥（テストで検出して修正）**: ① 同一 batchId の 8 並行送信で 1 本が 500（重複キーの S ロック→`FOR UPDATE` の X ロック待ち合いでデッドロック）→ `INSERT … ON DUPLICATE KEY UPDATE` に変更 ② 先走りバッチが失敗行で連番を占有して別の batchId での再送を妨げた → 事前の `peek` で行を作らず 409 ③ `FetchStore` と `ScheduleFetchFactReader` を 1 クラスで実装すると Bean が曖昧になった → 分離 ④ 3 アプリの `requiredSchemaVersion` が揃わないと release-manifest の検証が失敗する（`tools/release`）→ dashboard も 3 に統一 ⑤ ingest の本番起動に KEK が要るため image smoke を更新 ⑥ **RA だけを取り込むと `race_day` が無く有効な予定が STALE になる／確認済みの日が YSCH で再確認されない**（YSCH の PLANNED が CONFIRMED の日を INVALID_TRANSITION で拒否し確認時刻が進まない）→ RA で開催日を CONFIRMED にし、YSCH の PLANNED は先へ進んだ日では確認時刻だけ進める ⑦ 認証・モードガードのパス書き換え迂回のテストを追加（ハンドラは認証済みの呼び出し元が無ければ 500 で何も保存しない）。
 ### テスト（ローカル、JDK 21、**MySQL 8.0.46。8.4/9.7 の合否ではない**）
 | 区分 | 結果 |
 |---|---|
-| `:domain` 単体 | **667 件成功**（T3.3 の 632 ＋ 新規 35: `EnvelopeValidatorTest` 12・`AgentAuthTest` 10・`FetchPolicyTest` 9・`HeartbeatAndBackfillTest` 3 ほか） |
+| `:domain` 単体 | **667 件成功**（T3.3 の 632 ＋ 新規 35: `EnvelopeValidatorTest` 13・`AgentAuthTest` 10・`FetchPolicyTest` 9・`HeartbeatAndBackfillTest` 3） |
 | `:ingest` 単体 | 31 件成功（起動設定の新規 3: 本番の KEK 必須・本番で正規化レコード不可・オプション不正） |
-| `:ingest` MySQL 統合（**新規 35**） | **44 件成功**（`AgentAuthIntegrationTest` 9・`IngestIdempotencyIntegrationTest` 9・`IngestPipelineIntegrationTest` 17・既存 `IngestReadyIntegrationTest` 9）。署名不正・nonce 再利用・時刻ずれ・失効・期限切れ・OpsMode STOPPED/UNKNOWN・テナント越境・展開爆弾・ログに秘密なし・同一 batchId の 8 並行 ×5 ラウンド・途中失敗の巻き戻り・ACK 直前の失敗・YSCH 取得の事実（途中／EOF／予定なし／失敗／古い）・source_version・オッズ upsert・combo キー正規化・1 倍未満の隔離・カーソル・バックフィル・逆順更新の並行 |
+| `:ingest` MySQL 統合（**新規 37**） | **46 件成功**（`AgentAuthIntegrationTest` 10・`IngestIdempotencyIntegrationTest` 9・`IngestPipelineIntegrationTest` 18・既存 `IngestReadyIntegrationTest` 9）。署名不正・nonce 再利用・時刻ずれ・失効・期限切れ・OpsMode STOPPED/UNKNOWN・テナント越境・展開爆弾・ログに秘密なし・同一 batchId の 8 並行 ×5 ラウンド・途中失敗の巻き戻り・ACK 直前の失敗・YSCH 取得の事実（途中／EOF／予定なし／失敗／古い）・source_version・オッズ upsert・combo キー正規化・1 倍未満の隔離・カーソル・バックフィル・逆順更新の並行 |
 | `:persistence` 統合 | 161 件中 160 成功（新規 `IngestStoresIntegrationTest` 8 件: 全体一意の agent_id、nonce、カーソル、ギャップ、バックフィルの重複排除と越境 FK、取得の事実、UnitOfWork のデッドロック再実行）。**失敗 1 件は `WiringIntegrationTest`（`mysql:8.4` 固定の版確認。ローカルが 8.0 のため。CI では 8.4/9.7 で実行）** |
 | `:db-migration` | 単体 57・統合 44 成功（V3 の適用・権限・FK を反映） |
 | `:bot` 単体 / 統合（T3.3 の回帰） | 67 / 31 成功 |

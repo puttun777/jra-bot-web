@@ -291,7 +291,7 @@ jobs:
         if: always() && contains(env.DB_SUITES, 'apps')
         run: |
           python3 .github/scripts/verify_test_results.py "bot integration" bot/build/test-results/integrationTest 31 "BotJobIntegrationTest,CalendarCheckIntegrationTest"
-          python3 .github/scripts/verify_test_results.py "ingest integration" ingest/build/test-results/integrationTest 44 "IngestReadyIntegrationTest,AgentAuthIntegrationTest,IngestIdempotencyIntegrationTest,IngestPipelineIntegrationTest"
+          python3 .github/scripts/verify_test_results.py "ingest integration" ingest/build/test-results/integrationTest 46 "IngestReadyIntegrationTest,AgentAuthIntegrationTest,IngestIdempotencyIntegrationTest,IngestPipelineIntegrationTest"
           python3 .github/scripts/verify_test_results.py "dashboard integration" dashboard/build/test-results/integrationTest 9 "DashboardReadyIntegrationTest"
 
   # イメージのビルドとスモーク + ドライラン manifest（images.yml）。push も認証もしない。Dockerfile・リリース関連・ビルド定義が変わったときと、フル検証のときだけ

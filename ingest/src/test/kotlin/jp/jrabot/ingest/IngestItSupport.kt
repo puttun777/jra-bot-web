@@ -315,9 +315,11 @@ object IngestIt {
         createdOn: String,
         postTime: String? = "1525",
         name: String? = "テストレース",
+        kai: Int = 3,
+        nichime: Int = 1,
     ) = norm(
         "NRA",
-        mapOf("raceId" to raceId, "kubun" to kubun, "createdOn" to createdOn, "postTime" to postTime, "raceName" to name, "kai" to 3, "nichime" to 1),
+        mapOf("raceId" to raceId, "kubun" to kubun, "createdOn" to createdOn, "postTime" to postTime, "raceName" to name, "kai" to kai, "nichime" to nichime),
     )
 
     fun now(

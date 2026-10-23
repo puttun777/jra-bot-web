@@ -176,11 +176,18 @@ class IngestPipelineIntegrationTest {
         val first = it.db.scalar("SELECT last_confirmed_at FROM race_day")
         assertEquals(DayVerdict.CONFIRMED, it.effectiveDay(1, LocalDate.of(2026, 11, 1)).verdict)
         // 次の YSCH が同じ日を PLANNED として返しても、CONFIRMED のまま。確認の時刻は進む
-        ItClock.fixed = java.time.Instant.now().plusSeconds(3600)
+        ItClock.fixed =
+            java.time.Instant
+                .now()
+                .plusSeconds(3600)
         assertEquals(200, it.ingest(it.one, yschBatch(it.fetchId(), 0, true, it.nys("20261101"))).status)
         assertEquals("CONFIRMED", it.db.scalar("SELECT status FROM race_day"))
         assertTrue(it.db.scalar("SELECT last_confirmed_at FROM race_day")!! > first!!, "YSCH の再確認で確認の時刻が進む")
-        assertEquals(2, it.count("SELECT COUNT(*) FROM race_schedule_event WHERE event_type = 'DAY_STATUS' AND race_date = '2026-11-01'"), "PLANNED の作成と CONFIRMED への遷移の 2 件")
+        assertEquals(
+            2,
+            it.count("SELECT COUNT(*) FROM race_schedule_event WHERE event_type = 'DAY_STATUS' AND race_date = '2026-11-01'"),
+            "PLANNED の作成と CONFIRMED への遷移の 2 件",
+        )
         // 中止された開催日は YSCH の PLANNED で復活しない（初期状態に CANCELLED は使えないので、PLANNED→CANCELLED→PLANNED）
         for (status in listOf("PLANNED", "CANCELLED", "PLANNED")) {
             assertEquals(200, it.ingest(it.one, yschBatch(it.fetchId(), 0, true, it.nys("20261108", venue = "09", kai = 2, status = status))).status)
@@ -570,7 +577,7 @@ class IngestPipelineIntegrationTest {
                 val order = if (i % 2 == 0) venues else venues.reversed()
                 val recs =
                     order.map { (v, kai) -> it.nys("20261101", venue = v, kai = kai) } +
-                        order.map { (v, _) -> it.nra("20261101${v}11", "2", "20261030") }
+                        order.map { (v, kai) -> it.nra("20261101${v}11", "2", "20261030", kai = kai) }
                 it.ingest(it.one, it.envelope(records = recs))
             }
         val statuses = results.map { r -> r.getOrThrow().status }
@@ -578,7 +585,10 @@ class IngestPipelineIntegrationTest {
         assertTrue(statuses.count { s -> s == 200 } >= 1, "$statuses")
         assertEquals(3, it.count("SELECT COUNT(*) FROM race_day"))
         assertEquals(3, it.count("SELECT COUNT(*) FROM race_schedule"))
-        assertEquals(3, it.count("SELECT COUNT(*) FROM race_schedule_event WHERE event_type = 'DAY_STATUS'"), "履歴は変化ごとに 1 件")
+        assertEquals(3, it.count("SELECT COUNT(*) FROM race_day WHERE status = 'CONFIRMED'"), "RA が届いた開催日は CONFIRMED（到着順によらない）")
+        val dayEvents = it.count("SELECT COUNT(*) FROM race_schedule_event WHERE event_type = 'DAY_STATUS'")
+        assertTrue(dayEvents in 3..6, "履歴は変化ごとに 1 件（場ごとに作成 1〜遷移 1）: $dayEvents")
+        assertEquals(dayEvents, it.count("SELECT COUNT(DISTINCT dedup_hash) FROM race_schedule_event WHERE event_type = 'DAY_STATUS'"), "同じ変化の履歴が二重にならない")
         assertEquals(3, it.count("SELECT COUNT(*) FROM race_schedule_event WHERE event_type = 'ADDED'"))
         assertEquals(0, it.count("SELECT COUNT(*) FROM ingest_batch WHERE status = 'PROCESSING'"), "放置された処理が残らない")
         // 503 だったバッチは再送で完了できる

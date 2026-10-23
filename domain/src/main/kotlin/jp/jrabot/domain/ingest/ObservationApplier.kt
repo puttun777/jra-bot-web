@@ -154,7 +154,18 @@ class ObservationApplier(
         // （開催日の行が無い・古いと、有効な予定の導出で STALE になる）。中止・削除では動かさない。回・日目が無い RA は開催日を作れないので触れない
         if (usable && (o.kubun == RaceDataKubun.ANNOUNCEMENT || o.kubun == RaceDataKubun.CARD) && o.kai != null && o.nichime != null) {
             try {
-                days.apply(tenantId, o.raceId.date, o.raceId.venue, o.kai, o.nichime, RaceDayStatus.CONFIRMED, null, ctx.observedAt, ScheduleEventSource.RACE, "CONFIRMED:-")
+                days.apply(
+                    tenantId,
+                    o.raceId.date,
+                    o.raceId.venue,
+                    o.kai,
+                    o.nichime,
+                    RaceDayStatus.CONFIRMED,
+                    null,
+                    ctx.observedAt,
+                    ScheduleEventSource.RACE,
+                    "CONFIRMED:-",
+                )
             } catch (_: IllegalArgumentException) {
                 // 開催回・日目の食い違いは開催日を更新しない（予定自体の反映は済んでいる）
             }
