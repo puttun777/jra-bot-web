@@ -5,8 +5,8 @@
 ## Stage 2-F（claude/stage2-app-bootstrap）
 ### 結果
 - **T2.8 実装完了**（3 アプリの起動設定・内部ヘルスチェック・Job 実行契約）。T2.6 には進んでいない。**業務処理は未実装のスタブ**。スタブの起動成功を、本番で Bot が正常動作することの証明として扱わない。**実 GCP・実 Cloud SQL には一度も接続していない。**
-- **PR**: <PR>（main 向け、マージはユーザーが判断）。
-- **CI（GitHub Actions、Temurin 25）**: <CI>
+- **PR**: #10（main 向け、マージはユーザーが判断）。
+- **CI（GitHub Actions、Temurin 25）**: run 39910437001（head 054d9e7。T2.8 の全コードを含む）で **build (Temurin 25) / repo hygiene / db integration (MySQL 8.4) / db integration (MySQL 9.7) の必須 4 つと、非ゲートの connector/j 26.x check（8.4・9.7）の計 6 ジョブがすべて成功**。各ジョブ内の件数検証ステップ（cloud-gcp 91 以上、persistence 単体 23・bot 54・ingest 28・dashboard 30 以上、persistence 統合 98・bot 8・ingest 9・dashboard 9 以上、スキップ・失敗 0、期待クラスの欠落なし）も成功。ジョブログの本文はこの環境から取得できなかったため、件数の実測値はステップの成功（閾値判定）で確認した。その後の docs だけのコミットで CI が再実行される（結果は PR のチェックを参照）。
 - ローカル（JDK 21 スモーク + Docker）: 全体の `./gradlew build`、`ktlintCheck`、`checkModuleDependencies` 成功。**MySQL 8.4.13 と 9.7.4 の両方**で `:persistence` 98 / `:bot` 8 / `:ingest` 9 / `:dashboard` 9 の統合テストが成功（スキップ 0・失敗 0）。`:db-migration:integrationTest`（44）は 8.4 で成功（9.7 は CI）。JDK 25 の結果は CI のもの。
 ### セッションの環境（CLAUDE.md の記録義務）
 `java -version` = OpenJDK 21.0.12（JDK 25 なし。`-PjdkVersion=21` のスモーク）、Gradle 9.7.1 動作、Docker 29.9.1: **`dockerd` を起動でき（root）**、`mysql:8.4`・`mysql:9.7` を取得できた（ローカルの統合テストを実行できた）。Maven Central の 429 は待って再試行して解消（ミラーは使っていない）。`LC_ALL=C.UTF-8` で実行。
