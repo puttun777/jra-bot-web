@@ -24,7 +24,10 @@ bash .github/scripts/check-repo-hygiene.sh   # 秘密・実データの混入チ
 
 ## CI
 `.github/workflows/ci.yml`（main 向け PR と main への push）。Temurin 25 / Gradle Wrapper / 権限は `contents: read` のみ / Secrets 不使用。
-DB 統合テスト（`db-integration` ジョブ）: `:db-migration:integrationTest` が Testcontainers で使い捨ての **MySQL 8.4 と 9.7** を起動し、Flyway V1/V2/`R__grants.sql` と CLI を検証する（Docker が無ければ失敗し、スキップしない）。手元で実行するには Docker が必要: `MYSQL_IMAGE=mysql:8.4 ./gradlew :db-migration:integrationTest`。通常の `./gradlew build` は Docker 不要の単体テストだけ。
+DB 統合テスト（`db-integration` ジョブ）: `:db-migration:integrationTest`（Flyway V1/V2/`R__grants.sql` と CLI）と `:persistence:integrationTest`（Doma の Repository 実装。スキーマは本物の db-migration CLI で適用）が、Testcontainers で使い捨ての **MySQL 8.4 と 9.7** を起動して検証する（Docker が無ければ失敗し、スキップしない）。手元で実行するには Docker が必要: `MYSQL_IMAGE=mysql:8.4 ./gradlew :db-migration:integrationTest :persistence:integrationTest`。Connector/J 26.x の確認は `-PconnectorJVersion=26.10.0`（採否は未決。D-070）。通常の `./gradlew build` は Docker 不要の単体テストだけ。
+
+## persistence（Doma）
+`:persistence` が domain の Repository ポート（Race / OddsSnapshot / BotRun / AppUser / RaceSchedule / Signal）を実装する。Doma（kapt）の DAO・Entity・SQL テンプレートは `internal` で、公開するのは `DbSettings`・`DataSourceFactory`・`PersistenceConfiguration` だけ。SQL は全て `tenant_id` を必須にし（`SqlTemplateTenantGuardTest` が静的に検査）、時刻は UTC の `DATETIME(6)`。起動設定はアプリ側（T2.8）で組み立てる。判断は `docs/DECISIONS.md` D-070〜D-075。
 
 ## db-migration（Flyway）
 `java -jar`（または `./gradlew :db-migration:run --args=--mode=info`）に `DB_URL` `DB_USER` `DB_PASSWORD`（`migrate` ユーザー）を環境変数で渡す。`--mode=info|validate|migrate` は必須。終了コードは 0 / 1 / 2 / 10（validate: 未適用あり）/ 75（DB 不達）。契約は `docs/CONTRACTS.md` §4.2。アプリの起動時には実行しない。

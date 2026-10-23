@@ -1,6 +1,6 @@
 # CONTRACTS（web ⇔ infra 受け渡し契約・正本は本ファイル）
 
-状態: **0.4.1（第2段階 / T2.3 で §4.2・§8.2 を実装に合わせて補足。0.4.0 の契約は変えていない）**。0.4.0 は第1段階 / T1.10 で確定した設計契約。infra の `docs/CONTRACTS.md` §2 の差異 D1〜D12 をすべて取り込んだ（対応表は §12）。実装・実リソースで確かめる必要がある箇所は「検証ゲート」として ID を書いている（一覧は `STAGE2_HANDOFF.md` §13）。
+状態: **0.4.2（第2段階 / T2.4 で §8.1 に JDBC 接続の固定値を補足。0.4.0 の契約は変えていない）**。0.4.0 は第1段階 / T1.10 で確定した設計契約。infra の `docs/CONTRACTS.md` §2 の差異 D1〜D12 をすべて取り込んだ（対応表は §12）。実装・実リソースで確かめる必要がある箇所は「検証ゲート」として ID を書いている（一覧は `STAGE2_HANDOFF.md` §13）。
 - 正本はこのファイル。infra 側は版番号を参照し、変更点を同期する。infra の文書を直す必要がある箇所は `PROGRESS.md` の「infra への引継ぎ」に記録する。web のセッションから infra を直接変更しない。
 - 用語: **mode** は現在のフェーズ（`NORMAL | STARTING | STOPPING | STOPPED`）。**desired** は利用者の意図（`NORMAL | STOPPED`）。アプリが読み取りに失敗したときや、内容が不正なときの判定値は **`UNKNOWN`** とする。UNKNOWN はアプリ内部だけの値で、正本には書かない。旧版の `phase` は廃止して `mode` に統一した（実装はまだ無いため互換フィールドは置かない）。
 
@@ -258,6 +258,7 @@ STOPPED 中の `ingest` 503、ビーコンのみ STOPPED、両方不達（UNKNOW
 - 接続方式の第一案は、Direct VPC egress 経由でプライベート IP へ JDBC 接続し、**TLS を必須**にする（`sslMode=VERIFY_CA` + Cloud SQL のサーバ CA を信頼ストアへ。IP 接続のため `VERIFY_IDENTITY` は使えない見込みで、要確認 G-DB-7）。代替案は Cloud SQL Java Connector（`ipTypes=PRIVATE`）。G-DB-5（IAM DB 認証）の結果と合わせて第2段階で選ぶ。
 - 認証は当面パスワード（Secret Manager）。IAM DB 認証が JDBC で使えれば（G-DB-5）、パスワードをやめる。
 - 文字セット `utf8mb4`、`serverTimezone=UTC`（接続のセッションも `time_zone='+00:00'`）。時刻は UTC の `DATETIME(6)` で保存し、表示だけ JST にする（DATA_MIGRATION_DESIGN §2）。
+- **0.4.2 の補足（T2.4 / D-070〜D-073）**: アプリの接続は `:persistence` の `DataSourceFactory`（HikariCP）が作り、次を**設定で外せない固定値**にする: `connectionInitSql = SET time_zone = '+00:00'`、`connectionTimeZone=UTC`、`characterEncoding=UTF-8`、**`useAffectedRows=true`**（upsert の `UNCHANGED` を更新件数 0 で判定するため。Connector/J の既定 false では変更なしも 1 件になる）、`rewriteBatchedStatements=false`、`allowMultiQueries=false`、接続タイムアウト 10 秒、`maxLifetime` 25 分。環境変数は `DB_URL` `DB_USER` `DB_PASSWORD` `DB_POOL_MAX`（1〜24。実行単位ごとの既定値は §8.3）。他の JDBC クライアントでこれらの表を更新する場合も `useAffectedRows` の違いに注意する。
 
 ### 8.2 用途別の DB ユーザー
 | ユーザー | Secret | 使う実行単位 | 権限（`R__grants.sql` で定義、Flyway が適用） |
@@ -380,3 +381,5 @@ STOPPED 中の `ingest` 503、ビーコンのみ STOPPED、両方不達（UNKNOW
 ## 13. 変更履歴
 0.1.0（第0段階）→ 0.2.0（ingest の別サービス化、エージェント認証、封筒、STOPPED 契約、ビーコン）→ 0.3.0（ingest/ml-train イメージ、モデル成果物・データセット・署名鍵）→ **0.4.0（T1.10: D1〜D12 を取り込み、`phase` を廃止、ModeProvider、heartbeat の写し、db-migration の CLI、DB 接続とユーザー、Job の終了コード、release-manifest、内部 API の認証、bot イメージの `--task` 化）**。
 0.4.1（第2段階 / T2.3）: §4.2 に出力 JSON・75 の範囲・Repeatable の扱いを補足、§8.2 に `R__grants.sql` の前提と app の権限範囲（D-065）を補足。契約の意味は変えていない（infra への影響は PROGRESS「infra への引継ぎ」）。
+
+0.4.2（第2段階 / T2.4）: §8.1 に JDBC 接続の固定値（`useAffectedRows=true` ほか）を補足。契約の意味は変えていない（infra への影響なし。接続 URL に同名のプロパティを入れても上書きされる）。
