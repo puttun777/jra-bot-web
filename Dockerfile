@@ -84,7 +84,7 @@ ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75.0", "-XX:+ExitOnOutOfMemoryError", 
 # ---------------------------------------------------------------- db-migration
 # Flyway CLI ラッパ。`--mode=info|validate|migrate`（CONTRACTS §4.2）。標準出力は JSON 1 行だけ。ModeProvider は参照しない。
 FROM runtime-base AS db-migration
-COPY --from=build --chmod=0444 /src/db-migration/build/install/db-migration/lib /app/lib
+COPY --from=build --chmod=a=rX /src/db-migration/build/install/db-migration/lib /app/lib
 ARG GIT_SHA=unknown
 LABEL org.opencontainers.image.title="jra-bot db-migration" \
       org.opencontainers.image.description="JRA Bot Flyway CLI wrapper (--mode=info|validate|migrate)" \
