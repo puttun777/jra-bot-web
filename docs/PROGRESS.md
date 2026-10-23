@@ -55,7 +55,10 @@ JIT のウォームアップや環境で変わる目安。数値の仕様は変�
 ### 未解決のまま保持（このセッションでは変更していない）
 T1.16（JRA-VAN 利用条件）、T1.17（JV-Link 公式仕様）、T1.20（実 SQLite・設定・モデル）、T1.21（数値挙動の承認: E6/E12/E14/H4/H10、生成段階の重複除去、買い目の賭け額の整合）、T3.0（Windows 実機 PoC）、infra I-H1〜I-H9、T5.0（infra 契約同期）、Cloud SQL・GCS 等の実環境検証（G-*）、MySQL 9.7 の本番採否、Connector/J 26.x の採否、`0<odds<1` の取込境界の扱い、デッドロック 1213 の再試行、bot-run の checkpoint・SIGTERM、本番 release-manifest、ml-train イメージ。branch protection の required checks を `ci gate` のみにする作業（ユーザー作業）も未確認。
 ### CI・PR
-- **PR**: 作成後に記載（main 向け。マージはユーザー）。
+- **PR #18**（main 向け。マージはユーザー）: https://github.com/puttun777/jra-bot-web/pull/18
+- コード・テスト・docs を含むコミット d511856 の CI run **39954862059**: **ci gate 成功**。成功 — changes and repo hygiene / build (Temurin 25)（`Kotlin vs legacy golden comparison` ステップを含む）/ golden tests (Python 3.12) / db integration (MySQL 8.4)。設計どおり skipped（未実施）— images / release tools and ci scripts / connectorj26。所要の目安: build 約 3 分、db 8.4 約 4 分、golden 約 1 分。
+- 本記録のコミット自体も PR 全体の差分で判定されるため同じジョブが走る（その run の結果は PR のチェックを参照。ここには追記しない）。
+- CI で未確認: ステップ内の比較出力（`GITHUB_STEP_SUMMARY`）の中身の目視。ジョブ全体の成功（比較不一致・申告と対応表の不一致ならステップが失敗する）で確認した。
 - **CI の方針**: `.github/workflows/ci.yml` は未変更（D-120）。変更判定は `kotlin_core`・`kotlin_golden`・`golden`・`docs` → `build`（Kotlin と旧 Python の比較を含む）・`golden`・DB 統合（MySQL 8.4 のみ）。images・Connector/J 26.x・MySQL 9.7 は走らない。`domain unit` の件数下限（387）とクラス一覧は、次に CI 設定を変更する PR で 488 と新クラスに更新する。
 ### 次の作業（T3.3 への引き継ぎ。今回は着手していない）
 - T3.3 は開催日制御（RACE_CALENDAR_DESIGN の実装: スキーマ、calendar-check、bot-run リース、手動補正、C01〜C28 のテスト）。T3.2 の計算エンジンとは独立。
