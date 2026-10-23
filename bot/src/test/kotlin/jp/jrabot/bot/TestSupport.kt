@@ -86,6 +86,11 @@ fun baseEnv(
             "DB_USER" to "bot",
             "DB_PASSWORD" to "synthetic-password-never-logged",
             "OPS_MODE_SOURCE" to opsSource,
+            // calendar-check の設定（テスト用の固定値。運用の既定値ではない）
+            "CALENDAR_WATCH_START_MINUTES" to "120",
+            "CALENDAR_PRESTART_MINUTES" to "10",
+            "CALENDAR_SETTLE_DEADLINE_MINUTES" to "90",
+            "CALENDAR_STALE_AFTER_MINUTES" to "120",
         )
     override.forEach { (k, v) -> if (v == null) m.remove(k) else m[k] = v }
     return m

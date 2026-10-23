@@ -2,6 +2,12 @@ package jp.jrabot.bot
 
 import com.zaxxer.hikari.HikariDataSource
 import jp.jrabot.domain.bot.BotRunRepository
+import jp.jrabot.domain.bot.JobLauncher
+import jp.jrabot.domain.calendar.CalendarOverrideRepository
+import jp.jrabot.domain.calendar.NoScheduleFetchFacts
+import jp.jrabot.domain.calendar.RaceDayRepository
+import jp.jrabot.domain.calendar.ScheduleEventRepository
+import jp.jrabot.domain.calendar.ScheduleFetchFactReader
 import jp.jrabot.domain.odds.OddsSnapshotRepository
 import jp.jrabot.domain.ops.ModeProvider
 import jp.jrabot.domain.ops.OpsMode
@@ -18,6 +24,7 @@ import org.springframework.context.ConfigurableApplicationContext
 import java.nio.file.Files
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertSame
@@ -52,6 +59,9 @@ class BotSpringWiringTest {
                 AppUserRepository::class.java,
                 RaceScheduleRepository::class.java,
                 SignalRepository::class.java,
+                RaceDayRepository::class.java,
+                ScheduleEventRepository::class.java,
+                CalendarOverrideRepository::class.java,
             )) {
                 assertNotNull(ctx.getBean(type), type.simpleName)
             }
@@ -59,6 +69,18 @@ class BotSpringWiringTest {
             assertEquals("2", ctx.getBean(SchemaVersionVerifier::class.java).required.toString())
             assertTrue(ctx.getBeansOfType(Class.forName("org.seasar.doma.jdbc.Config")).isNotEmpty())
             assertNotNull(ctx.getBean(BotJobExecutor::class.java))
+        }
+    }
+
+    @Test
+    fun `タスクごとのハンドラ（calendar-check だけ実装済み、他はスタブ）と、本番の起動基盤・取得の事実の配線は fail closed`() {
+        start(runtime("calendar-check")).use { ctx ->
+            assertIs<CalendarCheckTaskHandler>(ctx.getBean(BotTaskHandler::class.java))
+            assertIs<UnconfiguredJobLauncher>(ctx.getBean(JobLauncher::class.java), "起動基盤の本番の配線は未設定（fail closed）")
+            assertSame(NoScheduleFetchFacts, ctx.getBean(ScheduleFetchFactReader::class.java), "取得の事実は T3.4 まで存在しない")
+        }
+        for (task in listOf("bot-run", "reconcile", "retention", "export-dataset")) {
+            start(runtime(task)).use { ctx -> assertIs<StubTaskHandler>(ctx.getBean(BotTaskHandler::class.java), task) }
         }
     }
 

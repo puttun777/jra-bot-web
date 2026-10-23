@@ -43,6 +43,20 @@ class BotLauncherTest {
     private val env = baseEnv("/dev/null")
 
     @Test
+    fun `calendar-check の設定（監視ウィンドウ・鮮度）が無ければ終了コード 2 で、DB にもモードの確認にも進まない（既定値を置かない）`() {
+        for (name in listOf("CALENDAR_WATCH_START_MINUTES", "CALENDAR_PRESTART_MINUTES", "CALENDAR_SETTLE_DEADLINE_MINUTES", "CALENDAR_STALE_AFTER_MINUTES")) {
+            val h = Harness(OpsMode.NORMAL) { JobResult(JobExit.OK, "EXECUTED") }
+            assertEquals(2, h.launcher.run(args("calendar-check"), baseEnv("/dev/null", name to null)), name)
+            assertEquals(0, h.executeCalls.get(), name)
+            assertEquals(0, h.provider.calls.get(), "設定の検証はモード確認の前")
+            assertTrue(h.log.text().contains("INVALID_CONFIGURATION") && h.log.text().contains(name), h.log.text())
+        }
+        // 他のタスクは calendar の設定が無くても動く
+        val other = Harness(OpsMode.NORMAL) { JobResult(JobExit.OK, "EXECUTED") }
+        assertEquals(0, other.launcher.run(args("reconcile"), baseEnv("/dev/null", "CALENDAR_WATCH_START_MINUTES" to null)))
+    }
+
+    @Test
     fun `NORMAL ならスキーマ確認とタスクの実行へ進み、その結果の終了コードを返す`() {
         val h = Harness(OpsMode.NORMAL) { JobResult(JobExit.OK, "EXECUTED") }
         assertEquals(0, h.launcher.run(args("calendar-check"), env))

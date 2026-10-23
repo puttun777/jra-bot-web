@@ -42,8 +42,13 @@ class BotJobIntegrationTest {
     }
 
     @Test
-    fun `NORMAL かつスキーマ版 OK なら 5 つのタスクが（スタブとして）動き、ローカルでは終了コード 0`() {
-        for (t in BotTask.entries) assertEquals(0, exit(t.cliName, env("NORMAL")), t.cliName)
+    fun `NORMAL かつスキーマ版 OK なら、スタブのタスクはローカルでは終了コード 0（calendar-check は実装済みで別のテスト）`() {
+        for (t in BotTask.entries.filter { it != BotTask.CALENDAR_CHECK }) assertEquals(0, exit(t.cliName, env("NORMAL")), t.cliName)
+    }
+
+    @Test
+    fun `calendar-check は実装済みなので、予定の無い DB では不明（取得の事実なし）として 75 になりスタブの成功にならない`() {
+        assertEquals(75, exit("calendar-check", env("NORMAL")))
     }
 
     @Test
@@ -51,7 +56,7 @@ class BotJobIntegrationTest {
         // 本番はローカルファイルのモードを使えないので、モードだけフェイクにして、それ以外（Spring・DB・スキーマ確認）は本物で通す
         val launcher = BotLauncher(modeProviderFactory = { FixedMode(OpsMode.NORMAL) })
         val prodEnv = env("NORMAL") + mapOf("APP_ENV" to "prod", "OPS_MODE_SOURCE" to "gs://synthetic/ops.json")
-        for (t in BotTask.entries) assertEquals(1, launcher.run(args(t.cliName), prodEnv), t.cliName)
+        for (t in BotTask.entries.filter { it != BotTask.CALENDAR_CHECK }) assertEquals(1, launcher.run(args(t.cliName), prodEnv), t.cliName)
     }
 
     @Test
@@ -69,7 +74,7 @@ class BotJobIntegrationTest {
     @Test
     fun `NORMAL のときだけ DB に接続してスキーマ版を確認する`() {
         val before = MySqlSupport.serverConnections()
-        assertEquals(0, exit("calendar-check", env("NORMAL")))
+        assertEquals(0, exit("reconcile", env("NORMAL")))
         val after = MySqlSupport.serverConnections()
         assertTrue(after - before >= 2, "NORMAL で DB に接続していない: ${after - before}")
     }
