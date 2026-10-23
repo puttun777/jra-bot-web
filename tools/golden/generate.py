@@ -2,6 +2,7 @@
 
   python -m tools.golden.generate --legacy-path /path/to/jra-bot --check    # 書き込まず、コミット済みとの一致を検証（浮動小数は各ケースの許容誤差内）
   python -m tools.golden.generate --legacy-path /path/to/jra-bot --update   # 明示的に fixtures/ を更新（差分は PR で確認）
+  python -m tools.golden.generate --legacy-path /path/to/jra-bot --add-new  # 新しいケースのファイルだけ追加（既存のフィクスチャは 1 バイトも書き換えない）
 
 固定コミット以外・未コミット変更のある参照元は常に拒否する（上書き許可オプションは無い）。
 """
@@ -77,12 +78,31 @@ def regeneration_problems(committed: dict, regenerated: dict):
     return problems
 
 
+def add_new_files(out: Path, generated: dict):
+    """out に無いケースのファイルだけを書き、manifest を作り直す。既存のフィクスチャ（バイト列・sha256）は変更しない。
+
+    新しいケースを足すときに、旧実装の再生成で既存の値が最後の桁だけ揺れて diff に混ざるのを避ける
+    （既存の期待値は、レビュー済みのコミット済みの値が正本）。既存ファイルのうち、今のシナリオに無いものがあれば失敗する。
+    """
+    existing = {p.name: p.read_bytes() for p in out.glob("*.json") if p.name != C.MANIFEST_NAME}
+    stale = sorted(set(existing) - set(generated))
+    if stale:
+        raise legacy.LegacyError(f"コミット済みなのにシナリオに無いケースがある: {stale}")
+    new = {n: b for n, b in generated.items() if n != C.MANIFEST_NAME and n not in existing}
+    for n, data in new.items():
+        (out / n).write_bytes(data)
+    merged = dict(existing, **new)
+    (out / C.MANIFEST_NAME).write_bytes(jsonutil.dumps(fixtures_io.build_manifest(merged)).encode("utf-8"))
+    return sorted(new)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--legacy-path", required=True, help="jra-bot のチェックアウト（固定コミット）")
     mode = ap.add_mutually_exclusive_group(required=True)
     mode.add_argument("--check", action="store_true", help="書き込まず、再生成結果がコミット済みと一致するか検証")
     mode.add_argument("--update", action="store_true", help="fixtures/ を上書き更新（明示操作）")
+    mode.add_argument("--add-new", action="store_true", help="out に無いケースのファイルだけを追加（既存フィクスチャは変更しない）")
     ap.add_argument("--out", default=str(C.FIXTURE_DIR), help="出力先/比較先ディレクトリ")
     args = ap.parse_args(argv)
 
@@ -99,6 +119,14 @@ def main(argv=None):
             print("再生成結果がコミット済みフィクスチャと一致しません:\n  " + "\n  ".join(bad), file=sys.stderr)
             return 1
         print(f"OK: {len(files) - 1} フィクスチャ + manifest が再生成結果と一致（浮動小数は各ケースの許容誤差内。commit {C.PINNED_COMMIT[:7]}）")
+        return 0
+    if args.add_new:
+        try:
+            added = add_new_files(out, files)
+        except legacy.LegacyError as e:
+            print(f"ERROR: {e}", file=sys.stderr)
+            return 2
+        print(f"追加: {len(added)} ケース {added}（既存フィクスチャは未変更。manifest を更新）")
         return 0
     out.mkdir(parents=True, exist_ok=True)
     for p in out.glob("*.json"):

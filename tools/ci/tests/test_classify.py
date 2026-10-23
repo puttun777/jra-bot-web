@@ -58,8 +58,21 @@ class ScenarioTest(unittest.TestCase):
             self.assertEqual(dict(mode="code", build=False, golden=False, release=True, images=True, c26=False, db=[], suites=[]), jobs(p), f)
 
     def test_07_golden_fixture_only(self):
+        # フィクスチャが変わったら Python の再生成検証に加え、Kotlin との比較（build ジョブの中）も必要。DB・イメージは不要
         p = plan("tools/golden/fixtures/GD01-EV-001.json")
-        self.assertEqual(dict(mode="code", build=False, golden=True, release=False, images=False, c26=False, db=[], suites=[]), jobs(p))
+        self.assertEqual(dict(mode="code", build=True, golden=True, release=False, images=False, c26=False, db=[], suites=[]), jobs(p))
+
+    def test_07b_golden_runner_and_domain_always_run_the_kotlin_comparison(self):
+        # :domain の計算を変えたのに Kotlin と旧 Python の比較が漏れないこと（比較は build ジョブの中）
+        for f in ("golden-runner/src/main/kotlin/jp/jrabot/golden/GoldenCalls.kt", "golden-runner/build.gradle.kts"):
+            self.assertEqual(dict(mode="code", build=True, golden=False, release=False, images=False, c26=False, db=[], suites=[]), jobs(plan(f)), f)
+        p = plan("domain/src/main/kotlin/jp/jrabot/domain/decision/EvMath.kt")
+        self.assertTrue(p.run_build)
+        self.assertFalse(p.run_golden)  # Python 側（旧実装の再生成）は domain の変更に影響されない
+        self.assertEqual((["8.4"], ["persistence", "apps"]), (p.db_matrix, p.db_suites))  # 既存の domain の扱いのまま
+
+    def test_07c_golden_docs_only_does_not_build(self):
+        self.assertEqual("docs", plan("tools/golden/README.md").mode)
 
     def test_08_multiple_areas(self):
         p = plan("docs/PLAN.md", "bot/src/main/kotlin/jp/jrabot/bot/BotLauncher.kt", "tools/golden/generate.py", "Dockerfile")
@@ -108,7 +121,7 @@ class ScenarioTest(unittest.TestCase):
         self.assertEqual(dict(mode="code", build=False, golden=False, release=True, images=False, c26=False, db=[], suites=[]), jobs(p))
 
     def test_every_rule_pattern_compiles_and_tags_known(self):
-        known = {"docs", "kotlin_app", "kotlin_core", "kotlin_db", "build_cfg", "golden", "release", "docker", "connectorj", "ci"}
+        known = {"docs", "kotlin_app", "kotlin_core", "kotlin_db", "build_cfg", "golden", "kotlin_golden", "release", "docker", "connectorj", "ci"}
         for pattern, tags in classify.RULES:
             self.assertTrue(set(tags) <= known, pattern)
 

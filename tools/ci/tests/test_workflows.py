@@ -93,6 +93,9 @@ class WorkflowRulesTest(unittest.TestCase):
         b = job_blocks(CI)["build"]
         for needle in ('java-version: "25"', "./gradlew build", "checkModuleDependencies ktlintCheck", "EXPECTED_JDK", "verify_test_results.py"):
             self.assertIn(needle, b)
+        # T3.1: Kotlin と旧 Python のゴールデン比較は build ジョブの中。domain の変更で必ず走る（classify の kotlin_core → run_build）
+        for needle in (":golden-runner:run", "tools.golden.kotlin_compare", "tools.golden.verify", "kotlin_coverage.json"):
+            self.assertIn(needle, b)
         d = job_blocks(CI)["db-integration"]
         for needle in ("integrationTest", ":persistence:integrationTest", ":bot:integrationTest :ingest:integrationTest :dashboard:integrationTest", "tests < 30", "tests < 98"):
             self.assertIn(needle, d)

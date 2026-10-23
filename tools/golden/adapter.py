@@ -25,8 +25,12 @@ def _sig_defaults(L, mod, name):
 
 
 def _eval(L, a):
+    kwargs = dict(a.get("kwargs", {}))
+    snaps = a.get("snapshots")  # {"<umaban>": [{"odds","popularity"}…]}（新しい順）。recent_snapshots_func の代わりにデータで渡す
+    if snaps is not None:
+        kwargs["recent_snapshots_func"] = lambda umaban: snaps.get(str(umaban), [])
     res = L.decision.evaluate_odds(
-        _odds_list(L, a["odds"]), ml_cfg={"enabled": False}, return_debug=True, **a.get("kwargs", {}))
+        _odds_list(L, a["odds"]), ml_cfg={"enabled": False}, return_debug=True, **kwargs)
     if isinstance(res, tuple):  # 入力が空のときは return_debug=True でもリストだけが返る（旧実装の挙動をそのまま記録）
         signals, dbg = res
         return {"return_shape": "tuple", "signals": signals, "reject_counts": dbg.get("reject_counts")}

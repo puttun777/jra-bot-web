@@ -14,6 +14,7 @@ class DependencyRulesTest {
             ":bot" to setOf(":domain", ":persistence", ":cloud-gcp"),
             ":ingest" to setOf(":domain", ":persistence", ":cloud-gcp"),
             ":dashboard" to setOf(":domain", ":persistence", ":cloud-gcp"),
+            ":golden-runner" to setOf(":domain"),
         )
 
     @Test
@@ -32,6 +33,18 @@ class DependencyRulesTest {
                 assertTrue(v.single().startsWith("$from → $to"))
             }
         }
+    }
+
+    @Test
+    fun `golden-runner は domain だけに依存でき、他のどのモジュールも golden-runner に依存できない（検証専用でイメージに入れない）`() {
+        for (to in listOf(":persistence", ":cloud-gcp", ":bot", ":ingest", ":dashboard", ":db-migration")) {
+            assertEquals(1, DependencyRules.checkProjectDependencies(ok + (":golden-runner" to setOf(":domain", to))).size, "golden-runner → $to")
+        }
+        for (from in ok.keys - ":golden-runner") {
+            val v = DependencyRules.checkProjectDependencies(ok + (from to (ok.getValue(from) + ":golden-runner")))
+            assertEquals(1, v.size, "$from → :golden-runner を検知できること: $v")
+        }
+        assertTrue(DependencyRules.GOLDEN_RUNNER !in DependencyRules.apps)
     }
 
     @Test

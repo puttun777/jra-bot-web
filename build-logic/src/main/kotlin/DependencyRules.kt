@@ -10,7 +10,10 @@ object DependencyRules {
     const val INGEST = ":ingest"
     const val DASHBOARD = ":dashboard"
 
-    val modules = listOf(DOMAIN, PERSISTENCE, DB_MIGRATION, CLOUD_GCP, BOT, INGEST, DASHBOARD)
+    /** ゴールデンテストの Kotlin 側ランナー（検証専用。JSON の読み書きを持ち、:domain の計算を実行する。アプリのイメージには含めない）。 */
+    const val GOLDEN_RUNNER = ":golden-runner"
+
+    val modules = listOf(DOMAIN, PERSISTENCE, DB_MIGRATION, CLOUD_GCP, BOT, INGEST, DASHBOARD, GOLDEN_RUNNER)
     val apps = setOf(BOT, INGEST, DASHBOARD)
 
     /** 各モジュールが依存してよいプロジェクト。表にないものはすべて禁止。 */
@@ -23,6 +26,7 @@ object DependencyRules {
             BOT to setOf(DOMAIN, PERSISTENCE, CLOUD_GCP),
             INGEST to setOf(DOMAIN, PERSISTENCE, CLOUD_GCP),
             DASHBOARD to setOf(DOMAIN, PERSISTENCE, CLOUD_GCP),
+            GOLDEN_RUNNER to setOf(DOMAIN),
         )
 
     /** `:domain` に入れてはいけない外部ライブラリ（group の前方一致）。 */

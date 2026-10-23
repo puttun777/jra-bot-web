@@ -76,7 +76,7 @@ class DockerignoreTest(unittest.TestCase):
     def test_only_build_inputs_are_allowed(self):
         allowed = {l[1:] for l in self.LINES if l.startswith("!")}
         self.assertEqual(
-            {"/gradlew", "/settings.gradle.kts", "/build.gradle.kts", "/gradle.properties", "/gradle/", "/build-logic/", "/domain/", "/persistence/", "/cloud-gcp/", "/db-migration/", "/bot/", "/ingest/", "/dashboard/"},
+            {"/gradlew", "/settings.gradle.kts", "/build.gradle.kts", "/gradle.properties", "/gradle/", "/build-logic/", "/domain/", "/persistence/", "/cloud-gcp/", "/db-migration/", "/bot/", "/ingest/", "/dashboard/", "/golden-runner/"},
             allowed,
         )
         for forbidden in ("/docs", "/tools", "/.git", "/.github", "/agent", "/ml", "/.env"):

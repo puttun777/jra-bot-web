@@ -6,7 +6,7 @@ CI の実行範囲の決め方、分岐保護の設定、イメージのビル�
 | ジョブ | 内容 | いつ実行するか |
 |---|---|---|
 | `changes and repo hygiene` | 変更ファイルの分類（`tools/ci/classify.py`）+ 秘密/実データの混入検査 | **常に** |
-| `build (Temurin 25)` | `./gradlew build`（コンパイル・単体・ktlint・依存方向）、JDK 25 の確認、cloud-gcp/アプリ/persistence の単体テスト件数の検証 | Kotlin・Gradle・ビルド定義・CI の変更 |
+| `build (Temurin 25)` | `./gradlew build`（コンパイル・単体・ktlint・依存方向）、JDK 25 の確認、domain/golden-runner/cloud-gcp/アプリ/persistence の単体テスト件数の検証、**Kotlin と旧 Python のゴールデン比較**（`:golden-runner:run` → `tools.golden.kotlin_compare`。T3.1、D-107） | Kotlin・Gradle・ビルド定義・CI・**`tools/golden`（`.md` 以外）・`golden-runner`** の変更 |
 | `db integration (MySQL x)` | Testcontainers の MySQL。スイート: `migration`（:db-migration）/ `persistence`（:persistence）/ `apps`（:bot :ingest :dashboard） | 下表のとおり範囲が変わる |
 | `release tools and ci scripts (Python)` | `tools/release`（manifest・Dockerfile 静的検査）と `tools/ci`（判定・ゲート・ワークフロー規則）の単体テスト（Docker 不要） | リリース関連・Dockerfile・Dependabot 設定・マイグレーション・CI の変更 |
 | `golden tests (Python 3.12)` | T2.6 のゴールデンテスト | `tools/golden`・CI の変更 |
@@ -29,7 +29,8 @@ CI の実行範囲の決め方、分岐保護の設定、イメージのビル�
 | `bot|ingest|dashboard/build.gradle.kts`（requiredSchemaVersion） | ○ | 8.4 × apps | - | ○ | ○ | - |
 | `Dockerfile` `.dockerignore` | - | - | - | ○ | ○ | - |
 | `tools/release/` `docs/schemas/` `docs/release/` `docs/CONTRACTS.md` | - | - | - | ○ | `tools/release` のみ ○ | - |
-| `tools/golden/`（`*.md` 以外） | - | - | ○ | - | - | - |
+| `tools/golden/`（`*.md` 以外） | ○（Kotlin との比較が build ジョブの中にあるため。DB 統合は不要） | - | ○ | - | - | - |
+| `golden-runner`（Kotlin ランナー） | ○ | -（`:domain` に依存するだけで、persistence/アプリは使わない） | - | - | -（イメージの jar には入らない。Dockerfile は COPY のみ） | - |
 | `.github/dependabot.yml` | - | - | - | ○ | - | - |
 | `.github/workflows/`・`.github/scripts/`・`tools/ci/` | ○ | 8.4 + 9.7 × 全 | ○ | ○ | ○ | 本ワークフローのみ ○ |
 | 分類できないファイル・差分が空・取得失敗・想定外のイベント | **全部（fail closed）** | 全 | ○ | ○ | ○ | - |

@@ -78,21 +78,41 @@ GOLDEN_LEGACY_PATH=/path/to/jra-bot .venv-golden/bin/python -m tools.golden.run_
 - 浮動小数は JSON の数値（Python の最短往復表現）。NaN/Infinity は期待値に入れない（`{"$float": ...}` のタグが現れたら verify が失敗）。
 - `comparison_rules`: 既定 `abs_tol`（確率 1e-9、正規化 1e-12、ハッシュ・既定値は完全一致）+ パス別 `overrides`。型・キー集合・配列順序は常に厳密。
 
-## 将来の Kotlin 出力との比較
+## Kotlin 出力との比較
+
+**Stage 3-A（T3.1）で Kotlin 側のランナー `:golden-runner` を実装済み**（`:domain` の `jp.jrabot.domain.decision` を実行する。D-106・D-107）。
+
+```bash
+./gradlew :golden-runner:run --args="--fixtures $PWD/tools/golden/fixtures --out build/golden/kotlin_out.json --coverage build/golden/kotlin_coverage.json"
+python3 -m tools.golden.kotlin_compare --actual build/golden/kotlin_out.json --coverage build/golden/kotlin_coverage.json [--report report.json]
+```
+- ランナーは**全呼び出しを実行できたケースだけ**を出力し、未対応のケースは理由つきで `coverage` に載せる（空で埋めて成功に見せない）。
+- `kotlin_compare` は各フィクスチャ自身の `comparison_rules`（許容誤差・型・キー・順序）で比較し、**対応/未対応のケース数・呼び出し数を別に報告**、最大絶対誤差を出す。申告が `catalog.KOTLIN_PORT`（対応表）と違えば失敗（終了コード 2）。差分があれば 1。
+- 現在（T3.1 完了時点）: 14 ケース/562 呼び出しのうち、**Kotlin が検証したのは 10 ケース/380 呼び出し**（全一致、最大絶対誤差 0）。未対応は `G1-MODEL-001`・`G2-HASH-001`（T3.6）、`GD05-COMBO-001`（T3.2）、`GD10-DEFAULTS-001`（T1.20）の 4 ケース/182 呼び出しで、**成功に数えない**。CI は `build` ジョブの中で実行する。
+
+比較の一般形（`compare` 単体）:
 
 1. Kotlin 側のランナーが `fixtures/*.json` の `input.calls` を読み、同じ call 名の関数を実行する。
 2. 結果を `{"schema_version": 1, "results": {"<case_id>": {"results": [{"call_id": ..., "outcome": ...}]}}}` の形で JSON 出力する。
 3. `python -m tools.golden.compare --actual kotlin_out.json [--case ID ...] [--report report.json]`。差分はケース ID・パス・種類・期待値・実際の値・許容誤差で表示し、`--report` に機械処理用 JSON を出す。終了コード: 0=全一致 / 1=差分 / 2=形式不正・**未提供のケースあり**（未実装を成功扱いにしない）。
 
-`compare` の単体テストの「自己比較」は比較器自体の検査で、Kotlin の結果ではない（Kotlin 側は未実装）。
+`compare` / `kotlin_compare` の単体テストの「自己比較」は比較器自体の検査で、Kotlin の結果ではない。Kotlin の結果との比較は上の `:golden-runner` の実行が行う。
 
-## 実装済みケース（旧実装から生成済み: 10 ケース / 447 呼び出し）
+### 新しいケースの追加（既存フィクスチャを書き換えない）
 
-`GD01-EV-001` `GD01-KELLY-002`（odds=1.0 の ZeroDivisionError=E5 を含む）`GD02-PROB-001` `GD02-NORM-002` `G2-HASH-001` `G1-MODEL-001` `GD03-FILTER-001` `GD05-COMBO-001` `GD09-EVAL-001`（evaluate_odds 全体、ML 無効の市場フォールバック）`GD10-DEFAULTS-001`（関数既定値）。
+`scenarios.py` にケースを足し、`generate --add-new` を使う。**存在しないケースのファイルだけを書き、既存ファイルは 1 バイトも変えない**（`--update` は全ファイルを書き直すので、浮動小数の最後の桁の揺れが既存の期待値の差分に混ざる）。manifest は既存の sha256 を保ったまま追記される。`catalog.KOTLIN_PORT` にも追加し（Kotlin が対応するなら supported、そうでなければ理由つきで unsupported）、`verify` と `generate --check` が通ることを確認する。
+
+```bash
+.venv-golden/bin/python -m tools.golden.generate --legacy-path /path/to/jra-bot --add-new
+```
+
+## 実装済みケース（旧実装から生成済み: 14 ケース / 562 呼び出し）
+
+`GD01-EV-001` `GD01-KELLY-002`（odds=1.0 の ZeroDivisionError=E5 を含む）`GD02-PROB-001` `GD02-NORM-002` `G2-HASH-001` `G1-MODEL-001` `GD03-FILTER-001` `GD05-COMBO-001` `GD09-EVAL-001`（evaluate_odds 全体、ML 無効の市場フォールバック）`GD10-DEFAULTS-001`（関数既定値）。T3.1 で追加（`evaluate_odds` の単勝判定。D-108）: `GD03-SNAPSHOT-002`（急落・人気急上昇フィルタ）`GD04-WIN-HITRATE-003`（hit_rate モード）`GD08-SELECT-003`（選別・見送り・賭式絞り込み・総投資上限）`GD07-SIZING-004`（縮小係数・Kelly・ブレンド・頭数）。
 
 ## 登録のみ・未実装（Stage 3 へ引き継ぎ）
 
-`catalog.py` が正本（`verify` が整合を検査）。状況: 登録 17 項目のうち **implemented=2（GD01, G1）/ partial=11 / planned=4（G4〜G7）**。partial は一部の関数のみ生成済みで、各項目の `remaining` に未実施の範囲を記載。主な未実施: ワイド/三連複の Plackett–Luce 経路（E8〜E11）、hit_rate モード、比例縮小（E6）、ML 例外時のラベル（E1）、時間帯スケジュール・adaptive_relaxation（daemon 側）、合成 SQLite を使う特徴量ベクトル（G6）、ensemble（G4）。
+`catalog.py` が正本（`verify` が整合を検査）。状況: 登録 17 項目のうち **implemented=2（GD01, G1）/ partial=11 / planned=4（G4〜G7）**。partial は一部の関数のみ生成済みで、各項目の `remaining` に未実施の範囲を記載。主な未実施: ワイド/三連複の Plackett–Luce 経路（E8〜E11）、ML 例外時のラベル（E1）、時間帯スケジュール・adaptive_relaxation（daemon 側）、合成 SQLite を使う特徴量ベクトル（G6）、ensemble（G4）。（hit_rate モードと比例縮小 E6 の旧挙動は T3.1 で生成済み）
 
 ## トラブルシューティング
 
