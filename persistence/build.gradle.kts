@@ -17,6 +17,17 @@ dependencies {
     testImplementation(libs.mysql.connector.j)
 }
 
+// G-DB-0b: Connector/J 26.x の互換性確認用。`-PconnectorJVersion=26.10.0` で版だけを差し替える（既定は Boot の BOM の 9.7.0）。
+// 採用はしない（成功しても D-070 の記録後に判断する）。
+val connectorJOverride: String? = providers.gradleProperty("connectorJVersion").orNull
+if (connectorJOverride != null) {
+    configurations.configureEach {
+        resolutionStrategy.eachDependency {
+            if (requested.group == "com.mysql" && requested.name == "mysql-connector-j") useVersion(connectorJOverride)
+        }
+    }
+}
+
 kapt {
     arguments {
         // SQL テンプレート（META-INF/<パッケージ>/<Dao>/<メソッド>.sql）の存在をコンパイル時に検査させる
@@ -47,6 +58,7 @@ val integrationTest by tasks.registering(Test::class) {
             .get()
             .asFile.path,
     )
+    systemProperty("expected.connectorj.version", connectorJOverride ?: "")
     // テストの再利用（キャッシュ）で DB 検証を飛ばさない
     outputs.upToDateWhen { false }
     testLogging.showStandardStreams = false

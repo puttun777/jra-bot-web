@@ -46,7 +46,7 @@ object Fixtures {
         raceId: RaceId = raceId(),
         market: Market = Market.WIN,
         observedAt: Instant = OBSERVED,
-        vararg values: Pair<Int, Double> = arrayOf(1 to 2.5, 2 to 10.0, 3 to 3.3),
+        values: Array<Pair<Int, Double>> = arrayOf(1 to 2.5, 2 to 10.0, 3 to 3.3),
     ) = OddsSnapshot(
         tenantId,
         raceId,

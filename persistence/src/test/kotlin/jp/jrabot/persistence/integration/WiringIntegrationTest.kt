@@ -30,6 +30,15 @@ class WiringIntegrationTest {
     }
 
     @Test
+    fun `使っている Connector_J の版を記録し、版を差し替えた構成(G-DB-0b)では指定どおりの版が使われている`() {
+        val version =
+            h.dataSource.connection.use { it.metaData.driverVersion }
+        println("MySQL Connector/J driver version = $version")
+        val expected = System.getProperty("expected.connectorj.version").orEmpty()
+        if (expected.isNotEmpty()) assertTrue(version.contains(expected), "Connector/J の版が $expected ではない: $version")
+    }
+
+    @Test
     fun `starter が作る Config は JVM のタイムゾーンに依存しない自前の方言を使う`() {
         val config = h.bean(Config::class.java)
         assertIs<MysqlDialect>(config.dialect)

@@ -130,3 +130,67 @@ class TestDb(
 
     fun count(sql: String): Long = checkNotNull(scalar(sql)).toLong()
 }
+
+/** MySQL のエラー番号。 */
+object MySqlError {
+    const val DUPLICATE_ENTRY = 1062
+    const val FK_CHILD = 1452
+    const val CHECK_VIOLATED = 3819
+    const val TABLE_DENIED = 1142
+    const val COLUMN_DENIED = 1143
+    const val DB_DENIED = 1044
+    const val OUT_OF_RANGE = 1264
+}
+
+/** 例外の連鎖にある SQLException のエラー番号。無ければ null。 */
+fun Throwable.mysqlErrorCode(): Int? = generateSequence(this) { it.cause }.filterIsInstance<java.sql.SQLException>().firstOrNull()?.errorCode
+
+/** [block] が、指定したエラー番号のいずれかの SQL エラーで失敗することを確かめる（他のエラー・成功はテスト失敗）。 */
+fun assertSqlError(
+    vararg codes: Int,
+    block: () -> Unit,
+) {
+    try {
+        block()
+    } catch (e: Throwable) {
+        val actual = e.mysqlErrorCode()
+        assertTrue(actual != null && actual in codes, "期待した SQL エラー ${codes.toList()} ではない: $actual ($e)")
+        return
+    }
+    kotlin.test.fail("SQL エラー ${codes.toList()} になるはずだが成功した")
+}
+
+/** 権限不足（表・列・DB のいずれかの拒否）で失敗すること。 */
+fun assertDenied(block: () -> Unit) = assertSqlError(MySqlError.TABLE_DENIED, MySqlError.COLUMN_DENIED, MySqlError.DB_DENIED, block = block)
+
+/** テスト間でデータを空にする（FK の子から順に）。テナント 1・2 は残す。 */
+fun TestDb.resetData() {
+    for (table in listOf("signals", "odds_snapshots", "bot_run", "race_schedule", "races")) exec("DELETE FROM $table")
+}
+
+/** [n] 個のタスクを同時に開始する（全員が揃うまで待ってから実行する）。結果（または例外）を順序どおりに返す。 */
+fun <T> runConcurrently(
+    n: Int,
+    task: (Int) -> T,
+): List<Result<T>> {
+    val pool =
+        java.util.concurrent.Executors
+            .newFixedThreadPool(n)
+    try {
+        val ready = java.util.concurrent.CountDownLatch(n)
+        val go = java.util.concurrent.CountDownLatch(1)
+        val futures =
+            (0 until n).map { i ->
+                pool.submit<Result<T>> {
+                    ready.countDown()
+                    go.await()
+                    runCatching { task(i) }
+                }
+            }
+        assertTrue(ready.await(30, TimeUnit.SECONDS), "スレッドが揃わない")
+        go.countDown()
+        return futures.map { it.get(60, TimeUnit.SECONDS) }
+    } finally {
+        pool.shutdownNow()
+    }
+}
