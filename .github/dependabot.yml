@@ -1,0 +1,89 @@
+# Dependabot（バージョン更新。T2.5 後半 / D-012）。
+# 方針: 安定版のみ（Dependabot は現行が安定版なら Alpha/Beta/RC/Snapshot を提案しない）／週次／minor+patch は 1 つの PR にグループ化／
+#       PR 数は上限で抑える／**自動マージしない**（マージはユーザー。auto-merge の設定・ワークフローを置かない）／
+#       採否が未決・ゲート付きの依存は ignore で自動提案しない。セキュリティ更新は別経路（Dependabot security updates。リポジトリ設定で有効化する）で、
+#       open-pull-requests-limit の対象外。ignore は『バージョン更新』の提案を止めるもので、既知の脆弱性への対応を妨げるものではない（セキュリティ PR の扱いは要実環境確認）。
+# 各 PR は ci.yml が変更内容に応じて検証する（gradle の版 → build + DB 統合 8.4/9.7 + Connector/J 互換性 + images、Dockerfile → images など）。
+version: 2
+updates:
+  # Gradle（gradle/libs.versions.toml の Version Catalog と build-logic のプラグイン依存）
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Tokyo"
+    open-pull-requests-limit: 3
+    labels: ["dependencies"]
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      gradle-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      # Spring Boot 4.2 への移行は VERSIONS §7 のゲート（4.2.0 は RC。GA・4.2.1 以降の段階の切れ目で手動実施）。4.1.x のパッチだけ提案する
+      - dependency-name: "org.springframework.boot*"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+      # Connector/J 26.x は採否が未決（D-070。既定は Boot の BOM に従う 9.7.0）。互換性確認は compat-connectorj26.yml で手動/月次に行う
+      - dependency-name: "com.mysql:mysql-connector-j"
+        update-types: ["version-update:semver-major"]
+
+  # GitHub Actions（SHA ピン留めの行と『# vX.Y.Z』のコメントを更新する）
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "06:00"
+      timezone: "Asia/Tokyo"
+    open-pull-requests-limit: 2
+    labels: ["dependencies"]
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      actions-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # Docker のベースイメージ（Dockerfile の eclipse-temurin。タグ + digest 固定の digest を更新する）
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "06:00"
+      timezone: "Asia/Tokyo"
+    open-pull-requests-limit: 2
+    labels: ["dependencies"]
+    commit-message:
+      prefix: "chore(docker)"
+    groups:
+      docker-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      # JDK は 25（LTS）で固定（VERSIONS §1）。メジャー（26 など非 LTS を含む）への更新は自動提案しない
+      - dependency-name: "eclipse-temurin"
+        update-types: ["version-update:semver-major"]
+
+  # Python（tools/golden の requirements.txt。numpy は旧実装の出力のバイト一致に関わるため、PR の golden テストで検証する）
+  - package-ecosystem: "pip"
+    directory: "/tools/golden"
+    schedule:
+      interval: "weekly"
+      day: "thursday"
+      time: "06:00"
+      timezone: "Asia/Tokyo"
+    open-pull-requests-limit: 1
+    labels: ["dependencies"]
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      python-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "numpy"
+        update-types: ["version-update:semver-major"]

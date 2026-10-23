@@ -110,7 +110,7 @@ class SmokePatternTest(unittest.TestCase):
         self.assertTrue(image_smoke.SECRET_ASSIGNMENT.search("api_key: abcdef"))
         self.assertFalse(image_smoke.SECRET_ASSIGNMENT.search("db.password=${DB_PASSWORD}"))
         self.assertFalse(image_smoke.SECRET_ASSIGNMENT.search("server.port=${PORT:8080}"))
-        self.assertTrue(image_smoke.PRIVATE_KEY.search("-----BEGIN RSA PRIVATE KEY-----"))
+        self.assertTrue(image_smoke.PRIVATE_KEY.search("-----BEGIN " + "RSA PRIVATE KEY-----"))
         self.assertTrue(image_smoke.SECRET_ENV_NAME.search("DB_PASSWORD"))
         self.assertFalse(image_smoke.SECRET_ENV_NAME.search("JAVA_HOME"))
 

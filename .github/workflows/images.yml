@@ -1,0 +1,69 @@
+name: images
+
+# Docker イメージのビルドとスモーク、ドライランの release-manifest（manifest-preview.json）の生成と検証（T2.5 後半）。
+# - 認証なし・push なし・デプロイなし: GCP / Artifact Registry / Docker Hub / GHCR のどれにも認証も push もしない。イメージはランナーのローカルにだけ作る。
+# - 実行が重い（Gradle のビルドを含む）ので、ci.yml が「Dockerfile・リリース・ビルド定義が変わったとき」だけ呼び出す。手動実行（workflow_dispatch）もできる。
+# - 成果物は manifest-preview.json（deployable=false。本番の release-manifest.json ではない）、smoke-report.json、images-local.json。
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  images:
+    name: images (build + smoke, no push)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Docker
+        run: docker version --format 'client={{.Client.Version}} server={{.Server.Version}}'
+      - name: Build the 4 images (shared Gradle build stage; local only, no push)
+        run: |
+          set -euo pipefail
+          GIT_SHA="$(git rev-parse HEAD)"
+          start=$(date +%s)
+          for t in db-migration bot ingest dashboard; do
+            docker build --progress=plain --target "$t" --build-arg GIT_SHA="$GIT_SHA" -t "jra-bot/$t:$GIT_SHA" . 2>&1 | tail -n 40
+          done
+          echo "build seconds: $(( $(date +%s) - start ))"
+          docker image ls --format '{{.Repository}}:{{.Tag}} {{.Size}}' | grep '^jra-bot/'
+        shell: bash
+      - name: Pull the CI-only MySQL image
+        run: docker pull mysql:8.4
+      - name: Security and startup smoke (non-root, ENTRYPOINT, exit codes, secrets, JDK 25, SIGTERM; CI-only MySQL with synthetic data)
+        run: python3 -m tools.release.image_smoke --git-sha "$(git rev-parse HEAD)" --report-dir out
+      - name: Dry-run manifest (preview; not deployable) - generate, validate, reproducibility
+        run: |
+          set -eu
+          GIT_SHA="$(git rev-parse HEAD)"
+          BUILT_AT="$(date -u -d "@$(git show -s --format=%ct HEAD)" +%Y-%m-%dT%H:%M:%SZ)"
+          for i in 1 2; do
+            python3 -m tools.release.cli preview --git-sha "$GIT_SHA" --built-at "$BUILT_AT" --local-images out/images-local.json --out "out/preview-$i.json"
+          done
+          cmp out/preview-1.json out/preview-2.json
+          mv out/preview-1.json out/manifest-preview.json
+          rm out/preview-2.json
+          python3 -m tools.release.cli validate --kind preview --expect-git-sha "$GIT_SHA" out/manifest-preview.json
+          # プレビューは本番用としては必ず拒否される（拒否されなければ失敗）
+          rc=0; python3 -m tools.release.cli validate --kind production out/manifest-preview.json || rc=$?
+          test "$rc" = 1
+          {
+            echo "## images (dry run)"
+            echo "- git_sha: \`$GIT_SHA\`"
+            echo "- manifest-preview.json: deployable=false（レジストリへ push していないので digest は無い。ローカル image ID は digest ではない）"
+            echo "- ml-train: 未実装のためビルドしていない（Stage 3）"
+            docker image ls --format '- {{.Repository}}:{{.Tag}} {{.Size}}' | grep 'jra-bot/' || true
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload dry-run artifacts (smoke report and manifest preview)
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: images-dry-run
+          path: out/
+          retention-days: 14
+          if-no-files-found: warn

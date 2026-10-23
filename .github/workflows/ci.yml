@@ -1,22 +1,63 @@
 name: ci
 
+# 変更内容に応じて重いジョブだけを実行する（GitHub Free の月 2,000 分枠の節約。tools/ci/classify.py）。
+# - `changes` が変更ファイルを分類する（fail closed: 分類・差分取得に失敗したら全部実行）。docs だけの変更は `changes` と `ci gate` だけ。
+# - **分岐保護の required check は `ci gate` だけにする**。ワークフロー全体を paths で止めると required check が Pending のまま残るため使わない。
+#   `ci gate` は常に実行され、実行が必要なジョブが success でなければ失敗する。skipped を『テストした』とは数えない（要約に『未実施』と出す）。
+# - 契機: PR、main への push（push 前後の差分で同じ判定）、手動（フル検証）、月次（フル検証 + Connector/J 26.x）。
 on:
   pull_request:
     branches: [main]
   push:
     branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "23 18 1 * *" # 毎月 1 日 18:23 UTC（日本時間 2 日 03:23）。フル検証
 
 # 最小権限。Secrets は使わない・クラウドの認証情報も使わない（PR から本番へアクセスしない）。
 permissions:
   contents: read
 
+# PR は新しい push で古い実行を止める。main の push は止めない（途中のコミットの検証を落とさない）
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # 変更判定 + 秘密/実データの混入検査（常に実行。ジョブ数を増やさないよう 1 つにまとめる: 課金はジョブごとに分単位で切り上げ）
+  changes:
+    name: changes and repo hygiene
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      mode: ${{ steps.classify.outputs.mode }}
+      reason: ${{ steps.classify.outputs.reason }}
+      run_build: ${{ steps.classify.outputs.run_build }}
+      run_golden: ${{ steps.classify.outputs.run_golden }}
+      run_release: ${{ steps.classify.outputs.run_release }}
+      run_images: ${{ steps.classify.outputs.run_images }}
+      run_connectorj26: ${{ steps.classify.outputs.run_connectorj26 }}
+      db_matrix: ${{ steps.classify.outputs.db_matrix }}
+      db_suites: ${{ steps.classify.outputs.db_suites }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # 差分（PR の merge コミットの第 1 親、push の before）を取るため
+      - name: Classify changed files (fail closed)
+        id: classify
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: python3 -m tools.ci.classify
+      - name: Check tracked files (secrets / real data)
+        run: bash .github/scripts/check-repo-hygiene.sh
+
   build:
     name: build (Temurin 25)
+    needs: changes
+    if: needs.changes.outputs.run_build == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -29,7 +70,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "25"
-      # Wrapper jar の検証もここで行われる（既定で有効）。キャッシュは読み取りのみ（main 以外では書かない）。
+      # Wrapper jar の検証もここで行われる（既定で有効）。Gradle のキャッシュは main 以外では書かない（PR が main 用のキャッシュを汚染しない）。
       - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
       - name: Show toolchain
         run: |
@@ -79,22 +120,27 @@ jobs:
           python3 .github/scripts/verify_test_results.py "dashboard unit" dashboard/build/test-results/test 30 \
             "DashboardInternalApiTest,AdminWriteGuardTest,DashboardStartupConfigTest"
 
-  repo-hygiene:
-    name: repo hygiene (secrets / real data)
+  # tools/release（release-manifest の生成・検証、Dockerfile の静的検査）と tools/ci（変更判定・ゲート）の Python 単体テスト。Docker 不要
+  release-tools:
+    name: release tools and ci scripts (Python)
+    needs: changes
+    if: needs.changes.outputs.run_release == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Check tracked files
-        run: bash .github/scripts/check-repo-hygiene.sh
+      - name: Unit tests (none skipped)
+        run: python3 -m tools.ci.run_tests --min-tests 100
 
   # ゴールデンテスト基盤（T2.6）。Python は ubuntu-24.04 標準の 3.12 系を使い、minor を検証する。
   # 旧実装は公開リポジトリを固定コミットで取得する（認証・Secrets 不要）。生成結果は書き込まず、コミット済みフィクスチャとの一致を検証する
   # （フィクスチャを CI が自動更新することはない）。0 件・スキップ・不足は失敗。
   golden:
     name: golden tests (Python 3.12)
+    needs: changes
+    if: needs.changes.outputs.run_golden == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
@@ -140,21 +186,23 @@ jobs:
           rc=0; python3 -m tools.golden.compare --actual bad.json || rc=$?; test "$rc" = 1
           rc=0; python3 -m tools.golden.compare --actual miss.json || rc=$?; test "$rc" = 2
 
-  # DB 統合テスト（T2.3 + T2.4）: Flyway V1/V2/R__grants と CLI（:db-migration）、および Doma の Repository 実装（:persistence。スキーマは本物の
-  # db-migration CLI で適用）を、使い捨ての MySQL コンテナ（Testcontainers）に対して検証する。
-  # 8.4 LTS（本番の暫定基準: D-046）と 9.7 LTS（互換性の確認: G-DB-0）を別ジョブで実行する。
-  # Docker が使えない・イメージを取得できない場合は**失敗する**（スキップして成功扱いにしない）。使うのは CI 専用の一時的なテスト値だけで、
-  # 本番の秘密・GCP・実データには一切触れない。
+  # DB 統合テスト（T2.3 + T2.4 + T2.8）: Flyway V1/V2/R__grants と CLI（:db-migration）、Doma の Repository（:persistence）、実行アプリの起動・Job を、
+  # 使い捨ての MySQL コンテナ（Testcontainers）に対して検証する。MySQL 8.4 LTS（本番の暫定基準: D-046）と 9.7 LTS（互換性の確認: G-DB-0）。
+  # 実行範囲は変更内容で決まる（tools/ci/classify.py）: マトリクス（8.4 だけ / 8.4 + 9.7）とスイート（migration, persistence, apps）。
+  # Docker が使えない・イメージを取得できない場合は**失敗する**（スキップして成功扱いにしない）。使うのは CI 専用の一時的なテスト値だけ。
   db-integration:
     name: db integration (MySQL ${{ matrix.mysql }})
+    needs: changes
+    if: needs.changes.outputs.db_matrix != '[]'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        mysql: ["8.4", "9.7"]
+        mysql: ${{ fromJSON(needs.changes.outputs.db_matrix) }}
     env:
       MYSQL_IMAGE: mysql:${{ matrix.mysql }}
+      DB_SUITES: ${{ needs.changes.outputs.db_suites }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -170,10 +218,11 @@ jobs:
           docker pull "$MYSQL_IMAGE"
           docker image inspect "$MYSQL_IMAGE" --format '{{.Id}} {{.Created}}'
       - name: Integration tests (Testcontainers, ${{ env.MYSQL_IMAGE }})
+        if: contains(env.DB_SUITES, 'migration')
         run: ./gradlew :db-migration:integrationTest --stacktrace
       # 「実行されたテストが 0 件」「スキップがある」「失敗がある」をすべて失敗にする（黙って緑にしない）。
       - name: Verify that the integration tests actually ran
-        if: always()
+        if: always() && contains(env.DB_SUITES, 'migration')
         run: |
           dir=db-migration/build/test-results/integrationTest
           test -d "$dir" || { echo "::error::no integrationTest results"; exit 1; }
@@ -189,10 +238,10 @@ jobs:
           PY
       # :persistence の統合テスト（T2.4）。8.4 / 9.7 の両ジョブで必ず実行する（db-migration のテストが失敗しても実行して結果を両方残す）。
       - name: Persistence integration tests (Testcontainers, ${{ env.MYSQL_IMAGE }})
-        if: always()
+        if: always() && contains(env.DB_SUITES, 'persistence')
         run: ./gradlew :persistence:integrationTest --stacktrace
       - name: Verify that the persistence integration tests actually ran
-        if: always()
+        if: always() && contains(env.DB_SUITES, 'persistence')
         run: |
           dir=persistence/build/test-results/integrationTest
           test -d "$dir" || { echo "::error::no persistence integrationTest results"; exit 1; }
@@ -220,48 +269,43 @@ jobs:
       # 実行アプリの統合テスト（T2.8）: /internal/ready のスキーマ版・DB 停止/復旧、Job の終了コード（DB 不達 75 とスキーマ不足 1 の区別）、
       # 非 NORMAL のモードで DB に接続しないこと（サーバの接続数）。8.4 / 9.7 の両ジョブで必ず実行する。
       - name: App integration tests (Testcontainers, ${{ env.MYSQL_IMAGE }})
-        if: always()
+        if: always() && contains(env.DB_SUITES, 'apps')
         run: ./gradlew :bot:integrationTest :ingest:integrationTest :dashboard:integrationTest --continue --stacktrace
       - name: Verify that the app integration tests actually ran
-        if: always()
+        if: always() && contains(env.DB_SUITES, 'apps')
         run: |
           python3 .github/scripts/verify_test_results.py "bot integration" bot/build/test-results/integrationTest 8 "BotJobIntegrationTest"
           python3 .github/scripts/verify_test_results.py "ingest integration" ingest/build/test-results/integrationTest 9 "IngestReadyIntegrationTest"
           python3 .github/scripts/verify_test_results.py "dashboard integration" dashboard/build/test-results/integrationTest 9 "DashboardReadyIntegrationTest"
 
-  # G-DB-0b（T2.4）: MySQL Connector/J 26.x の互換性確認。:persistence の統合テストだけを、Connector/J の版を差し替えて実行する。
-  # 採否は別の判断（D-070）なので、このジョブの結果で PR をブロックしない（continue-on-error）。結果は記録する。
-  persistence-connectorj26:
-    name: connector/j 26.x check (MySQL ${{ matrix.mysql }})
+  # イメージのビルドとスモーク + ドライラン manifest（images.yml）。push も認証もしない。Dockerfile・リリース関連・ビルド定義が変わったときと、フル検証のときだけ
+  images:
+    needs: changes
+    if: needs.changes.outputs.run_images == 'true'
+    uses: ./.github/workflows/images.yml
+
+  # Connector/J 26.x の互換性確認（非ゲート。採否は別判断）。Connector/J・DB ドライバ関連の依存設定が変わったときと、フル検証のときだけ
+  connectorj26:
+    needs: changes
+    if: needs.changes.outputs.run_connectorj26 == 'true'
+    uses: ./.github/workflows/compat-connectorj26.yml
+
+  # 最終集約チェック。**分岐保護の required check はこれだけ**にする。常に実行され、docs だけの変更でも正常に終わる。
+  # 実行が必要と判定されたジョブが success でなければ失敗（skipped・cancelled も失敗）。変更判定が失敗したら失敗（fail closed）。
+  ci-gate:
+    name: ci gate
+    if: always()
+    needs: [changes, build, release-tools, golden, db-integration, images, connectorj26]
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    continue-on-error: true
-    strategy:
-      fail-fast: false
-      matrix:
-        mysql: ["8.4", "9.7"]
-    env:
-      MYSQL_IMAGE: mysql:${{ matrix.mysql }}
-      CONNECTOR_J_VERSION: "26.10.0"
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
-        with:
-          distribution: temurin
-          java-version: "25"
-      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
-      - name: Persistence integration tests (Connector/J ${{ env.CONNECTOR_J_VERSION }}, ${{ env.MYSQL_IMAGE }})
-        run: ./gradlew :persistence:integrationTest -PconnectorJVersion="$CONNECTOR_J_VERSION" --stacktrace
-      - name: Summary
-        if: always()
-        run: |
-          python3 - persistence/build/test-results/integrationTest <<'PY'
-          import glob, sys, xml.etree.ElementTree as ET
-          tests = skipped = failures = errors = 0
-          for f in glob.glob(sys.argv[1] + "/*.xml"):
-              r = ET.parse(f).getroot()
-              tests += int(r.get("tests")); skipped += int(r.get("skipped")); failures += int(r.get("failures")); errors += int(r.get("errors"))
-          print(f"connector/j 26.x: tests={tests} skipped={skipped} failures={failures} errors={errors}")
-          PY
+          sparse-checkout: |
+            tools/__init__.py
+            tools/ci
+      - name: Evaluate (a skipped job is reported as not tested, never as passed)
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: python3 -m tools.ci.gate
