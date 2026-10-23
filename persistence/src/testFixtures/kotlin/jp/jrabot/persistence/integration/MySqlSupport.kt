@@ -18,7 +18,7 @@ object MySqlSupport {
     val image: String = System.getenv("MYSQL_IMAGE")?.takeIf { it.isNotBlank() } ?: "mysql:8.4"
 
     // CI の一時コンテナ専用のテスト値（本番の秘密ではない）
-    private const val ROOT_PASSWORD = "root-pw-for-ci-container"
+    const val ROOT_PASSWORD = "root-pw-for-ci-container"
     val PASSWORDS =
         mapOf(
             "migrate" to "migrate-pw-ci",
@@ -28,7 +28,16 @@ object MySqlSupport {
             "mltrain" to "mltrain-pw-ci",
         )
 
+    /**
+     * **ローカル検証専用**: `JRABOT_TEST_MYSQL_EXTERNAL=host:port`（root のパスワードは [ROOT_PASSWORD]）を設定すると、Docker を使わず
+     * 既に動いている MySQL を使う（Docker の使えないクラウドセッションでの事前確認用。版は 8.4/9.7 と限らない）。
+     * CI では設定しない。8.4/9.7 の合否は Testcontainers（`MYSQL_IMAGE`）の結果だけを正とする。
+     */
+    private val external: Pair<String, Int>? =
+        System.getenv("JRABOT_TEST_MYSQL_EXTERNAL")?.takeIf { it.isNotBlank() }?.let { it.substringBeforeLast(':') to it.substringAfterLast(':').toInt() }
+
     private val container: MySQLContainer by lazy {
+        check(external == null) { "外部の MySQL を使うときはコンテナを起動しない" }
         MySQLContainer(image)
             .withDatabaseName("bootstrap")
             .withUsername("bootstrap")
@@ -45,10 +54,13 @@ object MySqlSupport {
         true
     }
 
-    fun jdbcUrl(database: String?): String = "jdbc:mysql://${container.host}:${container.getMappedPort(3306)}/${database.orEmpty()}"
+    fun jdbcUrl(database: String?): String {
+        val (host, port) = hostAndPort()
+        return "jdbc:mysql://$host:$port/${database.orEmpty()}"
+    }
 
     /** コンテナの接続先（ホスト, ポート）。中継（[TcpProxy]）の転送先に使う。 */
-    fun hostAndPort(): Pair<String, Int> = container.host to container.getMappedPort(3306)
+    fun hostAndPort(): Pair<String, Int> = external ?: (container.host to container.getMappedPort(3306))
 
     /**
      * サーバが受け付けた接続の累計（`Connections` ステータス。接続の試行を含み、失敗した認証も数える）。
@@ -182,7 +194,18 @@ fun assertDenied(block: () -> Unit) = assertSqlError(MySqlError.TABLE_DENIED, My
 
 /** テスト間でデータを空にする（FK の子から順に）。テナント 1・2 は残す。 */
 fun TestDb.resetData() {
-    for (table in listOf("signals", "odds_snapshots", "bot_run", "race_schedule", "races")) exec("DELETE FROM $table")
+    for (table in listOf(
+        "signals",
+        "odds_snapshots",
+        "bot_run",
+        "calendar_override",
+        "race_schedule_event",
+        "race_day",
+        "race_schedule",
+        "races",
+    )) {
+        exec("DELETE FROM $table")
+    }
 }
 
 /** [n] 個のタスクを同時に開始する（全員が揃うまで待ってから実行する）。結果（または例外）を順序どおりに返す。 */

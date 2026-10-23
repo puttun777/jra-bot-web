@@ -28,7 +28,7 @@ enum class BotRunTrigger { SCHEDULER, MANUAL, RECONCILE, BACKFILL }
 
 /**
  * 実行の状態（RACE_CALENDAR_DESIGN §6.3 の状態遷移図と、CONTRACTS §9.2 の `INTERRUPTED`）。
- * `INTERRUPTED` は DDL 案の ENUM には無い。T2.3 の `V2` で加える（PROGRESS に記録）。遷移の検証は T3.3。
+ * `INTERRUPTED` は DDL 案の ENUM には無い。T2.3 の `V2` で加える（PROGRESS に記録）。遷移の規則は [BotRunStateMachine]。
  */
 enum class BotRunState(
     /** 実行中として排他（`active_slot = 1`）を持つ状態。 */
@@ -46,7 +46,8 @@ enum class BotRunState(
 
 /**
  * bot の実行 1 回（`bot_run`）。二重実行は DB の UNIQUE(active_slot) とリースで防ぐ（D-026）。
- * [checkpoint] はレース別のステージなどを持つ不透明な文字列（中身の型付けは T3.3）。[version] は楽観ロック（新規は 0）。
+ * [checkpoint] はレース別のステージなどを持つ JSON オブジェクトの文字列（中身の型付けは T3.8 の bot-run。T3.3 は保存の契約だけ。
+ * MySQL の JSON 型に保存されるので、読み戻した文字列は整形が変わり得る）。[version] は楽観ロック（新規は 0。状態・リース・checkpoint の更新ごとに 1 進む）。
  */
 data class BotRun(
     override val tenantId: TenantId,
@@ -68,5 +69,11 @@ data class BotRun(
         require(finishedAt == null || !finishedAt.isBefore(startedAt)) { "finishedAt が startedAt より前" }
         require(!(state.holdsActiveSlot && finishedAt != null)) { "実行中の状態で finishedAt は設定できない" }
         require(exitReason == null || exitReason.length <= 200) { "exitReason は 200 文字以下" }
+        require(leaseOwner == null || (leaseOwner.isNotBlank() && leaseOwner.length <= 100)) { "leaseOwner は 1〜100 文字" }
+        require(checkpoint == null || checkpoint.length <= MAX_CHECKPOINT_LENGTH) { "checkpoint は $MAX_CHECKPOINT_LENGTH 文字以下" }
+    }
+
+    companion object {
+        const val MAX_CHECKPOINT_LENGTH = 65_535
     }
 }

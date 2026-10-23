@@ -87,7 +87,7 @@ P0 の順: F26/F04/F05/F06/F07（基礎純関数）→ F16（DB）→ F08/F09（
 |---|---|
 | F01 JV-Link 取得 | 使用 API は Init/Open/RTOpen/Read/Skip/Close/SetSavePath/SetPort のみ。`JVGets`/`JVStatus`/`JVWatchEvent` 等は未使用。dataspec は RACE, RCVN/RCOV, 0B30/31/33/35, 0B12, 0B15。**YSCH と 0B14 は未使用**。**分類は W のまま**、実装はエージェント(Python 暫定, D-018)。64bit 版 JV-Link の登場で「32bit 必須」前提が変わる |
 | F02 パーサ | RA/SE/HR/O1/O3/O5/UM の位置一覧を JVLINK_DESIGN §1.4 に整理。**HR 払戻の桁解釈に 10 倍ずれの疑義**、文字列経由の cp932 再エンコードによる欠落リスク、レース ID が回・日目を欠く問題。**分類 K（server）のまま**、再現せず仕様書で正を確認(T1.17) |
-| F03 開催日/発走予定 | 専用ロジックなし(確認済)。新設計=YSCH+RA+0B14+手動補正、`race_day/race_schedule/…` スキーマ、calendar-check/bot-run 分離。**分類 K（新規）のまま** |
+| F03 開催日/発走予定 | 専用ロジックなし(確認済)。新設計=YSCH+RA+0B14+手動補正、`race_day/race_schedule/…` スキーマ、calendar-check/bot-run 分離。**分類 K（新規）のまま**。**T3.3 実装済み**（開催日の導出・手動補正・履歴・calendar-check・bot-run リース。一部は T3.4〜T3.9 待ち: RACE_CALENDAR_DESIGN §11） |
 | F14 常駐ループ | `post_time` が `00:00`/8時前/18時超なら監視窓の開始に置換する暗黙処理、`result_fetched` などメモリ状態、`datetime.now()` を確認。**新設計では UNKNOWN 明示・DB 状態・Clock 注入** |
 | F21/F22 補てん取込・タイムスタンプ | RCOV/RCVN は「非蓄積系ソフト向け補てん情報」で、蓄積用途では DIFN 等が本来。lastfiletimestamp は JVOpen 成功時に保存(読込完走と独立)→ **ACK 後のみ前進・オーバーラップ読み直し**へ |
 | 新規 F27 取込 API(ingest)/エージェント | 認証・冪等・キュー・ビーコン。契約 CONTRACTS §3・§7 |

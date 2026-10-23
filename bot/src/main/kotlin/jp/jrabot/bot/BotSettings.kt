@@ -1,6 +1,7 @@
 package jp.jrabot.bot
 
 import jp.jrabot.cloudgcp.ops.OpsModeProviders
+import jp.jrabot.domain.calendar.CalendarSettings
 import jp.jrabot.domain.ops.AppEnv
 import jp.jrabot.persistence.jdbc.DbSettings
 
@@ -14,6 +15,8 @@ class BotSettings(
     /** `OpsModeProviders.fromEnvironment` に渡す環境（`OPS_MODE_SOURCE`、`APP_ENV`）。 */
     val opsEnv: Map<String, String>,
     val releaseIdOverride: String?,
+    /** `calendar-check` だけが必要とする設定（他のタスクでは null）。環境変数は [CalendarSettingsParser]。 */
+    val calendar: CalendarSettings? = null,
 ) {
     companion object {
         const val DB_USER = "bot" // CONTRACTS §8.2: bot（全 --task）
@@ -27,7 +30,8 @@ class BotSettings(
             // 最小権限: 本番では bot 用のユーザー以外（migrate など強い権限）で動かさない。ローカルは任意のユーザーを許す
             check(appEnv == AppEnv.LOCAL || db.user == DB_USER) { "DB_USER が bot 用のユーザー($DB_USER)ではない" }
             val opsEnv = env.filterKeys { it == OpsModeProviders.ENV_SOURCE || it == OpsModeProviders.ENV_APP }
-            return BotSettings(appEnv, db, opsEnv, env["RELEASE_ID"])
+            val calendar = if (task == BotTask.CALENDAR_CHECK) CalendarSettingsParser.fromEnv(env) else null
+            return BotSettings(appEnv, db, opsEnv, env["RELEASE_ID"], calendar)
         }
     }
 }

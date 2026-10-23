@@ -148,10 +148,10 @@ Reader/Writer は分かれており、`XxxRepository` は両方を継承する�
 | `Notifier` | 通知 1 件の配送（分割・429・Webhook は実装） | `Notification` → `DELIVERED`/`NOT_SENT`/`UNKNOWN` | 結果で返す。`UNKNOWN` は自動で再送しない（CONTRACTS §9.2） | SIGNAL はテナント必須 | 冪等でない。二重通知は `SignalWriter.claim` が防ぐ | `:bot`（Discord）= T3.x |
 | `HeartbeatMirror` | エージェント最終接続を GCS に写す（時刻・ID・版だけ） | `(TenantId, AgentHeartbeat)` → `WRITTEN`/`SKIPPED`/`FAILED` | **投げない** | パスは `TenantId` だけから | 条件（5 分/版変更）を満たさなければ `SKIPPED` | `:cloud-gcp` = T3.4/T3.5 |
 | `RaceReader`/`RaceWriter` | レース | `find`/`listByDate`、`upsert` → `UpsertOutcome` | — | 必須 | 自然キーの upsert | `:persistence` = T2.4 |
-| `RaceScheduleReader`/`Writer` | 開催予定 | `find`/`listByDate`、`insertIfAbsent`、`update`（楽観ロック `UpdateResult`） | — | 必須 | `insertIfAbsent` は冪等 | `:persistence` = T2.4/T3.3（`race_schedule_event` の追記は T3.3 で拡張） |
+| `RaceScheduleReader`/`Writer` | 開催予定 | `find`/`listByDate`、`insertIfAbsent`、`update`（楽観ロック `UpdateResult`） | — | 必須 | `insertIfAbsent` は冪等 | `:persistence` = T2.4/**T3.3 実装済み**（**履歴つきに変更**: `insertIfAbsent(schedule, event)`・`update(schedule, event)` は `ChangeResult`。D-125） |
 | `OddsSnapshotReader`/`Writer` | オッズ（レース単位。全件取得なし） | `latest`/`history`、`upsert` | — | 必須 | 自然キーの upsert | `:persistence` = T2.4 |
 | `SignalReader`/`Writer` | Signal と通知の claim | `insertIfAbsent`、`claim`→`markSent`/`markSendUnknown` | — | 必須 | claim は原子的。状態は逆戻りしない | `:persistence` = T2.4/T3.x |
-| `BotRunReader`/`Writer` | 実行とリース | `findActive`、`tryStart`（Started/AlreadyActive）、`update`（楽観ロック） | — | 必須 | 二重起動は DB の UNIQUE が最終防壁 | `:persistence` = T2.4/T3.3 |
+| `BotRunReader`/`Writer` | 実行とリース | `findActive`・`listByDate`、`acquire`（Acquired〔奪取あり得る〕/AlreadyActive/Contended）、`heartbeat`・`transition`・`saveCheckpoint`（**T3.3 で `tryStart`・`update` を置換**。D-127） | — | 必須 | 二重起動は DB の UNIQUE が最終防壁 | `:persistence` = T2.4/T3.3 |
 | `AppUserRepository`（読取りのみ） | 利用者 | `findByEmail`（唯一テナントを取らない 1 件の完全一致）、`listByTenant` | — | 例外は `findByEmail` のみ | 読取りのみ | `:persistence` = T2.4 |
 
 ### 14.1 T2.3 / T2.4 への引き継ぎ（DDL と domain の整合）
@@ -232,3 +232,10 @@ Reader/Writer は分かれており、`XxxRepository` は両方を継承する�
 - **Stage 2 の完了判定（技術面）**: T2.1〜T2.8 は実装済み（PR #5〜#12）で、CI は緑（PROGRESS に run ID）。依存の互換性（Doma/Kotlin/Boot/Flyway/Connector/J 9.7.0、MySQL 8.4/9.7）と 4 イメージのビルド・スモークは CI で確認。**未完了・未検証として残る（Stage 2 の技術的な完了とは分けて扱う）**: 実 GCP での ModeProvider・内部 API 認証・Cloud Run Jobs の引数と終了コード（G-OPS-*, G-AUTH-1, G-APP-1, G-JOB-1）、Cloud SQL の実環境（G-DB-1/5/6/7）、MySQL 9.7 の採否（D-069）、Connector/J 26.x の採否、デッドロック 1213 の再試行、bot-run の checkpoint・SIGTERM、`mltrain` のスキーマ版確認方法、**ml-train イメージ（Stage 3）と本番 release-manifest（第5段階）**、T1.16・T1.17・T1.20・T1.21（ユーザー）、infra I-H1〜I-H9 と T5.0。
 - **Stage 3 へ進める作業**（上のブロッカーに依存しない）: T3.1（EV/Kelly/確率/判定/急落フィルタの Kotlin 移植と `tools/golden` の比較）、T3.2（ワイド/三連複）、T3.3（開催日制御）、T3.4（取込 API）、T3.7（Discord 通知）、T3.6 の Kotlin 側（FeatureBuilder 等。実データを使わない範囲）。**ブロックされる作業**: T3.5・T3.6 の実データ部分・旧新比較の総合（T1.16/T1.17/T1.20/T1.21）、T3.0（実機）、第5段階全体（T5.0・infra の追従・ユーザーの GCP 承認）、本番 manifest（ml-train + push 後の digest + 検証済みロールバック範囲 + feature_schema_hash）。
 - **Stage 3 が足すもの（イメージ関連）**: bot のスタブ差し替え時に `StubTaskHandler` の本番 exit 1 を外すのは実装が揃ってから（スモークの『prod は 0 にならない』検査も合わせて見直す）。`ml/` の Dockerfile ターゲット（`ml-train`）を追加し、`IMAGE_NAMES`/`BUILDABLE_IMAGES`（`tools/release/repo_facts.py`）・スモーク・`images.yml` を更新する。`feature_schema_hash`（ML_DESIGN §4）を定義し manifest に載せる。ロールバックの『旧イメージ × 新スキーマ』統合テストを作り `docs/release/rollback-verified.json` に記録する。
+
+### 14.9 T3.3 の結果と T3.4〜T3.9 への引き継ぎ（開催日制御）
+- **実装**: RACE_CALENDAR_DESIGN §11 と DECISIONS D-122〜D-129。`ingest`（T3.4）が使う入口: `RaceScheduleUpdater.apply(RaceScheduleObservation)`（RA 由来の取得内容。パース後の値で渡す）・`applyTimeChange`/`revokeTimeChange`（0B14 の TC 差分）・`RaceDayUpdater`（YSCH）・`ScheduleEventWriter.append`（STALE・FETCH_FAILURE）・**取得の事実** `ScheduleFetchFactReader`（T3.4 が実装して `NoScheduleFetchFacts` を置き換える。「YSCH が日付 D を対象に成功した時刻」を DB に持つ表は V2 に無いので、T3.4 で決める）。`ingest` の DB ユーザーは `race_day`・`race_schedule`・`race_schedule_event` を書ける（`calendar_override` は読めない）。
+- **T3.8（bot-run）が使うもの**: `BotRunRepository.acquire`（`AlreadyActive`・`Contended` は起動しない正常/一時失敗）→ `transition`（STARTING→RUNNING）→ サイクルごとに `heartbeat`（`Expired`/`Lost` なら即停止）・`saveCheckpoint`（`Conflict` は読み直して再試行）→ 終了の遷移（SIGTERM は INTERRUPTED + checkpoint を `transition` の引数で同時保存）。奪取時は `AcquireResult.Acquired.takenOver` の checkpoint と `race_schedule.status` から状態を再導出する。`race_schedule` の MONITORING 以降の進行の履歴は DDL に種類が無い（V3 で ENUM 追加が必要か T3.8 で判断）。リース・heartbeat の運用値は T3.8 でユーザー確認。
+- **bot の配線**: `JobLauncher` の本番実装は未設定（`UnconfiguredJobLauncher`。GCP 実装は T5 系）。calendar-check の `CALENDAR_*` の運用値（`watch_start` の 120/240 分の食い違い、`prestart` の解釈、`stale_after`）は**ユーザー確認待ち**。
+- **ローカル検証**: Docker が使えないセッションでは `JRABOT_TEST_MYSQL_EXTERNAL=host:port`（ローカルの MySQL）で統合テストを実行できる（8.4/9.7 の合否ではない。D-129）。
+

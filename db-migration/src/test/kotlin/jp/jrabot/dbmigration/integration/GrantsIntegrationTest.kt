@@ -167,6 +167,9 @@ class GrantsIntegrationTest {
             "SELECT MAX(version) FROM flyway_schema_history",
             "INSERT INTO calendar_override (tenant_id, scope, race_date, action, reason, created_by, created_at) VALUES (1, 'DAY', '2026-11-01', 'MARK_NO_RACE', 'test', 'alice@example.com', $now)",
             "UPDATE calendar_override SET revoked_at = $now, revoked_by = 'alice@example.com' WHERE tenant_id = 1",
+            "INSERT INTO race_schedule_event (tenant_id, race_id, race_date, event_type, source, observed_at, received_at, dedup_hash) VALUES (1, NULL, '2026-11-01', 'MANUAL_OVERRIDE', 'MANUAL', $now, $now, '${hash(
+                40,
+            )}')",
             "INSERT INTO agent_registration_code (tenant_id, code_hash, expires_at, created_at) VALUES (1, '${hash(
                 10,
             )}', DATE_ADD($now, INTERVAL 1 DAY), $now)",
@@ -180,6 +183,10 @@ class GrantsIntegrationTest {
             "INSERT INTO races (tenant_id, race_id, race_date, venue_code, race_no, created_at, updated_at) VALUES (1, '202611010601', '2026-11-01', '06', 1, $now, $now)",
             "UPDATE races SET name = 'x'",
             "DELETE FROM calendar_override",
+            "UPDATE race_schedule_event SET source = 'SYSTEM'",
+            "DELETE FROM race_schedule_event",
+            "UPDATE race_schedule SET status = 'CARD'",
+            "INSERT INTO race_day (tenant_id, race_date, venue_code, kai, nichime, status, first_seen_at) VALUES (1, '2026-11-01', '06', 1, 1, 'PLANNED', $now)",
             "UPDATE audit_log SET reason = 'tamper'",
             "DELETE FROM audit_log",
             "INSERT INTO app_user (tenant_id, email, role, created_at, updated_at) VALUES (1, 'x@example.com', 'ADMIN', $now, $now)",

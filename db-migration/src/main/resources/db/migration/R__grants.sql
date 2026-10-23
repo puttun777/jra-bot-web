@@ -344,6 +344,8 @@ GRANT SELECT ON `${flyway:defaultSchema}`.`flyway_schema_history` TO 'app'@'%';
 GRANT SELECT (tenant_id, agent_id, name, token_expires_at, status, created_at, created_by, revoked_at, revoked_by) ON `${flyway:defaultSchema}`.`agent` TO 'app'@'%';
 GRANT SELECT (id, tenant_id, expires_at, created_at, created_by, used_at, used_by_agent_id) ON `${flyway:defaultSchema}`.`agent_registration_code` TO 'app'@'%';
 GRANT INSERT, UPDATE ON `${flyway:defaultSchema}`.`calendar_override` TO 'app'@'%';
+-- 手動補正の追記・取消と同じトランザクションで履歴（MANUAL_OVERRIDE・MANUAL_REVOKE）を残す（T3.3 / D-125）。追記（INSERT）だけで、更新・削除はできない。
+GRANT INSERT ON `${flyway:defaultSchema}`.`race_schedule_event` TO 'app'@'%';
 GRANT INSERT ON `${flyway:defaultSchema}`.`agent_registration_code` TO 'app'@'%';
 GRANT UPDATE (status, revoked_at, revoked_by) ON `${flyway:defaultSchema}`.`agent` TO 'app'@'%';
 GRANT INSERT ON `${flyway:defaultSchema}`.`audit_log` TO 'app'@'%';

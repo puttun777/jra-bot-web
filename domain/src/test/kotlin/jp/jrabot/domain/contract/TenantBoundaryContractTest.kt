@@ -3,6 +3,10 @@ package jp.jrabot.domain.contract
 import jp.jrabot.domain.agent.HeartbeatMirror
 import jp.jrabot.domain.bot.BotRunRepository
 import jp.jrabot.domain.bot.JobLauncher
+import jp.jrabot.domain.calendar.CalendarOverrideRepository
+import jp.jrabot.domain.calendar.RaceDayRepository
+import jp.jrabot.domain.calendar.ScheduleEventRepository
+import jp.jrabot.domain.calendar.ScheduleFetchFactReader
 import jp.jrabot.domain.ml.DatasetStore
 import jp.jrabot.domain.ml.ModelStore
 import jp.jrabot.domain.odds.OddsSnapshotRepository
@@ -29,6 +33,10 @@ class TenantBoundaryContractTest {
         listOf(
             RaceRepository::class.java,
             RaceScheduleRepository::class.java,
+            RaceDayRepository::class.java,
+            ScheduleEventRepository::class.java,
+            CalendarOverrideRepository::class.java,
+            ScheduleFetchFactReader::class.java,
             OddsSnapshotRepository::class.java,
             SignalRepository::class.java,
             BotRunRepository::class.java,

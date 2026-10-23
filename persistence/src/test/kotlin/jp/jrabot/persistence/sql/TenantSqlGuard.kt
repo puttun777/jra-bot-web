@@ -12,7 +12,7 @@ internal object TenantSqlGuard {
     val ALLOWED_WITHOUT_TENANT = setOf("AppUserDao/selectByEmail.sql")
 
     val TENANT_TABLES =
-        setOf("races", "odds_snapshots", "bot_run", "signals", "race_schedule", "app_user")
+        setOf("races", "odds_snapshots", "bot_run", "signals", "race_schedule", "app_user", "race_day", "race_schedule_event", "calendar_override")
 
     val TENANT_BIND = Regex("""tenant_id\s*=\s*/\*\s*(?:entity\.|rows\.)?tenantId\s*\*/\s*[^\s,)]+""")
     private val TABLE_REF = Regex("""\b(?:FROM|JOIN|UPDATE|INTO)\s+([a-z_]+)""", RegexOption.IGNORE_CASE)

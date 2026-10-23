@@ -219,6 +219,7 @@ class MigrationScriptsTest {
         assertEquals(
             setOf(
                 "calendar_override:INSERT, UPDATE",
+                "race_schedule_event:INSERT",
                 "agent_registration_code:INSERT",
                 "agent:UPDATE (status, revoked_at, revoked_by)",
                 "audit_log:INSERT",

@@ -50,6 +50,19 @@ internal interface BotRunDao {
         runDate: LocalDate,
     ): BotRunEntity?
 
+    /** 主キーで**行ロック**つきで読む（heartbeat・状態遷移・checkpoint・奪取の検証と更新を原子的にする）。 */
+    @Select
+    fun selectByIdForUpdate(
+        tenantId: Long,
+        runId: String,
+    ): BotRunEntity?
+
+    @Select
+    fun selectByDate(
+        tenantId: Long,
+        runDate: LocalDate,
+    ): List<BotRunEntity>
+
     @Select
     fun selectRecent(
         tenantId: Long,
@@ -59,7 +72,7 @@ internal interface BotRunDao {
     @Insert(sqlFile = true)
     fun insert(entity: BotRunEntity): Result<BotRunEntity>
 
-    /** `entity.version` が保存値と等しい行だけを更新し、`version` を 1 増やす。 */
+    /** `entity.version` が保存値と等しい行だけを更新し、`version` を 1 増やす（所有者・状態の検証は呼び出し側が行ロックの下で行う）。 */
     @Update(sqlFile = true)
     fun updateIfVersion(entity: BotRunEntity): Result<BotRunEntity>
 }

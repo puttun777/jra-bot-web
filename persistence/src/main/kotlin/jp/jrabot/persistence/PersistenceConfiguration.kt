@@ -1,6 +1,9 @@
 package jp.jrabot.persistence
 
 import jp.jrabot.domain.bot.BotRunRepository
+import jp.jrabot.domain.calendar.CalendarOverrideRepository
+import jp.jrabot.domain.calendar.RaceDayRepository
+import jp.jrabot.domain.calendar.ScheduleEventRepository
 import jp.jrabot.domain.odds.OddsSnapshotRepository
 import jp.jrabot.domain.race.RaceRepository
 import jp.jrabot.domain.race.RaceScheduleRepository
@@ -9,16 +12,22 @@ import jp.jrabot.domain.tenant.AppUserRepository
 import jp.jrabot.domain.time.Clock
 import jp.jrabot.persistence.dao.AppUserDaoImpl
 import jp.jrabot.persistence.dao.BotRunDaoImpl
+import jp.jrabot.persistence.dao.CalendarOverrideDaoImpl
 import jp.jrabot.persistence.dao.OddsSnapshotDaoImpl
 import jp.jrabot.persistence.dao.RaceDaoImpl
+import jp.jrabot.persistence.dao.RaceDayDaoImpl
 import jp.jrabot.persistence.dao.RaceScheduleDaoImpl
+import jp.jrabot.persistence.dao.ScheduleEventDaoImpl
 import jp.jrabot.persistence.dao.SignalDaoImpl
 import jp.jrabot.persistence.doma.jrabotMysqlDialect
 import jp.jrabot.persistence.repository.AppUserRepositoryImpl
 import jp.jrabot.persistence.repository.BotRunRepositoryImpl
+import jp.jrabot.persistence.repository.CalendarOverrideRepositoryImpl
 import jp.jrabot.persistence.repository.OddsSnapshotRepositoryImpl
+import jp.jrabot.persistence.repository.RaceDayRepositoryImpl
 import jp.jrabot.persistence.repository.RaceRepositoryImpl
 import jp.jrabot.persistence.repository.RaceScheduleRepositoryImpl
+import jp.jrabot.persistence.repository.ScheduleEventRepositoryImpl
 import jp.jrabot.persistence.repository.SignalRepositoryImpl
 import org.seasar.doma.jdbc.Config
 import org.seasar.doma.jdbc.dialect.Dialect
@@ -72,7 +81,25 @@ class PersistenceConfiguration {
     fun raceScheduleRepository(
         config: Config,
         tx: TransactionOperations,
-    ): RaceScheduleRepository = RaceScheduleRepositoryImpl(RaceScheduleDaoImpl(config), tx)
+    ): RaceScheduleRepository = RaceScheduleRepositoryImpl(RaceScheduleDaoImpl(config), ScheduleEventDaoImpl(config), tx)
+
+    @Bean
+    fun raceDayRepository(
+        config: Config,
+        tx: TransactionOperations,
+    ): RaceDayRepository = RaceDayRepositoryImpl(RaceDayDaoImpl(config), ScheduleEventDaoImpl(config), tx)
+
+    @Bean
+    fun scheduleEventRepository(
+        config: Config,
+        tx: TransactionOperations,
+    ): ScheduleEventRepository = ScheduleEventRepositoryImpl(ScheduleEventDaoImpl(config), tx)
+
+    @Bean
+    fun calendarOverrideRepository(
+        config: Config,
+        tx: TransactionOperations,
+    ): CalendarOverrideRepository = CalendarOverrideRepositoryImpl(CalendarOverrideDaoImpl(config), ScheduleEventDaoImpl(config), tx)
 
     @Bean
     fun signalRepository(

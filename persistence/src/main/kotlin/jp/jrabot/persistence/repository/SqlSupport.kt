@@ -6,6 +6,9 @@ import java.sql.SQLException
 /** MySQL のエラー番号 1062（重複キー）。 */
 internal const val DUPLICATE_ENTRY = 1062
 
+/** MySQL のエラー番号 1213（デッドロック。InnoDB はトランザクションの片方を ROLLBACK して返す）。 */
+internal const val DEADLOCK = 1213
+
 /** 原因の連鎖にある最初の [SQLException]（Doma が包む前のもの）。 */
 internal fun Throwable.sqlException(): SQLException? = generateSequence(this) { it.cause }.filterIsInstance<SQLException>().firstOrNull()
 
@@ -40,3 +43,38 @@ internal fun upsertOutcomeOf(count: Int): jp.jrabot.domain.repository.UpsertOutc
         0 -> jp.jrabot.domain.repository.UpsertOutcome.UNCHANGED
         else -> error("upsert の更新件数が想定外: $count（useAffectedRows=true が前提）")
     }
+
+/** 原因の連鎖のどこかが MySQL のデッドロック（1213、または SQLSTATE 40001）か。他のエラーは false。 */
+internal fun Throwable.isDeadlock(): Boolean =
+    generateSequence(this) { it.cause }.filterIsInstance<SQLException>().any { it.errorCode == DEADLOCK || it.sqlState == "40001" }
+
+/** デッドロックの再試行の上限（初回を含む）。 */
+internal const val DEADLOCK_ATTEMPTS = 3
+
+/**
+ * [block] を 1 つのトランザクションで実行し、**デッドロック（1213）のときだけ**トランザクションごと再実行する（有限回・[DEADLOCK_ATTEMPTS]）。
+ * 使ってよいのは、再実行しても結果が同じ（冪等な）操作だけ。他の SQL エラー・上限を超えたデッドロックは握りつぶさず**そのまま投げる**
+ * （成功扱いにしない）。再実行の前に短く待つ（すぐに再実行して同じ順序で衝突するのを避ける）。呼び出し元が既にトランザクション内なら、
+ * 外側の rollback が必要なので再試行しない（そのまま投げる）。
+ */
+internal fun <T> TransactionOperations.inTransactionRetryingDeadlock(
+    attempts: Int = DEADLOCK_ATTEMPTS,
+    block: () -> T,
+): T {
+    require(attempts >= 1) { "attempts は 1 以上" }
+    var attempt = 1
+    while (true) {
+        try {
+            return inTransaction(block)
+        } catch (e: RuntimeException) {
+            if (!e.isDeadlock() || attempt >= attempts ||
+                org.springframework.transaction.support.TransactionSynchronizationManager
+                    .isActualTransactionActive()
+            ) {
+                throw e
+            }
+            Thread.sleep(10L * attempt)
+            attempt++
+        }
+    }
+}

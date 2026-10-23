@@ -1,7 +1,7 @@
 package jp.jrabot.domain.race
 
-import jp.jrabot.domain.repository.InsertOutcome
-import jp.jrabot.domain.repository.UpdateResult
+import jp.jrabot.domain.calendar.ChangeResult
+import jp.jrabot.domain.calendar.ScheduleEvent
 import jp.jrabot.domain.tenant.TenantId
 import java.time.LocalDate
 
@@ -20,15 +20,25 @@ interface RaceScheduleReader {
 }
 
 /**
- * 開催予定の更新（calendar-check・ingest・管理操作）。変更は必ず `race_schedule_event` の追記と同じトランザクションで行う
- * （RACE_CALENDAR_DESIGN §4。イベントの型とその追記は T3.3 でこのポートを拡張する）。
+ * 開催予定の更新（calendar-check・ingest・管理操作）。**予定の変更は必ず [ScheduleEvent] の追記と同じトランザクションで行う**
+ * （RACE_CALENDAR_DESIGN §4）。履歴なしで予定だけを書き換える操作は提供しない。
+ * 版の新旧・状態遷移の検証は呼び出し側（`RaceScheduleUpdater`）が行い、ここは永続化の原子性・冪等性・楽観ロックだけを担う。
  */
 interface RaceScheduleWriter {
-    /** 自然キー `(tenantId, raceId)` が無いときだけ挿入する。冪等（既にあれば変更しない）。 */
-    fun insertIfAbsent(schedule: RaceSchedule): InsertOutcome
+    /**
+     * 自然キー `(tenantId, raceId)` が無いときだけ挿入し、[event] を追記する。既にあれば [ChangeResult.AlreadyExists]（変更なし）、
+     * 同じ履歴が既にあれば [ChangeResult.Duplicate]（挿入も取り消す）。[event] はこの予定のもの（テナント・レースが一致）でなければならない。
+     */
+    fun insertIfAbsent(
+        schedule: RaceSchedule,
+        event: ScheduleEvent,
+    ): ChangeResult<RaceSchedule>
 
-    /** 楽観ロック更新。`schedule.version` が保存値と一致するときだけ成功する（[UpdateResult] を参照）。 */
-    fun update(schedule: RaceSchedule): UpdateResult<RaceSchedule>
+    /** 楽観ロック更新。`schedule.version` が保存値と一致するときだけ成功し、[event] を同じトランザクションで追記する（[ChangeResult] を参照）。 */
+    fun update(
+        schedule: RaceSchedule,
+        event: ScheduleEvent,
+    ): ChangeResult<RaceSchedule>
 }
 
 interface RaceScheduleRepository :
