@@ -41,10 +41,10 @@
 ## 第2段階 ― 基盤（W）
 - [x] T2.1 Gradle KTS マルチプロジェクト雛形、Version Catalog、依存検査（bot⇄dashboard禁止）← T1.4,T1.10 — 根拠: PR #5 の CI（run 39826288899）が Temurin 25.0.4.1 で成功（build/ktlint/checkModuleDependencies/単体 11 件/build-logic の依存規則テスト）。違反検知は単体 9 + TestKit 4 で確認。詳細は PROGRESS
 - [x] T2.2 :domain 値オブジェクト（Odds, Probability, Money 等）・Repository interface — 根拠: PR #6（claude/stage2-domain-vo）。単体 214 件 + build-logic 18 件（ローカル JDK 21 のスモーク）、CI（JDK 25）の結果は PROGRESS。D-060〜D-062。Horse/RaceHorse/Tenant の Repository 等は後続（PROGRESS「次のタスク」）
-- [ ] T2.3 :db-migration Flyway V1/V2/`R__grants.sql`（範囲は ARCHITECTURE §5.1）+ CLI `--mode`（CONTRACTS §4.2）。G-DB-0 ← T1.10
+- [x] T2.3 :db-migration Flyway V1/V2/`R__grants.sql`（範囲は ARCHITECTURE §5.1）+ CLI `--mode`（CONTRACTS §4.2）。G-DB-0 ← T1.10 — 根拠: PR #7（claude/stage2-db-migration）。単体 57 件（Docker 不要）+ 統合 44 件 × MySQL 8.4 / 9.7.4 が GitHub Actions（run 39882827525）で合格。**G-DB-0 は 8.4・9.7 のコンテナで合格（9.7 は D-069 の対処後。採否は未決）。Connector/J 26.x・Doma・Cloud SQL（G-DB-6 ほか）は未検証**。VERSIONS §9
 - [ ] T2.4 :persistence Doma DAO/Entity/変換（Testcontainers 統合テスト）← T2.2,T2.3
 - [ ] T2.5 CI（build/lint/unit/DB統合/イメージ）、Renovate/Dependabot ← T2.1
-  - 前半 **完了**（`ci.yml`: build/ktlint/依存方向/単体/JDK25/repo-hygiene、PR #5 で緑）。DB 統合（T2.3 以降）・イメージ・Dependabot・manifest は**未着手**（T2.5 は未完了のまま）
+  - 前半 **完了**（`ci.yml`: build/ktlint/依存方向/単体/JDK25/repo-hygiene、PR #5 で緑）。**DB 統合（MySQL 8.4/9.7 の `db-integration`）は T2.3 で追加済み（PR #7 で緑）**。イメージ・Dependabot・manifest は**未着手**（T2.5 は未完了のまま）
 - [ ] T2.6 ゴールデンテスト基盤（旧実装出力フィクスチャ生成スクリプト、実データ非含有）
 - [ ] T2.7 :cloud-gcp `ModeProvider`（GCS, CONTRACTS §5.2）+ ローカル実装 ← T2.2
 - [ ] T2.8 各実行アプリの最小起動（`/internal/health|ready`、`--task`、終了コード、CONTRACTS §4.3・§9）← T2.4,T2.7

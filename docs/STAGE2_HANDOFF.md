@@ -123,10 +123,10 @@ db-migration（単独）
 | ID | 内容 | 段階 | 文書 |
 |---|---|---|---|
 | G-VER-1〜5 | 版の組合せ（Kotlin/Gradle/JDK/Boot、Doma kapt、時刻・JSON・UPSERT、Thymeleaf+Security+htmx、Actions の Docker） | 2（G-VER-4 は 4 の冒頭） | VERSIONS §6 |
-| G-DB-0 / 0b | MySQL 8.4/9.7 × Flyway × Connector/J（9.7.0 / 26.x）× Doma | 2 | VERSIONS §6 |
+| G-DB-0 / 0b | MySQL 8.4/9.7 × Flyway × Connector/J（9.7.0 / 26.x）× Doma | 2 | VERSIONS §6・§9。**T2.3: 8.4・9.7.4 × Flyway 13.11.1 × Connector/J 9.7.0 は CI で合格（D-069 の対処後）。26.x と Doma は T2.4** |
 | G-DB-4 | 負荷の目安（オッズの書込・集計クエリ） | 2（ローカル MySQL） | infra PLAN |
 | G-DB-5 | IAM DB 認証を JDBC で使えるか | 2（調査）/ 5（実環境） | CONTRACTS §8.1 |
-| G-DB-6 | Cloud SQL のユーザーの既定権限と、`R__grants.sql` による REVOKE/GRANT | 2（MySQL で）/ 5（Cloud SQL で） | CONTRACTS §8.2 |
+| G-DB-6 | Cloud SQL のユーザーの既定権限と、`R__grants.sql` による REVOKE/GRANT | 2（MySQL で）/ 5（Cloud SQL で） | CONTRACTS §8.2。**MySQL コンテナ（8.4/9.7）では T2.3 で合格。Cloud SQL は未検証** |
 | G-DB-7 | プライベート IP での TLS 検証（`VERIFY_CA`）か Java Connector か | 5 | CONTRACTS §8.1 |
 | G-DB-1 / G-COST-1 | 東京で db-g1-small を選べるか、`max_connections`、正式な単価 | 5 の前（ユーザー） | infra CLOUD_COSTS §10 |
 | G-OPS-1〜9 | ingress=internal、停止と起動、メンテナンス、cancel のシグナル、Jobs の上限 14h、CAS、IAP のプログラム通過・`aud` の形式、組織なし IAP、apply 前ガード | 5 | infra OPERATIONS_DESIGN §12 |
