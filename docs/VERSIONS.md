@@ -186,7 +186,7 @@ GitHub Actions（`db-integration` 8.4 / 9.7、ubuntu-24.04、Temurin 25、PR #8�
 | `actions/upload-artifact` | **v7.0.2**（`cf430e030ddbb5b0abf93d22962f4752f3646cd9`） | 公式リポジトリのタグ（`git ls-remote`）から SHA を取得してピン留め。リリース日は未確認（Dependabot が更新） |
 | MySQL（スモーク用） | `mysql:8.4`（CI 専用の使い捨て） | DB 統合テストの暫定本番基準と同じ。9.7 でのスモークはしない（9.7 は DB 統合テストで検証） |
 | Python（tools/ci・tools/release） | 標準ライブラリだけ（追加依存なし） | JSON Schema 検証は自前のサブセット（未対応キーワードは拒否） |
-| Dependabot | `.github/dependabot.yml`（D-100） | Boot minor/major・Connector/J major・eclipse-temurin major・numpy major は自動提案しない |
+| Dependabot | `.github/dependabot.yml`（D-100） | Boot minor/major・Connector/J major・eclipse-temurin major は自動提案しない。**numpy は 2.5.3 固定で全版を自動提案しない**（D-103。更新は tools/golden/README.md の手順で手動） |
 - **Connector/J 26.x の過去の検証結果（削除していない）**: §10。`26.10.0` × MySQL 8.4・9.7 で `:persistence:integrationTest` 86 件すべて合格（CI run 39898663936、Temurin 25）。T2.6 の run 39921807006 でも同ジョブが 8.4・9.7 で成功。**採否は未決**（D-070）。毎 PR の実行はやめ、手動・月次・関連依存の変更時に実行する（D-098）。
 - **MySQL 9.7**: 暫定の本番基準は 8.4 のまま。9.7 は D-069（複合の自己参照 FK を検査しない）が残るため、**本番採用を自動決定しない**。互換性確認は DB・JDBC・スキーマ・依存の変更時と月次/手動のフル検証で続ける。
 - **未確認**: Docker Hub のレート制限（429）はクラウドセッションで発生した（Docker Hub / Maven Central）。GitHub-hosted ランナーでの影響は CI の結果で確認する（PROGRESS）。Dockerfile の `HEALTHCHECK` を Cloud Run が使うかどうかは公式文書で明記を確認できていない（付けない: D-093）。

@@ -112,7 +112,7 @@ run 39921807006（T2.6、head 6f24519。全ジョブが毎回実行）。壁時�
 - 検証項目: `tools/release/tests/test_manifest.py`（正常、必須欠落、未知フィールド、不正 SHA、タグのみ/短い/大文字/他レジストリ/他名前/仮値の digest、不正スキーマ版、未対応 contract_version、CONTRACTS との不一致、焼き込み値との不一致、flyway 不一致、アプリ間の食い違い、不正・未検証のロールバック範囲、プレビューの本番利用拒否、プレビューへの digest 混入、ブロッカー隠し、生成の再現性、CLI の終了コード）。
 
 ## 6. Dependabot（`.github/dependabot.yml`、D-100）
-gradle / github-actions / docker（`Dockerfile`）/ pip（`tools/golden`）。週次（月・火・水・木）、minor/patch は 1 グループ、PR 上限 3/2/2/1、自動マージなし。Spring Boot の minor/major、Connector/J の major、eclipse-temurin の major、numpy の major は提案しない。設定とディレクトリ構成の整合は `tools/ci/tests/test_workflows.py` が検査。**未検証**: Dependabot の実 PR（有効化後の最初の PR で、ignore・グループ化・build-logic の検出を確認）。Dependabot version updates / security updates の有効化はリポジトリ設定（ユーザー作業）。
+gradle / github-actions / docker（`Dockerfile`）/ pip（`tools/golden`）。週次（月・火・水・木）、minor/patch は 1 グループ、PR 上限 3/2/2/1、自動マージなし。Spring Boot の minor/major、Connector/J の major、eclipse-temurin の major は提案しない。pip（`tools/golden`）の numpy は 2.5.3 固定のため全版を提案しない（D-103。セキュリティ更新と手動更新は妨げない設計）。設定とディレクトリ構成の整合は `tools/ci/tests/test_workflows.py` が検査。**未検証**: Dependabot の実 PR（有効化後の最初の PR で、ignore・グループ化・build-logic の検出を確認）。Dependabot version updates / security updates の有効化はリポジトリ設定（ユーザー作業）。
 
 ## 7. ローカルでの確認
 ```bash

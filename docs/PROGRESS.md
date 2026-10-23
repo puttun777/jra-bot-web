@@ -2,6 +2,10 @@
 
 最終更新: 2026-10-23（第2段階 / Stage 2-H 追補: マージ後の実測と golden 再生成のフレーク修正）
 
+## numpy 固定と Dependabot 設定（claude/stage2-numpy-pin-dependabot。D-103）
+- PR #13（numpy 2.5.3→2.5.4）の golden 失敗は、`requirements.txt` だけが上がり `PINNED_NUMPY`・フィクスチャ・sha256 と不一致になったため。ゴールデンの再現性を優先して 2.5.3 を維持し、`tools/golden` の numpy を Dependabot version updates の対象外にした。`requirements.txt`・`constants.py`・フィクスチャ・sha256 は未変更。更新手順は `tools/golden/README.md`。#13 は閉じる（ユーザー判断）。Stage 3 には進んでいない。
+- 未検証: ignore がセキュリティ更新を妨げないこと（実環境の最初のセキュリティ PR で確認）。
+
 ## Stage 2-H 追補（マージ後の実測と golden 再生成の修正。claude/stage2-images-ci を main から作り直し）
 ### 経緯
 - T2.5 後半は PR #12 として 2026-10-23 09:21 に main へマージ済み。本追補は、**マージ後に判明した不具合の修正**と実測の記録だけ（Stage 3 には進んでいない）。
