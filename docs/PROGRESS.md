@@ -38,6 +38,10 @@
 - T3.5（Windows 取得エージェント）は **D-5・D-6 の承認が前提**。`plan`・`mode`・`update`・`register` の HTTP、`HeartbeatMirror` の GCS 実装、KEK の運用が残る（UNRESOLVED G-1〜G-4）。実データ形式のパーサは T1.17（仕様書 12 項目）の確認後。
 ### ブランチ
 `claude/stage3-ingest-api`（main の 7cd8fdc から作成。PR は main 向け、マージはユーザー）。CI の結果と PR 番号は下の「CI・PR」。
+### CI・PR
+- **PR #20**（main 向け。マージはユーザー）: https://github.com/puttun777/jra-bot-web/pull/20
+- **CI（コードを含む最新コミット cdc599f、run 40003205466）: ci gate 成功**。成功 — changes and repo hygiene / build (Temurin 25: ktlint・依存規則・単体・Kotlin ゴールデン比較) / golden tests (Python 3.12) / release tools and ci scripts / **db integration (MySQL 8.4)・(MySQL 9.7)**（db-migration・persistence 161・bot 31・ingest 46・dashboard 9 の下限と期待クラスを CI が検証）/ images (build + smoke, no push)。設計どおり skipped — connectorj26（Connector/J 26.x の変更なし）。ローカルで失敗していた `WiringIntegrationTest` は CI（8.4/9.7）では成功。
+- 本記録のコミット（docs のみ）でも CI が走る。その結果は PR のチェックを参照（ここには追記しない）。
 
 ## Stage 3-C（claude/stage3-calendar-lease）: T3.3 開催日制御・calendar-check・bot-run リース・手動補正
 ### 結果（T3.3 の範囲で完了。**本番で動作する Bot ではない**。bot-run の業務ループは T3.8、実データ取込は T3.4）
