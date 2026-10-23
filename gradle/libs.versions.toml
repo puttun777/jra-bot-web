@@ -4,6 +4,8 @@ kotlin = "2.4.21"
 spring-boot = "4.1.2"
 ktlint = "1.8.0"
 flyway = "13.11.1"
+doma = "3.14.1"
+doma-spring-boot = "3.0.0"
 
 [libraries]
 # Boot の BOM（JUnit・Spring 系・mysql-connector-j などの版をここに従わせる）
@@ -16,6 +18,12 @@ flyway-core = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
 flyway-mysql = { module = "org.flywaydb:flyway-mysql", version.ref = "flyway" }
 mysql-connector-j = { module = "com.mysql:mysql-connector-j" }
 testcontainers-mysql = { module = "org.testcontainers:testcontainers-mysql" }
+# :persistence だけが使う（D-070）。Doma は kapt（KSP は公式未対応: VERSIONS §2）。Boot の BOM は管理しない
+doma-core = { module = "org.seasar.doma:doma-core", version.ref = "doma" }
+doma-kotlin = { module = "org.seasar.doma:doma-kotlin", version.ref = "doma" }
+doma-processor = { module = "org.seasar.doma:doma-processor", version.ref = "doma" }
+doma-spring-boot-starter = { module = "org.seasar.doma.boot:doma-spring-boot-starter", version.ref = "doma-spring-boot" }
+spring-boot-starter-jdbc = { module = "org.springframework.boot:spring-boot-starter-jdbc" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 kotlin-test-junit5 = { module = "org.jetbrains.kotlin:kotlin-test-junit5" }
