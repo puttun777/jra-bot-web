@@ -178,3 +178,13 @@ Reader/Writer は分かれており、`XxxRepository` は両方を継承する�
   - 権限: dashboard=`app`、ingest=`ingest`、bot=`bot` の各接続ユーザーの範囲を超える SQL（例: bot が `races` を書く）は `R__grants.sql` で拒否される。DAO を作るときに必要な権限が足りなければ、**強い権限を足さず** `R__grants.sql` を最小限で変更し、`GrantsIntegrationTest` を更新する。
 - **未確認のまま**: G-DB-6（Cloud SQL で migrate が GRANT/REVOKE できるか、新規ユーザーの既定権限）、G-DB-5/7、G-DB-1、G-DB-4（負荷）。CI の MySQL コンテナでの成功を Cloud SQL の検証とは扱わない。
 - **Docker**: クラウドセッションでは Docker デーモンを起動できなかった（`dockerd` の起動はサンドボックスの判定で許可されなかったため試行を止めた）。DB 統合テストは GitHub Actions（`db-integration`）が正。
+
+### 14.3 T2.4 の結果と T2.7 / T2.8 / T3.x への引き継ぎ（実装済みの `:persistence`）
+- **実装**: 6 Repository（Race / OddsSnapshot / BotRun / AppUser / RaceSchedule / Signal）を domain のポートとして実装。Entity・DAO・SQL は `internal`。判断は DECISIONS D-070〜D-075。
+- **T2.8（アプリ起動）が行うこと**: ① `DbSettings.fromEnv(env, defaultPoolMax)`（§8.3 の既定: dashboard 3 / ingest 3 / bot-run 4 / 他 1 / export 2）→ `DataSourceFactory.create(settings)` を Bean にする。② ドメインの `Clock`（`SystemClock`）を Bean にする。③ `@Import(PersistenceConfiguration::class)`。doma-spring-boot-starter は Boot の自動構成で効く（`doma.dialect` の設定は不要。`PersistenceConfiguration` が `dialect` を定義する）。④ DB ユーザーは実行単位ごと（dashboard=`app`、ingest=`ingest`、bot=`bot`）。**`app_user` を読めるのは `app` だけ**（bot / ingest は `findByEmail` を使えない）。⑤ `useAffectedRows` などの接続の固定値は `DataSourceFactory` が持つ。独自に DataSource を作るなら CONTRACTS §8.1 0.4.2 を守る。
+- **スタブアプリの除外（T2.8 で外す）**: `:persistence` は starter-jdbc / doma-spring-boot-starter を実行時に持ち込むため、DataSource が無い最小アプリ（`BotApplication` `IngestApplication` `DashboardApplication`）の起動テストが `DataSourceAutoConfiguration` で失敗した（PR #8 の初回 CI で発覚）。3 つの `@SpringBootApplication(excludeName = …)` で `DataSourceAutoConfiguration` と `DomaAutoConfiguration` を除外している。**T2.8 で `DataSourceFactory` の DataSource を Bean にしたら、この除外を外す**（DataSource Bean があれば Boot の自動構成は引き下がる）。
+- **呼び出し側の約束**: `BotRunWriter.tryStart` / `SignalWriter.insertIfAbsent` は、**長い REPEATABLE READ のトランザクションの中で呼ばない**（重複判定後に勝者の行を同じ接続で読むため。見えなければ `IllegalStateException`）。複数の Repository 呼び出しを 1 つのトランザクションにするときは、アプリケーションサービスの `@Transactional`（`PersistenceConfiguration` の `PlatformTransactionManager` に参加する）で囲む。
+- **T3.3 が足すもの**: `race_schedule_event` の追記（`RaceScheduleRepositoryImpl` を拡張）、期限切れリースの奪取、`bot_run` の状態遷移の検証、デッドロック（1213）の再試行が必要ならここ。
+- **未実装・未確認**: Connector/J 26.x の採否、MySQL 9.7 の採否、Cloud SQL（IAM 認証・TLS・`wait_timeout`・`max_connections`）、`odds_snapshots` の大量書込み性能（G-DB-4）、`combo_odds_snapshots` / `results` / `payouts` / `bets` などの Repository（必要になる Stage 3 で、同じ型（Entity + SQL + 越境テスト）で追加する）。
+- **テストの足し方**: 新しい DAO の SQL は `tenant_id` を束縛で必須にする（`SqlTemplateTenantGuardTest`）。表を増やしたら `TenantSqlGuard.TENANT_TABLES` に足す。統合テストのクラスを増やしたら `ci.yml` の期待クラスの一覧に足す。
+

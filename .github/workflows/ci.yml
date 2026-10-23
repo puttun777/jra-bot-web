@@ -53,7 +53,8 @@ jobs:
       - name: Check tracked files
         run: bash .github/scripts/check-repo-hygiene.sh
 
-  # DB 統合テスト（T2.3）: Flyway V1/V2/R__grants と CLI を、使い捨ての MySQL コンテナ（Testcontainers）に適用して検証する。
+  # DB 統合テスト（T2.3 + T2.4）: Flyway V1/V2/R__grants と CLI（:db-migration）、および Doma の Repository 実装（:persistence。スキーマは本物の
+  # db-migration CLI で適用）を、使い捨ての MySQL コンテナ（Testcontainers）に対して検証する。
   # 8.4 LTS（本番の暫定基準: D-046）と 9.7 LTS（互換性の確認: G-DB-0）を別ジョブで実行する。
   # Docker が使えない・イメージを取得できない場合は**失敗する**（スキップして成功扱いにしない）。使うのは CI 専用の一時的なテスト値だけで、
   # 本番の秘密・GCP・実データには一切触れない。
@@ -98,4 +99,71 @@ jobs:
           print(f"tests={tests} skipped={skipped} failures={failures} errors={errors}")
           if tests < 30 or skipped or failures or errors:
               sys.exit("integration tests did not all run and pass")
+          PY
+      # :persistence の統合テスト（T2.4）。8.4 / 9.7 の両ジョブで必ず実行する（db-migration のテストが失敗しても実行して結果を両方残す）。
+      - name: Persistence integration tests (Testcontainers, ${{ env.MYSQL_IMAGE }})
+        if: always()
+        run: ./gradlew :persistence:integrationTest --stacktrace
+      - name: Verify that the persistence integration tests actually ran
+        if: always()
+        run: |
+          dir=persistence/build/test-results/integrationTest
+          test -d "$dir" || { echo "::error::no persistence integrationTest results"; exit 1; }
+          python3 - "$dir" <<'PY'
+          import glob, os, sys, xml.etree.ElementTree as ET
+          expected = {
+              "WiringIntegrationTest", "RaceRepositoryIntegrationTest", "OddsSnapshotRepositoryIntegrationTest",
+              "BotRunRepositoryIntegrationTest", "SignalRepositoryIntegrationTest", "RaceScheduleRepositoryIntegrationTest",
+              "AppUserRepositoryIntegrationTest", "TenantIsolationIntegrationTest", "TimeConversionIntegrationTest",
+              "EnumContractIntegrationTest", "PermissionsIntegrationTest",
+          }
+          seen = set()
+          tests = skipped = failures = errors = 0
+          for f in glob.glob(sys.argv[1] + "/*.xml"):
+              r = ET.parse(f).getroot()
+              seen.add(r.get("name").rsplit(".", 1)[-1])
+              tests += int(r.get("tests")); skipped += int(r.get("skipped")); failures += int(r.get("failures")); errors += int(r.get("errors"))
+          print(f"tests={tests} skipped={skipped} failures={failures} errors={errors} classes={len(seen)}")
+          missing = expected - seen
+          if missing:
+              sys.exit(f"integration test classes missing from the results: {sorted(missing)}")
+          if tests < 80 or skipped or failures or errors:
+              sys.exit("persistence integration tests did not all run and pass")
+          PY
+
+  # G-DB-0b（T2.4）: MySQL Connector/J 26.x の互換性確認。:persistence の統合テストだけを、Connector/J の版を差し替えて実行する。
+  # 採否は別の判断（D-070）なので、このジョブの結果で PR をブロックしない（continue-on-error）。結果は記録する。
+  persistence-connectorj26:
+    name: connector/j 26.x check (MySQL ${{ matrix.mysql }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        mysql: ["8.4", "9.7"]
+    env:
+      MYSQL_IMAGE: mysql:${{ matrix.mysql }}
+      CONNECTOR_J_VERSION: "26.10.0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "25"
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - name: Persistence integration tests (Connector/J ${{ env.CONNECTOR_J_VERSION }}, ${{ env.MYSQL_IMAGE }})
+        run: ./gradlew :persistence:integrationTest -PconnectorJVersion="$CONNECTOR_J_VERSION" --stacktrace
+      - name: Summary
+        if: always()
+        run: |
+          python3 - persistence/build/test-results/integrationTest <<'PY'
+          import glob, sys, xml.etree.ElementTree as ET
+          tests = skipped = failures = errors = 0
+          for f in glob.glob(sys.argv[1] + "/*.xml"):
+              r = ET.parse(f).getroot()
+              tests += int(r.get("tests")); skipped += int(r.get("skipped")); failures += int(r.get("failures")); errors += int(r.get("errors"))
+          print(f"connector/j 26.x: tests={tests} skipped={skipped} failures={failures} errors={errors}")
           PY
