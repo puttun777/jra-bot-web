@@ -77,7 +77,8 @@ class CliIntegrationTest {
         val migrate = CliHarness.run(db, "migrate")
         assertEquals(1, migrate.code, migrate.stderr + migrate.stdout)
         assertEquals("0", db.scalar("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = '${db.name}' AND TABLE_NAME = 'races'"))
-        assertEquals(1, CliHarness.run(db, "validate").code)
+        // validate は履歴が無いので「全部未適用」（10）。実際には migrate が拒否する（start は migrate せず失敗するか、migrate が 1 で止まる）
+        assertEquals(10, CliHarness.run(db, "validate").code)
     }
 
     @Test

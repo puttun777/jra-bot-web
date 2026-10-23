@@ -61,7 +61,7 @@ class FlywayEngine(
         return InfoReport(
             current = current?.version?.toString(),
             latest = latest?.version?.toString(),
-            pending = all.filter { it.state == MigrationState.PENDING || it.state == MigrationState.OUTDATED }.map { label(it) },
+            pending = all.filter { it.state == MigrationState.PENDING || it.state == MigrationState.OUTDATED }.map { label(it) }.distinct(),
             failed = all.filter { it.state.isFailed }.map { label(it) },
         )
     }
