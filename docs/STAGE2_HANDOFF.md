@@ -24,7 +24,7 @@
 | 6 | T2.7（新） | `:cloud-gcp` の `ModeProvider`（GCS）を**エミュレータなしの単体テスト**で作る（HTTP をフェイクにする）。ローカル用のファイル実装 | T2.2 | CONTRACTS §5.2 の全規則をテスト |
 | 7 | T2.8（新） | 各実行アプリの最小起動（`/internal/health`・`/internal/ready`、`--task` の振り分け、終了コード 0/75/2/1）。業務処理はまだ入れない | T2.4, T2.7 | CONTRACTS §4.3・§9 の契約テスト |
 | 8 | T2.6 | ゴールデンテストの基盤（`tools/golden/`: 参照元を固定コミット f7dbf69 で実行し、合成入力 → JSON フィクスチャ） | T2.1 | フィクスチャの生成手順が README にあり、CI で読める |
-| 9 | T2.5（後半） | イメージのビルド（push はしない）、`release-manifest.json` の生成（ドライラン）、Dependabot | T2.8 | CI の成果物に manifest（digest はダミー可）が出る |
+| 9 | T2.5（後半） | イメージのビルド（push はしない）、`release-manifest.json` の生成（ドライラン）、Dependabot | T2.8 | CI の成果物に manifest が出る。**実装では digest をダミーにせず、プレビュー（`manifest-preview.json`、deployable=false）にした**（§14.7） |
 - 各タスクは**小さい PR**（1 タスク = 1 PR が目安）にする。ブランチは `claude/stage2-<topic>`。
 
 ## 2. Gradle モジュール構成
@@ -77,7 +77,7 @@ db-migration（単独）
 | ワークフロー | 契機 | ジョブ |
 |---|---|---|
 | `ci.yml` | PR、main への push | ① `build`: setup-java（Temurin 25）+ setup-gradle → `./gradlew check`（単体・lint・依存方向）。② `db`: ubuntu ランナーの Docker で Testcontainers（MySQL 8.4/9.7 のマトリクス）。③ `python`: `tools/`・`ml/`・`agent/` の単体テスト。④ `secrets-scan`: 秘密・実データっぽいファイルの検査（拡張子・サイズ・パターン） |
-| `images.yml`（第2段階の後半） | main への push、タグ | イメージのビルドと `release-manifest.json` の生成（**push は第5段階でユーザーが WIF を承認するまで行わない**） |
+| `images.yml`（第2段階の後半。**実装済み**） | `ci.yml` からの呼び出し（Dockerfile・リリース・ビルド定義の変更時、フル検証時）、手動 | イメージのビルド・スモーク・`manifest-preview.json` の生成と検証（**push も認証もしない。push は第5段階でユーザーが WIF を承認するまで行わない**）。CI の実行範囲の決め方は `CI_AND_IMAGES.md` |
 - Actions は**コミット SHA でピン留め**する（VERSIONS §1）。`permissions: contents: read` を既定にする。PR からフォークのシークレットは使わない（そもそもシークレットを置かない）。
 - **CI の結果を完了判定の正とする**。クラウドセッションで実行した結果は補助として PROGRESS に記録する。
 
@@ -225,3 +225,9 @@ Reader/Writer は分かれており、`XxxRepository` は両方を継承する�
 - **未実装（catalog.py の planned / partial）**: ワイド・三連複の Plackett–Luce（E8〜E11）、hit_rate モード、max_total_bet_per_race 縮小（E6）、ML 例外ラベル（E1）、ensemble（G4）、decision 側ブレンド（G5）、合成 SQLite の特徴量ベクトル（G6）、時間帯スケジュール/adaptive_relaxation（run_daemon.py 側。時刻依存）、config.example.yaml 全キーの突合（T1.20）。
 - **次**: T2.5 後半（Docker イメージ・Dependabot・release-manifest）。T2.6 では未着手。
 
+### 14.7 T2.5 後半の結果と Stage 2 の完了判定 / Stage 3 への引き継ぎ（イメージ・manifest・Dependabot・CI 最適化）
+- **実装**: `Dockerfile`（D-093）、`.dockerignore`（既定拒否）、`tools/release/`（manifest の生成・検証 CLI、スモーク）、`docs/schemas/release-manifest{,-preview}.v1.json`、`docs/release/rollback-verified.json`、`tools/ci/`（変更判定・ゲート）、`.github/workflows/{ci,images,compat-connectorj26}.yml`、`.github/dependabot.yml`。運用手順・CI の 14 ケースの表・無料枠の見積りは `docs/CI_AND_IMAGES.md`。結果の実測は PROGRESS の Stage 2-H。
+- **分岐保護の更新（ユーザー作業）**: required checks を **`ci gate` だけ**にする。旧名（`build (Temurin 25)`・`repo hygiene (secrets / real data)`・`db integration (MySQL 8.4)` など）を required にしたままだと、docs だけの PR で該当ジョブが走らず `Pending` のまま残る（マトリクスのジョブは skipped のとき `${{ matrix.mysql }}` が展開されない名前で出る）。`repo hygiene` は `changes and repo hygiene` に統合した。
+- **Stage 2 の完了判定（技術面）**: T2.1〜T2.8 は実装済み（PR #5〜#12）で、CI は緑（PROGRESS に run ID）。依存の互換性（Doma/Kotlin/Boot/Flyway/Connector/J 9.7.0、MySQL 8.4/9.7）と 4 イメージのビルド・スモークは CI で確認。**未完了・未検証として残る（Stage 2 の技術的な完了とは分けて扱う）**: 実 GCP での ModeProvider・内部 API 認証・Cloud Run Jobs の引数と終了コード（G-OPS-*, G-AUTH-1, G-APP-1, G-JOB-1）、Cloud SQL の実環境（G-DB-1/5/6/7）、MySQL 9.7 の採否（D-069）、Connector/J 26.x の採否、デッドロック 1213 の再試行、bot-run の checkpoint・SIGTERM、`mltrain` のスキーマ版確認方法、**ml-train イメージ（Stage 3）と本番 release-manifest（第5段階）**、T1.16・T1.17・T1.20・T1.21（ユーザー）、infra I-H1〜I-H9 と T5.0。
+- **Stage 3 へ進める作業**（上のブロッカーに依存しない）: T3.1（EV/Kelly/確率/判定/急落フィルタの Kotlin 移植と `tools/golden` の比較）、T3.2（ワイド/三連複）、T3.3（開催日制御）、T3.4（取込 API）、T3.7（Discord 通知）、T3.6 の Kotlin 側（FeatureBuilder 等。実データを使わない範囲）。**ブロックされる作業**: T3.5・T3.6 の実データ部分・旧新比較の総合（T1.16/T1.17/T1.20/T1.21）、T3.0（実機）、第5段階全体（T5.0・infra の追従・ユーザーの GCP 承認）、本番 manifest（ml-train + push 後の digest + 検証済みロールバック範囲 + feature_schema_hash）。
+- **Stage 3 が足すもの（イメージ関連）**: bot のスタブ差し替え時に `StubTaskHandler` の本番 exit 1 を外すのは実装が揃ってから（スモークの『prod は 0 にならない』検査も合わせて見直す）。`ml/` の Dockerfile ターゲット（`ml-train`）を追加し、`IMAGE_NAMES`/`BUILDABLE_IMAGES`（`tools/release/repo_facts.py`）・スモーク・`images.yml` を更新する。`feature_schema_hash`（ML_DESIGN §4）を定義し manifest に載せる。ロールバックの『旧イメージ × 新スキーマ』統合テストを作り `docs/release/rollback-verified.json` に記録する。
