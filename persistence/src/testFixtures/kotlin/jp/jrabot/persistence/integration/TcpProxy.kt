@@ -18,9 +18,6 @@ class TcpProxy(
     @Volatile private var server: ServerSocket? = null
     private val open = CopyOnWriteArrayList<Socket>()
 
-    /** 待受け中か（[stop] で false、[start] で true）。 */
-    val isRunning: Boolean get() = server != null
-
     /** 中継の待受けポート。最初の [start] で決まり、再開しても同じ。 */
     var port: Int = 0
         private set

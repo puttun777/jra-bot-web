@@ -112,9 +112,12 @@ class CalendarCheckIntegrationTest {
             )
 
         /** 本番と同じ Spring 構成。[overrides] が true なら時計・起動基盤・取得の事実を合成の Fake に差し替える。 */
-        private fun start(overrides: Boolean = true): ConfigurableApplicationContext {
+        private fun start(
+            overrides: Boolean = true,
+            url: String = "jdbc:mysql://127.0.0.1:${proxy.port}/${db.name}",
+        ): ConfigurableApplicationContext {
             val command = BotCommand(BotTask.CALENDAR_CHECK, TenantId.of(1))
-            val runtime = BotRuntime(command, BotSettings.from(env(), BotTask.CALENDAR_CHECK), mode)
+            val runtime = BotRuntime(command, BotSettings.from(env(url), BotTask.CALENDAR_CHECK), mode)
             return SpringApplicationBuilder(BotApplication::class.java)
                 .web(WebApplicationType.NONE)
                 .logStartupInfo(false)
@@ -231,7 +234,6 @@ class CalendarCheckIntegrationTest {
         launcher.result = LaunchResult.Launched("exec-synthetic")
         facts.facts.clear()
         mode.mode = OpsMode.NORMAL
-        if (!proxy.isRunning) proxy.start()
     }
 
     @AfterEach
@@ -496,18 +498,22 @@ class CalendarCheckIntegrationTest {
     // --- C23・C24・配線 ---
 
     @Test
-    fun `C23 DB に接続できなければ 75（再試行ループなし）で、起動を要求しない。復旧後は動く`() {
+    fun `C23 DB に接続できなければ 75（再試行ループなし）で、起動を要求しない`() {
         threeVenues()
         at(8, 0)
-        assertEquals(JobResult(JobExit.OK, "LAUNCH_REQUESTED"), run())
-        launcher.requests.clear()
-        proxy.stop()
-        val started = System.nanoTime()
-        assertEquals(JobResult(JobExit.TEMPFAIL, "DB_UNAVAILABLE"), run())
-        assertTrue(Duration.ofNanos(System.nanoTime() - started) < Duration.ofSeconds(60), "再試行で長く待っている")
-        assertTrue(launcher.requests.isEmpty())
-        proxy.start()
-        assertEquals(JobResult(JobExit.OK, "LAUNCH_REQUESTED"), run())
+        // この試験専用の中継と Spring のコンテキスト（共有の中継を止めて同じポートで再開すると、他のプロセスにポートを取られて失敗し得るので、再開しない）
+        val (host, port) = MySqlSupport.hostAndPort()
+        TcpProxy(host, port).start().use { own ->
+            val viaOwn = start(url = "jdbc:mysql://127.0.0.1:${own.port}/${db.name}")
+            val executor = viaOwn.getBean(BotJobExecutor::class.java)
+            assertEquals(JobResult(JobExit.OK, "LAUNCH_REQUESTED"), executor.execute())
+            launcher.requests.clear()
+            own.stop()
+            val started = System.nanoTime()
+            assertEquals(JobResult(JobExit.TEMPFAIL, "DB_UNAVAILABLE"), executor.execute())
+            assertTrue(Duration.ofNanos(System.nanoTime() - started) < Duration.ofSeconds(60), "再試行で長く待っている")
+            assertTrue(launcher.requests.isEmpty())
+        }
     }
 
     @Test

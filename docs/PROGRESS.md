@@ -45,6 +45,7 @@
 - **PR #19**（main 向け。マージはユーザー）: https://github.com/puttun777/jra-bot-web/pull/19
 - **CI（コードを含む最新コミット 5f1175d、run 39981783406）: ci gate 成功**。成功 — changes and repo hygiene / build (Temurin 25) / golden tests / release tools and ci scripts / **db integration (MySQL 8.4)・(MySQL 9.7)**（persistence 統合 153・bot 統合 31 などの下限と期待クラスを CI が検証）/ images (build + smoke, no push)。設計どおり skipped — connectorj26（Connector/J 26.x の変更なし）。
 - **途中の失敗と修正**: 最初のコミット 5c57f00 の run 39980918312 は **images のスモークが失敗**（`calendar-check` が実装済みで `CALENDAR_*` が必須になり、旧スタブ前提のスモークが exit 2 になった）→ `tools/release/image_smoke.py` を実装に合わせて修正（5f1175d。`calendar-check` は空の予定で exit 75 `SCHEDULE_UNKNOWN` を検査、スタブの検査は `reconcile`）。コードの不具合ではなくスモークの更新漏れ。
+- **docs のみのコミット a6e45c8 の CI で `db integration (MySQL 9.7)` が失敗**（`CalendarCheckIntegrationTest` の C23 が `java.net.BindException: Address already in use`）。原因はテストの作り: 共有の TCP 中継を止めて**同じポートで再開**する際に、他のプロセスの接続がそのポートを取ることがある（コードの欠陥ではない。直前のコード同一のコミットでは 8.4/9.7 とも成功）。C23 を専用の中継・専用のコンテキストにし、再開しない形へ修正（ローカルで 3 回連続成功）。再開を使う既存テスト（`SchemaVersionVerifierIntegrationTest` など）は未変更。
 - 本記録のコミット自体も PR 全体の差分で判定されるため同じジョブが走る（その結果は PR のチェックを参照。ここには追記しない）。
 ### 次の作業（T3.4 への引き継ぎ。今回は着手していない）
 - T3.4（取込 API・実データ取得）が使う入口と未決事項は `docs/STAGE2_HANDOFF.md` §14.9。取込側が `RaceScheduleUpdater`・`RaceDayUpdater`・`ScheduleEventWriter` を呼び、**取得の事実**（`ScheduleFetchFactReader` の実装）と `race_day.last_confirmed_at` の更新（`RaceDayUpdater.confirm`）を必ず行う（さもないと全日が UNKNOWN/STALE になり calendar-check は起動しない = fail closed）。
