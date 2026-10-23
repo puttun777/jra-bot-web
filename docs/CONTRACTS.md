@@ -149,6 +149,7 @@ web→Artifact Registry の push 権限と、infra 側の manifest 取得権限�
   | 単調性 | 同じプロセス内で `seq` が以前より小さい値を読んだら UNKNOWN にして警告を出す（書き戻りや改竄の検知） |
   | ログ | 状態が変わったときだけ INFO（`mode`、`seq`）。UNKNOWN になったら WARN と理由 |
 - 型: `enum OpsMode { NORMAL, STARTING, STOPPING, STOPPED, UNKNOWN }`。UNKNOWN は正本には存在しない値で、アプリ内部の判定結果だけに使う。
+- 実装の補足（0.4.3 / T2.7 / D-077〜D-080。契約の意味は変えない）: ① `desired.set_at` と `operation.*` は**任意**（欠落・null 可。あれば型を検査。`operation.status` の値の種類は検査しない）。② 同じ `seq` で `mode` / `desired.mode` が違う読取りも UNKNOWN（`seq` は書込みごとに +1 の契約と矛盾するため）。同じ `seq` で内容が同じなら正常。③ 巻き戻りの検知はプロセスの存続中ずっと有効。正本を意図して巻き戻す（復元）場合は稼働中のアプリの再起動が必要（infra の復旧手順へ: T5.0）。④ 読取りのタイムアウト 3 秒は呼び出し側から見た上限として強制する。⑤ ローカルファイルは `APP_ENV=local` のときだけ。`OPS_MODE_SOURCE` の未設定・不正は起動失敗。
 
 ### 5.3 モードごとのアプリの振る舞い
 | 対象 | NORMAL | STARTING / STOPPING / STOPPED | UNKNOWN |
@@ -383,3 +384,5 @@ STOPPED 中の `ingest` 503、ビーコンのみ STOPPED、両方不達（UNKNOW
 0.4.1（第2段階 / T2.3）: §4.2 に出力 JSON・75 の範囲・Repeatable の扱いを補足、§8.2 に `R__grants.sql` の前提と app の権限範囲（D-065）を補足。契約の意味は変えていない（infra への影響は PROGRESS「infra への引継ぎ」）。
 
 0.4.2（第2段階 / T2.4）: §8.1 に JDBC 接続の固定値（`useAffectedRows=true` ほか）を補足。契約の意味は変えていない（infra への影響なし。接続 URL に同名のプロパティを入れても上書きされる）。
+
+0.4.3（第2段階 / T2.7）: §5.2 に実装の補足（任意項目・同一 seq の扱い・巻き戻り検知の寿命・タイムアウトの強制・ローカルファイルの条件）を追加。契約の意味は変えていない（infra への影響: 復元手順にアプリの再起動を含める）。
