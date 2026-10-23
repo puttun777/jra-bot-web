@@ -4,7 +4,6 @@ import com.zaxxer.hikari.HikariDataSource
 import jp.jrabot.domain.bot.BotRunRepository
 import jp.jrabot.domain.bot.JobLauncher
 import jp.jrabot.domain.calendar.CalendarOverrideRepository
-import jp.jrabot.domain.calendar.NoScheduleFetchFacts
 import jp.jrabot.domain.calendar.RaceDayRepository
 import jp.jrabot.domain.calendar.ScheduleEventRepository
 import jp.jrabot.domain.calendar.ScheduleFetchFactReader
@@ -66,7 +65,7 @@ class BotSpringWiringTest {
                 assertNotNull(ctx.getBean(type), type.simpleName)
             }
             assertSame(mode, ctx.getBean(ModeProvider::class.java), "モード確認に使ったものと同じインスタンス")
-            assertEquals("2", ctx.getBean(SchemaVersionVerifier::class.java).required.toString())
+            assertEquals("3", ctx.getBean(SchemaVersionVerifier::class.java).required.toString())
             assertTrue(ctx.getBeansOfType(Class.forName("org.seasar.doma.jdbc.Config")).isNotEmpty())
             assertNotNull(ctx.getBean(BotJobExecutor::class.java))
         }
@@ -77,7 +76,11 @@ class BotSpringWiringTest {
         start(runtime("calendar-check")).use { ctx ->
             assertIs<CalendarCheckTaskHandler>(ctx.getBean(BotTaskHandler::class.java))
             assertIs<UnconfiguredJobLauncher>(ctx.getBean(JobLauncher::class.java), "起動基盤の本番の配線は未設定（fail closed）")
-            assertSame(NoScheduleFetchFacts, ctx.getBean(ScheduleFetchFactReader::class.java), "取得の事実は T3.4 まで存在しない")
+            assertEquals(
+                "DbScheduleFetchFactReader",
+                ctx.getBean(ScheduleFetchFactReader::class.java)::class.simpleName,
+                "取得の事実は DB の ingest_fetch から読む（合成の FixedScheduleFetchFacts や、常に null の NoScheduleFetchFacts ではない）",
+            )
         }
         for (task in listOf("bot-run", "reconcile", "retention", "export-dataset")) {
             start(runtime(task)).use { ctx -> assertIs<StubTaskHandler>(ctx.getBean(BotTaskHandler::class.java), task) }

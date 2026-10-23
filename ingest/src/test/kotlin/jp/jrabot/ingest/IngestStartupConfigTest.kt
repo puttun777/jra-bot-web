@@ -27,6 +27,14 @@ class IngestStartupConfigTest {
         return m.map { "${it.key}=${it.value}" }.toTypedArray()
     }
 
+    // テスト専用の KEK（本番の秘密ではない）。256bit の合成値
+    private val kek =
+        "k1:" +
+            java.util.Base64
+                .getEncoder()
+                .encodeToString(ByteArray(32) { (it + 1).toByte() })
+    private val prodKek = arrayOf("AGENT_KEK_KEYS" to kek, "AGENT_KEK_ACTIVE_KID" to "k1")
+
     private fun rootMessages(e: Throwable): String = generateSequence(e) { it.cause }.joinToString(" | ") { it.message.orEmpty() }
 
     @Test
@@ -50,7 +58,7 @@ class IngestStartupConfigTest {
 
     @Test
     fun `本番(APP_ENV=prod)でローカルファイルのモードは使えない（ローカル実装へ黙ってフォールバックしない）`() {
-        val e = assertFailsWith<Throwable> { start(*base("APP_ENV" to "prod", "DB_USER" to "ingest")).close() }
+        val e = assertFailsWith<Throwable> { start(*base("APP_ENV" to "prod", "DB_USER" to "ingest", *prodKek)).close() }
         assertTrue(rootMessages(e).contains("APP_ENV=local"), rootMessages(e))
     }
 
@@ -58,13 +66,13 @@ class IngestStartupConfigTest {
     fun `本番では ingest 用の DB ユーザー以外（migrate など）では起動しない`() {
         val gcs = "OPS_MODE_SOURCE" to "gs://synthetic-bucket/state/ops-state.json"
         for (user in listOf("migrate", "app", "bot", "root")) {
-            assertFailsWith<Throwable>(user) { start(*base("APP_ENV" to "prod", "DB_USER" to user, gcs)).close() }
+            assertFailsWith<Throwable>(user) { start(*base("APP_ENV" to "prod", "DB_USER" to user, gcs, *prodKek)).close() }
         }
     }
 
     @Test
     fun `本番の gs の設定ならネットワークにも GCP にも触れずに起動できる`() {
-        start(*base("APP_ENV" to "prod", "DB_USER" to "ingest", "OPS_MODE_SOURCE" to "gs://synthetic-bucket/state/ops-state.json")).use { ctx ->
+        start(*base("APP_ENV" to "prod", "DB_USER" to "ingest", "OPS_MODE_SOURCE" to "gs://synthetic-bucket/state/ops-state.json", *prodKek)).use { ctx ->
             assertNotNull(ctx.getBean(jp.jrabot.domain.ops.ModeProvider::class.java))
         }
     }
@@ -90,6 +98,51 @@ class IngestStartupConfigTest {
         }
         start(*base()).use { ctx ->
             assertEquals(3, (ctx.getBean(javax.sql.DataSource::class.java) as com.zaxxer.hikari.HikariDataSource).maximumPoolSize)
+        }
+    }
+
+    private val gcs = "OPS_MODE_SOURCE" to "gs://synthetic-bucket/state/ops-state.json"
+
+    @Test
+    fun `本番では署名鍵の KEK が無いと起動しない（未認証で業務データを保存しない）、形式が不正でも鍵の値を出さずに失敗する`() {
+        val e = assertFailsWith<Throwable> { start(*base("APP_ENV" to "prod", "DB_USER" to "ingest", gcs)).close() }
+        assertTrue(rootMessages(e).contains("AGENT_KEK_KEYS"), rootMessages(e))
+        val half = assertFailsWith<Throwable> { start(*base("APP_ENV" to "prod", "DB_USER" to "ingest", gcs, "AGENT_KEK_KEYS" to kek)).close() }
+        assertTrue(rootMessages(half).contains("AGENT_KEK_ACTIVE_KID"), rootMessages(half))
+        val bad =
+            assertFailsWith<Throwable> {
+                start(
+                    *base(
+                        "APP_ENV" to "prod",
+                        "DB_USER" to "ingest",
+                        gcs,
+                        "AGENT_KEK_KEYS" to "k1:@@@",
+                        "AGENT_KEK_ACTIVE_KID" to "k1",
+                    ),
+                ).close()
+            }
+        assertFalse(rootMessages(bad).contains("@@@"), rootMessages(bad))
+    }
+
+    @Test
+    fun `合成の正規化レコードの受け入れは本番では有効にできない（実データの取込を偽装しない）`() {
+        val e =
+            assertFailsWith<Throwable> {
+                start(*base("APP_ENV" to "prod", "DB_USER" to "ingest", gcs, *prodKek, "INGEST_ACCEPT_NORMALIZED_RECORDS" to "true")).close()
+            }
+        assertTrue(rootMessages(e).contains("INGEST_ACCEPT_NORMALIZED_RECORDS"), rootMessages(e))
+        start(*base("INGEST_ACCEPT_NORMALIZED_RECORDS" to "true")).use { ctx -> assertNotNull(ctx.getBean(jp.jrabot.domain.ingest.RecordParsers::class.java)) }
+    }
+
+    @Test
+    fun `取込オプションの不正な値は起動に失敗する`() {
+        for ((k, v) in listOf(
+            "INGEST_ODDS_BELOW_PAR" to "maybe",
+            "INGEST_STORE_COMBO_ODDS" to "yes",
+            "INGEST_MAX_BODY_BYTES" to "10",
+            "INGEST_MAX_INFLATED_BYTES" to "x",
+        )) {
+            assertFailsWith<Throwable>(k) { start(*base(k to v)).close() }
         }
     }
 }

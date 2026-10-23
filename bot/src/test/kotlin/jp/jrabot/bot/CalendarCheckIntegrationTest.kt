@@ -9,7 +9,6 @@ import jp.jrabot.domain.bot.LaunchResult
 import jp.jrabot.domain.bot.LaunchableJob
 import jp.jrabot.domain.bot.LeaseRequest
 import jp.jrabot.domain.bot.RunId
-import jp.jrabot.domain.calendar.NoScheduleFetchFacts
 import jp.jrabot.domain.calendar.ScheduleFetchFact
 import jp.jrabot.domain.calendar.ScheduleFetchFactReader
 import jp.jrabot.domain.ops.ModeProvider
@@ -562,7 +561,7 @@ class CalendarCheckIntegrationTest {
                 ).run()
         contexts += prod
         assertIs<UnconfiguredJobLauncher>(prod.getBean(JobLauncher::class.java))
-        assertEquals(NoScheduleFetchFacts, prod.getBean(ScheduleFetchFactReader::class.java))
+        assertEquals("DbScheduleFetchFactReader", prod.getBean(ScheduleFetchFactReader::class.java)::class.simpleName, "本番の配線は DB の取得の事実")
         at(8, 0)
         assertEquals(JobResult(JobExit.FAILURE, "LAUNCH_FAILED"), prod.getBean(BotJobExecutor::class.java).execute())
     }

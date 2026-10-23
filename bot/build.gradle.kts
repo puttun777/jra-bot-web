@@ -3,8 +3,8 @@ plugins {
 }
 
 // このアプリが必要とする最小のスキーマ版（CONTRACTS §4.3。/internal/ready と Job の開始時に flyway_schema_history と比較する）。
-// V1/V2 の表を使うコードなので 2。使う表が増える V3 以降のコードを入れるときに上げる。
-extra["requiredSchemaVersion"] = "2"
+// V3 の ingest_fetch（取得の事実。ScheduleFetchFactReader）を読むので 3。
+extra["requiredSchemaVersion"] = "3"
 
 dependencies {
     implementation(project(":domain"))

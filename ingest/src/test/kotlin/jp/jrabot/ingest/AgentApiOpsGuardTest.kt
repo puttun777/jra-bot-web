@@ -53,17 +53,20 @@ class AgentApiOpsGuardTest {
     }
 
     @Test
-    fun `NORMAL なら通過する（ハンドラに到達する）`() {
-        assertEquals(200, http.get("/v1/agent/plan").status)
-        assertEquals(200, http.send("POST", "/v1/agent/ingest").status)
-        assertEquals(2, probe.reached.get())
+    fun `NORMAL ならモードガードは通し、次の層（エージェント認証）が判断する（KEK 未設定なら 503 で未認証のハンドラには到達しない）`() {
+        for (r in listOf(http.get("/v1/agent/plan"), http.send("POST", "/v1/agent/ingest"), http.send("POST", "/v1/agent/heartbeat"))) {
+            assertEquals(503, r.status)
+            assertNull(r.header("X-Ops-Mode"), "モードを理由にした拒否ではない")
+            assertEquals("""{"error":"AGENT_AUTH_NOT_CONFIGURED"}""", r.body)
+        }
+        assertEquals(0, probe.reached.get(), "認証できないのにハンドラへ到達した（未認証の経路）")
     }
 
     @Test
     fun `STARTING STOPPING STOPPED は 503 と X-Ops-Mode で、ハンドラに到達しない`() {
         for (m in listOf(OpsMode.STARTING, OpsMode.STOPPING, OpsMode.STOPPED)) {
             mode.mode = m
-            for (r in listOf(http.get("/v1/agent/plan"), http.send("POST", "/v1/agent/ingest"))) {
+            for (r in listOf(http.get("/v1/agent/plan"), http.send("POST", "/v1/agent/ingest"), http.send("POST", "/v1/agent/heartbeat"))) {
                 assertEquals(503, r.status, "$m")
                 assertEquals(m.name, r.header("X-Ops-Mode"), "$m")
                 assertEquals("""{"error":"OPS_MODE_NOT_NORMAL"}""", r.body)
@@ -104,9 +107,11 @@ class AgentApiOpsGuardTest {
     }
 
     @Test
-    fun `v1 agent mode はガードの対象外（DB に触れずビーコンと同じ内容を返す API。Stage 3）`() {
+    fun `v1 agent mode はモードガードの対象外（DB に触れずビーコンと同じ内容を返す API。実装は T3．5 の前提。認証は必要）`() {
         mode.mode = OpsMode.STOPPED
-        assertEquals(200, http.get("/v1/agent/mode").status)
+        val r = http.get("/v1/agent/mode")
+        assertNull(r.header("X-Ops-Mode"), "ガードは掛からない")
+        assertEquals("""{"error":"AGENT_AUTH_NOT_CONFIGURED"}""", r.body, "ガードの次の層（認証）が判断する")
     }
 
     @Test

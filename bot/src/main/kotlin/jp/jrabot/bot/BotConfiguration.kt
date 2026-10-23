@@ -4,7 +4,6 @@ import jp.jrabot.domain.bot.BotRunRepository
 import jp.jrabot.domain.bot.JobLauncher
 import jp.jrabot.domain.calendar.CalendarCheckService
 import jp.jrabot.domain.calendar.CalendarOverrideRepository
-import jp.jrabot.domain.calendar.NoScheduleFetchFacts
 import jp.jrabot.domain.calendar.RaceDayRepository
 import jp.jrabot.domain.calendar.ScheduleFetchFactReader
 import jp.jrabot.domain.ops.ModeProvider
@@ -57,10 +56,8 @@ class BotConfiguration {
     @ConditionalOnMissingBean(JobLauncher::class)
     fun jobLauncher(): JobLauncher = UnconfiguredJobLauncher()
 
-    /** 取得の事実は T3.4/T3.5 の実装まで存在しない（行の無い日は「不明」のまま。開催なしを確認したことにしない）。 */
-    @Bean
-    @ConditionalOnMissingBean(ScheduleFetchFactReader::class)
-    fun scheduleFetchFacts(): ScheduleFetchFactReader = NoScheduleFetchFacts
+    // 取得の事実（ScheduleFetchFactReader）は :persistence の `scheduleFetchFactReader`（DB の ingest_fetch。T3.4）。
+    // DB に事実が無い日は null（= 行の無い日は「不明」のまま。開催なしを確認したことにしない）。
 
     /**
      * タスクごとの実装。**calendar-check（T3.3）だけが実装済み**で、他（bot-run・reconcile・retention・export-dataset）は未実装のスタブ

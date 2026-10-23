@@ -17,6 +17,7 @@ class MigrationScriptsTest {
 
     private val v1 = resource("V1__baseline.sql")
     private val v2 = resource("V2__ops_calendar_ingest_ml.sql")
+    private val v3 = resource("V3__ingest_auth_fetch_backfill.sql")
     private val grants = resource("R__grants.sql")
 
     /** コメント（`--` 以降）を除く。 */
@@ -71,19 +72,22 @@ class MigrationScriptsTest {
         assertEquals(expectedV1, tables(v1).keys)
         assertEquals(expectedV2, tables(v2).keys)
         assertEquals(emptySet(), tables(v1).keys.intersect(tables(v2).keys))
+        // V3（T3.4）は V1/V2 の表を作り直さず、新しい 2 表だけを足す（既存の表への変更は ALTER）
+        assertEquals(setOf("ingest_fetch", "ingest_backfill"), tables(v3).keys)
+        assertEquals(emptySet(), tables(v3).keys.intersect(tables(v1).keys + tables(v2).keys))
     }
 
     @Test
     fun `すべての表は InnoDB と utf8mb4`() {
-        val all = code(v1) + code(v2)
-        assertEquals(33, Regex("CREATE TABLE ").findAll(all).count())
-        assertEquals(33, Regex("""\) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;""").findAll(all).count())
+        val all = code(v1) + code(v2) + code(v3)
+        assertEquals(35, Regex("CREATE TABLE ").findAll(all).count())
+        assertEquals(35, Regex("""\) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;""").findAll(all).count())
     }
 
     @Test
     fun `テナント表は tenant_id が先頭の列`() {
         val shared = setOf("tenant", "code_venue")
-        for ((name, body) in tables(v1) + tables(v2)) {
+        for ((name, body) in tables(v1) + tables(v2) + tables(v3)) {
             if (name in shared) continue
             val firstColumn = body.lines().first { it.isNotBlank() }.trim()
             assertTrue(firstColumn.startsWith("id ") || firstColumn.startsWith("tenant_id "), "$name の先頭の列は tenant_id（または代理キー id）: $firstColumn")
@@ -95,7 +99,7 @@ class MigrationScriptsTest {
     fun `テナント表を参照する FK はすべて tenant_id を先頭にした複合 FK`() {
         val fk = Regex("""FOREIGN KEY \(([^)]*)\) REFERENCES (\w+) \(([^)]*)\)""")
         var checked = 0
-        for ((name, body) in tables(v1) + tables(v2)) {
+        for ((name, body) in tables(v1) + tables(v2) + tables(v3)) {
             for (m in fk.findAll(body)) {
                 val (childCols, parent, parentCols) = m.destructured
                 if (parent == "code_venue" || parent == "tenant") continue
@@ -123,7 +127,7 @@ class MigrationScriptsTest {
 
     @Test
     fun `V1 と V2 に本番の行・ユーザー・破壊的な文を入れない`() {
-        for (sql in listOf(code(v1), code(v2))) {
+        for (sql in listOf(code(v1), code(v2), code(v3))) {
             for (forbidden in listOf("CREATE USER", "DROP", "TRUNCATE", "DELETE", "UPDATE", "GRANT", "REVOKE", "CREATE DATABASE", "CREATE SCHEMA")) {
                 assertFalse(Regex("""(?m)^\s*$forbidden\b""").containsMatchIn(sql), "$forbidden は禁止")
             }
@@ -135,7 +139,7 @@ class MigrationScriptsTest {
 
     @Test
     fun `コード列は ascii_bin で、予約語で壊れる列名を使わない`() {
-        val all = tables(v1) + tables(v2)
+        val all = tables(v1) + tables(v2) + tables(v3)
         val raceIdLines = all.values.flatMap { it.lines() }.filter { Regex("""^\s*race_id\s+CHAR""").containsMatchIn(it) }
         assertTrue(raceIdLines.isNotEmpty())
         for (line in raceIdLines) assertTrue("CHAR(12) CHARACTER SET ascii COLLATE ascii_bin" in line, "race_id は CHAR(12) ascii_bin: $line")
@@ -149,7 +153,7 @@ class MigrationScriptsTest {
     private val grantsCode = code(grants)
     private val statements = grantsCode.split(';').map { it.trim() }.filter { it.isNotEmpty() }
     private val users = listOf("app", "ingest", "bot", "mltrain")
-    private val allTables = tables(v1).keys + tables(v2).keys + "flyway_schema_history"
+    private val allTables = tables(v1).keys + tables(v2).keys + tables(v3).keys + "flyway_schema_history"
 
     @Test
     fun `grants は GRANT と REVOKE だけで、スキーマ名はプレースホルダ`() {

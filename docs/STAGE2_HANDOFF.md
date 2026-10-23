@@ -100,8 +100,8 @@ db-migration（単独）
 ## 11. 未解決事項（勝手に確定しない）
 | # | 事項 | 担当 | 影響する段階 |
 |---|---|---|---|
-| 1 | JRA-VAN への問い合わせ Q1〜Q8。**2 人目の利用方法、クラウド保存、データの再利用、一般公開はどれも未確認**。個人契約のデータを 2 人で共有できるとは仮定しない。2 人目が自分で契約しているかどうか | ユーザー（T1.16） | 実データの投入（3・5・6）。テナント設計は前倒しで対応済み |
-| 2 | JV-Link 公式仕様書での確認 | ユーザー（T1.17） | 3 |
+| 1 | （2026-10-23 に再スコープ: 2 人利用・配布・一般公開は対象外。現行は UNRESOLVED.md の D-1 / E-1〜E-3 / COMP-1〜4。以下は旧記述）JRA-VAN への問い合わせ Q1〜Q8。**2 人目の利用方法、クラウド保存、データの再利用、一般公開はどれも未確認**。個人契約のデータを 2 人で共有できるとは仮定しない。2 人目が自分で契約しているかどうか | ユーザー（T1.16） | 実データの投入（3・5・6）。テナント設計は前倒しで対応済み |
+| 2 | JV-Link 公式仕様書での確認（2026-10-23: SDK 5.0.0・64bit の公開は確認済み。仕様書 12 項目は未確認: JVLINK_DESIGN §12） | ユーザー（T1.17） | 3 |
 | 3 | 実 SQLite、`prob_source` の分布、実 `config.yaml`、`*.pkl` | ユーザー（T1.20） | 3（ゴールデンは合成で先行できる） |
 | 4 | フロント案 A の承認、`legacy`/`v2`、E 項目の C 分類（E6/E11/E12/E14/H10）、H2 の扱い | ユーザー（T1.21） | 3・4・6 |
 | 5 | Spring Boot 4.2.0 の GA（未 GA） | 監視（VERSIONS §7） | 2〜5 の切れ目 |
@@ -232,6 +232,13 @@ Reader/Writer は分かれており、`XxxRepository` は両方を継承する�
 - **Stage 2 の完了判定（技術面）**: T2.1〜T2.8 は実装済み（PR #5〜#12）で、CI は緑（PROGRESS に run ID）。依存の互換性（Doma/Kotlin/Boot/Flyway/Connector/J 9.7.0、MySQL 8.4/9.7）と 4 イメージのビルド・スモークは CI で確認。**未完了・未検証として残る（Stage 2 の技術的な完了とは分けて扱う）**: 実 GCP での ModeProvider・内部 API 認証・Cloud Run Jobs の引数と終了コード（G-OPS-*, G-AUTH-1, G-APP-1, G-JOB-1）、Cloud SQL の実環境（G-DB-1/5/6/7）、MySQL 9.7 の採否（D-069）、Connector/J 26.x の採否、デッドロック 1213 の再試行、bot-run の checkpoint・SIGTERM、`mltrain` のスキーマ版確認方法、**ml-train イメージ（Stage 3）と本番 release-manifest（第5段階）**、T1.16・T1.17・T1.20・T1.21（ユーザー）、infra I-H1〜I-H9 と T5.0。
 - **Stage 3 へ進める作業**（上のブロッカーに依存しない）: T3.1（EV/Kelly/確率/判定/急落フィルタの Kotlin 移植と `tools/golden` の比較）、T3.2（ワイド/三連複）、T3.3（開催日制御）、T3.4（取込 API）、T3.7（Discord 通知）、T3.6 の Kotlin 側（FeatureBuilder 等。実データを使わない範囲）。**ブロックされる作業**: T3.5・T3.6 の実データ部分・旧新比較の総合（T1.16/T1.17/T1.20/T1.21）、T3.0（実機）、第5段階全体（T5.0・infra の追従・ユーザーの GCP 承認）、本番 manifest（ml-train + push 後の digest + 検証済みロールバック範囲 + feature_schema_hash）。
 - **Stage 3 が足すもの（イメージ関連）**: bot のスタブ差し替え時に `StubTaskHandler` の本番 exit 1 を外すのは実装が揃ってから（スモークの『prod は 0 にならない』検査も合わせて見直す）。`ml/` の Dockerfile ターゲット（`ml-train`）を追加し、`IMAGE_NAMES`/`BUILDABLE_IMAGES`（`tools/release/repo_facts.py`）・スモーク・`images.yml` を更新する。`feature_schema_hash`（ML_DESIGN §4）を定義し manifest に載せる。ロールバックの『旧イメージ × 新スキーマ』統合テストを作り `docs/release/rollback-verified.json` に記録する。
+
+### 14.10 T3.4 の結果と T3.5 以降への引き継ぎ（取込 API。2026-10-23。判断 D-130〜D-143、未解決は UNRESOLVED.md）
+- **実装**: `:domain` の `jp.jrabot.domain.ingest`（封筒検証 `EnvelopeValidator`、認証 `AgentAuthenticator`・`AgentSigning`・`SigningKeyCipher`、バッチ処理 `BatchIngestor`、取得セッション `FetchPolicy`、適用 `ObservationApplier`、`RecordParser`、バックフィル `BackfillService`、ハートビート）、`:persistence`（V3、Doma DAO、`SpringUnitOfWork`、`DbScheduleFetchFactReader`）、`:ingest`（`AgentAuthFilter`・`AgentApiController`・合成の正規化 JSON パーサ）。
+- **T3.5 が前提にすること**: ① 署名は**提案 P-1**（`K=HMAC(token,"jra-bot/agent-sign/v1")` で `method|requestUri|timestamp|nonce|sha256(送信した本文)` を署名。承認待ち）② 蓄積系の取得は**提案 P-2** の `fetch`（id・seq・targetFrom/To・origin・backfillId）を付けて送る（無いと取得の事実もカーソルも作られない）③ 409 は `Retry-After` を見て同一バッチを再送、422 は DEAD ④ 応答の `cursor` が出たらローカルの `acked_ts` を前進 ⑤ 実データのレコード形式はサーバ側でまだ解析できない（保留）。
+- **未実装（T3.5 / 後続）**: `plan`・`mode`・`update`・`register` の HTTP、`HeartbeatMirror` の GCS 実装、実データ形式のパーサ（T1.17）、reconcile（STALE）、KEK の発行と運用。
+- **検証の状況**: ローカルは MySQL 8.0.46（Docker 不可）で domain 667・persistence 統合 161（うち 8.4 固定の `WiringIntegrationTest` 1 件は環境差で失敗）・ingest 単体 31／統合 44・bot 67／31・db-migration 統合 44 を実行。**8.4 / 9.7 の合否は CI が正**。
+- **infra への引継ぎ（T5.0）**: ingest に `AGENT_KEK_KEYS`・`AGENT_KEK_ACTIVE_KID`（Secret Manager）と `INGEST_*`、V3 の GRANT（`R__grants.sql`）、bot の必要スキーマ版 3（3 アプリとも 3 に統一）。
 
 ### 14.9 T3.3 の結果と T3.4〜T3.9 への引き継ぎ（開催日制御）
 - **実装**: RACE_CALENDAR_DESIGN §11 と DECISIONS D-122〜D-129。`ingest`（T3.4）が使う入口: `RaceScheduleUpdater.apply(RaceScheduleObservation)`（RA 由来の取得内容。パース後の値で渡す）・`applyTimeChange`/`revokeTimeChange`（0B14 の TC 差分）・`RaceDayUpdater`（YSCH）・`ScheduleEventWriter.append`（STALE・FETCH_FAILURE）・**取得の事実** `ScheduleFetchFactReader`（T3.4 が実装して `NoScheduleFetchFacts` を置き換える。「YSCH が日付 D を対象に成功した時刻」を DB に持つ表は V2 に無いので、T3.4 で決める）。`ingest` の DB ユーザーは `race_day`・`race_schedule`・`race_schedule_event` を書ける（`calendar_override` は読めない）。

@@ -4,15 +4,37 @@ import jp.jrabot.domain.bot.BotRunRepository
 import jp.jrabot.domain.calendar.CalendarOverrideRepository
 import jp.jrabot.domain.calendar.RaceDayRepository
 import jp.jrabot.domain.calendar.ScheduleEventRepository
+import jp.jrabot.domain.calendar.ScheduleFetchFactReader
+import jp.jrabot.domain.ingest.AgentCredentialStore
+import jp.jrabot.domain.ingest.AgentHeartbeatStore
+import jp.jrabot.domain.ingest.BackfillStore
+import jp.jrabot.domain.ingest.FetchStore
+import jp.jrabot.domain.ingest.IngestBatchStore
+import jp.jrabot.domain.ingest.IngestCursorStore
+import jp.jrabot.domain.ingest.IngestGapStore
+import jp.jrabot.domain.ingest.NonceStore
+import jp.jrabot.domain.ingest.RawRecordStore
+import jp.jrabot.domain.ingest.UnitOfWork
+import jp.jrabot.domain.odds.ComboOddsSnapshotRepository
 import jp.jrabot.domain.odds.OddsSnapshotRepository
 import jp.jrabot.domain.race.RaceRepository
 import jp.jrabot.domain.race.RaceScheduleRepository
 import jp.jrabot.domain.signal.SignalRepository
 import jp.jrabot.domain.tenant.AppUserRepository
 import jp.jrabot.domain.time.Clock
+import jp.jrabot.persistence.dao.AgentDaoImpl
+import jp.jrabot.persistence.dao.AgentHeartbeatDaoImpl
+import jp.jrabot.persistence.dao.AgentNonceDaoImpl
 import jp.jrabot.persistence.dao.AppUserDaoImpl
 import jp.jrabot.persistence.dao.BotRunDaoImpl
 import jp.jrabot.persistence.dao.CalendarOverrideDaoImpl
+import jp.jrabot.persistence.dao.ComboOddsSnapshotDaoImpl
+import jp.jrabot.persistence.dao.IngestBackfillDaoImpl
+import jp.jrabot.persistence.dao.IngestBatchDaoImpl
+import jp.jrabot.persistence.dao.IngestCursorDaoImpl
+import jp.jrabot.persistence.dao.IngestFetchDaoImpl
+import jp.jrabot.persistence.dao.IngestGapDaoImpl
+import jp.jrabot.persistence.dao.IngestRawDaoImpl
 import jp.jrabot.persistence.dao.OddsSnapshotDaoImpl
 import jp.jrabot.persistence.dao.RaceDaoImpl
 import jp.jrabot.persistence.dao.RaceDayDaoImpl
@@ -20,17 +42,32 @@ import jp.jrabot.persistence.dao.RaceScheduleDaoImpl
 import jp.jrabot.persistence.dao.ScheduleEventDaoImpl
 import jp.jrabot.persistence.dao.SignalDaoImpl
 import jp.jrabot.persistence.doma.jrabotMysqlDialect
+import jp.jrabot.persistence.repository.AgentHeartbeatStoreImpl
+import jp.jrabot.persistence.repository.AgentRegistrar
+import jp.jrabot.persistence.repository.AgentRegistrarImpl
+import jp.jrabot.persistence.repository.AgentRepositoryImpl
 import jp.jrabot.persistence.repository.AppUserRepositoryImpl
+import jp.jrabot.persistence.repository.BackfillStoreImpl
 import jp.jrabot.persistence.repository.BotRunRepositoryImpl
 import jp.jrabot.persistence.repository.CalendarOverrideRepositoryImpl
+import jp.jrabot.persistence.repository.ComboOddsSnapshotRepositoryImpl
+import jp.jrabot.persistence.repository.DbScheduleFetchFactReader
+import jp.jrabot.persistence.repository.FetchStoreImpl
+import jp.jrabot.persistence.repository.IngestBatchStoreImpl
+import jp.jrabot.persistence.repository.IngestCursorStoreImpl
+import jp.jrabot.persistence.repository.IngestGapStoreImpl
+import jp.jrabot.persistence.repository.NonceStoreImpl
 import jp.jrabot.persistence.repository.OddsSnapshotRepositoryImpl
 import jp.jrabot.persistence.repository.RaceDayRepositoryImpl
 import jp.jrabot.persistence.repository.RaceRepositoryImpl
 import jp.jrabot.persistence.repository.RaceScheduleRepositoryImpl
+import jp.jrabot.persistence.repository.RawRecordStoreImpl
 import jp.jrabot.persistence.repository.ScheduleEventRepositoryImpl
 import jp.jrabot.persistence.repository.SignalRepositoryImpl
+import jp.jrabot.persistence.repository.SpringUnitOfWork
 import org.seasar.doma.jdbc.Config
 import org.seasar.doma.jdbc.dialect.Dialect
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.jdbc.datasource.DataSourceTransactionManager
@@ -107,4 +144,78 @@ class PersistenceConfiguration {
         clock: Clock,
         tx: TransactionOperations,
     ): SignalRepository = SignalRepositoryImpl(SignalDaoImpl(config), clock, tx)
+
+    // ---- 取込（T3.4）。ingest が書き、bot が取得の事実を読む。ここは Config・トランザクション・時計だけで作れるものに限る（KEK などの秘密は :ingest 側）
+
+    @Bean
+    fun unitOfWork(transactionManager: PlatformTransactionManager): UnitOfWork = SpringUnitOfWork(transactionManager)
+
+    @Bean
+    fun agentCredentialStore(config: Config): AgentCredentialStore = AgentRepositoryImpl(AgentDaoImpl(config))
+
+    @Bean
+    fun agentRegistrar(
+        config: Config,
+        tx: TransactionOperations,
+    ): AgentRegistrar = AgentRegistrarImpl(AgentDaoImpl(config), tx)
+
+    @Bean
+    fun nonceStore(
+        config: Config,
+        tx: TransactionOperations,
+    ): NonceStore = NonceStoreImpl(AgentNonceDaoImpl(config), tx)
+
+    @Bean
+    fun agentHeartbeatStore(
+        config: Config,
+        tx: TransactionOperations,
+    ): AgentHeartbeatStore = AgentHeartbeatStoreImpl(AgentHeartbeatDaoImpl(config), tx)
+
+    @Bean
+    fun ingestBatchStore(
+        config: Config,
+        tx: TransactionOperations,
+    ): IngestBatchStore = IngestBatchStoreImpl(IngestBatchDaoImpl(config), tx)
+
+    @Bean
+    fun rawRecordStore(
+        config: Config,
+        tx: TransactionOperations,
+    ): RawRecordStore = RawRecordStoreImpl(IngestRawDaoImpl(config), tx)
+
+    @Bean
+    fun fetchStore(
+        config: Config,
+        tx: TransactionOperations,
+    ): FetchStore = FetchStoreImpl(IngestFetchDaoImpl(config), tx)
+
+    /** 取得の事実（YSCH の完全な取得）。DB の `ingest_fetch` から読む。bot の calendar-check がこれを使う。 */
+    @Bean
+    @ConditionalOnMissingBean(ScheduleFetchFactReader::class) // テストは合成の事実に差し替える（本番に差し替えの口は無い。配線は bot のテストが検査）
+    fun scheduleFetchFactReader(config: Config): ScheduleFetchFactReader = DbScheduleFetchFactReader(IngestFetchDaoImpl(config))
+
+    @Bean
+    fun ingestCursorStore(
+        config: Config,
+        tx: TransactionOperations,
+    ): IngestCursorStore = IngestCursorStoreImpl(IngestCursorDaoImpl(config), tx)
+
+    @Bean
+    fun ingestGapStore(
+        config: Config,
+        tx: TransactionOperations,
+    ): IngestGapStore = IngestGapStoreImpl(IngestGapDaoImpl(config), tx)
+
+    @Bean
+    fun backfillStore(
+        config: Config,
+        tx: TransactionOperations,
+    ): BackfillStore = BackfillStoreImpl(IngestBackfillDaoImpl(config), tx)
+
+    @Bean
+    fun comboOddsSnapshotRepository(
+        config: Config,
+        tx: TransactionOperations,
+        clock: Clock,
+    ): ComboOddsSnapshotRepository = ComboOddsSnapshotRepositoryImpl(ComboOddsSnapshotDaoImpl(config), tx, clock)
 }

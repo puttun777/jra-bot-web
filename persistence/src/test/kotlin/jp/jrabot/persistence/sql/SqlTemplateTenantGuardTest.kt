@@ -38,11 +38,17 @@ class SqlTemplateTenantGuardTest {
     }
 
     @Test
-    fun `テナント条件の例外は AppUserDao_selectByEmail の 1 本だけで、実際にテナント条件を持たない`() {
-        assertEquals(setOf("AppUserDao/selectByEmail.sql"), TenantSqlGuard.ALLOWED_WITHOUT_TENANT)
-        val text = File(sqlRoot, "AppUserDao/selectByEmail.sql").readText()
-        assertTrue(!text.contains("tenant_id"), "許可リストの SQL がテナント条件を持っている（リストが古い）")
-        assertTrue(text.contains("email = /* email */"), "完全一致の 1 件取得であること")
+    fun `テナント条件の例外は3本だけ（ログインのemail解決・認証のagent_id解決・nonce掃除）で、実際にテナント条件を持たない`() {
+        assertEquals(
+            setOf("AppUserDao/selectByEmail.sql", "AgentDao/selectByAgentId.sql", "AgentNonceDao/deleteExpired.sql"),
+            TenantSqlGuard.ALLOWED_WITHOUT_TENANT,
+        )
+        for (name in TenantSqlGuard.ALLOWED_WITHOUT_TENANT) {
+            assertTrue(!File(sqlRoot, name).readText().contains("tenant_id"), "許可リストの SQL がテナント条件を持っている（リストが古い）: $name")
+        }
+        assertTrue(File(sqlRoot, "AppUserDao/selectByEmail.sql").readText().contains("email = /* email */"), "完全一致の 1 件取得であること")
+        // agent_id は V3 の UNIQUE（全体で一意）なので、1 件に決まる
+        assertTrue(File(sqlRoot, "AgentDao/selectByAgentId.sql").readText().contains("agent_id = /* agentId */"), "agent_id の完全一致であること")
     }
 
     @Test
@@ -94,9 +100,19 @@ class SqlTemplateTenantGuardTest {
                 .sorted()
         assertEquals(
             listOf(
+                "AgentDao",
+                "AgentHeartbeatDao",
+                "AgentNonceDao",
                 "AppUserDao",
                 "BotRunDao",
                 "CalendarOverrideDao",
+                "ComboOddsSnapshotDao",
+                "IngestBackfillDao",
+                "IngestBatchDao",
+                "IngestCursorDao",
+                "IngestFetchDao",
+                "IngestGapDao",
+                "IngestRawDao",
                 "OddsSnapshotDao",
                 "RaceDao",
                 "RaceDayDao",

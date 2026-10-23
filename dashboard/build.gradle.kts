@@ -3,8 +3,8 @@ plugins {
 }
 
 // このアプリが必要とする最小のスキーマ版（CONTRACTS §4.3。/internal/ready と Job の開始時に flyway_schema_history と比較する）。
-// V1/V2 の表を使うコードなので 2。使う表が増える V3 以降のコードを入れるときに上げる。
-extra["requiredSchemaVersion"] = "2"
+// 3 アプリで同じ値にする（release-manifest の検証規則: tools/release/manifest.py）。V3 の表は dashboard 自身はまだ使わない（app の SELECT 権限だけ付与済み）。
+extra["requiredSchemaVersion"] = "3"
 
 dependencies {
     implementation(project(":domain"))

@@ -74,7 +74,7 @@
 |---|---|---|---|---|
 | A | Spring MVC + **Thymeleaf + htmx** + 軽量 CSS + グラフは ECharts/Chart.js | 単一デプロイ、Node ビルド不要、IAP/認可を Spring に集約、CI が単純、スケールゼロで軽い | 高度な対話 UI は工数大 | Thymeleaf 3.1.5.RELEASE（Boot BOM）、htmx 2.0.11、Apache ECharts 6.1.0 または Chart.js 4.5.1、Pico CSS 2.1.1（任意） |
 | B | **React 19 + Vite + TypeScript + Tailwind** の SPA（Spring は API のみ） | 表現力・拡張性、将来の一般公開向き | Node ビルド/依存管理/脆弱性対応が増える、CI・Docker 工程増 | React 19.3.1、Vite 8.3.5、TypeScript 7.0.2、Tailwind CSS 4.3.3、ECharts 6.1.0 |
-初期所見: 現行 Streamlit 画面群（Overview/Race/Horse/Performance/Signals/Ops）は表・フィルタ・グラフ中心で、2 人利用・コスト優先の要件には **案 A** が合う見込み。ただし画面精査（T1.5）前なので確定しない。最終的に Node を使う場合は Node LTS 版を別途確認する。
+初期所見: 現行 Streamlit 画面群（Overview/Race/Horse/Performance/Signals/Ops）は表・フィルタ・グラフ中心で、本人 1 名利用（2026-10-23 変更。旧: 2 人利用）・コスト優先の要件には **案 A** が合う見込み。ただし画面精査（T1.5）前なので確定しない。最終的に Node を使う場合は Node LTS 版を別途確認する。
 
 ## 6. 第2段階で必要な互換性の検証（T2.1/T2.3/T2.4 の完了条件）
 | ID | 組合せ | 方法 | 合格条件 | 不合格時 |

@@ -1,7 +1,8 @@
 # jra-bot-web
 
 JRA Bot（参照元 `puttun777/jra-bot`）を Kotlin / Spring Boot の Web アプリへ段階的にリプレースするリポジトリ（Private）。
-設計・進捗・判断は `docs/` が正本。最初に `CLAUDE.md` → `docs/PROGRESS.md` → `docs/PLAN.md` を読む。再開手順は `docs/STAGE2_HANDOFF.md` §12。
+**利用者は本人 1 名・私的・非営利・非公開**（`docs/REQUIREMENTS.md` §0。2026-10-23 に最大 2 人から変更。`tenant_id` の構造と認証認可は維持し、利用者の登録・招待・共有は作らない）。
+設計・進捗・判断は `docs/` が正本。未解決事項の管理表は `docs/UNRESOLVED.md`。最初に `CLAUDE.md` → `docs/PROGRESS.md` → `docs/PLAN.md` を読む。再開手順は `docs/STAGE2_HANDOFF.md` §12。
 
 ## モジュール
 `:domain` `:persistence` `:db-migration` `:cloud-gcp` `:bot` `:ingest` `:dashboard`（依存方向は `docs/ARCHITECTURE.md` §2）。

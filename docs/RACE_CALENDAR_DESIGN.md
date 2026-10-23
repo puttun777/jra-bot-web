@@ -358,7 +358,7 @@ Scheduler は「固定間隔で `app --task=calendar-check` を起動するだ�
 | C11 | 完了 | TC の取消 → REVOKED と元の時刻へ復元（D。履歴の永続化は P の一般経路） |
 | C12・C13 | 完了 | 臨時レースの追加（ADDED）、区分 0 は DELETED として保持し再読込・新しい版でも復活しない（D,B） |
 | C14・C15 | 完了 | 朝に RA 無し → UNCONFIRMED → 到着後に起動、確認が古い → STALE（D,B）。鮮度の境界（ちょうどは新鮮） |
-| C16 | **未対応**（スケジュールの鮮度のみ） | エージェント停止・ハートビート・オッズ鮮度・`ingest_gap` は T3.4/T3.5/T3.8 |
+| C16 | **一部**（T3.4 でスケジュールの鮮度＋ハートビートの記録＋取得失敗の `ingest_gap`） | `agent_heartbeat` の記録と、取得失敗時の `ingest_gap`・`FETCH_FAILURE` は T3.4。**ハートビート欠落の検知・警告・オッズ鮮度による通知停止は T3.5/T3.8** |
 | C17〜C19 | 完了 | 手動の開催日・時刻、開催なし、DENY_RUN は ALLOW_RUN に勝つ、取消・期限（P,D,B）。手動起動 API は Stage 4（判断は `ManualStartPolicy`） |
 | C20 | 完了 | 連続実行（起動要求の重複はあり得ると明記）と、bot-run の同時 2/8 本の取得で勝者 1 つ（P,B） |
 | C21 | 一部 | 期限切れ → 奪取、旧行 ABORTED、checkpoint を新しい実行へ引継ぎ（P,B）。**状態の再導出・二重通知なしは T3.8** |
@@ -369,3 +369,22 @@ Scheduler は「固定間隔で `app --task=calendar-check` を起動するだ�
 | C26 | 完了 | 新しい版の後に古い版を再読込しても反映しない（D） |
 | C27 | **一部**（遷移表のみ） | SETTLING→INCOMPLETE→COMPLETED の遷移表と INCOMPLETE の日は bot-run を起動しない。reconcile の補完は T3.9 |
 | C28 | **未対応** | 14 時間の最大稼働の ABORT は T3.8 |
+
+## 12. T3.4 の実装（取得の事実・取込の接続。2026-10-23。判断は DECISIONS D-130〜D-143、未解決は UNRESOLVED.md）
+「取得の事実」を **V3 の `ingest_fetch`** に永続化し、T3.3 の `ScheduleFetchFactReader` を DB 実装（`DbScheduleFetchFactReader`）に置き換えて bot に配線した（`NoScheduleFetchFacts` の本番配線は廃止。合成の `FixedScheduleFetchFacts` は引き続きテスト専用）。
+
+### 12.1 7 つの状態の区別
+| 状態 | DB 上の表現 | calendar-check から見た結果 |
+|---|---|---|
+| 取得成功・予定あり | `ingest_fetch.status=SUCCEEDED` かつ `race_day` の行（取込のたびに `last_confirmed_at` が進む。`RaceDayUpdater.apply` の `NoChange`→`confirm`） | 行ごとの判定（CONFIRMED・UNCONFIRMED など） |
+| 取得成功・予定なし | `SUCCEEDED` かつ `covered_from..covered_to` が日付を覆い、`race_day`・`race_schedule` の行が無い | `NO_RACE_CONFIRMED`（新鮮なときだけ） |
+| 取得失敗 | `ingest_fetch.status=FAILED`（`fail_reason`）＋ `race_schedule_event(FETCH_FAILURE)`＋`ingest_gap(FETCH_FAILURE)` | 事実なし（UNKNOWN／既存の行は古くなる） |
+| 取得していない | `ingest_fetch` の行なし | `UNKNOWN`（行の無い日は開催なしにしない） |
+| 取得が古い | `SUCCEEDED` だが `completed_at` が `stale_after` より前 | `STALE` |
+| 途中まで取得した | `IN_PROGRESS`（`next_seq`＜EOF）。放置された取得は事実にならない | 事実なし。途中で見えた開催日は個別に反映済み（その行の確認時刻だけ進む） |
+| 手動で開催を補正した | `calendar_override`（既存。T3.3） | 手動が優先（根拠 `MANUAL`） |
+**事実の範囲**: `[targetFrom, min(targetTo, この取得で見た最後の開催日)]`。それより先の日付は「まだ公表されていない」と「開催なし」を区別できないので事実にしない（UNKNOWN のまま）。開催日を 1 件も見ない成功は事実にならない。
+**仕様未確認のため**: 実データ形式（JV-Data の YS）は解析できず保留（PENDING）になり、取得は `UNPARSED_RECORDS` で失敗する。つまり**実データから取得の事実が作られるのは、YS パーサ（T1.17 の確認後）を追加してから**（fail closed）。
+
+### 12.2 取込の接続
+`BatchIngestor` が 解析→`ObservationApplier`→`RaceDayUpdater`（YSCH の開催日）・`RaceScheduleUpdater`（RA の予定・TC の時刻変更と取消）・`ScheduleEventWriter`（取得失敗の `FETCH_FAILURE`）を同一トランザクションで呼ぶ。`STALE` イベントの生成（reconcile）と、YSCH から消えた開催日の扱い（確認時刻が進まず古くなるだけ）は T3.8（UNRESOLVED G-6）。

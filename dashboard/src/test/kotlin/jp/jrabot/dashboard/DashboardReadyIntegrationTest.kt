@@ -73,7 +73,7 @@ class DashboardReadyIntegrationTest {
         ctx.use {
             val r = http.get("/internal/ready", TestAuth.validToken())
             assertEquals(200, r.status, r.body)
-            assertEquals("""{"status":"READY","schemaVersion":"2","requiredSchemaVersion":"2"}""", r.body)
+            assertEquals("""{"status":"READY","schemaVersion":"3","requiredSchemaVersion":"3"}""", r.body)
         }
     }
 
@@ -125,13 +125,13 @@ class DashboardReadyIntegrationTest {
             ctx.getBean(ControllableModeProvider::class.java).mode = OpsMode.STARTING
             assertEquals(200, http.get("/internal/ready", TestAuth.validToken()).status)
             // V2 を「失敗」に変えると、成功した最大版は 1 になる
-            setHistory("UPDATE flyway_schema_history SET success = 0 WHERE version = '2'")
+            setHistory("UPDATE flyway_schema_history SET success = 0 WHERE version = '3'")
             try {
                 val r = http.get("/internal/ready", TestAuth.validToken())
                 assertEquals(503, r.status, r.body)
-                assertEquals("""{"status":"NOT_READY","reason":"SCHEMA_INSUFFICIENT","schemaVersion":"1","requiredSchemaVersion":"2"}""", r.body)
+                assertEquals("""{"status":"NOT_READY","reason":"SCHEMA_INSUFFICIENT","schemaVersion":"2","requiredSchemaVersion":"3"}""", r.body)
             } finally {
-                setHistory("UPDATE flyway_schema_history SET success = 1 WHERE version = '2'")
+                setHistory("UPDATE flyway_schema_history SET success = 1 WHERE version = '3'")
             }
             // 新しい版が入っていても許容する（expand/contract）
             insertVersion(900, "10")
