@@ -7,6 +7,7 @@ import org.gradle.api.tasks.Copy
 import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.WriteProperties
 import org.gradle.api.tasks.testing.Test
+import org.springframework.boot.gradle.tasks.bundling.BootJar
 
 /**
  * bot / ingest / dashboard 用: Kotlin 共通設定 + Spring Boot（実行可能 jar、kotlin-spring）。
@@ -38,6 +39,9 @@ class SpringBootAppPlugin : Plugin<Project> {
                 t.property("releaseId", target.providers.gradleProperty("releaseId").orElse("dev"))
             }
         target.tasks.named("processResources", Copy::class.java) { it.from(appInfo) }
+
+        // イメージ用の成果物（T2.5 後半）: Dockerfile が版に依存せず参照できる固定名（<module>.jar）にする。
+        target.tasks.named("bootJar", BootJar::class.java) { it.archiveFileName.set("${target.name}.jar") }
 
         // 通常の test は Docker 不要の起動・単体テストだけ。MySQL（Testcontainers）を使う統合テストは integrationTest で実行する
         // （:persistence と同じ方式。MYSQL_IMAGE が MySQL の版。Docker が無ければ失敗し、スキップしない。スキーマは本物の db-migration CLI で適用する）。
