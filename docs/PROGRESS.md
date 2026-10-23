@@ -5,7 +5,9 @@
 ## Stage 2-E（claude/stage2-gcp-mode-provider）
 ### 結果
 - **T2.7 実装完了**（`:cloud-gcp` の `ModeProvider`: GCS 実装 + ローカルファイル実装、単体テスト、CI の件数検証）。T2.8 には進んでいない。**実 GCP には一度も接続していない**（単体テストの成功を実 GCP のアクセス成功とは扱わない）。
-- **PR / CI**: （PR 作成後に追記）
+- **PR**: #9（main 向け、マージはユーザーが判断）。
+- **CI（GitHub Actions、Temurin 25）**: run 39902427400（head 04f709f。T2.7 の全コードを含む）で **build (Temurin 25) / repo hygiene / db integration (MySQL 8.4) / db integration (MySQL 9.7) の必須 4 つと、非ゲートの connector/j 26.x check（8.4・9.7）の計 6 ジョブがすべて成功**。build ジョブの「cloud-gcp の単体テストの実行件数の検証」ステップも成功（0 件・スキップ・失敗なし。件数の閾値は 55 以上）。既存の DB 統合テスト・domain のテストは変更しておらず、同じジョブで成功した。その後の docs だけのコミットで CI が再実行される（結果は PR のチェックを参照）。
+- ローカル（JDK 21 スモーク）の全体 `./gradlew build` も成功: domain 214 / persistence 15 / db-migration 57 / cloud-gcp 56 / アプリ各 2、スキップ・失敗 0（Maven Central の 429 を待って再試行した後）。JDK 25 の結果は CI のもの。
 ### セッションの環境（CLAUDE.md の記録義務）
 `java -version` = OpenJDK 21.0.12（JDK 25 なし。`-PjdkVersion=21` のスモーク）、Gradle 9.7.1 動作、Docker 29.9.1 CLI あり（今回の範囲では未使用。DB 統合テストは変更していない）。Maven Central が IP 単位で 429 を返し、ビルドは待って再試行した（GCS ミラーを init script で置こうとしたが、パッケージレジストリの迂回として拒否されたので**削除し使っていない**）。ローカルのロケールが POSIX だと日本語のテスト名でレポート生成が失敗するため `LC_ALL=C.UTF-8` で実行した（CI は影響なし）。ローカルの結果は JDK 21 のスモークで、JDK 25 の結果ではない。
 ### 実装したクラスと責務（`cloud-gcp/src/main/kotlin/jp/jrabot/cloudgcp/ops/`）
@@ -31,7 +33,7 @@
 | `LocalFileModeProviderTest` | 10 | ファイル判定(NORMAL 以外)・不在(23)・不正 JSON(24)・ディレクトリ/大きすぎる・キャッシュと seq 検査が GCS 版と同じ・`APP_ENV=local` のみ許可・本番/未設定で起動失敗・`OPS_MODE_SOURCE` の不正・`gs://` は生成時に通信しない・設定値をメッセージに出さない |
 - 変異テスト（手動）: seq 巻き戻りの検査・再試行間隔・失敗時のキャッシュ破棄をそれぞれ壊すとテストが失敗することを確認し、元に戻した。
 ### ローカルの結果（JDK 21 スモーク。JDK 25 ではない）
-`:cloud-gcp:test` 56 件・スキップ 0・失敗 0、`ktlintCheck`、`checkModuleDependencies` 成功。全体の `./gradlew build` は Maven Central の 429 で他モジュールの依存を取得できず、**ローカルでは完了を確認できていない**（CI が正）。
+`:cloud-gcp:test` 56 件・スキップ 0・失敗 0、`ktlintCheck`、`checkModuleDependencies` 成功。全体の `./gradlew build` は初回 Maven Central の 429 で失敗したが、待って再試行し成功した（上記）。
 ### 実 GCP で未検証の項目（完了扱いにしない）
 ADC（Cloud Run のランタイム SA）での認証、実バケットの IAM（`storage.objects.get` だけで足りること）、レイテンシ、SDK のリトライと 3 秒の上限が実環境で意図どおり働くこと、メタデータサーバ不達時の挙動。既存の検証ゲート G-OPS-1〜9 に該当項目が無いので、infra の T5.0 で追加する。
 ### T2.8 への引き継ぎ
