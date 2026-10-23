@@ -1,7 +1,7 @@
 package jp.jrabot.cloudgcp.ops
 
 import com.google.cloud.storage.Storage
-import jp.jrabot.domain.ops.ModeProvider
+import jp.jrabot.domain.ops.InspectableModeProvider
 import jp.jrabot.domain.time.Clock
 import java.net.URI
 import java.nio.file.Path
@@ -12,7 +12,7 @@ class OpsModeConfigurationException(
 ) : IllegalStateException(message)
 
 /**
- * [ModeProvider] の生成（Spring 非依存。T2.8 が Bean にする）。
+ * [ModeProvider] の生成（Spring 非依存。T2.8 で各アプリが Bean にする）。
  *
  * - `gs://…`: GCS 実装（ADC）。`APP_ENV` に関わらず使える。生成時に通信しない（最初の [ModeProvider.current] で読む）。
  * - ローカルファイル（`file:` URI またはパス）: **`APP_ENV=local` を明示したときだけ**。それ以外（未設定・`prod` など）で指定されたら、
@@ -27,7 +27,7 @@ object OpsModeProviders {
     fun fromEnvironment(
         env: Map<String, String>,
         clock: Clock,
-    ): ModeProvider {
+    ): InspectableModeProvider {
         val raw = env[ENV_SOURCE]?.trim().orEmpty()
         if (raw.isEmpty()) throw OpsModeConfigurationException("$ENV_SOURCE が未設定")
         return when {
@@ -53,13 +53,13 @@ object OpsModeProviders {
         location: GcsLocation,
         clock: Clock,
         storage: () -> Storage = { GcsStorageFactory.create() },
-    ): ModeProvider = CachingModeProvider(GcsOpsStateSource(location, storage), clock)
+    ): InspectableModeProvider = CachingModeProvider(GcsOpsStateSource(location, storage), clock)
 
     /** ローカルファイル実装（テスト・ローカル開発用）。GCS 版と同じ検証・キャッシュ・seq の検査を使う。 */
     fun file(
         path: Path,
         clock: Clock,
-    ): ModeProvider = CachingModeProvider(FileOpsStateSource(path), clock)
+    ): InspectableModeProvider = CachingModeProvider(FileOpsStateSource(path), clock, sourceLabel = CachingModeProvider.SOURCE_FILE)
 
     private fun parseLocation(raw: String): GcsLocation =
         try {

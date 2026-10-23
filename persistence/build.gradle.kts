@@ -1,6 +1,7 @@
 plugins {
     id("jrabot.kotlin-module")
     id("org.jetbrains.kotlin.kapt")
+    `java-test-fixtures`
 }
 
 // Doma・Spring JDBC/TX・HikariCP・Connector/J は :persistence に隔離する（:domain には入れない。checkModuleDependencies が強制）。
@@ -15,6 +16,12 @@ dependencies {
 
     testImplementation(libs.testcontainers.mysql)
     testImplementation(libs.mysql.connector.j)
+
+    // MySQL コンテナの支援（MySqlSupport・TestDb・TcpProxy）は testFixtures に置き、:persistence と 3 アプリの統合テストが共用する。
+    testFixturesImplementation(platform(libs.spring.boot.dependencies))
+    testFixturesImplementation(libs.testcontainers.mysql)
+    testFixturesImplementation(libs.mysql.connector.j)
+    testFixturesImplementation(libs.kotlin.test.junit5)
 }
 
 // G-DB-0b: Connector/J 26.x の互換性確認用。`-PconnectorJVersion=26.10.0` で版だけを差し替える（既定は Boot の BOM の 9.7.0）。

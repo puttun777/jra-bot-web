@@ -23,6 +23,16 @@ object DataSourceFactory {
         poolName: String = "jrabot-db",
     ): HikariDataSource = HikariDataSource(hikariConfig(settings, poolName))
 
+    /**
+     * 最初の `getConnection` まで**接続もプールの起動もしない** DataSource（設定は [create] と同じ）。アプリの起動時に DB へ触れず、
+     * DB が停止していてもプロセスを起動でき（`/internal/health`）、DB を使わない経路（Job の非 NORMAL の終了など）では接続が発生しない。
+     * 最初の接続に失敗したときはプールを作らず例外を投げ、次の呼び出しで再試行する（HikariCP の既定の動き）。
+     */
+    fun createLazy(
+        settings: DbSettings,
+        poolName: String = "jrabot-db",
+    ): HikariDataSource = HikariDataSource().also { hikariConfig(settings, poolName).copyStateTo(it) }
+
     internal fun hikariConfig(
         settings: DbSettings,
         poolName: String,
