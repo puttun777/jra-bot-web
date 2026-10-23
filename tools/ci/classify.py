@@ -11,6 +11,8 @@
   kotlin_db   :persistence :db-migration  → build、DB 統合（全スイート・8.4 と 9.7）
   build_cfg   Gradle・版数・build-logic・ktlint 設定  → build、DB 統合（全・8.4 + 9.7）、images
   golden      tools/golden  → golden（Python）
+  kotlin_golden  tools/golden（.md 以外）・golden-runner  → build（Kotlin と旧 Python の比較は build ジョブの中。DB 統合は不要）。
+              :domain の変更は kotlin_core で build に入るので、比較も必ず走る
   release     tools/release・スキーマ・契約・マイグレーション・アプリの build 定義  → release-tools（Python 単体）
   docker      Dockerfile / .dockerignore  → images（ビルド + スモーク）
   connectorj  Connector/J などの DB ドライバ関連の依存設定  → connector/j 26.x 互換性チェック（非ゲート）
@@ -55,9 +57,10 @@ RULES: list[tuple[str, tuple[str, ...]]] = [
     (r"^(bot|ingest|dashboard|cloud-gcp)/", ("kotlin_app",)),
     # --- ビルド・lint の設定
     (r"^(gradle/|build-logic/|gradlew(\.bat)?$|settings\.gradle\.kts$|build\.gradle\.kts$|gradle\.properties$|\.editorconfig$)", ("build_cfg", "docker")),
-    # --- Python ゴールデン
+    # --- ゴールデン（Python のフィクスチャ検証 + Kotlin ランナーとの比較）。フィクスチャやシナリオが変わったら Kotlin 側の比較も必要
+    (r"^golden-runner/", ("kotlin_golden",)),
     (r"^tools/golden/.*\.md$", ("docs",)),
-    (r"^tools/golden/", ("golden",)),
+    (r"^tools/golden/", ("golden", "kotlin_golden")),
 ]
 
 FULL_MATRIX = ["8.4", "9.7"]
@@ -116,7 +119,7 @@ def classify(files: list[str]) -> Plan:
         return Plan("docs", "ドキュメントのみ", files=len(files))
 
     p = Plan("code", "", files=len(files))
-    p.run_build = bool(tags & {"kotlin_app", "kotlin_core", "kotlin_db", "build_cfg"})
+    p.run_build = bool(tags & {"kotlin_app", "kotlin_core", "kotlin_db", "build_cfg", "kotlin_golden"})
     if tags & {"kotlin_db", "build_cfg"}:
         p.db_matrix, p.db_suites = list(FULL_MATRIX), list(ALL_SUITES)
     elif tags & {"kotlin_core"}:

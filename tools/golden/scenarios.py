@@ -167,6 +167,151 @@ def _defaults_001():
     return _calls("sd", "signature_defaults", [{"module": m, "function": f} for m, f in spec])
 
 
+# ---- T3.1（Stage 3-A）で追加: evaluate_odds の単勝判定（hit_rate・フィルタ・選別・賭け額・上限縮小）。既存ケースは変更しない ----
+def _race(odds, pops=None):
+    pops = pops or list(range(1, len(odds) + 1))
+    return [{"umaban": i + 1, "odds": float(o), "popularity": p} for i, (o, p) in enumerate(zip(odds, pops))]
+
+
+_ODDS18 = [4.2, 6.8, 9.6, 13.0, 16.0, 21.0, 26.0, 32.0, 40.0, 52.0, 66.0, 84.0, 110.0, 140.0, 180.0, 240.0, 360.0, 500.0]  # 逆数の和 < 1（EV が正の馬が多い）
+_LOOSE = {"ev_threshold": -0.5, "ev_shrink_factor": 1.0}  # ほぼ全馬が閾値を通る（賭け額・選別を見るため）
+_BIG = dict(_LOOSE, bankroll=2000.0, max_bet=50.0)  # 資金を増やし、頭数の多いレースでも多くの馬が min_bet を超える（同点・並びを見るため）
+
+
+def _eval_calls(prefix, cases):
+    return _calls(prefix, "evaluate_odds", cases)
+
+
+def _hit_rate_003():
+    r6, r18 = _RACE6, _race(_ODDS18)
+    hr = dict(_LOOSE, priority_mode="hit_rate")
+    cases = [
+        {"odds": r6, "kwargs": dict(hr)},                                                        # フィルタなし（EV 閾値のみ）
+        {"odds": r6, "kwargs": dict(hr, win_odds_max=12.0)},                                      # 12.0 ちょうどは除外しない（odds > 上限）
+        {"odds": r6, "kwargs": dict(hr, win_odds_max=11.999)},
+        {"odds": r6, "kwargs": dict(hr, win_prob_min=0.1)},
+        {"odds": r6, "kwargs": dict(hr, win_prob_min=0.25)},
+        {"odds": r6, "kwargs": dict(hr, win_ratio_min=1.1)},
+        {"odds": r6, "kwargs": dict(hr, win_ratio_min=1.2)},
+        {"odds": r6, "kwargs": dict(hr, win_odds_max=20.0, win_prob_min=0.05, win_ratio_min=0.9)},  # 3 フィルタの組合せ
+        {"odds": r6, "kwargs": dict(hr, hit_rate_min_ev=0.15)},                                   # hit_rate_min_ev が ev_threshold を上書き
+        {"odds": r6, "kwargs": dict(hr, hit_rate_min_ev=0.15, ev_threshold=-0.9)},
+        {"odds": r6, "kwargs": dict(hr, ev_threshold=0.15)},                                      # hit_rate_min_ev なし → ev_threshold
+        {"odds": r6, "kwargs": dict(hr, hit_rate_bet_type_priority=["単勝", "ワイド"], max_signals=3)},
+        {"odds": r6, "kwargs": dict(hr, hit_rate_bet_type_priority=[], max_signals=3)},
+        {"odds": r6, "kwargs": dict(_LOOSE, win_odds_max=5.0, win_prob_min=0.9, win_ratio_min=9.0)},  # edge ではフィルタは無効
+        {"odds": r6, "kwargs": dict(_LOOSE, priority_mode="unknown_mode", win_odds_max=5.0)},       # hit_rate 以外は edge 扱い
+        {"odds": r18, "kwargs": dict(hr, bankroll=2000.0, max_bet=50.0, max_signals=5, win_prob_min=0.01)},
+        {"odds": r18, "kwargs": dict(hr, bankroll=2000.0, max_bet=50.0, max_signals=18, notify_skips=True)},   # 見送りシグナルを含む並び
+        {"odds": r18, "kwargs": dict(hr, max_signals=18, notify_skips=True, hit_rate_min_ev=-0.9)},
+        {"odds": r18, "kwargs": dict(hr, bankroll=2000.0, max_bet=50.0, max_signals=4, win_odds_max=30.0, win_ratio_min=1.0)},
+    ]
+    return _eval_calls("hr", cases)
+
+
+def _snapshots_002():
+    r6 = _RACE6
+    sn = lambda *rows: [{"odds": o, "popularity": p} for o, p in rows]  # noqa: E731  新しい順
+    snapshots = {
+        "1": sn((3.0, 1), (3.2, 1)),            # 急落なし（3.2 → 3.0）
+        "2": sn((4.5, 2), (5.625, 4)),          # 最古 5.625 → 4.5: 下落率 0.2（境界: 急落ではない）
+        "3": sn((7.0, 3), (9.0, 3)),            # 9.0 → 7.0: 0.222… > 0.2 → 急落
+        "4": sn((12.0, 4), (11.0, 7)),          # 人気 7 → 4: 差 3（境界: 急上昇）
+        "5": sn((25.0, 5), (26.0, 7)),          # 人気 7 → 5: 差 2（急上昇でない）
+        "6": sn((40.0, 6)),                      # 1 件だけ → 判定しない
+    }
+    cases = [
+        {"odds": r6, "kwargs": dict(_LOOSE), "snapshots": snapshots},
+        {"odds": r6, "kwargs": dict(_LOOSE, drop_threshold=0.1), "snapshots": snapshots},
+        {"odds": r6, "kwargs": dict(_LOOSE, drop_threshold=0.3, surge_threshold=2), "snapshots": snapshots},
+        {"odds": r6, "kwargs": dict(_LOOSE, surge_threshold=4), "snapshots": snapshots},
+        {"odds": r6, "kwargs": dict(_LOOSE), "snapshots": {}},                                    # 全馬スナップショットなし
+        {"odds": r6, "kwargs": dict(_LOOSE), "snapshots": {"1": sn((3.0, 1), (0.0, 1)), "2": sn((4.5, 2), (-1.0, 2))}},  # 最古のオッズ 0/負
+        {"odds": r6, "kwargs": dict(_LOOSE, priority_mode="hit_rate", win_prob_min=0.1), "snapshots": snapshots},  # hit_rate フィルタが先
+        {"odds": r6, "kwargs": dict(_LOOSE, notify_skips=True), "snapshots": snapshots},
+        {"odds": r6, "kwargs": dict(_BIG, max_signals=6), "snapshots": snapshots},
+        {"odds": _race(_ODDS18), "kwargs": dict(_BIG, max_signals=18, drop_threshold=0.05),
+         "snapshots": {str(i + 1): [{"odds": o, "popularity": i + 1}, {"odds": o * 1.1, "popularity": i + 3}] for i, o in enumerate(_ODDS18)}},
+    ]
+    return _eval_calls("sn", cases)
+
+
+def _select_003():
+    r6, r18 = _RACE6, _race(_ODDS18)
+    same18 = _race([20.0] * 18)  # 逆数の和 0.9 < 1: 全馬が同じ正の EV
+    cases = [
+        {"odds": same18, "kwargs": dict(_BIG, max_signals=2)},                                      # 全馬同オッズ（同点は入力順）
+        {"odds": same18, "kwargs": dict(_BIG, max_signals=5, priority_mode="hit_rate")},
+        {"odds": same18, "kwargs": dict(_BIG, max_signals=0)},
+        {"odds": same18, "kwargs": dict(_BIG, max_signals=100)},
+        {"odds": same18, "kwargs": dict(_LOOSE, max_signals=3)},                                    # 賭け額が min_bet 未満 → 信号なし
+        {"odds": _race([8.0, 8.0, 8.0, 5.0, 5.0], [1, 2, 3, 4, 5]), "kwargs": dict(_BIG, max_signals=5)},   # 同点のグループ 2 つ
+        {"odds": _race([8.0, 8.0, 8.0, 5.0, 5.0], [1, 2, 3, 4, 5]), "kwargs": dict(_BIG, max_signals=5, priority_mode="hit_rate")},
+        {"odds": _race([8.0, 8.0, 8.0, 5.0, 5.0], [1, 2, 3, 4, 5]), "kwargs": dict(_BIG, max_signals=5, priority_mode="hit_rate",
+                                                                                   hit_rate_bet_type_priority=["単勝"])},
+        {"odds": r18, "kwargs": dict(_BIG, max_signals=3)},
+        {"odds": r18, "kwargs": dict(_BIG, max_signals=18)},
+        {"odds": r18, "kwargs": dict(_BIG, max_signals=18, priority_mode="hit_rate")},
+        {"odds": r18, "kwargs": dict(ev_threshold=0.08, ev_shrink_factor=0.7)},                     # 既定どおり
+        {"odds": r6, "kwargs": dict(_LOOSE, include_bet_strategy=False)},
+        {"odds": r6, "kwargs": dict(_LOOSE, bet_type_mode="best_only")},
+        {"odds": r6, "kwargs": dict(_LOOSE, bet_type_mode="BEST_ONLY", max_signals=3)},
+        {"odds": r6, "kwargs": dict(_LOOSE, bet_types=["単勝"])},
+        {"odds": r6, "kwargs": dict(_LOOSE, bet_types=["ワイド"], notify_skips=True)},               # 単勝を含まない → 見送りエントリが最推奨
+        {"odds": r6, "kwargs": dict(_LOOSE, bet_types=["三連複", "単勝"])},
+        {"odds": r6, "kwargs": dict(_LOOSE, bet_types=[])},                                         # 対象の賭式なし
+        {"odds": r6, "kwargs": dict(_LOOSE, notify_skips=True, max_signals=6)},
+        {"odds": r6, "kwargs": dict(_LOOSE, notify_skips=True, max_signals=6, race_id="synthetic-race-1",
+                                    win_payout_rate=0.81, show_adjusted_mkt=True)},
+        {"odds": r6, "kwargs": dict(_LOOSE, bet_types=["ワイド", "三連複"], notify_skips=True, ev_threshold=-1.5)},
+        # win_max_over_market（p/市場確率 > 上限で除外。無効値は 0 以下）
+        {"odds": r6, "kwargs": dict(_LOOSE, win_max_over_market=1.0)},
+        {"odds": r6, "kwargs": dict(_LOOSE, win_max_over_market=1.1)},
+        {"odds": r6, "kwargs": dict(_LOOSE, win_max_over_market=2.0)},
+        {"odds": r6, "kwargs": dict(_LOOSE, win_max_over_market=-1.0)},
+        {"odds": r6, "kwargs": dict(_LOOSE, win_max_over_market=None)},
+        # max_total_bet_per_race（E6: 比例縮小・min_bet を見ない。最推奨の賭け額は scale² になる旧挙動）
+        {"odds": r6, "kwargs": dict(_LOOSE, kelly_fraction=1.0, max_bet=10.0, max_signals=3, max_total_bet_per_race=12.0)},
+        {"odds": r6, "kwargs": dict(_LOOSE, kelly_fraction=1.0, max_bet=10.0, max_signals=3, max_total_bet_per_race=1000.0)},
+        {"odds": r6, "kwargs": dict(_LOOSE, kelly_fraction=1.0, max_bet=10.0, max_signals=3, max_total_bet_per_race=0.0)},
+        {"odds": r6, "kwargs": dict(_LOOSE, kelly_fraction=1.0, max_bet=10.0, max_signals=3, max_total_bet_per_race=-5.0)},
+        {"odds": r6, "kwargs": dict(_LOOSE, kelly_fraction=1.0, max_bet=10.0, max_signals=6, max_total_bet_per_race=2.0, notify_skips=True)},
+        {"odds": r6, "kwargs": dict(_LOOSE, kelly_fraction=1.0, max_signals=3, max_total_bet_per_race=3.0, bet_type_mode="best_only")},
+    ]
+    return _eval_calls("sel", cases)
+
+
+def _sizing_004():
+    r6, r18 = _RACE6, _race(_ODDS18)
+    cases = []
+    # ev_shrink_factor（[0,1] に収める。0.0 はメタ情報では 1.0 になる旧挙動）
+    for f in (0.0, 0.5, 0.7, 1.0, 1.5, -0.2):
+        cases.append({"odds": r6, "kwargs": {"ev_threshold": -0.5, "ev_shrink_factor": f}})
+    # Kelly 分数・資金・min/max bet（bet_before_clip == min_bet の境界を含む）
+    for kf in (0.0, 0.1, 0.25, 0.5, 1.0):
+        cases.append({"odds": r6, "kwargs": dict(_LOOSE, kelly_fraction=kf, notify_skips=True, max_signals=6)})
+    for bankroll in (10.0, 50.0, 100.0, 1000.0):
+        cases.append({"odds": r6, "kwargs": dict(_LOOSE, bankroll=bankroll, notify_skips=True, max_signals=6)})
+    for mb, xb in ((0.0, 10.0), (1.0, 10.0), (2.0, 3.0), (5.0, 5.0), (0.5, 0.5)):
+        cases.append({"odds": r6, "kwargs": dict(_LOOSE, min_bet=mb, max_bet=xb, notify_skips=True, max_signals=6)})
+    # 市場ブレンド・確率クリップ
+    for a in (0.0, 0.0005, 0.001, 0.0011, 0.25, 0.5, 0.9, 0.998, 0.999, 1.0, 1.5, -0.5):
+        cases.append({"odds": r6, "kwargs": dict(_LOOSE, ml_market_blend_alpha=a, max_signals=6, notify_skips=True)})
+    for c in (0.05, 0.2, 0.35, 1.0, 0.0, -1.0):
+        cases.append({"odds": r6, "kwargs": dict(_LOOSE, win_prob_clip_max=c, max_signals=6, notify_skips=True)})
+    cases.append({"odds": r6, "kwargs": dict(_LOOSE, enable_prob_clip=False, max_signals=6, notify_skips=True)})
+    cases.append({"odds": r6, "kwargs": dict(_LOOSE, ml_market_blend_alpha=1.0, win_prob_clip_max=0.1, max_signals=6, notify_skips=True)})
+    # 頭数・極端な人気
+    for odds in ([1.2], [1.5, 3.0], [1.1, 30.0, 40.0, 60.0, 80.0, 100.0], [1.5, 1.5], [999.0, 999.0, 999.0],
+                 [2.0, 0.0, 5.0], [0.0, 0.0], [0.5, 4.0], [1.01, 2.0]):
+        cases.append({"odds": _race(odds), "kwargs": dict(_LOOSE, max_signals=10, notify_skips=True)})
+    cases.append({"odds": _race([2.5, 4.0, 6.0, 9.0], [0, 0, 0, 0]), "kwargs": dict(_LOOSE, max_signals=10)})  # 人気 0（欠損）
+    cases.append({"odds": r18, "kwargs": dict(_BIG, max_signals=18, notify_skips=True)})
+    cases.append({"odds": r18, "kwargs": dict(_LOOSE, max_signals=18, notify_skips=True)})
+    cases.append({"odds": r18, "kwargs": dict(ev_threshold=0.0, ev_shrink_factor=0.7, max_signals=18, notify_skips=True)})
+    return _eval_calls("sz", cases)
+
+
 _EXC_MSG = {"path": "results.*.outcome.message", "mode": "ignore"}  # 例外メッセージは記録するが比較しない（型は比較する）
 
 CASES = [
@@ -195,6 +340,14 @@ CASES = [
           "jraev.ev.bet_strategy.calculate_wide_prob", "jraev.ev.bet_strategy.calculate_trifecta_prob"), _combo_001()),
     Case("GD09-EVAL-001", ("GD04", "GD07", "GD08", "GD09"), "evaluate_odds 全体（ML 無効=市場フォールバック、DB なし、合成 6 頭。閾値・max_signals・odds=1.0・空・1 頭）",
          ("jraev.ev.decision.evaluate_odds",), _eval_001(), known_defects=("E1", "E3", "E5")),
+    Case("GD04-WIN-HITRATE-003", ("GD03", "GD04", "GD08"), "evaluate_odds の hit_rate モード（win_odds_max / win_prob_min / win_ratio_min / hit_rate_min_ev / 同率の賭式優先 / edge との違い）",
+         ("jraev.ev.decision.evaluate_odds",), _hit_rate_003(), known_defects=("E3",)),
+    Case("GD03-SNAPSHOT-002", ("GD03",), "evaluate_odds の急落・人気急上昇フィルタ（recent_snapshots_func 経由。最古との比較・閾値の境界・件数不足・最古のオッズ 0/負）",
+         ("jraev.ev.decision.evaluate_odds",), _snapshots_002(), known_defects=("E14",)),
+    Case("GD08-SELECT-003", ("GD07", "GD08", "GD09"), "evaluate_odds の選別・見送り・賭式絞り込み・win_max_over_market・max_total_bet_per_race 縮小（同点の順序、全馬同オッズ、best_only、notify_skips）",
+         ("jraev.ev.decision.evaluate_odds",), _select_003(), known_defects=("E3", "E6", "E7")),
+    Case("GD07-SIZING-004", ("GD02", "GD07", "GD09"), "evaluate_odds の賭け額・確率経路（ev_shrink_factor・Kelly 分数・資金・min/max_bet・市場ブレンド α・確率クリップ・頭数 1/2/18・全馬同オッズ・odds 0/1.01/極端な人気）",
+         ("jraev.ev.decision.evaluate_odds",), _sizing_004(), known_defects=("E4", "E5", "E12")),
     Case("GD10-DEFAULTS-001", ("GD10",), "関数シグネチャの既定値（D-016: 関数既定と example config の食い違い確認用）",
          ("inspect.signature(jraev.ev.decision.evaluate_odds ほか)",), _defaults_001(), default_abs_tol=0.0),
 ]

@@ -224,6 +224,7 @@ Reader/Writer は分かれており、`XxxRepository` は両方を継承する�
 - **Stage 3 の入口**: Kotlin ランナーは `fixtures/*.json` の `input.calls` を読み、`adapter.CALLS` と同名の関数（calc_ev, calc_kelly_fraction, estimate_prob_normalized, hash_bucket, model_predict, check_odds_drop, evaluate_odds ほか）を実行して `{"schema_version":1,"results":{case_id:{results:[…]}}}` を出力 → `compare`。E5（odds=1.0 の ZeroDivisionError）等は「旧挙動」として記録されており、新仕様（`ODDS_AT_PAR` 等）の期待値は別ケースとして追加する。
 - **未実装（catalog.py の planned / partial）**: ワイド・三連複の Plackett–Luce（E8〜E11）、hit_rate モード、max_total_bet_per_race 縮小（E6）、ML 例外ラベル（E1）、ensemble（G4）、decision 側ブレンド（G5）、合成 SQLite の特徴量ベクトル（G6）、時間帯スケジュール/adaptive_relaxation（run_daemon.py 側。時刻依存）、config.example.yaml 全キーの突合（T1.20）。
 - **次**: T2.5 後半（Docker イメージ・Dependabot・release-manifest）。T2.6 では未着手。
+- **（追記 2026-10-23）Kotlin 側は T3.1 で実装済み**: `:golden-runner` + `tools/golden/kotlin_compare.py`（対応/未対応を分けて報告）。14 ケース/562 呼び出し中、Kotlin が検証したのは 10 ケース/380 呼び出し。詳細は `tools/golden/README.md`、D-106〜D-108、PROGRESS の Stage 3-A。
 
 ### 14.7 T2.5 後半の結果と Stage 2 の完了判定 / Stage 3 への引き継ぎ（イメージ・manifest・Dependabot・CI 最適化）
 - **実装**: `Dockerfile`（D-093）、`.dockerignore`（既定拒否）、`tools/release/`（manifest の生成・検証 CLI、スモーク）、`docs/schemas/release-manifest{,-preview}.v1.json`、`docs/release/rollback-verified.json`、`tools/ci/`（変更判定・ゲート）、`.github/workflows/{ci,images,compat-connectorj26}.yml`、`.github/dependabot.yml`。運用手順・CI の 14 ケースの表・無料枠の見積りは `docs/CI_AND_IMAGES.md`。結果の実測は PROGRESS の Stage 2-H。

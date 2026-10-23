@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 from . import constants as C, fixtures_io, jsonutil
-from .catalog import CATALOG, VALID_STATUS
+from .catalog import CATALOG, KOTLIN_PORT, VALID_STATUS
 
 REQUIRED = ("fixture_id", "case_id", "schema_version", "source_repository", "source_commit", "source_function",
             "input", "expected_output", "execution_parameters", "comparison_rules", "data_classification",
@@ -175,6 +175,19 @@ def verify_dir(directory):
         for cid in e["case_ids"]:
             if cid not in by_case:
                 errs.append(f"catalog: {e['id']} が存在しないフィクスチャ {cid} を参照")
+    # Kotlin 移植の対応表: 全ケースがちょうど 1 回、対応/未対応に分類されていること（未対応には理由）
+    sup, uns = KOTLIN_PORT["supported"], KOTLIN_PORT["unsupported"]
+    if len(set(sup)) != len(sup):
+        errs.append("catalog: KOTLIN_PORT.supported に重複がある")
+    for cid in sorted(set(sup) & set(uns)):
+        errs.append(f"catalog: KOTLIN_PORT の対応と未対応の両方に {cid}")
+    for cid in sorted((set(sup) | set(uns)) - set(by_case)):
+        errs.append(f"catalog: KOTLIN_PORT が存在しないフィクスチャ {cid} を参照")
+    for cid in sorted(set(by_case) - set(sup) - set(uns)):
+        errs.append(f"catalog: KOTLIN_PORT に分類されていないフィクスチャ {cid}")
+    for cid, reason in uns.items():
+        if not reason:
+            errs.append(f"catalog: KOTLIN_PORT の未対応 {cid} に理由がない")
     for cid, fx in by_case.items():
         for sid in fx["scenario_ids"]:
             if sid not in seen:

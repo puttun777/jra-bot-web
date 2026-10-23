@@ -28,6 +28,8 @@ COPY db-migration ./db-migration
 COPY bot ./bot
 COPY ingest ./ingest
 COPY dashboard ./dashboard
+# settings.gradle.kts が include するため必要（検証専用のツールで、どのイメージにも入らない: jar は上の 4 つのターゲットの成果物だけをコピーする）
+COPY golden-runner ./golden-runner
 ARG GIT_SHA=unknown
 # テストと lint は CI の別ジョブで実行済み（イメージのビルドでは実行しない）。ここでは成果物だけを作る
 # 依存のダウンロード先（~/.gradle/caches）は BuildKit のキャッシュマウント: 層には残らず（イメージに入らない）、同じビルダー上の再ビルドで再利用される

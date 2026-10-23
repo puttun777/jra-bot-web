@@ -36,9 +36,29 @@
       "sha256": "2c0891280905fa7bc5292e5df9e8f4464a5c96aae27a72b834af2bece7add6cb"
     },
     {
+      "case_id": "GD03-SNAPSHOT-002",
+      "path": "GD03-SNAPSHOT-002.json",
+      "sha256": "5ff85a86ce2972f1c5dec23c63385a33f6340c3ded3ab179f7ac3241a99fb3ec"
+    },
+    {
+      "case_id": "GD04-WIN-HITRATE-003",
+      "path": "GD04-WIN-HITRATE-003.json",
+      "sha256": "8845906a8c1679d35ac7ee5a60c38d5b2345513754b6a0a937df1765afc8881f"
+    },
+    {
       "case_id": "GD05-COMBO-001",
       "path": "GD05-COMBO-001.json",
       "sha256": "0e87142c256c0cae6ec49fba9ae6645dbb48f229c6dcce30a9c2c12e95721022"
+    },
+    {
+      "case_id": "GD07-SIZING-004",
+      "path": "GD07-SIZING-004.json",
+      "sha256": "13e77c1f42e9572599fcef135a344dbb9e1910814d59e16d0e3942f6b77b5fe7"
+    },
+    {
+      "case_id": "GD08-SELECT-003",
+      "path": "GD08-SELECT-003.json",
+      "sha256": "ba00dd08c3081aa84d0312f52a374aa3aa38c5f1cb10c3096186155eff4bd443"
     },
     {
       "case_id": "GD09-EVAL-001",

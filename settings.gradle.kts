@@ -23,4 +23,5 @@ include(
     ":bot",
     ":ingest",
     ":dashboard",
+    ":golden-runner",
 )

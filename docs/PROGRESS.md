@@ -1,6 +1,53 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-10-23（第2段階 / Stage 2-H 追補: マージ後の実測と golden 再生成のフレーク修正）
+最終更新: 2026-10-23（第3段階 / Stage 3-A: T3.1 EV・Kelly・確率・判定・急落フィルタの Kotlin 移植と旧 Python とのゴールデン比較）
+
+## Stage 3-A（claude/stage3-core-decision）: T3.1 EV・Kelly・確率・判定・急落フィルタ
+### 結果（単勝の範囲で完了。本番で動作する Bot ではない）
+- **着手前の確認**: main（PR #16 マージ後、9718c7b）の CI は成功（run 39942398688、全ジョブ success）。PR #13（numpy 2.5.4）は未マージ・クローズ、PR #14（Gradle 更新）は対象外。numpy は 2.5.3 固定のまま、フィクスチャの再生成・上書きはしていない（既存 10 ファイルの sha256 は不変）。参照元は固定コミット `f7dbf69fd8940121782870de902e8c449e6ca149`（読み取り専用。変更なし）。
+- **実装したもの**（`:domain` の `jp.jrabot.domain.decision`。純粋 Kotlin、Spring/Doma/Jackson/GCP SDK なし）: `EvMath`（EV・期待回収・期待利益）、`KellyMath`（Kelly 割合・推奨賭け額・`LegacyZeroDivisionException`）、`MarketProbability`（生の暗黙確率・0.99 上限・正規化と ±10% 補正）、`MarketBlend`（判定側の logit ブレンド・クリップ・再正規化）、`SnapshotFilters`/`SnapshotsNewestFirst`/`RecentSnapshotsProvider`（急落・人気急上昇。並びを型で保証）、`WinStake`（縮小・Kelly 係数・賭け額）、`BetStrategyBuilder`/`BetStrategy`（単勝 + ワイド/三連複の見送りエントリ・最推奨・best_only・上限縮小）、`WinDecisionEvaluator`/`WinDecisionConfig`/`WinDecisionResult`（単勝の判定・理由コード・見送りシグナル・ソート・max_signals・総投資上限）、`DecisionFixes`/`PipelineVersion`、`DecisionQuantities`（`ProbRaw`/`ProbUsed`/`Ev`/`Ratio`/`BetType`）、`PythonCompat`（`min`/`max`・`sum`・`repr`・`.2f`/`.1%`）。**金額は旧実装の「点」の `Double`**（`Money` ではない）。
+- **ゴールデンの Kotlin 側**: 新モジュール `:golden-runner`（検証専用。`:domain` のみ依存、Jackson。イメージ非搭載。D-106）、`tools/golden/kotlin_compare.py`（対応/未対応を分けて報告）、`catalog.KOTLIN_PORT`（対応表）、`generate --add-new`、ゴールデン 4 ケース追加（D-108）。CI の `build` ジョブに比較ステップを追加し、`classify` の `kotlin_golden` タグで `tools/golden`（.md 以外）・`golden-runner` の変更でも必ず走るようにした（`:domain` は従来どおり）。DB 統合・イメージは追加で動かさない。
+### 旧 Python との比較（ローカル実測。CI の結果は下の「CI」）
+| 項目 | 結果 |
+|---|---|
+| フィクスチャ全体 | 14 ケース / **562 呼び出し**（旧: 10 ケース / 447。T3.1 で 4 ケース / 115 呼び出しを追加） |
+| **Kotlin が検証した（対応）** | **10 ケース / 380 呼び出し — 全一致**（`GD01-EV-001` 137 / `GD01-KELLY-002` 68 / `GD02-PROB-001` 18 / `GD02-NORM-002` 15 / `GD03-FILTER-001` 20 / `GD09-EVAL-001` 7 / 追加: `GD03-SNAPSHOT-002` 10 / `GD04-WIN-HITRATE-003` 19 / `GD08-SELECT-003` 33 / `GD07-SIZING-004` 53）。比較した浮動小数 26,759 個 |
+| **未対応（比較していない。成功に数えない）** | **4 ケース / 182 呼び出し** — `G1-MODEL-001` 73（ML 推論: T3.6）、`G2-HASH-001` 70（特徴量ハッシュ: T3.6）、`GD05-COMBO-001` 33（ワイド/三連複: T3.2）、`GD10-DEFAULTS-001` 6（旧関数の既定値の突合: T1.20） |
+| 検証済みの割合 | 380 / 562 呼び出し = 67.6%（**『全件一致』ではない**） |
+| 最大絶対誤差 | **0**（許容は各ケースの `comparison_rules` のまま: 確率・EV・金額 1e-9、正規化 1e-12。全値がビット一致。`np.log`/`np.exp` と `kotlin.math` の差も出なかった。別の CPU/libm では最後の 1〜2 桁が揺れ得るため許容誤差は維持） |
+| 例外 | `GD01-KELLY-002` の E5（`odds=1.0` の ZeroDivisionError）を型で一致（メッセージは各ケースの rules で ignore） |
+| 比較の感度 | 閾値の比較演算子を 1 つ変えると（`>` → `>=`）`GD03-FILTER-001`・`GD03-SNAPSHOT-002` が不一致になることを確認（元に戻した） |
+### テスト
+| 区分 | 結果（ローカル） |
+|---|---|
+| `:domain` 単体 | **387 件成功**（旧 214 + 新 173: `PythonCompat` 51 / `EvMath` 16 / `KellyMath` 18 / `MarketProbability` 22 / `SnapshotFilters` 7 / `MarketBlend` 7 / `WinStake` 17 / `WinDecisionEvaluator` 35） |
+| `:golden-runner` 単体 | **9 件成功**（型の忠実さ・未対応の判定・例外の対応・実フィクスチャの分類 562 呼び出し = 380 + 182） |
+| build-logic（依存規則） | 21 件成功（`:golden-runner` の許可表と『誰も依存できない』を追加） |
+| ktlint / checkModuleDependencies | 成功（`:check`） |
+| Python ゴールデン | **74 件成功**（旧 62 + `kotlin_compare` 9 + `add_new` 3）、`generate --check`（14 ケース）・`verify` 成功 |
+| Python ci/release | **109 件成功**（旧 107 + classify 2。`golden-runner`・`tools/golden` で build が走ること、Dockerfile/.dockerignore の許可、ワークフローの必須ステップ） |
+| 未実施（ローカル） | 他モジュール（persistence/bot/ingest/dashboard/cloud-gcp）のビルド・DB 統合・イメージ — ローカルは JDK 21（`-PjdkVersion=21`）で、Maven Central の 429 もあり CI に任せる。完了判定の正は GitHub Actions（D-056） |
+### 意図的な差異・互換（詳細は D-105・D-109・D-110、MIGRATION_MATRIX §8.0）
+- **旧挙動を維持（未承認の数値変更なし）**: `pipeline_version=legacy`、`fixes.*` はすべて false（E6・E12・E14・H10 の改善案は未実装。true にすると `UnsupportedDecisionScopeException`）。E5 は旧と同じく除外（理由 `ODDS_AT_PAR` を付けるのみ）。H4 の二重ブレンド、H10 の係数 0.8、E6 の scale² も旧のまま。
+- **旧実装の精読で判明（再現済み）**: 固定額賭けは `bet_strategy` の隠れ（`= None`）で一度も使われない / `best_strategy` と `strategies` の同一オブジェクトによる scale² / ワイドも見送りエントリを返す（E11 の記述を訂正）/ `meta.ev_shrink_factor` の `or 1.0` / 補正制限 ±10% は実質ノーオペレーション（E13）/ `0<odds<1` の Kelly は正の値（**入力境界で拒否するかは未解決: T3.4・ユーザー判断**）。
+- **入力検証の差異**: 非有限のオッズ・設定値、負の `max_signals`、未承認 `fixes`、推定オッズのワイド/三連複判定は拒否または例外（旧は黙って流す／意図しないスライス）。`WinDecisionConfig` は運用の既定値を持たない（D-016。`legacyFunctionDefaults()` は比較用）。
+### 未対応・範囲外（T3.1 の完了範囲と残りを区別）
+- ML 経路（`_normalize_with_correction`・ensemble・特徴量・E1/E2）: T3.6。ワイド/三連複の買い目・Plackett–Luce・E8〜E11: T3.2（このセッションでは着手しない）。時間帯スケジュール・adaptive_relaxation: T3.8。DB のスナップショット取得: T3.4。Discord 本文: T3.7。`StubTaskHandler` は置き換えていない。bot-run のループ・checkpoint・SIGTERM は未実装・未検証のまま。
+### セッションの環境
+`java -version`: OpenJDK 21（JDK 25 なし。ローカルのビルドは `-PjdkVersion=21`、CI は JDK 25）。`./gradlew`: 9.7.1 が動作（ロケールを `LC_ALL=C.UTF-8` にしないと日本語名のテストレポートで失敗する）。`docker info`: Docker 29.9.1（本セッションでは未使用）。Python 3.13.16（venv の numpy 2.5.3 で旧実装を実行）。
+### 未解決のまま保持（このセッションでは変更していない）
+T1.16（JRA-VAN 利用条件）、T1.17（JV-Link 公式仕様）、T1.20（実 SQLite・設定・モデル）、T1.21（数値挙動の承認: E6/E12/E14/H4/H10）、T3.0（Windows 実機 PoC）、infra I-H1〜I-H9、T5.0（infra 契約同期）、Cloud SQL・GCS 等の実環境検証（G-*）、MySQL 9.7 の本番採否、Connector/J 26.x の採否、bot-run の checkpoint・SIGTERM、本番 release-manifest、ml-train イメージ。branch protection の required checks を `ci gate` のみにする作業（ユーザー作業）も未確認。
+### CI・PR
+- **PR #17**（main 向け。マージはユーザー）: https://github.com/puttun777/jra-bot-web/pull/17
+- コード・テスト・docs を含むコミット 35f9e79 の CI run **39946864540**: **ci gate 成功**。全ジョブ成功 — changes and repo hygiene / build (Temurin 25)（`Kotlin vs legacy golden comparison` ステップを含む）/ release tools and ci scripts / golden tests (Python 3.12) / db integration (MySQL 8.4)・(9.7) / images (build + smoke, no push)。`connectorj26` は設計どおり skipped（未実施。Connector/J 26.x の変更なし）。
+- 本コミット（この記録）自体も、PR 全体の差分で判定されるため同じジョブが走る。その run の結果は PR のチェックを参照（ここには追記しない）。
+- CI で未確認: ステップ内の比較出力（`GITHUB_STEP_SUMMARY`）の中身の目視。ジョブ全体の成功（比較不一致・申告と対応表の不一致・件数不足ならステップが失敗する）で確認した。
+### 次の作業（T3.2 への引き継ぎ）
+- T3.2 はワイド/三連複: `BetStrategyBuilder` の見送りエントリの部分を、Plackett–Luce の確率（`_wide_pair_prob`/`_top3_set_prob`、重みは `p^α` で α を [0.1, 5] にクリップ、p は [1e-12, 0.99]）・実オッズ・流し/BOX・`*_max_prob`/`*_max_over_market`/`*_min_prob`・`ticket_allocation` に置き換える。`WinDecisionConfig.requireRealOddsForCombo=false`・実オッズ受け渡しの `UnsupportedDecisionScopeException` を外す。ゴールデンは `GD05-COMBO-001`（33 呼び出し、単純推定関数）を `KOTLIN_PORT` の supported に移し、GD05/GD06 の Plackett–Luce 経路（E8〜E11）のケースを `generate --add-new` で追加する（既存フィクスチャは書き換えない）。
+- `StrategyEntry.tickets`（現在は見送りエントリの空配列のみ）と、`BetSignal`/`SkipSignal` のワイド/三連複の経路、`hit_rate_bet_type_priority` の賭式順序のテストを足す。`max_total_bet_per_race` の tickets の stake 縮小も T3.2。
+- 先に決めておくとよいこと: `0<odds<1` の扱い、運用の既定値（example config）— T1.20/T3.8。
+### ブランチ
+`claude/stage3-core-decision`（main の 9718c7b から作成。PR は main 向け、マージはユーザー）。
 
 ## numpy 固定と Dependabot 設定（claude/stage2-numpy-pin-dependabot。D-103）
 - PR #13（numpy 2.5.3→2.5.4）の golden 失敗は、`requirements.txt` だけが上がり `PINNED_NUMPY`・フィクスチャ・sha256 と不一致になったため。ゴールデンの再現性を優先して 2.5.3 を維持し、`tools/golden` の numpy を Dependabot version updates の対象外にした。`requirements.txt`・`constants.py`・フィクスチャ・sha256 は未変更。更新手順は `tools/golden/README.md`。#13 は閉じる（ユーザー判断）。Stage 3 には進んでいない。

@@ -44,7 +44,7 @@ JRA Bot (参照元 `puttun777/jra-bot`, Python/SQLite/Streamlit) を Kotlin/Spri
 | docs/MIGRATION_MATRIX.md / FRONTEND_DESIGN / ML_DESIGN / DATA_MIGRATION_DESIGN / RACE_CALENDAR_DESIGN / JVLINK_DESIGN / DATA_SOURCE_COMPLIANCE | 機能移行・各設計（E 項目は MIGRATION_MATRIX §8） | web |
 
 ## モジュール（Gradle Kotlin DSL マルチプロジェクト）
-`:domain` `:persistence` `:db-migration` `:cloud-gcp` `:bot` `:ingest` `:dashboard`（D-045）。bot / ingest / dashboard は相互依存しない。domain は Spring/Doma/クラウド SDK 非依存。Python は `agent/` `ml/` `tools/`（Gradle 外）。詳細は ARCHITECTURE.md。
+`:domain` `:persistence` `:db-migration` `:cloud-gcp` `:bot` `:ingest` `:dashboard`（D-045）と、検証専用の `:golden-runner`（Kotlin 側ゴールデンランナー。`:domain` だけに依存、イメージ非搭載: D-106）。bot / ingest / dashboard は相互依存しない。domain は Spring/Doma/クラウド SDK 非依存。Python は `agent/` `ml/` `tools/`（Gradle 外）。詳細は ARCHITECTURE.md。
 
 ## 実行環境（クラウドセッション）
 - セッションごとにツールが異なり得る。作業冒頭で `java -version` / `./gradlew --version` / `docker info` を確認し PROGRESS に記録。実行できないテストは「未実施」と書き、成功と偽らない。完了判定の正は GitHub Actions（D-056）。

@@ -48,10 +48,12 @@ Python の 3 つ（`agent/`、`ml/`、`tools/`）は依存を別々に管理す�
 | `:bot` | Job（`--task=bot-run\|calendar-check\|reconcile\|retention\|export-dataset`）、Discord 通知、オーケストレーション | `:domain`、`:persistence`、`:cloud-gcp` | `:dashboard`、`:ingest` |
 | `:ingest` | エージェント API（認証・冪等・封筒）、パーサの呼び出し、upsert、heartbeat の写し | 同上 | `:bot`、`:dashboard` |
 | `:dashboard` | 画面（Thymeleaf+htmx）、`/api/v1`（DTO）、認証・認可、管理操作 | 同上 | `:bot`、`:ingest` |
+| `:golden-runner`（T3.1、D-106） | **検証専用**: `tools/golden` のフィクスチャを読み、`:domain` の計算（`jp.jrabot.domain.decision`）を実行して結果 JSON を出力する（Python の比較器 `kotlin_compare` が旧実装の期待値と比べる）。JSON の読み書きはここだけ（`:domain` は Jackson に依存しない） | `:domain`、Jackson | それ以外のモジュールすべて。**どのモジュールもこれに依存しない**。アプリのイメージに入れない（Dockerfile は settings の include のため COPY するだけ） |
 
 - **実行アプリ（bot/ingest/dashboard）同士は依存しない**。ルート build の検査タスクで、`project(":bot")` などへの依存があれば失敗させ、CI で強制する（T2.1）。
 - 共通の処理は責務名のモジュール（`:domain`、`:persistence`、`:cloud-gcp`）に置く。`common` や `util` という名前のモジュールは作らない。マイクロサービスも増やさない。
 - ローカル・テスト用のポート実装は、各モジュールの `testFixtures` に置く。ファイルのモード、固定 `Clock`、メモリの `ModelStore` など。`APP_ENV=local` では、アプリの起動クラスがファイル実装を組み立てる。
+- `:domain` の `jp.jrabot.domain.decision`（T3.1）は、旧 Python と同じ式・同じ分岐順の**素の `Double`** で計算する（値オブジェクト `Odds`/`Probability`/`Money` は旧実装の境界挙動を再現できないので使わない。変換は呼び出し側）。設定は運用の既定値を持たない。D-104〜D-111。
 - fat jar（Spring Boot の実行可能 jar）を作るのは `:bot`・`:ingest`・`:dashboard`・`:db-migration` だけ。
 
 ### 2.1 レイヤ（各実行アプリの中）

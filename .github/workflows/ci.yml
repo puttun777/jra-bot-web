@@ -82,6 +82,17 @@ jobs:
         run: ./gradlew build --stacktrace
       - name: Dependency rules (explicit)
         run: ./gradlew checkModuleDependencies ktlintCheck
+      # Kotlin（:domain）の計算結果と、旧 Python（固定コミット f7dbf69）のフィクスチャの比較（T3.1）。各ケース自身の comparison_rules（許容誤差・型・キー・順序）で比較し、
+      # Kotlin が『対応』と申告したケースだけを比べる。未対応のケースは成功に数えず、ケース数・呼び出し数を別に報告する（対応表は tools/golden/catalog.py の KOTLIN_PORT）。
+      # フィクスチャは CI が書き換えない（sha256 を verify で確認）。標準ライブラリの Python だけで動く（numpy・旧実装は不要）。
+      - name: Kotlin vs legacy golden comparison
+        run: |
+          python3 -m tools.golden.verify
+          mkdir -p "$RUNNER_TEMP/golden"
+          ./gradlew :golden-runner:run --stacktrace --args="--fixtures $PWD/tools/golden/fixtures --out $RUNNER_TEMP/golden/kotlin_out.json --coverage $RUNNER_TEMP/golden/kotlin_coverage.json"
+          python3 -m tools.golden.kotlin_compare --actual "$RUNNER_TEMP/golden/kotlin_out.json" --coverage "$RUNNER_TEMP/golden/kotlin_coverage.json" \
+            --report "$RUNNER_TEMP/golden/report.json" | tee "$RUNNER_TEMP/golden/summary.txt"
+          { echo '### Kotlin vs legacy golden comparison'; echo '```'; cat "$RUNNER_TEMP/golden/summary.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       # :cloud-gcp の単体テスト（T2.7。ModeProvider）。実 GCP には接続しない（フェイクとローカルの HTTP サーバだけ）。0 件・スキップ・失敗を許さない。
       - name: Verify that the cloud-gcp unit tests actually ran
         run: |
@@ -113,6 +124,9 @@ jobs:
         run: |
           python3 .github/scripts/verify_test_results.py "persistence unit" persistence/build/test-results/test 23 \
             "SchemaVersionTest,SchemaCheckClassificationTest,DbSettingsTest,MappingTest,PersistenceModuleTest,SqlTemplateTenantGuardTest"
+          python3 .github/scripts/verify_test_results.py "domain unit (incl. decision logic, T3.1)" domain/build/test-results/test 387 \
+            "EvMathTest,KellyMathTest,PythonCompatTest,MarketProbabilityTest,SnapshotFiltersTest,MarketBlendTest,WinStakeTest,WinDecisionEvaluatorTest"
+          python3 .github/scripts/verify_test_results.py "golden-runner unit" golden-runner/build/test-results/test 9 "GoldenRunnerTest"
           python3 .github/scripts/verify_test_results.py "bot unit" bot/build/test-results/test 54 \
             "BotArgsParserTest,BotLauncherTest,BotJobExecutorTest,BotProcessTest,BotSpringWiringTest,JobGateTest,CycleGateTest"
           python3 .github/scripts/verify_test_results.py "ingest unit" ingest/build/test-results/test 28 \

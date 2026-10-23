@@ -198,6 +198,26 @@ P0 の順: F26/F04/F05/F06/F07（基礎純関数）→ F16（DB）→ F08/F09（
 | E14 | 急落フィルタは `recent_snapshots[-1]`（新しい順のリストなので**最古**）とだけ比較する | F（既定）/ **C** | 既定は旧のまま。スナップショットの並びを型（`SnapshotsNewestFirst`）で保証する。案: 連続する変化も見る | フィルタの発動回数が変わる | GD03 | 連続判定にするなら**要** |
 | E15 | decision 内の `datetime.now()`（経過日数）、daemon の `minutes_to_post` が naive な時刻 | R | `Clock` を注入し、JST の aware な時刻で計算する（日本に夏時間は無いので数値は不変）。テストでは固定時刻にする | なし（境界の時刻はテストで確認） | GD04（mins=30/5 の境界） | 不要 |
 
+### 8.0 T3.1（Stage 3-A）の実装状況（2026-10-23。`:domain` の `jp.jrabot.domain.decision`、D-104〜D-111）
+`pipeline_version=legacy`、`fixes.*` はすべて false（C の改善案は**未実装**。有効化は `UnsupportedDecisionScopeException`）。ゴールデンは Kotlin が検証したケースだけを数える（`tools/golden/catalog.py` の `KOTLIN_PORT`）。
+| # | 分類 | Kotlin（T3.1）の扱い | 検証 |
+|---|---|---|---|
+| E1 | R | 未実装（ML 経路は T3.6。T3.1 は ML 無効の市場フォールバックのみ） | - |
+| E2 | R | 未実装（ensemble は T3.6） | - |
+| E3 | R | **実装**: 全除外経路に `DecisionReason`。旧集計と同じ数値の `LegacyRejectCounts` も返す（旧集計に無い経路: `WIN_OVER_MARKET`・`NO_STRATEGY`・`ODDS_AT_PAR`） | 単体 + GD04/GD08 |
+| E4 | R | **実装**: `ProbRaw`/`ProbUsed`/`Ev`/`Ratio` を別項目で保持（`ev` は縮小後基準、`prob`/`ratio` は縮小前基準、`_calc_*` は検算値） | 単体 + GD07 |
+| E5 | R | **実装**: `odds==1.0` で `LegacyZeroDivisionException`（旧 ZeroDivisionError）。判定側は除外し理由 `ODDS_AT_PAR`。数値は不変。`0<odds<1` の Kelly は旧実装では正の値（補正せず再現。D-105） | GD01-KELLY-002・GD09 |
+| E6 | **C** | 旧挙動を実装（比例縮小・`min_bet` 再判定なし・最推奨の賭け額は scale²: D-109②）。改善案は**未実装・未承認** | GD08（総投資上限） |
+| E7 | F | **実装**: 見送りエントリが最推奨になり得る（単勝を含まない `bet_types` で確認） | GD08 |
+| E8〜E11 | F/C | 未実装（T3.2）。ただし実オッズ未取得の**見送りエントリ**（ワイド・三連複とも。E11 の記述は訂正: D-109③）は実装 | GD09 |
+| E12 | F/**C** | 旧挙動を実装（判定の賭け額計算は `max_fraction=1.0` 固定。`suggest_bet_amount` の `max_fraction` は関数単体でのみ有効）。改善案は未実装・未承認 | GD01-KELLY-002・GD07 |
+| E13 | F | **実装**（`estimate_prob_normalized`）。±10% 補正は再正規化で消える（実質ノーオペレーション: D-109⑤） | GD02-NORM-002 |
+| E14 | F/**C** | **実装**: `SnapshotsNewestFirst` で並びを型で保証し、最古 1 件との比較（閾値の境界: 急落 `>`、人気急上昇 `>=`）。連続判定の案は未実装・未承認 | GD03-FILTER-001・GD03-SNAPSHOT-002 |
+| E15 | R | 判定は時刻を読まない。`Clock` 注入はスケジュール（daemon 側）の移植時（T3.8） | - |
+| H4 | - | `legacy`（二重ブレンド）を再現（`MarketBlend`）。v2 は未承認で未実装 | GD07-SIZING-004 |
+| H10 | **C** | 旧挙動を実装（確率源ラベルの完全一致で、実際のラベルでは常に 0.8）。enum 化の案は未実装・未承認 | 単体 + GD09 |
+| 新規 | F | `evaluate_odds` の `bet_strategy` 引数が隠れて固定額が使われない（D-109①）。Kotlin は固定額を持たない | GD09（`投資戦略: None`） |
+
 ### 8.1 ML 側の疑義（ML_DESIGN §2 の H）との対応
 | 疑義 | 対応する項目 | 新仕様（案） | 本番への反映 |
 |---|---|---|---|

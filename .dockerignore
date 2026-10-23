@@ -14,6 +14,7 @@
 !/bot/
 !/ingest/
 !/dashboard/
+!/golden-runner/
 
 # 許可したディレクトリの中でも除外する（ビルド生成物・IDE・秘密/実データの拡張子）
 **/build/
