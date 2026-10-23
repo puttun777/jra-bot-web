@@ -1,0 +1,713 @@
+{
+  "case_id": "GD05-COMBO-001",
+  "comparison_rules": {
+    "default": {
+      "float": {
+        "abs_tol": 1e-09,
+        "mode": "abs_tol"
+      }
+    },
+    "overrides": [],
+    "strict": {
+      "key_set": true,
+      "list_order": true,
+      "nonfinite": "reject",
+      "types": true
+    }
+  },
+  "data_classification": "synthetic",
+  "description": "bet_strategy の単純推定関数（estimate_wide/trifecta_odds、calculate_wide/trifecta_prob）。Plackett–Luce 経路は対象外",
+  "execution_parameters": {
+    "clock": "not_used (対象関数は現在時刻を読まない。datetime.now を使う経路は対象外)",
+    "cwd": "empty temporary directory",
+    "fixed_time": "2026-01-01T00:00:00+09:00",
+    "libraries": {
+      "numpy": "2.5.3"
+    },
+    "ml_cfg": {
+      "enabled": false
+    },
+    "network": "blocked",
+    "seed": 20260101,
+    "timezone": "Asia/Tokyo"
+  },
+  "expected_output": {
+    "results": [
+      {
+        "call_id": "wo-000",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "wo-001",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "wo-002",
+        "outcome": {
+          "status": "ok",
+          "value": 0.4
+        }
+      },
+      {
+        "call_id": "wo-003",
+        "outcome": {
+          "status": "ok",
+          "value": 1.2000000000000002
+        }
+      },
+      {
+        "call_id": "wo-004",
+        "outcome": {
+          "status": "ok",
+          "value": 1.0534999999999999
+        }
+      },
+      {
+        "call_id": "wo-005",
+        "outcome": {
+          "status": "ok",
+          "value": 3.5
+        }
+      },
+      {
+        "call_id": "wo-006",
+        "outcome": {
+          "status": "ok",
+          "value": 3.0029999999999997
+        }
+      },
+      {
+        "call_id": "wo-007",
+        "outcome": {
+          "status": "ok",
+          "value": 30.0
+        }
+      },
+      {
+        "call_id": "wo18-000",
+        "outcome": {
+          "status": "ok",
+          "value": 1.75
+        }
+      },
+      {
+        "call_id": "to-000",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "to-001",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "to-002",
+        "outcome": {
+          "status": "ok",
+          "value": 0.03
+        }
+      },
+      {
+        "call_id": "to-003",
+        "outcome": {
+          "status": "ok",
+          "value": 0.09
+        }
+      },
+      {
+        "call_id": "to-004",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0602
+        }
+      },
+      {
+        "call_id": "to-005",
+        "outcome": {
+          "status": "ok",
+          "value": 0.2
+        }
+      },
+      {
+        "call_id": "to-006",
+        "outcome": {
+          "status": "ok",
+          "value": 0.1001
+        }
+      },
+      {
+        "call_id": "to-007",
+        "outcome": {
+          "status": "ok",
+          "value": 1.0
+        }
+      },
+      {
+        "call_id": "wp-000",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "wp-001",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "wp-002",
+        "outcome": {
+          "status": "ok",
+          "value": 0.15000000000000002
+        }
+      },
+      {
+        "call_id": "wp-003",
+        "outcome": {
+          "status": "ok",
+          "value": 0.75
+        }
+      },
+      {
+        "call_id": "wp-004",
+        "outcome": {
+          "status": "ok",
+          "value": 0.99
+        }
+      },
+      {
+        "call_id": "wp-005",
+        "outcome": {
+          "status": "ok",
+          "value": 0.99
+        }
+      },
+      {
+        "call_id": "wp-006",
+        "outcome": {
+          "status": "ok",
+          "value": 0.99
+        }
+      },
+      {
+        "call_id": "wpe-000",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "tp-000",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "tp-001",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "tp-002",
+        "outcome": {
+          "status": "ok",
+          "value": 0.18000000000000002
+        }
+      },
+      {
+        "call_id": "tp-003",
+        "outcome": {
+          "status": "ok",
+          "value": 0.9
+        }
+      },
+      {
+        "call_id": "tp-004",
+        "outcome": {
+          "status": "ok",
+          "value": 0.99
+        }
+      },
+      {
+        "call_id": "tp-005",
+        "outcome": {
+          "status": "ok",
+          "value": 0.99
+        }
+      },
+      {
+        "call_id": "tp-006",
+        "outcome": {
+          "status": "ok",
+          "value": 0.99
+        }
+      },
+      {
+        "call_id": "tpe-000",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      }
+    ]
+  },
+  "fixture_id": "golden/GD05-COMBO-001/v1",
+  "generator": {
+    "tool": "tools/golden",
+    "tool_version": "0.1.0"
+  },
+  "input": {
+    "calls": [
+      {
+        "args": {
+          "win_odds": -1.0
+        },
+        "call_id": "wo-000",
+        "function": "estimate_wide_odds"
+      },
+      {
+        "args": {
+          "win_odds": 0.0
+        },
+        "call_id": "wo-001",
+        "function": "estimate_wide_odds"
+      },
+      {
+        "args": {
+          "win_odds": 1.0
+        },
+        "call_id": "wo-002",
+        "function": "estimate_wide_odds"
+      },
+      {
+        "args": {
+          "win_odds": 3.0
+        },
+        "call_id": "wo-003",
+        "function": "estimate_wide_odds"
+      },
+      {
+        "args": {
+          "win_odds": 3.01
+        },
+        "call_id": "wo-004",
+        "function": "estimate_wide_odds"
+      },
+      {
+        "args": {
+          "win_odds": 10.0
+        },
+        "call_id": "wo-005",
+        "function": "estimate_wide_odds"
+      },
+      {
+        "args": {
+          "win_odds": 10.01
+        },
+        "call_id": "wo-006",
+        "function": "estimate_wide_odds"
+      },
+      {
+        "args": {
+          "win_odds": 100.0
+        },
+        "call_id": "wo-007",
+        "function": "estimate_wide_odds"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "num_horses": 8
+          },
+          "win_odds": 5.0
+        },
+        "call_id": "wo18-000",
+        "function": "estimate_wide_odds"
+      },
+      {
+        "args": {
+          "win_odds": -1.0
+        },
+        "call_id": "to-000",
+        "function": "estimate_trifecta_odds"
+      },
+      {
+        "args": {
+          "win_odds": 0.0
+        },
+        "call_id": "to-001",
+        "function": "estimate_trifecta_odds"
+      },
+      {
+        "args": {
+          "win_odds": 1.0
+        },
+        "call_id": "to-002",
+        "function": "estimate_trifecta_odds"
+      },
+      {
+        "args": {
+          "win_odds": 3.0
+        },
+        "call_id": "to-003",
+        "function": "estimate_trifecta_odds"
+      },
+      {
+        "args": {
+          "win_odds": 3.01
+        },
+        "call_id": "to-004",
+        "function": "estimate_trifecta_odds"
+      },
+      {
+        "args": {
+          "win_odds": 10.0
+        },
+        "call_id": "to-005",
+        "function": "estimate_trifecta_odds"
+      },
+      {
+        "args": {
+          "win_odds": 10.01
+        },
+        "call_id": "to-006",
+        "function": "estimate_trifecta_odds"
+      },
+      {
+        "args": {
+          "win_odds": 100.0
+        },
+        "call_id": "to-007",
+        "function": "estimate_trifecta_odds"
+      },
+      {
+        "args": {
+          "odds_list": [
+            {
+              "odds": 3.0,
+              "popularity": 1,
+              "umaban": 1
+            },
+            {
+              "odds": 6.0,
+              "popularity": 2,
+              "umaban": 2
+            }
+          ],
+          "target_umaban": 1,
+          "win_prob": -0.1
+        },
+        "call_id": "wp-000",
+        "function": "calculate_wide_prob"
+      },
+      {
+        "args": {
+          "odds_list": [
+            {
+              "odds": 3.0,
+              "popularity": 1,
+              "umaban": 1
+            },
+            {
+              "odds": 6.0,
+              "popularity": 2,
+              "umaban": 2
+            }
+          ],
+          "target_umaban": 1,
+          "win_prob": 0.0
+        },
+        "call_id": "wp-001",
+        "function": "calculate_wide_prob"
+      },
+      {
+        "args": {
+          "odds_list": [
+            {
+              "odds": 3.0,
+              "popularity": 1,
+              "umaban": 1
+            },
+            {
+              "odds": 6.0,
+              "popularity": 2,
+              "umaban": 2
+            }
+          ],
+          "target_umaban": 1,
+          "win_prob": 0.1
+        },
+        "call_id": "wp-002",
+        "function": "calculate_wide_prob"
+      },
+      {
+        "args": {
+          "odds_list": [
+            {
+              "odds": 3.0,
+              "popularity": 1,
+              "umaban": 1
+            },
+            {
+              "odds": 6.0,
+              "popularity": 2,
+              "umaban": 2
+            }
+          ],
+          "target_umaban": 1,
+          "win_prob": 0.5
+        },
+        "call_id": "wp-003",
+        "function": "calculate_wide_prob"
+      },
+      {
+        "args": {
+          "odds_list": [
+            {
+              "odds": 3.0,
+              "popularity": 1,
+              "umaban": 1
+            },
+            {
+              "odds": 6.0,
+              "popularity": 2,
+              "umaban": 2
+            }
+          ],
+          "target_umaban": 1,
+          "win_prob": 0.66
+        },
+        "call_id": "wp-004",
+        "function": "calculate_wide_prob"
+      },
+      {
+        "args": {
+          "odds_list": [
+            {
+              "odds": 3.0,
+              "popularity": 1,
+              "umaban": 1
+            },
+            {
+              "odds": 6.0,
+              "popularity": 2,
+              "umaban": 2
+            }
+          ],
+          "target_umaban": 1,
+          "win_prob": 0.67
+        },
+        "call_id": "wp-005",
+        "function": "calculate_wide_prob"
+      },
+      {
+        "args": {
+          "odds_list": [
+            {
+              "odds": 3.0,
+              "popularity": 1,
+              "umaban": 1
+            },
+            {
+              "odds": 6.0,
+              "popularity": 2,
+              "umaban": 2
+            }
+          ],
+          "target_umaban": 1,
+          "win_prob": 1.0
+        },
+        "call_id": "wp-006",
+        "function": "calculate_wide_prob"
+      },
+      {
+        "args": {
+          "odds_list": [],
+          "target_umaban": 1,
+          "win_prob": 0.3
+        },
+        "call_id": "wpe-000",
+        "function": "calculate_wide_prob"
+      },
+      {
+        "args": {
+          "odds_list": [
+            {
+              "odds": 3.0,
+              "popularity": 1,
+              "umaban": 1
+            },
+            {
+              "odds": 6.0,
+              "popularity": 2,
+              "umaban": 2
+            }
+          ],
+          "target_umaban": 1,
+          "win_prob": -0.1
+        },
+        "call_id": "tp-000",
+        "function": "calculate_trifecta_prob"
+      },
+      {
+        "args": {
+          "odds_list": [
+            {
+              "odds": 3.0,
+              "popularity": 1,
+              "umaban": 1
+            },
+            {
+              "odds": 6.0,
+              "popularity": 2,
+              "umaban": 2
+            }
+          ],
+          "target_umaban": 1,
+          "win_prob": 0.0
+        },
+        "call_id": "tp-001",
+        "function": "calculate_trifecta_prob"
+      },
+      {
+        "args": {
+          "odds_list": [
+            {
+              "odds": 3.0,
+              "popularity": 1,
+              "umaban": 1
+            },
+            {
+              "odds": 6.0,
+              "popularity": 2,
+              "umaban": 2
+            }
+          ],
+          "target_umaban": 1,
+          "win_prob": 0.1
+        },
+        "call_id": "tp-002",
+        "function": "calculate_trifecta_prob"
+      },
+      {
+        "args": {
+          "odds_list": [
+            {
+              "odds": 3.0,
+              "popularity": 1,
+              "umaban": 1
+            },
+            {
+              "odds": 6.0,
+              "popularity": 2,
+              "umaban": 2
+            }
+          ],
+          "target_umaban": 1,
+          "win_prob": 0.5
+        },
+        "call_id": "tp-003",
+        "function": "calculate_trifecta_prob"
+      },
+      {
+        "args": {
+          "odds_list": [
+            {
+              "odds": 3.0,
+              "popularity": 1,
+              "umaban": 1
+            },
+            {
+              "odds": 6.0,
+              "popularity": 2,
+              "umaban": 2
+            }
+          ],
+          "target_umaban": 1,
+          "win_prob": 0.55
+        },
+        "call_id": "tp-004",
+        "function": "calculate_trifecta_prob"
+      },
+      {
+        "args": {
+          "odds_list": [
+            {
+              "odds": 3.0,
+              "popularity": 1,
+              "umaban": 1
+            },
+            {
+              "odds": 6.0,
+              "popularity": 2,
+              "umaban": 2
+            }
+          ],
+          "target_umaban": 1,
+          "win_prob": 0.56
+        },
+        "call_id": "tp-005",
+        "function": "calculate_trifecta_prob"
+      },
+      {
+        "args": {
+          "odds_list": [
+            {
+              "odds": 3.0,
+              "popularity": 1,
+              "umaban": 1
+            },
+            {
+              "odds": 6.0,
+              "popularity": 2,
+              "umaban": 2
+            }
+          ],
+          "target_umaban": 1,
+          "win_prob": 1.0
+        },
+        "call_id": "tp-006",
+        "function": "calculate_trifecta_prob"
+      },
+      {
+        "args": {
+          "odds_list": [],
+          "target_umaban": 1,
+          "win_prob": 0.3
+        },
+        "call_id": "tpe-000",
+        "function": "calculate_trifecta_prob"
+      }
+    ]
+  },
+  "known_defects": [],
+  "legacy_behavior_note": "expected_output は旧実装が実際に返した値（欠陥候補を含む）。新仕様の期待値ではない。",
+  "scenario_ids": [
+    "GD05",
+    "GD06"
+  ],
+  "schema_version": 1,
+  "source_commit": "f7dbf69fd8940121782870de902e8c449e6ca149",
+  "source_function": [
+    "jraev.ev.bet_strategy.estimate_wide_odds",
+    "jraev.ev.bet_strategy.estimate_trifecta_odds",
+    "jraev.ev.bet_strategy.calculate_wide_prob",
+    "jraev.ev.bet_strategy.calculate_trifecta_prob"
+  ],
+  "source_repository": "puttun777/jra-bot"
+}

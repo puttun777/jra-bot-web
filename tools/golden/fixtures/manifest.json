@@ -1,0 +1,61 @@
+{
+  "fixtures": [
+    {
+      "case_id": "G1-MODEL-001",
+      "path": "G1-MODEL-001.json",
+      "sha256": "0531810d65e419c387d0b4cd8ae87a3097e7e62316de8c4fe67cfa0d70140079"
+    },
+    {
+      "case_id": "G2-HASH-001",
+      "path": "G2-HASH-001.json",
+      "sha256": "5136eeda72d08e98cbb0f1979403f0f543397a9e80c5e0fa49abc225587f9614"
+    },
+    {
+      "case_id": "GD01-EV-001",
+      "path": "GD01-EV-001.json",
+      "sha256": "aacf562a920ff73020439e8c5ffb5818e94fec345caa5c097315405e51438389"
+    },
+    {
+      "case_id": "GD01-KELLY-002",
+      "path": "GD01-KELLY-002.json",
+      "sha256": "7456dc21366d6ea35c06486cde3b38c8afe39076b2087fa03bd2f83a806985a9"
+    },
+    {
+      "case_id": "GD02-NORM-002",
+      "path": "GD02-NORM-002.json",
+      "sha256": "eb0f732d7668cea35b708ab56f16a80a4c2884f2690efdccace5c467aff72352"
+    },
+    {
+      "case_id": "GD02-PROB-001",
+      "path": "GD02-PROB-001.json",
+      "sha256": "4c441ae9a7674d7a17ef2c71b86a33abce34535238bb39c5acfb9ec82996124b"
+    },
+    {
+      "case_id": "GD03-FILTER-001",
+      "path": "GD03-FILTER-001.json",
+      "sha256": "2c0891280905fa7bc5292e5df9e8f4464a5c96aae27a72b834af2bece7add6cb"
+    },
+    {
+      "case_id": "GD05-COMBO-001",
+      "path": "GD05-COMBO-001.json",
+      "sha256": "0e87142c256c0cae6ec49fba9ae6645dbb48f229c6dcce30a9c2c12e95721022"
+    },
+    {
+      "case_id": "GD09-EVAL-001",
+      "path": "GD09-EVAL-001.json",
+      "sha256": "ef0f2b621198f1c389bcb53e22d4154248cb3b99a8df1db462d6e2e7f2e5b5cb"
+    },
+    {
+      "case_id": "GD10-DEFAULTS-001",
+      "path": "GD10-DEFAULTS-001.json",
+      "sha256": "e7cc6e6c9df189a1be3408a1109668f75f19268459ea6f946160b00ff0f858c7"
+    }
+  ],
+  "generator": {
+    "tool": "tools/golden",
+    "tool_version": "0.1.0"
+  },
+  "schema_version": 1,
+  "source_commit": "f7dbf69fd8940121782870de902e8c449e6ca149",
+  "source_repository": "puttun777/jra-bot"
+}

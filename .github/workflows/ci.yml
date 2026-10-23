@@ -90,6 +90,56 @@ jobs:
       - name: Check tracked files
         run: bash .github/scripts/check-repo-hygiene.sh
 
+  # ゴールデンテスト基盤（T2.6）。Python は ubuntu-24.04 標準の 3.12 系を使い、minor を検証する。
+  # 旧実装は公開リポジトリを固定コミットで取得する（認証・Secrets 不要）。生成結果は書き込まず、コミット済みフィクスチャとの一致を検証する
+  # （フィクスチャを CI が自動更新することはない）。0 件・スキップ・不足は失敗。
+  golden:
+    name: golden tests (Python 3.12)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      LEGACY_COMMIT: f7dbf69fd8940121782870de902e8c449e6ca149
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Python 3.12 and dependencies
+        run: |
+          python3 --version
+          python3 -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version'
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --no-input -r tools/golden/requirements.txt
+      - name: Fetch legacy implementation at the pinned commit (read-only, public)
+        run: |
+          git clone --quiet --no-checkout https://github.com/puttun777/jra-bot.git "$RUNNER_TEMP/legacy"
+          git -C "$RUNNER_TEMP/legacy" checkout --quiet --detach "$LEGACY_COMMIT"
+          test "$(git -C "$RUNNER_TEMP/legacy" rev-parse HEAD)" = "$LEGACY_COMMIT"
+      - name: Verify committed fixtures (schema, provenance, hashes, synthetic-only)
+        run: python3 -m tools.golden.verify
+      - name: Unit tests (none skipped; legacy regeneration included)
+        env:
+          GOLDEN_LEGACY_PATH: ${{ runner.temp }}/legacy
+        run: |
+          "$RUNNER_TEMP/venv/bin/python" -m tools.golden.run_tests --min-tests 45 --max-skipped 0
+      - name: Regenerate from legacy and require an exact match (no write)
+        run: |
+          "$RUNNER_TEMP/venv/bin/python" -m tools.golden.generate --legacy-path "$RUNNER_TEMP/legacy" --check
+      - name: Comparator smoke test (self-comparison passes, perturbed and missing results fail)
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, copy
+          fx = {p.stem: json.loads(p.read_text()) for p in pathlib.Path("tools/golden/fixtures").glob("*.json") if p.name != "manifest.json"}
+          ok = {"schema_version": 1, "results": {k: v["expected_output"] for k, v in fx.items()}}
+          pathlib.Path("ok.json").write_text(json.dumps(ok))
+          bad = copy.deepcopy(ok); bad["results"]["GD01-EV-001"]["results"][5]["outcome"]["value"] += 1e-6
+          pathlib.Path("bad.json").write_text(json.dumps(bad))
+          miss = copy.deepcopy(ok); del miss["results"]["G1-MODEL-001"]
+          pathlib.Path("miss.json").write_text(json.dumps(miss))
+          PY
+          python3 -m tools.golden.compare --actual ok.json
+          rc=0; python3 -m tools.golden.compare --actual bad.json || rc=$?; test "$rc" = 1
+          rc=0; python3 -m tools.golden.compare --actual miss.json || rc=$?; test "$rc" = 2
+
   # DB 統合テスト（T2.3 + T2.4）: Flyway V1/V2/R__grants と CLI（:db-migration）、および Doma の Repository 実装（:persistence。スキーマは本物の
   # db-migration CLI で適用）を、使い捨ての MySQL コンテナ（Testcontainers）に対して検証する。
   # 8.4 LTS（本番の暫定基準: D-046）と 9.7 LTS（互換性の確認: G-DB-0）を別ジョブで実行する。

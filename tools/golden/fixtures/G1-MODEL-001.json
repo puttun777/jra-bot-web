@@ -1,0 +1,1957 @@
+{
+  "case_id": "G1-MODEL-001",
+  "comparison_rules": {
+    "default": {
+      "float": {
+        "abs_tol": 1e-09,
+        "mode": "abs_tol"
+      }
+    },
+    "overrides": [],
+    "strict": {
+      "key_set": true,
+      "list_order": true,
+      "nonfinite": "reject",
+      "types": true
+    }
+  },
+  "data_classification": "synthetic",
+  "description": "WinProbabilityModel を合成重みで推論（Platt・市場ブレンド・次元の切詰め/ゼロ埋め・logit 極端値・未学習）",
+  "execution_parameters": {
+    "clock": "not_used (対象関数は現在時刻を読まない。datetime.now を使う経路は対象外)",
+    "cwd": "empty temporary directory",
+    "fixed_time": "2026-01-01T00:00:00+09:00",
+    "libraries": {
+      "numpy": "2.5.3"
+    },
+    "ml_cfg": {
+      "enabled": false
+    },
+    "network": "blocked",
+    "seed": 20260101,
+    "timezone": "Asia/Tokyo"
+  },
+  "expected_output": {
+    "results": [
+      {
+        "call_id": "mp-plain-000",
+        "outcome": {
+          "status": "ok",
+          "value": 0.33591521097794763
+        }
+      },
+      {
+        "call_id": "mp-plain-001",
+        "outcome": {
+          "status": "ok",
+          "value": 0.5846168985233995
+        }
+      },
+      {
+        "call_id": "mp-plain-002",
+        "outcome": {
+          "status": "ok",
+          "value": 0.41576089549160655
+        }
+      },
+      {
+        "call_id": "mp-plain-003",
+        "outcome": {
+          "status": "ok",
+          "value": 0.22254659465787857
+        }
+      },
+      {
+        "call_id": "mp-plain-004",
+        "outcome": {
+          "status": "ok",
+          "value": 0.10805390001396077
+        }
+      },
+      {
+        "call_id": "mp-plain-005",
+        "outcome": {
+          "status": "ok",
+          "value": 0.05767062618090029
+        }
+      },
+      {
+        "call_id": "mp-plain-006",
+        "outcome": {
+          "status": "ok",
+          "value": 0.8795568382788792
+        }
+      },
+      {
+        "call_id": "mp-calib-000",
+        "outcome": {
+          "status": "ok",
+          "value": 0.27894391913729777
+        }
+      },
+      {
+        "call_id": "mp-calib-001",
+        "outcome": {
+          "status": "ok",
+          "value": 0.5438696749175437
+        }
+      },
+      {
+        "call_id": "mp-calib-002",
+        "outcome": {
+          "status": "ok",
+          "value": 0.3602636531890623
+        }
+      },
+      {
+        "call_id": "mp-calib-003",
+        "outcome": {
+          "status": "ok",
+          "value": 0.17136614203648415
+        }
+      },
+      {
+        "call_id": "mp-calib-004",
+        "outcome": {
+          "status": "ok",
+          "value": 0.07434032693659273
+        }
+      },
+      {
+        "call_id": "mp-calib-005",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0365102927272114
+        }
+      },
+      {
+        "call_id": "mp-calib-006",
+        "outcome": {
+          "status": "ok",
+          "value": 0.8794322036824153
+        }
+      },
+      {
+        "call_id": "mp-blend-000",
+        "outcome": {
+          "status": "ok",
+          "value": 0.9930108325273527
+        }
+      },
+      {
+        "call_id": "mp-blend-001",
+        "outcome": {
+          "status": "ok",
+          "value": 0.9964305306179806
+        }
+      },
+      {
+        "call_id": "mp-blend-002",
+        "outcome": {
+          "status": "ok",
+          "value": 0.9944127871001022
+        }
+      },
+      {
+        "call_id": "mp-blend-003",
+        "outcome": {
+          "status": "ok",
+          "value": 0.24828656305421443
+        }
+      },
+      {
+        "call_id": "mp-blend-004",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0837846453529355
+        }
+      },
+      {
+        "call_id": "mp-blend-005",
+        "outcome": {
+          "status": "ok",
+          "value": 0.028734296116270205
+        }
+      },
+      {
+        "call_id": "mp-blend-006",
+        "outcome": {
+          "status": "ok",
+          "value": 0.17220744545458996
+        }
+      },
+      {
+        "call_id": "mp-slice-000",
+        "outcome": {
+          "status": "ok",
+          "value": 0.4300735551586541
+        }
+      },
+      {
+        "call_id": "mp-slice-001",
+        "outcome": {
+          "status": "ok",
+          "value": 0.6773839932257139
+        }
+      },
+      {
+        "call_id": "mp-slice-002",
+        "outcome": {
+          "status": "ok",
+          "value": 0.51499550161941
+        }
+      },
+      {
+        "call_id": "mp-slice-003",
+        "outcome": {
+          "status": "ok",
+          "value": 0.4378512584184261
+        }
+      },
+      {
+        "call_id": "mp-slice-004",
+        "outcome": {
+          "status": "ok",
+          "value": 0.3228345804464897
+        }
+      },
+      {
+        "call_id": "mp-slice-005",
+        "outcome": {
+          "status": "ok",
+          "value": 0.23620363877188785
+        }
+      },
+      {
+        "call_id": "mp-slice-006",
+        "outcome": {
+          "status": "ok",
+          "value": 0.9991902489032859
+        }
+      },
+      {
+        "call_id": "mp-pad-000",
+        "outcome": {
+          "status": "ok",
+          "value": 0.9999742292434406
+        }
+      },
+      {
+        "call_id": "mp-pad-001",
+        "outcome": {
+          "status": "ok",
+          "value": 0.9999800462009548
+        }
+      },
+      {
+        "call_id": "mp-pad-002",
+        "outcome": {
+          "status": "ok",
+          "value": 0.999976337187419
+        }
+      },
+      {
+        "call_id": "mp-pad-003",
+        "outcome": {
+          "status": "ok",
+          "value": 0.43983773251408204
+        }
+      },
+      {
+        "call_id": "mp-pad-004",
+        "outcome": {
+          "status": "ok",
+          "value": 0.14177654454696265
+        }
+      },
+      {
+        "call_id": "mp-pad-005",
+        "outcome": {
+          "status": "ok",
+          "value": 0.03760576001673784
+        }
+      },
+      {
+        "call_id": "mp-pad-006",
+        "outcome": {
+          "status": "ok",
+          "value": 0.013291434744156226
+        }
+      },
+      {
+        "call_id": "mp-extreme-000",
+        "outcome": {
+          "status": "ok",
+          "value": 0.999999
+        }
+      },
+      {
+        "call_id": "mp-extreme-001",
+        "outcome": {
+          "status": "ok",
+          "value": 0.999999
+        }
+      },
+      {
+        "call_id": "mp-extreme-002",
+        "outcome": {
+          "status": "ok",
+          "value": 0.999999
+        }
+      },
+      {
+        "call_id": "mp-extreme-003",
+        "outcome": {
+          "status": "ok",
+          "value": 0.999999
+        }
+      },
+      {
+        "call_id": "mp-extreme-004",
+        "outcome": {
+          "status": "ok",
+          "value": 0.999999
+        }
+      },
+      {
+        "call_id": "mp-extreme-005",
+        "outcome": {
+          "status": "ok",
+          "value": 0.999999
+        }
+      },
+      {
+        "call_id": "mp-extreme-006",
+        "outcome": {
+          "status": "ok",
+          "value": 0.999999
+        }
+      },
+      {
+        "call_id": "mp-untrained-000",
+        "outcome": {
+          "status": "ok",
+          "value": 10.0
+        }
+      },
+      {
+        "call_id": "mp-untrained-001",
+        "outcome": {
+          "status": "ok",
+          "value": 10.0
+        }
+      },
+      {
+        "call_id": "mp-untrained-002",
+        "outcome": {
+          "status": "ok",
+          "value": 1.0
+        }
+      },
+      {
+        "call_id": "mp-untrained-003",
+        "outcome": {
+          "status": "ok",
+          "value": 0.4
+        }
+      },
+      {
+        "call_id": "mp-untrained-004",
+        "outcome": {
+          "status": "ok",
+          "value": 0.1
+        }
+      },
+      {
+        "call_id": "mp-untrained-005",
+        "outcome": {
+          "status": "ok",
+          "value": 0.02
+        }
+      },
+      {
+        "call_id": "mp-untrained-006",
+        "outcome": {
+          "status": "ok",
+          "value": 0.001001001001001001
+        }
+      },
+      {
+        "call_id": "mp-alpha0-000",
+        "outcome": {
+          "status": "ok",
+          "value": 0.999999
+        }
+      },
+      {
+        "call_id": "mp-alpha0-001",
+        "outcome": {
+          "status": "ok",
+          "value": 0.999999
+        }
+      },
+      {
+        "call_id": "mp-alpha0-002",
+        "outcome": {
+          "status": "ok",
+          "value": 0.999999
+        }
+      },
+      {
+        "call_id": "mp-alpha0-003",
+        "outcome": {
+          "status": "ok",
+          "value": 0.4
+        }
+      },
+      {
+        "call_id": "mp-alpha0-004",
+        "outcome": {
+          "status": "ok",
+          "value": 0.1
+        }
+      },
+      {
+        "call_id": "mp-alpha0-005",
+        "outcome": {
+          "status": "ok",
+          "value": 0.02
+        }
+      },
+      {
+        "call_id": "mp-alpha0-006",
+        "outcome": {
+          "status": "ok",
+          "value": 0.001001001001001001
+        }
+      },
+      {
+        "call_id": "mp-alpha1-000",
+        "outcome": {
+          "status": "ok",
+          "value": 0.33591521097794763
+        }
+      },
+      {
+        "call_id": "mp-alpha1-001",
+        "outcome": {
+          "status": "ok",
+          "value": 0.5846168985233995
+        }
+      },
+      {
+        "call_id": "mp-alpha1-002",
+        "outcome": {
+          "status": "ok",
+          "value": 0.41576089549160655
+        }
+      },
+      {
+        "call_id": "mp-alpha1-003",
+        "outcome": {
+          "status": "ok",
+          "value": 0.22254659465787857
+        }
+      },
+      {
+        "call_id": "mp-alpha1-004",
+        "outcome": {
+          "status": "ok",
+          "value": 0.10805390001396077
+        }
+      },
+      {
+        "call_id": "mp-alpha1-005",
+        "outcome": {
+          "status": "ok",
+          "value": 0.05767062618090029
+        }
+      },
+      {
+        "call_id": "mp-alpha1-006",
+        "outcome": {
+          "status": "ok",
+          "value": 0.8795568382788792
+        }
+      },
+      {
+        "call_id": "mf-000",
+        "outcome": {
+          "exception_type": "ValueError",
+          "message": "can only convert an array of size 1 to a Python scalar",
+          "status": "exception"
+        }
+      },
+      {
+        "call_id": "mf-001",
+        "outcome": {
+          "exception_type": "ValueError",
+          "message": "can only convert an array of size 1 to a Python scalar",
+          "status": "exception"
+        }
+      },
+      {
+        "call_id": "mf-002",
+        "outcome": {
+          "exception_type": "ValueError",
+          "message": "can only convert an array of size 1 to a Python scalar",
+          "status": "exception"
+        }
+      },
+      {
+        "call_id": "mf-003",
+        "outcome": {
+          "exception_type": "ValueError",
+          "message": "can only convert an array of size 1 to a Python scalar",
+          "status": "exception"
+        }
+      },
+      {
+        "call_id": "mf-004",
+        "outcome": {
+          "exception_type": "ValueError",
+          "message": "can only convert an array of size 1 to a Python scalar",
+          "status": "exception"
+        }
+      },
+      {
+        "call_id": "mf-005",
+        "outcome": {
+          "exception_type": "ValueError",
+          "message": "can only convert an array of size 1 to a Python scalar",
+          "status": "exception"
+        }
+      },
+      {
+        "call_id": "mf-006",
+        "outcome": {
+          "exception_type": "ValueError",
+          "message": "can only convert an array of size 1 to a Python scalar",
+          "status": "exception"
+        }
+      },
+      {
+        "call_id": "mb-plain-000",
+        "outcome": {
+          "status": "ok",
+          "value": [
+            0.354255109038138,
+            0.20141269138680162,
+            0.14201761588543413,
+            0.11160852498237124,
+            0.09445963833779619
+          ]
+        }
+      },
+      {
+        "call_id": "mb-blend-000",
+        "outcome": {
+          "status": "ok",
+          "value": [
+            0.3366092082133921,
+            0.18715744774658682,
+            0.11051793927968255,
+            0.07278086367087405,
+            0.04932433381525962
+          ]
+        }
+      },
+      {
+        "call_id": "mb-untrained-000",
+        "outcome": {
+          "status": "ok",
+          "value": [
+            0.4,
+            0.25,
+            0.125,
+            0.06666666666666667,
+            0.03333333333333333
+          ]
+        }
+      }
+    ]
+  },
+  "fixture_id": "golden/G1-MODEL-001/v1",
+  "generator": {
+    "tool": "tools/golden",
+    "tool_version": "0.1.0"
+  },
+  "input": {
+    "calls": [
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 0.0,
+          "popularity": 0
+        },
+        "call_id": "mp-plain-000",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 0.1,
+          "popularity": 1
+        },
+        "call_id": "mp-plain-001",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 1.0,
+          "popularity": 1
+        },
+        "call_id": "mp-plain-002",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 2.5,
+          "popularity": 2
+        },
+        "call_id": "mp-plain-003",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 10.0,
+          "popularity": 5
+        },
+        "call_id": "mp-plain-004",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 50.0,
+          "popularity": 12
+        },
+        "call_id": "mp-plain-005",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 999.0,
+          "popularity": 18
+        },
+        "call_id": "mp-plain-006",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "calib_a": 1.1,
+            "calib_b": -0.2,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 0.0,
+          "popularity": 0
+        },
+        "call_id": "mp-calib-000",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "calib_a": 1.1,
+            "calib_b": -0.2,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 0.1,
+          "popularity": 1
+        },
+        "call_id": "mp-calib-001",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "calib_a": 1.1,
+            "calib_b": -0.2,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 1.0,
+          "popularity": 1
+        },
+        "call_id": "mp-calib-002",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "calib_a": 1.1,
+            "calib_b": -0.2,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 2.5,
+          "popularity": 2
+        },
+        "call_id": "mp-calib-003",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "calib_a": 1.1,
+            "calib_b": -0.2,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 10.0,
+          "popularity": 5
+        },
+        "call_id": "mp-calib-004",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "calib_a": 1.1,
+            "calib_b": -0.2,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 50.0,
+          "popularity": 12
+        },
+        "call_id": "mp-calib-005",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "calib_a": 1.1,
+            "calib_b": -0.2,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 999.0,
+          "popularity": 18
+        },
+        "call_id": "mp-calib-006",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "calib_a": 1.1,
+            "calib_b": -0.2,
+            "market_blend_alpha": 0.6,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 0.0,
+          "popularity": 0
+        },
+        "call_id": "mp-blend-000",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "calib_a": 1.1,
+            "calib_b": -0.2,
+            "market_blend_alpha": 0.6,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 0.1,
+          "popularity": 1
+        },
+        "call_id": "mp-blend-001",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "calib_a": 1.1,
+            "calib_b": -0.2,
+            "market_blend_alpha": 0.6,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 1.0,
+          "popularity": 1
+        },
+        "call_id": "mp-blend-002",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "calib_a": 1.1,
+            "calib_b": -0.2,
+            "market_blend_alpha": 0.6,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 2.5,
+          "popularity": 2
+        },
+        "call_id": "mp-blend-003",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "calib_a": 1.1,
+            "calib_b": -0.2,
+            "market_blend_alpha": 0.6,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 10.0,
+          "popularity": 5
+        },
+        "call_id": "mp-blend-004",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "calib_a": 1.1,
+            "calib_b": -0.2,
+            "market_blend_alpha": 0.6,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 50.0,
+          "popularity": 12
+        },
+        "call_id": "mp-blend-005",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "calib_a": 1.1,
+            "calib_b": -0.2,
+            "market_blend_alpha": 0.6,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 999.0,
+          "popularity": 18
+        },
+        "call_id": "mp-blend-006",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 0.1,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3
+            ]
+          },
+          "odds": 0.0,
+          "popularity": 0
+        },
+        "call_id": "mp-slice-000",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 0.1,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3
+            ]
+          },
+          "odds": 0.1,
+          "popularity": 1
+        },
+        "call_id": "mp-slice-001",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 0.1,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3
+            ]
+          },
+          "odds": 1.0,
+          "popularity": 1
+        },
+        "call_id": "mp-slice-002",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 0.1,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3
+            ]
+          },
+          "odds": 2.5,
+          "popularity": 2
+        },
+        "call_id": "mp-slice-003",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 0.1,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3
+            ]
+          },
+          "odds": 10.0,
+          "popularity": 5
+        },
+        "call_id": "mp-slice-004",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 0.1,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3
+            ]
+          },
+          "odds": 50.0,
+          "popularity": 12
+        },
+        "call_id": "mp-slice-005",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 0.1,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3
+            ]
+          },
+          "odds": 999.0,
+          "popularity": 18
+        },
+        "call_id": "mp-slice-006",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 0.0,
+            "market_blend_alpha": 0.25,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002,
+              0.7,
+              -0.4
+            ]
+          },
+          "odds": 0.0,
+          "popularity": 0
+        },
+        "call_id": "mp-pad-000",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 0.0,
+            "market_blend_alpha": 0.25,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002,
+              0.7,
+              -0.4
+            ]
+          },
+          "odds": 0.1,
+          "popularity": 1
+        },
+        "call_id": "mp-pad-001",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 0.0,
+            "market_blend_alpha": 0.25,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002,
+              0.7,
+              -0.4
+            ]
+          },
+          "odds": 1.0,
+          "popularity": 1
+        },
+        "call_id": "mp-pad-002",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 0.0,
+            "market_blend_alpha": 0.25,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002,
+              0.7,
+              -0.4
+            ]
+          },
+          "odds": 2.5,
+          "popularity": 2
+        },
+        "call_id": "mp-pad-003",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 0.0,
+            "market_blend_alpha": 0.25,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002,
+              0.7,
+              -0.4
+            ]
+          },
+          "odds": 10.0,
+          "popularity": 5
+        },
+        "call_id": "mp-pad-004",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 0.0,
+            "market_blend_alpha": 0.25,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002,
+              0.7,
+              -0.4
+            ]
+          },
+          "odds": 50.0,
+          "popularity": 12
+        },
+        "call_id": "mp-pad-005",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 0.0,
+            "market_blend_alpha": 0.25,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002,
+              0.7,
+              -0.4
+            ]
+          },
+          "odds": 999.0,
+          "popularity": 18
+        },
+        "call_id": "mp-pad-006",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 100.0,
+            "weights": [
+              5.0,
+              5.0,
+              5.0,
+              5.0,
+              5.0
+            ]
+          },
+          "odds": 0.0,
+          "popularity": 0
+        },
+        "call_id": "mp-extreme-000",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 100.0,
+            "weights": [
+              5.0,
+              5.0,
+              5.0,
+              5.0,
+              5.0
+            ]
+          },
+          "odds": 0.1,
+          "popularity": 1
+        },
+        "call_id": "mp-extreme-001",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 100.0,
+            "weights": [
+              5.0,
+              5.0,
+              5.0,
+              5.0,
+              5.0
+            ]
+          },
+          "odds": 1.0,
+          "popularity": 1
+        },
+        "call_id": "mp-extreme-002",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 100.0,
+            "weights": [
+              5.0,
+              5.0,
+              5.0,
+              5.0,
+              5.0
+            ]
+          },
+          "odds": 2.5,
+          "popularity": 2
+        },
+        "call_id": "mp-extreme-003",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 100.0,
+            "weights": [
+              5.0,
+              5.0,
+              5.0,
+              5.0,
+              5.0
+            ]
+          },
+          "odds": 10.0,
+          "popularity": 5
+        },
+        "call_id": "mp-extreme-004",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 100.0,
+            "weights": [
+              5.0,
+              5.0,
+              5.0,
+              5.0,
+              5.0
+            ]
+          },
+          "odds": 50.0,
+          "popularity": 12
+        },
+        "call_id": "mp-extreme-005",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 100.0,
+            "weights": [
+              5.0,
+              5.0,
+              5.0,
+              5.0,
+              5.0
+            ]
+          },
+          "odds": 999.0,
+          "popularity": 18
+        },
+        "call_id": "mp-extreme-006",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 0.0,
+            "weights": null
+          },
+          "odds": 0.0,
+          "popularity": 0
+        },
+        "call_id": "mp-untrained-000",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 0.0,
+            "weights": null
+          },
+          "odds": 0.1,
+          "popularity": 1
+        },
+        "call_id": "mp-untrained-001",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 0.0,
+            "weights": null
+          },
+          "odds": 1.0,
+          "popularity": 1
+        },
+        "call_id": "mp-untrained-002",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 0.0,
+            "weights": null
+          },
+          "odds": 2.5,
+          "popularity": 2
+        },
+        "call_id": "mp-untrained-003",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 0.0,
+            "weights": null
+          },
+          "odds": 10.0,
+          "popularity": 5
+        },
+        "call_id": "mp-untrained-004",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 0.0,
+            "weights": null
+          },
+          "odds": 50.0,
+          "popularity": 12
+        },
+        "call_id": "mp-untrained-005",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 0.0,
+            "weights": null
+          },
+          "odds": 999.0,
+          "popularity": 18
+        },
+        "call_id": "mp-untrained-006",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "market_blend_alpha": 0.0,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 0.0,
+          "popularity": 0
+        },
+        "call_id": "mp-alpha0-000",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "market_blend_alpha": 0.0,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 0.1,
+          "popularity": 1
+        },
+        "call_id": "mp-alpha0-001",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "market_blend_alpha": 0.0,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 1.0,
+          "popularity": 1
+        },
+        "call_id": "mp-alpha0-002",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "market_blend_alpha": 0.0,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 2.5,
+          "popularity": 2
+        },
+        "call_id": "mp-alpha0-003",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "market_blend_alpha": 0.0,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 10.0,
+          "popularity": 5
+        },
+        "call_id": "mp-alpha0-004",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "market_blend_alpha": 0.0,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 50.0,
+          "popularity": 12
+        },
+        "call_id": "mp-alpha0-005",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "market_blend_alpha": 0.0,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 999.0,
+          "popularity": 18
+        },
+        "call_id": "mp-alpha0-006",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "market_blend_alpha": 1.0,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 0.0,
+          "popularity": 0
+        },
+        "call_id": "mp-alpha1-000",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "market_blend_alpha": 1.0,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 0.1,
+          "popularity": 1
+        },
+        "call_id": "mp-alpha1-001",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "market_blend_alpha": 1.0,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 1.0,
+          "popularity": 1
+        },
+        "call_id": "mp-alpha1-002",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "market_blend_alpha": 1.0,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 2.5,
+          "popularity": 2
+        },
+        "call_id": "mp-alpha1-003",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "market_blend_alpha": 1.0,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 10.0,
+          "popularity": 5
+        },
+        "call_id": "mp-alpha1-004",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "market_blend_alpha": 1.0,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 50.0,
+          "popularity": 12
+        },
+        "call_id": "mp-alpha1-005",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "market_blend_alpha": 1.0,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 999.0,
+          "popularity": 18
+        },
+        "call_id": "mp-alpha1-006",
+        "function": "model_predict"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 0.0,
+          "popularity": 0
+        },
+        "call_id": "mf-000",
+        "function": "model_extract_features"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 0.1,
+          "popularity": 1
+        },
+        "call_id": "mf-001",
+        "function": "model_extract_features"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 1.0,
+          "popularity": 1
+        },
+        "call_id": "mf-002",
+        "function": "model_extract_features"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 2.5,
+          "popularity": 2
+        },
+        "call_id": "mf-003",
+        "function": "model_extract_features"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 10.0,
+          "popularity": 5
+        },
+        "call_id": "mf-004",
+        "function": "model_extract_features"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 50.0,
+          "popularity": 12
+        },
+        "call_id": "mf-005",
+        "function": "model_extract_features"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds": 999.0,
+          "popularity": 18
+        },
+        "call_id": "mf-006",
+        "function": "model_extract_features"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds_list": [
+            2.5,
+            4.0,
+            8.0,
+            15.0,
+            30.0
+          ],
+          "popularity_list": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        "call_id": "mb-plain-000",
+        "function": "model_predict_batch"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": -1.5,
+            "calib_a": 1.1,
+            "calib_b": -0.2,
+            "market_blend_alpha": 0.6,
+            "weights": [
+              0.01,
+              -0.05,
+              -0.3,
+              1.2,
+              -0.0002
+            ]
+          },
+          "odds_list": [
+            2.5,
+            4.0,
+            8.0,
+            15.0,
+            30.0
+          ],
+          "popularity_list": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        "call_id": "mb-blend-000",
+        "function": "model_predict_batch"
+      },
+      {
+        "args": {
+          "model": {
+            "bias": 0.0,
+            "weights": null
+          },
+          "odds_list": [
+            2.5,
+            4.0,
+            8.0,
+            15.0,
+            30.0
+          ],
+          "popularity_list": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        "call_id": "mb-untrained-000",
+        "function": "model_predict_batch"
+      }
+    ]
+  },
+  "known_defects": [],
+  "legacy_behavior_note": "expected_output は旧実装が実際に返した値（欠陥候補を含む）。新仕様の期待値ではない。",
+  "scenario_ids": [
+    "G1"
+  ],
+  "schema_version": 1,
+  "source_commit": "f7dbf69fd8940121782870de902e8c449e6ca149",
+  "source_function": [
+    "jraev.ml.model.WinProbabilityModel.predict",
+    "jraev.ml.model.WinProbabilityModel.predict_batch",
+    "jraev.ml.model.WinProbabilityModel.extract_features"
+  ],
+  "source_repository": "puttun777/jra-bot"
+}

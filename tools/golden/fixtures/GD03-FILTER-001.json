@@ -1,0 +1,525 @@
+{
+  "case_id": "GD03-FILTER-001",
+  "comparison_rules": {
+    "default": {
+      "float": {
+        "abs_tol": 1e-09,
+        "mode": "abs_tol"
+      }
+    },
+    "overrides": [],
+    "strict": {
+      "key_set": true,
+      "list_order": true,
+      "nonfinite": "reject",
+      "types": true
+    }
+  },
+  "data_classification": "synthetic",
+  "description": "check_odds_drop / check_popularity_surge の閾値境界・スナップショット件数",
+  "execution_parameters": {
+    "clock": "not_used (対象関数は現在時刻を読まない。datetime.now を使う経路は対象外)",
+    "cwd": "empty temporary directory",
+    "fixed_time": "2026-01-01T00:00:00+09:00",
+    "libraries": {
+      "numpy": "2.5.3"
+    },
+    "ml_cfg": {
+      "enabled": false
+    },
+    "network": "blocked",
+    "seed": 20260101,
+    "timezone": "Asia/Tokyo"
+  },
+  "expected_output": {
+    "results": [
+      {
+        "call_id": "od-000",
+        "outcome": {
+          "status": "ok",
+          "value": false
+        }
+      },
+      {
+        "call_id": "od-001",
+        "outcome": {
+          "status": "ok",
+          "value": false
+        }
+      },
+      {
+        "call_id": "od-002",
+        "outcome": {
+          "status": "ok",
+          "value": true
+        }
+      },
+      {
+        "call_id": "od-003",
+        "outcome": {
+          "status": "ok",
+          "value": true
+        }
+      },
+      {
+        "call_id": "od-004",
+        "outcome": {
+          "status": "ok",
+          "value": false
+        }
+      },
+      {
+        "call_id": "od-005",
+        "outcome": {
+          "status": "ok",
+          "value": false
+        }
+      },
+      {
+        "call_id": "od-006",
+        "outcome": {
+          "status": "ok",
+          "value": false
+        }
+      },
+      {
+        "call_id": "od-007",
+        "outcome": {
+          "status": "ok",
+          "value": false
+        }
+      },
+      {
+        "call_id": "od-008",
+        "outcome": {
+          "status": "ok",
+          "value": false
+        }
+      },
+      {
+        "call_id": "od-009",
+        "outcome": {
+          "status": "ok",
+          "value": true
+        }
+      },
+      {
+        "call_id": "od-010",
+        "outcome": {
+          "status": "ok",
+          "value": false
+        }
+      },
+      {
+        "call_id": "ps-000",
+        "outcome": {
+          "status": "ok",
+          "value": true
+        }
+      },
+      {
+        "call_id": "ps-001",
+        "outcome": {
+          "status": "ok",
+          "value": true
+        }
+      },
+      {
+        "call_id": "ps-002",
+        "outcome": {
+          "status": "ok",
+          "value": true
+        }
+      },
+      {
+        "call_id": "ps-003",
+        "outcome": {
+          "status": "ok",
+          "value": false
+        }
+      },
+      {
+        "call_id": "ps-004",
+        "outcome": {
+          "status": "ok",
+          "value": false
+        }
+      },
+      {
+        "call_id": "ps-005",
+        "outcome": {
+          "status": "ok",
+          "value": false
+        }
+      },
+      {
+        "call_id": "ps-006",
+        "outcome": {
+          "status": "ok",
+          "value": false
+        }
+      },
+      {
+        "call_id": "ps-007",
+        "outcome": {
+          "status": "ok",
+          "value": true
+        }
+      },
+      {
+        "call_id": "ps-008",
+        "outcome": {
+          "status": "ok",
+          "value": false
+        }
+      }
+    ]
+  },
+  "fixture_id": "golden/GD03-FILTER-001/v1",
+  "generator": {
+    "tool": "tools/golden",
+    "tool_version": "0.1.0"
+  },
+  "input": {
+    "calls": [
+      {
+        "args": {
+          "current_odds": 8.0,
+          "recent_snapshots": [
+            {
+              "odds": 9.0,
+              "popularity": 3
+            },
+            {
+              "odds": 10.0,
+              "popularity": 4
+            }
+          ]
+        },
+        "call_id": "od-000",
+        "function": "check_odds_drop"
+      },
+      {
+        "args": {
+          "current_odds": 8.01,
+          "recent_snapshots": [
+            {
+              "odds": 9.0,
+              "popularity": 3
+            },
+            {
+              "odds": 10.0,
+              "popularity": 4
+            }
+          ]
+        },
+        "call_id": "od-001",
+        "function": "check_odds_drop"
+      },
+      {
+        "args": {
+          "current_odds": 7.99,
+          "recent_snapshots": [
+            {
+              "odds": 9.0,
+              "popularity": 3
+            },
+            {
+              "odds": 10.0,
+              "popularity": 4
+            }
+          ]
+        },
+        "call_id": "od-002",
+        "function": "check_odds_drop"
+      },
+      {
+        "args": {
+          "current_odds": 5.0,
+          "recent_snapshots": [
+            {
+              "odds": 9.0,
+              "popularity": 3
+            },
+            {
+              "odds": 10.0,
+              "popularity": 4
+            }
+          ]
+        },
+        "call_id": "od-003",
+        "function": "check_odds_drop"
+      },
+      {
+        "args": {
+          "current_odds": 12.0,
+          "recent_snapshots": [
+            {
+              "odds": 9.0,
+              "popularity": 3
+            },
+            {
+              "odds": 10.0,
+              "popularity": 4
+            }
+          ]
+        },
+        "call_id": "od-004",
+        "function": "check_odds_drop"
+      },
+      {
+        "args": {
+          "current_odds": 5.0,
+          "recent_snapshots": []
+        },
+        "call_id": "od-005",
+        "function": "check_odds_drop"
+      },
+      {
+        "args": {
+          "current_odds": 1.0,
+          "recent_snapshots": [
+            {
+              "odds": 9.0,
+              "popularity": 3
+            }
+          ]
+        },
+        "call_id": "od-006",
+        "function": "check_odds_drop"
+      },
+      {
+        "args": {
+          "current_odds": 5.0,
+          "recent_snapshots": [
+            {
+              "odds": 9.0,
+              "popularity": 3
+            },
+            {
+              "odds": 0.0,
+              "popularity": 4
+            }
+          ]
+        },
+        "call_id": "od-007",
+        "function": "check_odds_drop"
+      },
+      {
+        "args": {
+          "current_odds": 5.0,
+          "recent_snapshots": [
+            {
+              "odds": 9.0,
+              "popularity": 3
+            },
+            {
+              "odds": -1.0,
+              "popularity": 4
+            }
+          ]
+        },
+        "call_id": "od-008",
+        "function": "check_odds_drop"
+      },
+      {
+        "args": {
+          "current_odds": 15.0,
+          "recent_snapshots": [
+            {
+              "odds": 1.0,
+              "popularity": 1
+            },
+            {
+              "odds": 10.0,
+              "popularity": 4
+            },
+            {
+              "odds": 20.0,
+              "popularity": 9
+            }
+          ]
+        },
+        "call_id": "od-009",
+        "function": "check_odds_drop"
+      },
+      {
+        "args": {
+          "current_odds": 5.0,
+          "kwargs": {
+            "drop_threshold": 0.5
+          },
+          "recent_snapshots": [
+            {
+              "odds": 9.0,
+              "popularity": 3
+            },
+            {
+              "odds": 10.0,
+              "popularity": 4
+            }
+          ]
+        },
+        "call_id": "od-010",
+        "function": "check_odds_drop"
+      },
+      {
+        "args": {
+          "current_popularity": 1,
+          "recent_snapshots": [
+            {
+              "odds": 9.0,
+              "popularity": 5
+            },
+            {
+              "odds": 10.0,
+              "popularity": 6
+            }
+          ]
+        },
+        "call_id": "ps-000",
+        "function": "check_popularity_surge"
+      },
+      {
+        "args": {
+          "current_popularity": 2,
+          "recent_snapshots": [
+            {
+              "odds": 9.0,
+              "popularity": 5
+            },
+            {
+              "odds": 10.0,
+              "popularity": 6
+            }
+          ]
+        },
+        "call_id": "ps-001",
+        "function": "check_popularity_surge"
+      },
+      {
+        "args": {
+          "current_popularity": 3,
+          "recent_snapshots": [
+            {
+              "odds": 9.0,
+              "popularity": 5
+            },
+            {
+              "odds": 10.0,
+              "popularity": 6
+            }
+          ]
+        },
+        "call_id": "ps-002",
+        "function": "check_popularity_surge"
+      },
+      {
+        "args": {
+          "current_popularity": 4,
+          "recent_snapshots": [
+            {
+              "odds": 9.0,
+              "popularity": 5
+            },
+            {
+              "odds": 10.0,
+              "popularity": 6
+            }
+          ]
+        },
+        "call_id": "ps-003",
+        "function": "check_popularity_surge"
+      },
+      {
+        "args": {
+          "current_popularity": 7,
+          "recent_snapshots": [
+            {
+              "odds": 9.0,
+              "popularity": 5
+            },
+            {
+              "odds": 10.0,
+              "popularity": 6
+            }
+          ]
+        },
+        "call_id": "ps-004",
+        "function": "check_popularity_surge"
+      },
+      {
+        "args": {
+          "current_popularity": 1,
+          "recent_snapshots": []
+        },
+        "call_id": "ps-005",
+        "function": "check_popularity_surge"
+      },
+      {
+        "args": {
+          "current_popularity": 1,
+          "recent_snapshots": [
+            {
+              "odds": 9.0,
+              "popularity": 5
+            }
+          ]
+        },
+        "call_id": "ps-006",
+        "function": "check_popularity_surge"
+      },
+      {
+        "args": {
+          "current_popularity": 2,
+          "kwargs": {
+            "surge_threshold": 4
+          },
+          "recent_snapshots": [
+            {
+              "odds": 9.0,
+              "popularity": 5
+            },
+            {
+              "odds": 10.0,
+              "popularity": 6
+            }
+          ]
+        },
+        "call_id": "ps-007",
+        "function": "check_popularity_surge"
+      },
+      {
+        "args": {
+          "current_popularity": 0,
+          "recent_snapshots": [
+            {
+              "odds": 9.0,
+              "popularity": 5
+            },
+            {
+              "odds": 10.0,
+              "popularity": 0
+            }
+          ]
+        },
+        "call_id": "ps-008",
+        "function": "check_popularity_surge"
+      }
+    ]
+  },
+  "known_defects": [
+    "E14"
+  ],
+  "legacy_behavior_note": "expected_output は旧実装が実際に返した値（欠陥候補を含む）。新仕様の期待値ではない。",
+  "scenario_ids": [
+    "GD03"
+  ],
+  "schema_version": 1,
+  "source_commit": "f7dbf69fd8940121782870de902e8c449e6ca149",
+  "source_function": [
+    "jraev.ev.decision.check_odds_drop",
+    "jraev.ev.decision.check_popularity_surge"
+  ],
+  "source_repository": "puttun777/jra-bot"
+}

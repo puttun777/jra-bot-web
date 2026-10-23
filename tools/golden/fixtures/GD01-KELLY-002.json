@@ -1,0 +1,1247 @@
+{
+  "case_id": "GD01-KELLY-002",
+  "comparison_rules": {
+    "default": {
+      "float": {
+        "abs_tol": 1e-09,
+        "mode": "abs_tol"
+      }
+    },
+    "overrides": [
+      {
+        "mode": "ignore",
+        "path": "results.*.outcome.message"
+      }
+    ],
+    "strict": {
+      "key_set": true,
+      "list_order": true,
+      "nonfinite": "reject",
+      "types": true
+    }
+  },
+  "data_classification": "synthetic",
+  "description": "calc_kelly_fraction グリッドと suggest_bet_amount の min/max_bet 境界。odds=1.0 の ZeroDivisionError を含む",
+  "execution_parameters": {
+    "clock": "not_used (対象関数は現在時刻を読まない。datetime.now を使う経路は対象外)",
+    "cwd": "empty temporary directory",
+    "fixed_time": "2026-01-01T00:00:00+09:00",
+    "libraries": {
+      "numpy": "2.5.3"
+    },
+    "ml_cfg": {
+      "enabled": false
+    },
+    "network": "blocked",
+    "seed": 20260101,
+    "timezone": "Asia/Tokyo"
+  },
+  "expected_output": {
+    "results": [
+      {
+        "call_id": "kf-000",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf-001",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf-002",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf-003",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf-004",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf-005",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf-006",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf-007",
+        "outcome": {
+          "exception_type": "ZeroDivisionError",
+          "message": "float division by zero",
+          "status": "exception"
+        }
+      },
+      {
+        "call_id": "kf-008",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf-009",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf-010",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf-011",
+        "outcome": {
+          "status": "ok",
+          "value": 0.049048096192384774
+        }
+      },
+      {
+        "call_id": "kf-012",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf-013",
+        "outcome": {
+          "exception_type": "ZeroDivisionError",
+          "message": "float division by zero",
+          "status": "exception"
+        }
+      },
+      {
+        "call_id": "kf-014",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf-015",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf-016",
+        "outcome": {
+          "status": "ok",
+          "value": 0.125
+        }
+      },
+      {
+        "call_id": "kf-017",
+        "outcome": {
+          "status": "ok",
+          "value": 0.25
+        }
+      },
+      {
+        "call_id": "kf-018",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf-019",
+        "outcome": {
+          "exception_type": "ZeroDivisionError",
+          "message": "float division by zero",
+          "status": "exception"
+        }
+      },
+      {
+        "call_id": "kf-020",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf-021",
+        "outcome": {
+          "status": "ok",
+          "value": 0.19999999999999996
+        }
+      },
+      {
+        "call_id": "kf-022",
+        "outcome": {
+          "status": "ok",
+          "value": 0.25
+        }
+      },
+      {
+        "call_id": "kf-023",
+        "outcome": {
+          "status": "ok",
+          "value": 0.25
+        }
+      },
+      {
+        "call_id": "kf-024",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf-025",
+        "outcome": {
+          "exception_type": "ZeroDivisionError",
+          "message": "float division by zero",
+          "status": "exception"
+        }
+      },
+      {
+        "call_id": "kf-026",
+        "outcome": {
+          "status": "ok",
+          "value": 0.25
+        }
+      },
+      {
+        "call_id": "kf-027",
+        "outcome": {
+          "status": "ok",
+          "value": 0.25
+        }
+      },
+      {
+        "call_id": "kf-028",
+        "outcome": {
+          "status": "ok",
+          "value": 0.25
+        }
+      },
+      {
+        "call_id": "kf-029",
+        "outcome": {
+          "status": "ok",
+          "value": 0.25
+        }
+      },
+      {
+        "call_id": "kf1-000",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf1-001",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf1-002",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf1-003",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf1-004",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf1-005",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf1-006",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf1-007",
+        "outcome": {
+          "exception_type": "ZeroDivisionError",
+          "message": "float division by zero",
+          "status": "exception"
+        }
+      },
+      {
+        "call_id": "kf1-008",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf1-009",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf1-010",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf1-011",
+        "outcome": {
+          "status": "ok",
+          "value": 0.049048096192384774
+        }
+      },
+      {
+        "call_id": "kf1-012",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf1-013",
+        "outcome": {
+          "exception_type": "ZeroDivisionError",
+          "message": "float division by zero",
+          "status": "exception"
+        }
+      },
+      {
+        "call_id": "kf1-014",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf1-015",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf1-016",
+        "outcome": {
+          "status": "ok",
+          "value": 0.125
+        }
+      },
+      {
+        "call_id": "kf1-017",
+        "outcome": {
+          "status": "ok",
+          "value": 0.2992985971943888
+        }
+      },
+      {
+        "call_id": "kf1-018",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf1-019",
+        "outcome": {
+          "exception_type": "ZeroDivisionError",
+          "message": "float division by zero",
+          "status": "exception"
+        }
+      },
+      {
+        "call_id": "kf1-020",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf1-021",
+        "outcome": {
+          "status": "ok",
+          "value": 0.19999999999999996
+        }
+      },
+      {
+        "call_id": "kf1-022",
+        "outcome": {
+          "status": "ok",
+          "value": 0.5
+        }
+      },
+      {
+        "call_id": "kf1-023",
+        "outcome": {
+          "status": "ok",
+          "value": 0.5995991983967935
+        }
+      },
+      {
+        "call_id": "kf1-024",
+        "outcome": {
+          "status": "ok",
+          "value": 0.0
+        }
+      },
+      {
+        "call_id": "kf1-025",
+        "outcome": {
+          "exception_type": "ZeroDivisionError",
+          "message": "float division by zero",
+          "status": "exception"
+        }
+      },
+      {
+        "call_id": "kf1-026",
+        "outcome": {
+          "status": "ok",
+          "value": 1.0
+        }
+      },
+      {
+        "call_id": "kf1-027",
+        "outcome": {
+          "status": "ok",
+          "value": 1.0
+        }
+      },
+      {
+        "call_id": "kf1-028",
+        "outcome": {
+          "status": "ok",
+          "value": 1.0
+        }
+      },
+      {
+        "call_id": "kf1-029",
+        "outcome": {
+          "status": "ok",
+          "value": 1.0
+        }
+      },
+      {
+        "call_id": "sb-000",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "ev": 0.20000000000000018,
+            "expected_profit": 2.0000000000000018,
+            "kelly_fraction": 0.10000000000000003,
+            "strategy": "中額投資推奨",
+            "suggested_bet": 10.0
+          }
+        }
+      },
+      {
+        "call_id": "sb-001",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "ev": 0.20000000000000018,
+            "expected_profit": 2.0000000000000018,
+            "kelly_fraction": 0.10000000000000003,
+            "strategy": "中額投資推奨",
+            "suggested_bet": 10.0
+          }
+        }
+      },
+      {
+        "call_id": "sb-002",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "ev": 0.020000000000000018,
+            "expected_profit": 0.020000000000000146,
+            "kelly_fraction": 0.010000000000000064,
+            "strategy": "小額投資推奨（ケリー基準が低い）",
+            "suggested_bet": 1.0000000000000064
+          }
+        }
+      },
+      {
+        "call_id": "sb-003",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "ev": 0.020000000000000018,
+            "expected_profit": 0.010000000000000009,
+            "kelly_fraction": 0.010000000000000064,
+            "strategy": "小額投資推奨（ケリー基準が低い）",
+            "suggested_bet": 0.5
+          }
+        }
+      },
+      {
+        "call_id": "sb-004",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "ev": -0.3999999999999999,
+            "expected_profit": 0.0,
+            "kelly_fraction": 0.0,
+            "strategy": "投資推奨なし（EVが負）",
+            "suggested_bet": 0.0
+          }
+        }
+      },
+      {
+        "call_id": "sb-005",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "ev": 1.7000000000000002,
+            "expected_profit": 8.5,
+            "kelly_fraction": 0.05,
+            "strategy": "中額投資推奨",
+            "suggested_bet": 5.0
+          }
+        }
+      },
+      {
+        "call_id": "sb-006",
+        "outcome": {
+          "exception_type": "ZeroDivisionError",
+          "message": "float division by zero",
+          "status": "exception"
+        }
+      },
+      {
+        "call_id": "sb-007",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "ev": -1.0,
+            "expected_profit": 0.0,
+            "kelly_fraction": 0.0,
+            "strategy": "投資推奨なし（EVが負）",
+            "suggested_bet": 0.0
+          }
+        }
+      }
+    ]
+  },
+  "fixture_id": "golden/GD01-KELLY-002/v1",
+  "generator": {
+    "tool": "tools/golden",
+    "tool_version": "0.1.0"
+  },
+  "input": {
+    "calls": [
+      {
+        "args": {
+          "odds": 0.0,
+          "prob": 0.0
+        },
+        "call_id": "kf-000",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 1.0,
+          "prob": 0.0
+        },
+        "call_id": "kf-001",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 1.01,
+          "prob": 0.0
+        },
+        "call_id": "kf-002",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 2.0,
+          "prob": 0.0
+        },
+        "call_id": "kf-003",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 5.0,
+          "prob": 0.0
+        },
+        "call_id": "kf-004",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 999.0,
+          "prob": 0.0
+        },
+        "call_id": "kf-005",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 0.0,
+          "prob": 0.05
+        },
+        "call_id": "kf-006",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 1.0,
+          "prob": 0.05
+        },
+        "call_id": "kf-007",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 1.01,
+          "prob": 0.05
+        },
+        "call_id": "kf-008",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 2.0,
+          "prob": 0.05
+        },
+        "call_id": "kf-009",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 5.0,
+          "prob": 0.05
+        },
+        "call_id": "kf-010",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 999.0,
+          "prob": 0.05
+        },
+        "call_id": "kf-011",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 0.0,
+          "prob": 0.3
+        },
+        "call_id": "kf-012",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 1.0,
+          "prob": 0.3
+        },
+        "call_id": "kf-013",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 1.01,
+          "prob": 0.3
+        },
+        "call_id": "kf-014",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 2.0,
+          "prob": 0.3
+        },
+        "call_id": "kf-015",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 5.0,
+          "prob": 0.3
+        },
+        "call_id": "kf-016",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 999.0,
+          "prob": 0.3
+        },
+        "call_id": "kf-017",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 0.0,
+          "prob": 0.6
+        },
+        "call_id": "kf-018",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 1.0,
+          "prob": 0.6
+        },
+        "call_id": "kf-019",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 1.01,
+          "prob": 0.6
+        },
+        "call_id": "kf-020",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 2.0,
+          "prob": 0.6
+        },
+        "call_id": "kf-021",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 5.0,
+          "prob": 0.6
+        },
+        "call_id": "kf-022",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 999.0,
+          "prob": 0.6
+        },
+        "call_id": "kf-023",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 0.0,
+          "prob": 1.0
+        },
+        "call_id": "kf-024",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 1.0,
+          "prob": 1.0
+        },
+        "call_id": "kf-025",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 1.01,
+          "prob": 1.0
+        },
+        "call_id": "kf-026",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 2.0,
+          "prob": 1.0
+        },
+        "call_id": "kf-027",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 5.0,
+          "prob": 1.0
+        },
+        "call_id": "kf-028",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "odds": 999.0,
+          "prob": 1.0
+        },
+        "call_id": "kf-029",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 0.0,
+          "prob": 0.0
+        },
+        "call_id": "kf1-000",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 1.0,
+          "prob": 0.0
+        },
+        "call_id": "kf1-001",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 1.01,
+          "prob": 0.0
+        },
+        "call_id": "kf1-002",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 2.0,
+          "prob": 0.0
+        },
+        "call_id": "kf1-003",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 5.0,
+          "prob": 0.0
+        },
+        "call_id": "kf1-004",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 999.0,
+          "prob": 0.0
+        },
+        "call_id": "kf1-005",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 0.0,
+          "prob": 0.05
+        },
+        "call_id": "kf1-006",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 1.0,
+          "prob": 0.05
+        },
+        "call_id": "kf1-007",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 1.01,
+          "prob": 0.05
+        },
+        "call_id": "kf1-008",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 2.0,
+          "prob": 0.05
+        },
+        "call_id": "kf1-009",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 5.0,
+          "prob": 0.05
+        },
+        "call_id": "kf1-010",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 999.0,
+          "prob": 0.05
+        },
+        "call_id": "kf1-011",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 0.0,
+          "prob": 0.3
+        },
+        "call_id": "kf1-012",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 1.0,
+          "prob": 0.3
+        },
+        "call_id": "kf1-013",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 1.01,
+          "prob": 0.3
+        },
+        "call_id": "kf1-014",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 2.0,
+          "prob": 0.3
+        },
+        "call_id": "kf1-015",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 5.0,
+          "prob": 0.3
+        },
+        "call_id": "kf1-016",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 999.0,
+          "prob": 0.3
+        },
+        "call_id": "kf1-017",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 0.0,
+          "prob": 0.6
+        },
+        "call_id": "kf1-018",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 1.0,
+          "prob": 0.6
+        },
+        "call_id": "kf1-019",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 1.01,
+          "prob": 0.6
+        },
+        "call_id": "kf1-020",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 2.0,
+          "prob": 0.6
+        },
+        "call_id": "kf1-021",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 5.0,
+          "prob": 0.6
+        },
+        "call_id": "kf1-022",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 999.0,
+          "prob": 0.6
+        },
+        "call_id": "kf1-023",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 0.0,
+          "prob": 1.0
+        },
+        "call_id": "kf1-024",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 1.0,
+          "prob": 1.0
+        },
+        "call_id": "kf1-025",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 1.01,
+          "prob": 1.0
+        },
+        "call_id": "kf1-026",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 2.0,
+          "prob": 1.0
+        },
+        "call_id": "kf1-027",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 5.0,
+          "prob": 1.0
+        },
+        "call_id": "kf1-028",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 1.0
+          },
+          "odds": 999.0,
+          "prob": 1.0
+        },
+        "call_id": "kf1-029",
+        "function": "calc_kelly_fraction"
+      },
+      {
+        "args": {
+          "kwargs": {},
+          "odds": 3.0,
+          "prob": 0.4
+        },
+        "call_id": "sb-000",
+        "function": "suggest_bet_amount"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "bankroll": 100.0,
+            "max_bet": 10.0,
+            "min_bet": 10.0
+          },
+          "odds": 3.0,
+          "prob": 0.4
+        },
+        "call_id": "sb-001",
+        "function": "suggest_bet_amount"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "min_bet": 1.0
+          },
+          "odds": 3.0,
+          "prob": 0.34
+        },
+        "call_id": "sb-002",
+        "function": "suggest_bet_amount"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "bankroll": 10.0,
+            "min_bet": 0.5
+          },
+          "odds": 3.0,
+          "prob": 0.34
+        },
+        "call_id": "sb-003",
+        "function": "suggest_bet_amount"
+      },
+      {
+        "args": {
+          "kwargs": {},
+          "odds": 3.0,
+          "prob": 0.2
+        },
+        "call_id": "sb-004",
+        "function": "suggest_bet_amount"
+      },
+      {
+        "args": {
+          "kwargs": {
+            "max_fraction": 0.05
+          },
+          "odds": 3.0,
+          "prob": 0.9
+        },
+        "call_id": "sb-005",
+        "function": "suggest_bet_amount"
+      },
+      {
+        "args": {
+          "kwargs": {},
+          "odds": 1.0,
+          "prob": 0.5
+        },
+        "call_id": "sb-006",
+        "function": "suggest_bet_amount"
+      },
+      {
+        "args": {
+          "kwargs": {},
+          "odds": 0.0,
+          "prob": 0.5
+        },
+        "call_id": "sb-007",
+        "function": "suggest_bet_amount"
+      }
+    ]
+  },
+  "known_defects": [
+    "E5"
+  ],
+  "legacy_behavior_note": "expected_output は旧実装が実際に返した値（欠陥候補を含む）。新仕様の期待値ではない。",
+  "scenario_ids": [
+    "GD01",
+    "GD09"
+  ],
+  "schema_version": 1,
+  "source_commit": "f7dbf69fd8940121782870de902e8c449e6ca149",
+  "source_function": [
+    "jraev.ev.ev_calc.calc_kelly_fraction",
+    "jraev.ev.ev_calc.suggest_bet_amount"
+  ],
+  "source_repository": "puttun777/jra-bot"
+}

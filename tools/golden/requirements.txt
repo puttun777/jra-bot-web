@@ -1,0 +1,3 @@
+# 生成（旧実装の実行）に必要な最小限。verify / compare / 単体テストは標準ライブラリのみ。
+# 旧実装 requirements.txt のうち、対象の計算経路が import するのは numpy だけ（pandas/PyYAML/streamlit 等は不要）。
+numpy==2.5.3
