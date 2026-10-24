@@ -45,6 +45,7 @@ class MigrationApplyIntegrationTest {
             "ml_model",
             "ingest_fetch",
             "ingest_backfill",
+            "horse_master_history",
             "flyway_schema_history",
         )
 
@@ -65,8 +66,8 @@ class MigrationApplyIntegrationTest {
         val result = CliHarness.run(db, "migrate")
         assertEquals(0, result.code, result.stderr)
         assertTrue(""""success":true""" in result.stdout, result.stdout)
-        assertTrue(""""applied":["1","2","3","R__grants"]""" in result.stdout, result.stdout)
-        assertTrue(""""current":"3"""" in result.stdout && """"latest":"3"""" in result.stdout && """"pending":[]""" in result.stdout, result.stdout)
+        assertTrue(""""applied":["1","2","3","4","R__grants"]""" in result.stdout, result.stdout)
+        assertTrue(""""current":"4"""" in result.stdout && """"latest":"4"""" in result.stdout && """"pending":[]""" in result.stdout, result.stdout)
         println("MySQL ${MySqlSupport.image} -> server version ${MySqlSupport.serverVersion()}")
     }
 
@@ -82,13 +83,13 @@ class MigrationApplyIntegrationTest {
     }
 
     @Test
-    fun `履歴は V1 V2 と R__grants の 3 行で、すべて成功`() {
+    fun `履歴は V1〜V4 と R__grants の 5 行で、すべて成功`() {
         val db = CliHarness.migratedDatabase()
         val rows =
             db.query("SELECT version, description, success FROM flyway_schema_history ORDER BY installed_rank") {
                 "${it.getString(1)}|${it.getString(2)}|${it.getInt(3)}"
             }
-        assertEquals(listOf("1|baseline|1", "2|ops calendar ingest ml|1", "3|ingest auth fetch backfill|1", "null|grants|1"), rows)
+        assertEquals(listOf("1|baseline|1", "2|ops calendar ingest ml|1", "3|ingest auth fetch backfill|1", "4|horse master history|1", "null|grants|1"), rows)
     }
 
     @Test

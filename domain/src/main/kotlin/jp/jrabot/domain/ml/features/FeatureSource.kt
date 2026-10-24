@@ -28,6 +28,17 @@ interface FeatureSource {
     ): HorseMaster?
 
     /**
+     * [asOf] 時点の馬マスタ（累積値は [asOf] 時点で判明していた版。UNRESOLVED G-17 ⑤・D-166）。**新方式（point-in-time）はこちらだけを使う**。
+     * 既定は最新の 1 行（[horse]）で、履歴を持たない合成の供給元向け。履歴を持つ供給元（DB）は [HorseMasterAtTime.resolve] の規則で返す
+     * （時点を特定できない累積値は空にして、現在値を過去の値として使わない）。
+     */
+    fun horseAsOf(
+        tenantId: TenantId,
+        kettoNum: String,
+        asOf: Instant,
+    ): HorseMaster? = horse(tenantId, kettoNum)
+
+    /**
      * 過去走（着順が 1 以上のものだけ）を **日付の降順 → race_id の降順**で最大 [limit] 件。
      * [before] が null でなければ `run_date < before`（**その日を含まない**）のものだけ。日付の無い行は [before] 指定時は返さない。
      * [before] = null は旧互換モード（上限なし。H3 のラベルリークを含み得る）専用。
@@ -112,3 +123,42 @@ data class PastRun(
     val runDate: LocalDate?,
     val finish: Int,
 )
+
+/** 馬マスタの累積値の 1 つの版（`horse_master_history` の 1 行）。[knownAt] はこの内容が判明していたと言える最も早い時刻（観測の時刻）。 */
+data class HorseCumulative(
+    val knownAt: Instant,
+    val styleHint: String,
+    val distanceTable: ChakuTable,
+    val surfaceTable: ChakuTable,
+    val conditionTable: ChakuTable,
+)
+
+/**
+ * 馬マスタの時点の解決（累積値だけが対象。血統・生年月日は不変とみなす）。**履歴が無い時点の値を推測せず、現在値で補わない**:
+ * 1. 現在の行の最終更新が [asOf] 以前なら、それ以降に変更が無いので現在の行が [asOf] 時点の状態。
+ * 2. [history]（`known_at <= asOf` の最新の版。呼び出し側が時刻で絞る）があれば、その累積値。1 と 2 が両方あれば新しい方（同時刻は現在の行）。
+ * 3. どちらも無ければ累積値を空にする（`updatedAt` は現在の行のまま = [asOf] より後なので、[PointInTimeFeatureBuilder] が
+ *    [FeatureFlag.MASTER_NEWER_THAN_AS_OF] を付ける）。馬マスタが無ければ null。
+ */
+object HorseMasterAtTime {
+    fun resolve(
+        current: HorseMaster?,
+        history: HorseCumulative?,
+        asOf: Instant,
+    ): HorseMaster? {
+        if (current == null) return null
+        val usableHistory = history?.takeIf { !it.knownAt.isAfter(asOf) }
+        val currentValid = !current.updatedAt.isAfter(asOf)
+        if (currentValid && (usableHistory == null || !usableHistory.knownAt.isAfter(current.updatedAt))) return current
+        if (usableHistory != null) {
+            return current.copy(
+                styleHint = usableHistory.styleHint,
+                distanceTable = usableHistory.distanceTable,
+                surfaceTable = usableHistory.surfaceTable,
+                conditionTable = usableHistory.conditionTable,
+                updatedAt = usableHistory.knownAt,
+            )
+        }
+        return current.copy(styleHint = "", distanceTable = ChakuTable.EMPTY, surfaceTable = ChakuTable.EMPTY, conditionTable = ChakuTable.EMPTY)
+    }
+}
