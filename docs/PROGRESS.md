@@ -29,7 +29,9 @@ T1.20（実 pkl・実 SQLite）、T1.21、品質ゲートの閾値（D-13）、�
 ### 次の作業（**自動では進まない**）
 T3.7（Discord 通知。G-17 ⑥）／T3.8（bot-run 統合。G-17 ①②。履歴の追記）。第 5 段階前に T5.0（infra 同期。スキーマ版 4 の GRANT・`mltrain` ユーザー）。
 ### ブランチ・PR・CI
-`claude/stage3-ml-training`（main の 8ab5f41 から）。PR・CI の結果は下記「CI」を参照（**マージはユーザーの判断**）。
+`claude/stage3-ml-training`（main の 8ab5f41 から）。PR: https://github.com/puttun777/jra-bot-web/pull/24 （**マージはユーザーの判断**。自動マージなし）。
+CI（head a978147, run 40128981405）: build (Temurin 25)・db integration (MySQL 8.4 / 9.7)・golden・ml tools・**ml-train (Python 3.13)**・release tools・agent python 3.12/3.13・agent windows・**images（5 イメージのビルドとスモーク。push なし）**・changes and repo hygiene・**ci gate がすべて成功**（connectorj26 は非ゲートでスキップ）。
+経緯: 初回 CI で `images` が失敗した。①ml-train イメージの venv に `--chmod=a=rX` を付けたため python が起動できなかった → 外した ②スモークの env 引数の重複 ③`ml/requirements.txt` に推移的依存 `cloudpickle`・`narwhals` が無く、`--no-deps` のイメージで joblib が読めなかった → 追加（`pip check` がスモークで検出） ④スモークの合成 DB にテナント 1 が無く `ml_model` の FK 違反 → CI 専用 DB にだけ追加 ⑤成果物（uid 10001 所有）を検査側が読めなかった → 同イメージ内で読取り権限を付与。いずれもテスト・検査側またはイメージ定義の修正で、検査を緩めていない。
 
 ---
 
