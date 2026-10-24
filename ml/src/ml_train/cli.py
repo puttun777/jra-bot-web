@@ -47,6 +47,9 @@ def _parser() -> argparse.ArgumentParser:
     c.add_argument("--tenant-id", required=True, type=int)
     c.add_argument("--model-id", required=True)
     c.add_argument("--created-at", help="ISO-8601 UTC（省略時は現在時刻）")
+    from .legacy_pkl.cli import add_arguments
+
+    add_arguments(c)
     return p
 
 

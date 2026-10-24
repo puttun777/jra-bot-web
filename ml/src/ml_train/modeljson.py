@@ -26,7 +26,7 @@ _TOP_KEYS = {
     "model_schema_version", "model_id", "tenant_id", "kind", "algorithm", "feature_schema", "preprocessing", "weights", "bias",
     "calibration", "market_blend", "ensemble", "training", "metrics", "created_at", "producer", "sha256",
 }  # fmt: skip
-ALLOWED_DIMS = {"calibration": 40, "alpha": 35}
+ALLOWED_DIMS = {"calibration": {40}, "alpha": {35}, "legacy_compat": {5, 40}}  # Kotlin の ModelKind.allowedSchemas と同じ
 
 
 class ModelVerificationError(MlTrainError):
@@ -201,7 +201,7 @@ def verify_model_bytes(
     if expected_schema_hash and schema["hash"] != expected_schema_hash:
         raise ModelVerificationError("FEATURE_SCHEMA_MISMATCH", "feature_schema.hash がレジストリの記録と違う")
     kind = m["kind"]
-    if kind not in ALLOWED_DIMS or len(schema["names"]) != ALLOWED_DIMS[kind] or m["algorithm"] != "logistic_regression":
+    if kind not in ALLOWED_DIMS or len(schema["names"]) not in ALLOWED_DIMS[kind] or m["algorithm"] != "logistic_regression":
         raise ModelVerificationError("FEATURE_SCHEMA_MISMATCH", "kind と feature_schema が合わない")
     n = len(schema["names"])
     w = m["weights"]
