@@ -1,0 +1,77 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ml-train"
+version = "0.1.0"
+description = "JRA Bot ML 学習 Job（必要時のみ実行。常駐しない）。本人 1 名の私的利用専用。ACTIVE への昇格はしない。"
+requires-python = ">=3.12,<3.14"
+license = { text = "Proprietary" }
+# 実行時の依存は requirements.txt（推移的依存まで固定）。ここは直接依存の下限・上限だけ。
+dependencies = [
+  "numpy==2.5.3",
+  "scipy==1.18.1",
+  "scikit-learn==1.9.1",
+  "cryptography==50.0.2",
+  "PyMySQL==1.2.3",
+]
+
+[project.scripts]
+ml-train = "ml_train.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# tools.ml（リポジトリ直下。データセット契約・正準 JSON の参照実装）を import するため、リポジトリのルートも入れる
+pythonpath = ["src", ".."]
+addopts = "-ra --strict-markers -W error"
+filterwarnings = ["error"]
+markers = [
+  "integration: MySQL が必要なテスト（環境変数 ML_TRAIN_TEST_MYSQL がある時だけ実行。CI では Kotlin 側の結合テストが担当）",
+]
+
+[tool.ruff]
+line-length = 140
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF", "PL"]
+ignore = [
+  "PLR0913", "PLR0911", "PLR0912", "PLR0915", "PLR2004", "PLR0917",
+  "PLC0415",
+  "SIM105",
+  "S101",
+  "E501",
+  "RUF001", "RUF002", "RUF003",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["ml_train", "tests", "tools"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106", "S107", "RUF059", "S108", "S311", "S603", "S607", "PLC0415", "B017", "S301", "S608"]
+# pkl 変換は『許可リスト式 Unpickler』を実装するために pickle を使う（無制限の pickle.load は禁止。docs/ML_DESIGN.md §11.9）
+"src/ml_train/legacy_pkl/*" = ["S301"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src", "tests"]
+mypy_path = ["src", ".."]
+warn_unused_ignores = true
+[[tool.mypy.overrides]]
+# リポジトリ共有の参照実装（型注釈なし）。import は許すが中身は検査しない
+module = ["tools.*"]
+follow_imports = "skip"
+ignore_missing_imports = true
+[[tool.mypy.overrides]]
+module = ["sklearn.*", "scipy.*", "pymysql.*", "threadpoolctl.*"]
+ignore_missing_imports = true
+[[tool.mypy.overrides]]
+# テストは型を厳密に検査しない（src が strict。テストの引数は pytest が注入する）
+module = ["tests.*"]
+ignore_errors = true

@@ -1,0 +1,12 @@
+# ml-train の実行時依存（独立した依存環境。tools/golden の numpy 2.5.3、agent の cryptography とは別に管理する。版の選定根拠: docs/VERSIONS.md §15）。
+# 直接依存と、その推移的依存まで固定する（再現性）。pandas は使わない（CSV は標準ライブラリ + numpy で読む）。
+numpy==2.5.3
+scipy==1.18.1
+scikit-learn==1.9.1
+joblib==1.6.0
+threadpoolctl==3.7.0
+cryptography==50.0.2
+PyMySQL==1.2.3
+# cryptography の推移的依存（pip freeze 相当。再現性のため固定）
+cffi==2.1.1
+pycparser==3.12
