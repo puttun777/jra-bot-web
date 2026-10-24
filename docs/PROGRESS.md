@@ -25,7 +25,11 @@ D-5（P-1）・D-6（P-2）・D-7（P-3）は**承認済みにしていない**�
 ### T3.6 への引き継ぎ
 ML（T3.6）は agent と独立。前提: 実データ形式のパーサは未実装。T5.0 に G-13/G-14（ビーコンの再署名、配布、環境変数）。
 ### ブランチ・PR
-`claude/stage3-windows-agent`（main の 5aa8672 から）。**PR #21**（main 向け、マージはユーザー）。CI の結果は下。
+`claude/stage3-windows-agent`（main の 5aa8672 から）。**PR #21**（main 向け、マージはユーザー）。
+### CI
+- **コードを含む最新コミット d612c16 の run 40059683314: ci gate 成功**（agent python 3.12/3.13・agent windows・build・golden・release tools・db integration 8.4/9.7（`AgentInteropIntegrationTest` を含む ingest 統合）・images が成功。connectorj26 は設計どおり skipped）。
+- **途中の失敗と修正**: ① ruff の指摘（`with` の結合・書式）② `:ingest` 単体の全滅 — 旧テスト用の仮ハンドラ `ProbeController` が本物の `/v1/agent/mode|plan` と衝突（ローカルは Maven Central の 429 で Gradle が動かず事前に気づけなかった）③ 統合テストの期待値 2 件（D-144 で古い取得にも cursor を返す／STOPPED は claim 前に HALTED）。いずれもテスト側の更新で、コードの欠陥ではない。
+- 本記録のコミット（docs のみ）でも CI が走る（結果は PR のチェックを参照）。
 
 ## Stage 3-D（claude/stage3-ingest-api）: T3.4 取込 API・認証・冪等・取得の事実・バックフィル基盤
 ### 結果（T3.4 の範囲で完了。**本番で動作する取込ではない**: 実データ形式のパーサは未実装、署名方式は承認待ち、Windows エージェント本体は T3.5）
