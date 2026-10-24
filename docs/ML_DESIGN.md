@@ -340,3 +340,14 @@ H6・H7・H9 は学習側/データ側（F2・T1.20）。
 - 新規 5 ケース: `G6-FEATURES-001`（特徴量）・`G3-ML-NORM-002`（単体モデル → 正規化・補正）・`G4-ENSEMBLE-002`・`G5-BLEND-002`・`G7-LEGACY-FAIL-001`（旧実装側の失敗時の挙動）。G1（`model_extract_features` の 7 呼び出しを更新: D-153）と G2 は Kotlin で比較。
 - 新しいロード契約の失敗系（署名/ハッシュ/スキーマ/次元/NaN）は旧実装に対応物が無い新設計の仕様なので、ゴールデン（旧出力）ではなく Kotlin 単体テスト（`ModelLoaderTest`・`MlEndToEndTest`）と `tools/ml` の署名つき合成成果物（決定的に再生成可能）で検証した。
 
+## 12. T3.6-B の実装結果（ml-train。2026-10-24。判断 D-165〜D-179）
+**合成データのみで検証。実データでの学習・精度・品質閾値の妥当性は未検証。ML は本番利用可能ではない。**
+- **構成**: Kotlin `bot --task=export-dataset`（`DatasetExporter` → `DatasetPublisher`: gzip CSV → manifest〔確定の印〕）→ `DatasetStore` → Python `ml-train train`（`ml/src/ml_train`）→ `ModelStore`（`.sig` → `.json`〔確定の印〕）→ `ml_model` に CANDIDATE / REJECTED で登録（`mltrain` DB ユーザーは `ml_model` の SELECT/INSERT のみ。ACTIVE への昇格・既存行の更新/削除・他テナントの操作は構造的にできない）。
+- **学習（D-165）**: 標準化 + L2 ロジスティック回帰（lbfgs。決定的）+ Platt 校正 + 直近重み（半減期 90/180/240 日を平均 1 に正規化）。`class_weight` は使わない（H5）。**評価の分割（D-167）**: train で学習 → valid の日付順前半で Platt → 後半で指標・ゲート。
+- **品質ゲート（D-168）**: 既定値を持たない。設定が無い／check が 0 個／市場ベースラインが無いのに比較を要求 → REJECTED（fail closed）。市場ベースラインを捏造しない。数値閾値は未承認（UNRESOLVED D-13）。テストは明示したテスト用閾値のみ。
+- **モデル JSON（D-169）**: §11.3 の契約（正準 JSON・sha256・Ed25519〔JSON のバイト列に対する署名。`.sig` は raw 64 バイト〕）。Python の検証は Kotlin `ModelLoader` と同じ順序・理由コード。`model_id` は決定的（再実行は冪等）。REJECTED の登録は exit 0（D-170）。
+- **点時点安全（D-166）**: SQL 自体が時間を制限（過去走 `run_date < レース日`、オッズ `observed_at <= asOf`、馬マスタ履歴 `known_at <= asOf`）。1 着の結果行が無いレースは出力しない（`RESULT_INCOMPLETE`）。
+- **旧 pkl 変換（D-175）**: 許可リスト式 Unpickler（任意の pickle を安全にするものではない）+ opcode 走査 + サイズ上限。次元不一致は中止。実 pkl の変換は利用者のローカルのみ・未実施。
+- **保管（D-171・D-172）**: ml-train は `file://`（GCS ボリュームのマウント）のみ。GCS アダプタは Kotlin 側（偽クライアントで検証。実 GCS は未接続）。
+- **検証**: pytest 128 件・ruff・mypy strict、`MlTrainInteropIntegrationTest`（Kotlin 出力 → Python 学習 → Kotlin `ModelLoader` 検証）。ローカルは JDK 21・MySQL 8.0.46 であり、JDK 25 / MySQL 8.4・9.7 の合否ではない（CI が正: D-056）。
+
