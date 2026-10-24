@@ -1,6 +1,6 @@
 """合成の旧モデル pickle を書き出す（結合テスト用。実 pkl ではない）。
 
-  python -m tests.make_legacy_pkl OUT.pkl market5|calibration40|alpha35 [--dim N]
+python -m tests.make_legacy_pkl OUT.pkl market5|calibration40|alpha35 [--dim N]
 """
 
 import argparse

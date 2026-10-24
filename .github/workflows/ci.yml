@@ -38,6 +38,7 @@ jobs:
       run_images: ${{ steps.classify.outputs.run_images }}
       run_connectorj26: ${{ steps.classify.outputs.run_connectorj26 }}
       run_ml_tools: ${{ steps.classify.outputs.run_ml_tools }}
+      run_ml_train: ${{ steps.classify.outputs.run_ml_train }}
       run_agent: ${{ steps.classify.outputs.run_agent }}
       run_agent_windows: ${{ steps.classify.outputs.run_agent_windows }}
       db_matrix: ${{ steps.classify.outputs.db_matrix }}
@@ -240,6 +241,13 @@ jobs:
           python -m venv "$RUNNER_TEMP/agent-venv"
           "$RUNNER_TEMP/agent-venv/bin/pip" install --no-input -r agent/requirements.txt
           echo "AGENT_PYTHON=$RUNNER_TEMP/agent-venv/bin/python" >> "$GITHUB_ENV"
+      # Kotlin⇄Python の結合テスト（MlTrainInteropIntegrationTest）用。ml-train の実行時の依存は ml/requirements.txt（固定）だけ
+      - name: ml-train runtime dependencies (for the interop test)
+        if: contains(env.DB_SUITES, 'apps')
+        run: |
+          python -m venv "$RUNNER_TEMP/ml-venv"
+          "$RUNNER_TEMP/ml-venv/bin/pip" install --no-input -r ml/requirements.txt
+          echo "ML_TRAIN_PYTHON=$RUNNER_TEMP/ml-venv/bin/python" >> "$GITHUB_ENV"
       - name: Docker and image
         run: |
           docker version --format 'client={{.Client.Version}} server={{.Server.Version}}'
@@ -434,12 +442,56 @@ jobs:
             "$RUNNER_TEMP/venv/bin/python" -m tools.ml.dataset_contract --csv-gz "$RUNNER_TEMP/$n.csv.gz" --manifest "domain/src/test/resources/ml/dataset/$n.manifest.json"
           done
 
+  # ML 学習 Job（T3.6-B。ml/。Python 3.13 = ml-train イメージと同じ minor）。独立した依存環境（ml/requirements-dev.txt。固定）。
+  # ruff・mypy(strict)・pytest（合成データのみ。実データ・実 DB・本番鍵は使わない。署名鍵はテストが実行時に生成）。0 件・スキップ・失敗を許さない。
+  # Kotlin⇄Python の結合テスト（MySQL 8.4 上。:bot の MlTrainInteropIntegrationTest）は db-integration ジョブが実行する。
+  ml-train:
+    name: ml-train (Python 3.13)
+    needs: changes
+    if: needs.changes.outputs.run_ml_train == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: ml
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.13"
+      - name: Install (pinned)
+        run: |
+          python -m pip install --no-input -r requirements-dev.txt
+          python --version
+          python -m pip check
+      - name: ruff and mypy
+        run: |
+          ruff check .
+          ruff format --check .
+          mypy
+      - name: Training, evaluation, quality gate, signing, registry and pkl conversion tests
+        run: python -m pytest -q --junitxml=pytest.xml
+      # 0 件・失敗・スキップを成功扱いにしない（MySQL が要るテストは Kotlin 側の結合テストが担当するので、ここにスキップは無い）
+      - name: Verify that the tests actually ran
+        run: |
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          r = ET.parse("pytest.xml").getroot()
+          s = r if r.tag == "testsuite" else r.find("testsuite")
+          tests, skipped, failures, errors = (int(s.get(k)) for k in ("tests", "skipped", "failures", "errors"))
+          print(f"tests={tests} skipped={skipped} failures={failures} errors={errors}")
+          if tests < 128 or skipped or failures or errors:
+              raise SystemExit("ml-train tests did not all run and pass")
+          PY
+
   # 最終集約チェック。**分岐保護の required check はこれだけ**にする。常に実行され、docs だけの変更でも正常に終わる。
   # 実行が必要と判定されたジョブが success でなければ失敗（skipped・cancelled も失敗）。変更判定が失敗したら失敗（fail closed）。
   ci-gate:
     name: ci gate
     if: always()
-    needs: [changes, build, release-tools, golden, db-integration, images, connectorj26, agent, agent-windows, ml-tools]
+    needs: [changes, build, release-tools, golden, db-integration, images, connectorj26, agent, agent-windows, ml-tools, ml-train]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

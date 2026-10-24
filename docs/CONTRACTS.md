@@ -1,6 +1,6 @@
 # CONTRACTS（web ⇔ infra 受け渡し契約・正本は本ファイル）
 
-状態: **0.4.9（第3段階 / T3.6-A: §5.1 のモデル成果物・データセットの契約を具体化（正準 JSON・sha256・Ed25519 署名の対象と書式・検証鍵の書式・理由コード・データセットの列と manifest・レジストリの読取り）。契約の意味は変えない）**。0.4.8（第3段階 / T3.5: §3.2 の mode・plan・update の実装、§3.3.2 登録（register）の保留、§3.4 の重複 ACK への fetch・cursor の追加。P-1/P-2 は引き続き未承認）**。0.4.7（第3段階 / T3.4: V3、エージェント API の実装、環境変数の追加。§3.3 の署名方式と §3.4 の取得セッション・応答の追加は『提案 P-1 / P-2 / P-3』で、ユーザーの承認まで確定仕様ではない。0.4.5 以前の説明は下に残す）** — **0.4.5（第2段階 / T2.5 後半で §1・§10 にイメージの形式と manifest の検証規則を補足。T2.8 の 0.4.4 は §2・§3.2・§4.3・§9.1・§11。0.4.0 の契約の意味は変えていない）**。0.4.0 は第1段階 / T1.10 で確定した設計契約。infra の `docs/CONTRACTS.md` §2 の差異 D1〜D12 をすべて取り込んだ（対応表は §12）。実装・実リソースで確かめる必要がある箇所は「検証ゲート」として ID を書いている（一覧は `STAGE2_HANDOFF.md` §13）。
+状態: **0.4.10（第3段階 / T3.6-B: ①`export-dataset` の引数（`--dataset-id` `--from` `--to` `--feature-schema` 必須ほか）と `MODEL_STORE_URI`、データセットの manifest 保管（`{dataset_id}.manifest.json`・CSV の後に書く確定の印）②ml-train Job の具体化（引数・環境変数・終了コード・成果物の配置・model_id の決定的な導出・CANDIDATE/REJECTED のみ登録・品質ゲートは設定が無ければ fail closed）③V4（馬マスタの時点履歴 `horse_master_history`）④**`release-manifest` を schema_version 2 に改訂（破壊的）: `feature_schemas`（スキーマ別 hash）を追加し、`feature_schema_hash` を『スキーマ集合の hash』に確定（G-17 ⑧）**⑤ml-train イメージ（5 つ目）。infra への影響は §13 末尾と PROGRESS の I-H 項目）**。0.4.9（第3段階 / T3.6-A: §5.1 のモデル成果物・データセットの契約を具体化（正準 JSON・sha256・Ed25519 署名の対象と書式・検証鍵の書式・理由コード・データセットの列と manifest・レジストリの読取り）。契約の意味は変えない）**。0.4.8（第3段階 / T3.5: §3.2 の mode・plan・update の実装、§3.3.2 登録（register）の保留、§3.4 の重複 ACK への fetch・cursor の追加。P-1/P-2 は引き続き未承認）**。0.4.7（第3段階 / T3.4: V3、エージェント API の実装、環境変数の追加。§3.3 の署名方式と §3.4 の取得セッション・応答の追加は『提案 P-1 / P-2 / P-3』で、ユーザーの承認まで確定仕様ではない。0.4.5 以前の説明は下に残す）** — **0.4.5（第2段階 / T2.5 後半で §1・§10 にイメージの形式と manifest の検証規則を補足。T2.8 の 0.4.4 は §2・§3.2・§4.3・§9.1・§11。0.4.0 の契約の意味は変えていない）**。0.4.0 は第1段階 / T1.10 で確定した設計契約。infra の `docs/CONTRACTS.md` §2 の差異 D1〜D12 をすべて取り込んだ（対応表は §12）。実装・実リソースで確かめる必要がある箇所は「検証ゲート」として ID を書いている（一覧は `STAGE2_HANDOFF.md` §13）。
 - 正本はこのファイル。infra 側は版番号を参照し、変更点を同期する。infra の文書を直す必要がある箇所は `PROGRESS.md` の「infra への引継ぎ」に記録する。web のセッションから infra を直接変更しない。
 - 用語: **mode** は現在のフェーズ（`NORMAL | STARTING | STOPPING | STOPPED`）。**desired** は利用者の意図（`NORMAL | STOPPED`）。アプリが読み取りに失敗したときや、内容が不正なときの判定値は **`UNKNOWN`** とする。UNKNOWN はアプリ内部だけの値で、正本には書かない。旧版の `phase` は廃止して `mode` に統一した（実装はまだ無いため互換フィールドは置かない）。
 
@@ -168,7 +168,7 @@ web→Artifact Registry の push 権限と、infra 側の manifest 取得権限�
 ### 5.1 ML 成果物・ジョブ契約（D12）
 - **モデル成果物**: `model_schema_version: 1` の JSON と `.sig`（ML_DESIGN §5.2）。置き場は `MODEL_STORE_URI/{tenant_id}/models/{model_id}.json`。レジストリは DB の `ml_model`。bot は `ACTIVE` のモデルだけを読む。読む前に `sha256`・署名・`feature_schema_hash`・重みの長さを検証する。検証に失敗したら読み込みを拒否し、フォールバック理由を記録する。
 - **データセット**: bot の `--task=export-dataset` が `MODEL_STORE_URI/{tenant_id}/datasets/{dataset_id}.csv.gz` に出力する（gzip CSV、列順は `feature_schema`）。保持は 90 日（GCS のライフサイクル）。**Git や CI のログには載せない**。
-- **ml-train Job**: 入力は `--tenant-id`、`--dataset-id`、学習設定。**学習データは GCS のデータセットだけから読み、DB の業務テーブルには触れない**。出力はモデル JSON・署名・評価レポートを GCS に書き、`ml_model` に `CANDIDATE` の行を INSERT する（品質ゲート不合格なら `REJECTED`）。ACTIVE への昇格は管理者が dashboard で行う（ml-train にはその権限が無い）。
+- **ml-train Job（0.4.10 の具体化: `ml/`、イメージ `ml-train`、ENTRYPOINT `/opt/venv/bin/python -m ml_train`）**: `train --tenant-id N --dataset-id ID --config 学習設定.json [--gate 品質ゲート.json]`。環境変数: `APP_ENV` `OPS_MODE_SOURCE`（`file://`）`MODEL_STORE_URI`（`file://`）`MODEL_SIGNING_KEY`（生 32 バイトのシードの Base64。Secret Manager）`MODEL_VERIFY_PUBKEY`（任意。署名鍵の公開鍵が含まれることを起動時に検査）`DB_URL` `DB_USER`（本番は `mltrain`）`DB_PASSWORD` `GIT_SHA`。終了コード: 0=正常（**CANDIDATE の登録・REJECTED の登録・登録済み（冪等）・STOPPED 等によるスキップ**を含む。理由は JOB_RESULT の `reason`: `CANDIDATE_REGISTERED` `MODEL_REJECTED` `ALREADY_REGISTERED` `MODE_<mode>`）／1=データセット不正・学習失敗・署名検証失敗・DB の認証/権限・想定外／2=引数・設定の誤り／75=保存先・DB 不達・モード UNKNOWN・SIGTERM による確定前の中断。成果物: `{MODEL_STORE_URI}/{tenant_id}/models/{model_id}.json|.sig`（`.sig` を先、`.json` が確定の印）と `{tenant_id}/reports/{model_id}.report.json`。`model_id` は (テナント・データセットの CSV の sha256・学習設定・品質ゲート設定・種別・ml-train の版) から決まる決定的な値で、同じ入力の再実行は `ALREADY_REGISTERED`（重複行を作らない）。登録は `CANDIDATE` と `REJECTED` だけ（`ACTIVE` にしない。型で禁止）。**品質ゲートの数値は既定値を持たず未承認**: ゲート設定が無い／check が 0 個なら `REJECTED`（fail closed）、設定した check が評価できなければ不合格。SIGTERM は確定（レジストリ登録）の前なら、この実行が作った成果物だけを片付けて 75 で終わる。入力は `--tenant-id`、`--dataset-id`、学習設定。**学習データは GCS のデータセットだけから読み、DB の業務テーブルには触れない**。出力はモデル JSON・署名・評価レポートを GCS に書き、`ml_model` に `CANDIDATE` の行を INSERT する（品質ゲート不合格なら `REJECTED`）。ACTIVE への昇格は管理者が dashboard で行う（ml-train にはその権限が無い）。
 - **DB 権限**（DB ユーザー `mltrain`）: `ml_model` の `SELECT, INSERT` だけ（§8.2）。UPDATE、DELETE、他テーブルへのアクセスは不可。テナントは引数で受け取り、INSERT する行の `tenant_id` はその値に固定する。DB の行単位権限が無いので、越境はテナント引数の検証と監査（`created_by=ml-train:<execution>`）で防ぐ。
 - **モード**: Job の開始時に §5.2 の方法でモードを確認し、NORMAL 以外なら何もせず終える（§9）。
 - **infra の義務**: ①バケット（東京・非公開・バージョニング・データセットはライフサイクル 90 日）と IAM（ml-train: models の書込とデータセットの読取 / bot: models の読取とデータセットの書込〔export-dataset〕）、②署名鍵の Secret、③`ml-train` Job の定義（Scheduler は最初 paused）、④STOPPED のときに Job を起動しない。
@@ -226,7 +226,7 @@ web→Artifact Registry の push 権限と、infra 側の manifest 取得権限�
 - **エージェントが送信してよいのは mode=NORMAL のときだけ**。STARTING、STOPPING、不明のときはすべて「送らない」。
 
 ## 6. 契約バージョン
-`contract_version: 0.4.9`（0.4.0 から意味を変える変更は無いが、§3.3 の署名方式は P-1 の承認で確定する）。破壊的な変更はメジャー版を上げ、`release-manifest.json` に含める。エージェントプロトコルは `/v1`（`protocol: 1`）。第2段階以降に実装でずれが見つかったら 0.4.x / 0.5.0 として本ファイルで管理する。1.0.0 は第6段階の統合レビューで凍結する。
+`contract_version: 0.4.10`（0.4.9 までは 0.4.0 から意味を変える変更は無かった。0.4.10 は release-manifest の schema_version を 2 に上げる破壊的変更を含む（本番 manifest は未発行なので移行は不要）。§3.3 の署名方式は P-1 の承認で確定する§3.3 の署名方式は P-1 の承認で確定する）。破壊的な変更はメジャー版を上げ、`release-manifest.json` に含める。エージェントプロトコルは `/v1`（`protocol: 1`）。第2段階以降に実装でずれが見つかったら 0.4.x / 0.5.0 として本ファイルで管理する。1.0.0 は第6段階の統合レビューで凍結する。
 
 ## 7. Windows エージェントの STOPPED 時動作契約（T1.15）
 
@@ -341,7 +341,7 @@ STOPPED 中の `ingest` 503、ビーコンのみ STOPPED、両方不達（UNKNOW
 | 2 | 引数・設定の誤り | `--task` 不明、必須の環境変数が無い | 通知する |
 | 1・その他 | 失敗（バグ・検証 NG・スキーマ版不足） | 例外、`REQUIRED_SCHEMA_VERSION` 未満 | 通知する |
 - `db-migration` だけは `10`（validate で未適用あり）を追加で使う（§4.2）。通常の Job（bot）は 10 を使わない。
-- **0.4.4 の補足（T2.8 / D-085）**: 設定不正（`OPS_MODE_SOURCE` の未設定・不正、`APP_ENV` の誤り、DB の環境変数の不足、本番での `bot` 以外の DB ユーザー）は **2**。想定外の例外は **1**（75 にしない）。Job の順序は 引数 → 設定 → モード（DB に触れない）→（NORMAL のみ）スキーマ版 → タスク。**スタブ（業務処理が未実装のタスク）は本番(`APP_ENV=prod`)で exit 1・理由 `TASK_NOT_IMPLEMENTED`**（成功に見せない）。`--task` ごとの引数: 共通 `--task`・`--tenant-id`（必須）、`bot-run` `--date` `--trigger`、`calendar-check`/`reconcile` `--date`、`retention` `--dry-run`、`export-dataset` なし（暫定）。
+- **0.4.4 の補足（T2.8 / D-085）**: 設定不正（`OPS_MODE_SOURCE` の未設定・不正、`APP_ENV` の誤り、DB の環境変数の不足、本番での `bot` 以外の DB ユーザー）は **2**。想定外の例外は **1**（75 にしない）。Job の順序は 引数 → 設定 → モード（DB に触れない）→（NORMAL のみ）スキーマ版 → タスク。**スタブ（業務処理が未実装のタスク）は本番(`APP_ENV=prod`)で exit 1・理由 `TASK_NOT_IMPLEMENTED`**（成功に見せない）。`--task` ごとの引数: 共通 `--task`・`--tenant-id`（必須）、`bot-run` `--date` `--trigger`、`calendar-check`/`reconcile` `--date`、`retention` `--dry-run`、`export-dataset`（0.4.10 で確定）: `--dataset-id`（必須・`[A-Za-z0-9_-]{1,64}`）`--from` `--to`（必須・レース日・両端を含む・800 日未満）`--feature-schema=calibration|alpha`（必須）`--valid-fraction`（既定 0.2）`--as-of-lead-minutes`（既定 10）。環境変数 `MODEL_STORE_URI`（必須）。
 - **0.4.6 の補足（T3.3 / D-122〜D-127）**: ① **`calendar-check` は実装済み**（他のタスクは引き続きスタブ。本番で exit 1）。終了コード: 起動を要求して受け付けられた=0（`LAUNCH_REQUESTED`。bot-run が始まったことではない）／起動しないのが正常（開催なし・窓の外・実行中・中止・延期・DENY_RUN・完了済み・確定した非 NORMAL）=0／**要確認（予定が不明・古い・未確認、延期先不明、発走時刻なし、モード UNKNOWN）=75**（起動しない=fail closed。通知して次の定期起動に任せる）／起動要求の一時失敗=75／起動要求の失敗（**起動基盤が未設定の本番の配線を含む**）=1／実行途中の DB 不達=75。② 起動要求（`JobLauncher.launch`）は冪等でなく、連続実行・手動との競合で**重複し得る**。二重処理は起動された bot-run の DB リース（`bot_run` の UNIQUE(active_slot)・行ロック・版）が阻止する（`AlreadyActive` は正常な終了で、異常ではない）。③ リースの期限・heartbeat 間隔は設定可能な値として設計し、運用値は T3.8 で確定する（D-122）。
 - infra の OPERATIONS_DESIGN §2.4 は「UNKNOWN なら exit 0」と書いている。web は **UNKNOWN を 75** にした（D-048）。開催日に GCS 障害で何もしなかったことに気付けないのを防ぐため。infra への引継ぎ事項として記録した。
 
@@ -353,14 +353,14 @@ STOPPED 中の `ingest` 503、ビーコンのみ STOPPED、両方不達（UNKNOW
 - 他の Job（calendar-check、reconcile、retention、export-dataset、ml-train）は単位処理ごとに冪等にし、SIGTERM を受けたら現在の単位が終わった時点で終了する。retention の削除は 1 回あたり 1,000 行程度のチャンクでコミットする。
 - タイムアウト: bot-run は 14 時間（G-OPS-5 で上限を確認）、その他は 1 時間以内（Job ごとに設定）。
 
-## 10. `release-manifest.json`（D7, schema_version 1）
+## 10. `release-manifest.json`（D7, schema_version 2）
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "release": "2026.11.0",
   "git_sha": "<40桁>",
   "built_at": "2026-11-01T00:00:00Z",
-  "contract_version": "0.4.0",
+  "contract_version": "0.4.10",
   "agent_protocol": 1,
   "images": {
     "dashboard":    "asia-northeast1-docker.pkg.dev/<prj>/jra-bot/dashboard@sha256:<64桁>",
@@ -373,8 +373,9 @@ STOPPED 中の `ingest` 503、ビーコンのみ STOPPED、両方不達（UNKNOW
   "required_schema_version": "2",
   "rollback": { "min_app_release": "2026.11.0" },
   "model_schema_versions": [1],
+  "feature_schemas": { "calibration": "sha256:…", "alpha": "sha256:…", "market": "sha256:…" },
   "feature_schema_hash": "sha256:…",
-  "runtime": { "jdk": "25", "python": "3.x.y" },
+  "runtime": { "jdk": "25", "python": "3.13.x" },
   "notes": "…"
 }
 ```
@@ -386,6 +387,7 @@ STOPPED 中の `ingest` 503、ビーコンのみ STOPPED、両方不達（UNKNOW
 | `rollback.min_app_release` | **このリリースのスキーマ上で動くことを CI で確認した、最も古いアプリのリリース**。旧イメージ × 新スキーマの統合テストで決める。破壊的な変更（contract）を含むリリースでは、自分自身にする |
 | ロールバック規則 | アプリだけを旧リリース O に戻すのは `O.release ≥ 現在の rollback.min_app_release` のときだけ。**DB スキーマは戻さない**（前進修正のみ）。バックアップからの復元は障害復旧手順として扱う（infra OPERATIONS） |
 | `contract_version` | infra は自分が対応する範囲（メジャー版が一致）を検査する。一致しなければ deploy を拒否する |
+| `feature_schemas` / `feature_schema_hash`（**schema_version 2 で確定。G-17 ⑧**） | ML の特徴量スキーマは 3 つある（calibration=40 次元・alpha=35 次元・market=5 次元）ので、単一の hash では何を指すか曖昧だった。`feature_schemas` に**名前付きで各スキーマの hash**（`sha256:…`。Kotlin の `FeatureSchema` が唯一の定義）を持たせ（監査用）、`feature_schema_hash` はその**正準 JSON（キー順・空白なし・UTF-8）の SHA-256 に `sha256:` を付けた値**（スキーマ集合全体の単一の値。infra は等価比較にだけ使う）。検証: 両方をリポジトリの定義ファイルから再計算して一致を確認する（`tools/release`）。比較した案: A=集合全体を hash 化（採用・単一値を維持）／B=スキーマ別の hash を持たせる（採用・監査可能性）／C=既存の単一値に別の定義を与える（不採用: 意味が曖昧なまま）。A と B の併用は実装量が小さく（正準 JSON は既存）、既存フィールド名を保てる。ただし新しい必須フィールドの追加と定義の確定は**破壊的**なので schema_version を 1 → 2 にした（`release-manifest.v2.json`）。本番 manifest は未発行（第 5 段階の未解決ゲートが解消するまで生成禁止）なので移行は不要 |
 | 生成 | web の CI（release workflow）が生成し、GitHub Release に添付する。手で編集しない。JSON Schema は `docs/schemas/release-manifest.v1.json`（**0.4.5 で追加**） |
 - **0.4.5 の補足（T2.5 後半 / D-094・D-095）**: ① `images.*` の形式は `asia-northeast1-docker.pkg.dev/<project>/jra-bot/<name>@sha256:<64桁>`（`<name>` はキーと同じ）。**5 つすべて必須**（`ml-train` を含む。ml-train が無い間は本番 manifest を生成できない）。② `docs/schemas/release-manifest-preview.v1.json` の**プレビュー**（`manifest-preview.json`: `kind=release-manifest-preview`・`deployable:false`・`blockers`・`registry_digest:null`・ローカル image ID は digest ではない）はドライラン専用で、**本番スキーマに適合しない**。infra はプレビューを入力にしてはならない（`deployable` や `kind` を持つ文書は拒否する）。③ 検証: `contract_version` は `0.4.x` かつ web の `docs/CONTRACTS.md` と一致、`required_schema_version` は各アプリの jar に焼き込まれた値と一致、`flyway.latest_version` は同梱マイグレーションの最新版と一致、`rollback.min_app_release` は release 自身か検証記録のある値だけ。④ イメージの規約（§1 の補足）: uid/gid 10001 の non-root、`ENTRYPOINT` は `java …` の exec 形式で `CMD` なし（Cloud Run の `args` に `--task=…`/`--mode=…` を渡す）、web アプリは `PORT`（既定 8080）で待受け、`TZ=Asia/Tokyo` 設定済み、`HEALTHCHECK` なし（プローブは infra がサービスに設定する）、OCI ラベル `org.opencontainers.image.revision` = Git SHA。
 
@@ -445,4 +447,5 @@ STOPPED 中の `ingest` 503、ビーコンのみ STOPPED、両方不達（UNKNOW
 
 0.4.8（第3段階 / T3.5）: §3.2 の `mode`（認証なし・DB 不使用）・`plan`（検証済み仕様のみ・既定 idle）・`update`（署名済み manifest をそのまま返す）の実装、§3.3.2（register の保留と資格情報のライフサイクル）、§3.4 の重複 ACK に fetch・cursor を追加（加算のみ）。環境変数 `INGEST_PLAN_ITEMS_JSON`・`INGEST_VERIFIED_FETCH_SPECS`・`INGEST_UPDATE_MANIFEST_PATH` を追加（任意。infra は T5.0 で同期）。
 
+0.4.10（第3段階 / T3.6-B）: ①§1・§5.1: ml-train の実行契約（下の補足）②§9.1: `export-dataset` の引数 ③§10: release-manifest を schema_version 2 に改訂（`feature_schemas` を追加、`feature_schema_hash` を『スキーマ集合の hash』に確定。**破壊的だが本番 manifest は未発行**）④V4（`horse_master_history`）で requiredSchemaVersion は 4。infra への影響: T5.0 で ⓐ`release-manifest.v2.json`（`feature_schemas` を必須で受け付ける・`feature_schema_hash` は等価比較のみ）に追従 ⓑml-train の Cloud Run Job の定義（下記）ⓒ`MODEL_STORE_URI` を ml-train に `file://`（GCS ボリュームのマウント先）で渡すか、`gs://` の直接読書きの実装を web に依頼するかの選択（現在の ml-train は `gs://` を未対応として設定エラーにする）ⓓ`OPS_MODE_SOURCE` も同様（ml-train は `file://` のみ）ⓔ`MODEL_SIGNING_KEY` の書式（生 32 バイトのシードの Base64）と `MODEL_VERIFY_PUBKEY` の整合 ⓕ mltrain の DB 権限は `ml_model` の SELECT/INSERT のまま（変更なし）。
 0.4.9（第3段階 / T3.6-A）: §5.1 に ML 成果物・データセットの契約の具体化（正準 JSON・sha256・Ed25519 署名の対象と書式・検証鍵の書式・検証順序と理由コード・データセットの列と split・レジストリの読取り）を追加。契約の意味は変えていない（infra への影響: `MODEL_VERIFY_PUBKEY` の書式（Base64 の生 32 バイト、複数可）を鍵の発行手順（G-3/T5.0）に反映。実バケット・Terraform の変更は無い）。

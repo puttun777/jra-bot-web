@@ -3,7 +3,7 @@
   python -m tools.release.cli preview  --git-sha <40桁> --built-at 2026-11-01T00:00:00Z --local-images images-local.json --out manifest-preview.json
   python -m tools.release.cli validate --kind preview|production FILE [--expect-git-sha <40桁>]
   python -m tools.release.cli production --git-sha … --release 2026.11.0 --built-at … --registry-images registry.json \
-        --min-app-release 2026.11.0 --feature-schema-hash sha256:… --python-version 3.12.x --out release-manifest.json   # push 後だけ。今は使えない
+        --min-app-release 2026.11.0 --python-version 3.13.x --out release-manifest.json   # push 後だけ。今は使えない（feature_schema_hash はリポジトリの定義から計算する）
 
 終了コード: 0=適合 / 1=検証 NG / 2=引数・入力の誤り
 """
@@ -41,7 +41,6 @@ def main(argv: list[str] | None = None) -> int:
     pr.add_argument("--built-at", required=True)
     pr.add_argument("--registry-images", required=True)
     pr.add_argument("--min-app-release", required=True)
-    pr.add_argument("--feature-schema-hash", required=True)
     pr.add_argument("--python-version", required=True)
     pr.add_argument("--notes", default="")
     pr.add_argument("--out", required=True)
@@ -75,7 +74,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{a.file}: {a.kind} として適合")
             return 0
         sha = manifest.require_git_sha(a.git_sha)
-        doc = manifest.build_production(root, sha, a.release, a.built_at, _load(a.registry_images), a.min_app_release, a.feature_schema_hash, a.python_version, a.notes)
+        doc = manifest.build_production(root, sha, a.release, a.built_at, _load(a.registry_images), a.min_app_release, a.python_version, a.notes)
         Path(a.out).write_text(manifest.dumps(doc), encoding="utf-8")
         print(f"wrote {a.out}")
         return 0

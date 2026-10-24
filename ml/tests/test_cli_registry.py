@@ -178,3 +178,59 @@ def test_mysql_error_mapping_without_connection():
     assert e.reason == "DB_AUTH_FAILED" and e.exit_code == 1
     assert r._map(pymysql.err.ProgrammingError(1064, "syntax")).reason == "DB_ERROR"
     assert r._map(pymysql.err.OperationalError(1142, "INSERT denied")).reason == "DB_AUTH_FAILED"
+
+
+def test_sigterm_sets_a_flag_and_does_not_kill_the_process():
+    """SIGTERM は即終了せず、フラグを立てる（確定前なら job が成果物を片付けて 75 で終わる。確定後は完了させる）。"""
+    import os
+    import signal
+
+    from ml_train import sigterm
+
+    previous = signal.getsignal(signal.SIGTERM)
+    term = cli.Terminator()
+    try:
+        sigterm.reset()
+        term.install()
+        assert not term.requested
+        os.kill(os.getpid(), signal.SIGTERM)
+        assert term.requested  # ここに到達する = プロセスは終了していない
+    finally:
+        sigterm.reset()
+        signal.signal(signal.SIGTERM, previous)
+
+
+def test_sigterm_in_a_real_process_is_handled_between_phases(tmp_path):
+    """実プロセスで: 学習の途中に SIGTERM を受けたら、確定前なので成果物を残さず 75 で終わる。"""
+    import os
+    import signal
+    import subprocess
+    import sys
+    import time
+
+    from tests.synth import make_dataset
+
+    store = tmp_path / "store"
+    (store / "1" / "datasets").mkdir(parents=True)
+    gz, mf = make_dataset(n_days=60, races_per_day=12, horses=12)  # 少し大きくして学習に時間をかける
+    (store / "1" / "datasets" / "ds-synth-1.csv.gz").write_bytes(gz)
+    (store / "1" / "datasets" / "ds-synth-1.manifest.json").write_bytes(mf)
+    (tmp_path / "t.json").write_text(json.dumps({"kind": "calibration", "max_iter": 5000, "tol": 1e-12, "l2_c": 1000.0}))
+    (tmp_path / "g.json").write_text(json.dumps({"purpose": "synthetic_test", "checks": {"min_valid_rows": 1}}))
+    ops = tmp_path / "ops.json"
+    ops.write_text(json.dumps({"schema_version": 1, "seq": 1, "mode": "NORMAL", "desired": {"mode": "NORMAL"}}))
+    env = {
+        "PATH": os.environ.get("PATH", ""), "PYTHONPATH": os.pathsep.join([str(p) for p in (os.getcwd() + "/src", os.getcwd() + "/..")]),
+        "APP_ENV": "local", "OPS_MODE_SOURCE": f"file://{ops}", "MODEL_STORE_URI": f"file://{store}", "MODEL_SIGNING_KEY": KEY,
+        "DB_URL": "jdbc:mysql://127.0.0.1:1/x", "DB_USER": "mltrain", "DB_PASSWORD": "pw",
+    }  # fmt: skip
+    # DB には繋がらない設定（ポート 1）。SIGTERM が先に処理されるか、接続失敗(75)になる。どちらでも成果物は残らず exit 75
+    p = subprocess.Popen(
+        [sys.executable, "-m", "ml_train", "train", "--tenant-id", "1", "--dataset-id", "ds-synth-1", "--config", str(tmp_path / "t.json"), "--gate", str(tmp_path / "g.json")],
+        env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+    )  # fmt: skip
+    time.sleep(0.15)  # 起動中（重い import の最中）でも取りこぼさない
+    p.send_signal(signal.SIGTERM)
+    out, _ = p.communicate(timeout=120)
+    assert p.returncode == 75, out
+    assert not (store / "1" / "models").exists() or not list((store / "1" / "models").iterdir())

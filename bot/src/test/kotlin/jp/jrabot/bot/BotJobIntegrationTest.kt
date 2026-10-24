@@ -81,11 +81,11 @@ class BotJobIntegrationTest {
 
     @Test
     fun `スキーマ版が足りなければ 1、DB に接続できなければ 75 と区別される`() {
-        db.exec("UPDATE flyway_schema_history SET success = 0 WHERE version = '3'")
+        db.exec("UPDATE flyway_schema_history SET success = 0 WHERE version = '4'")
         try {
             assertEquals(1, exit("reconcile", env("NORMAL")), "スキーマ不足は 1")
         } finally {
-            db.exec("UPDATE flyway_schema_history SET success = 1 WHERE version = '3'")
+            db.exec("UPDATE flyway_schema_history SET success = 1 WHERE version = '4'")
         }
         assertEquals(0, exit("reconcile", env("NORMAL")))
         proxy.stop()

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/puttun777/jra-bot-web/docs/schemas/release-manifest.v1.json",
-  "title": "release-manifest (production, schema_version 1)",
-  "description": "CONTRACTS §10。デプロイ（infra）が入力にする本番用マニフェスト。仮値・未生成のイメージ・プレビューは受け付けない。ドライラン成果物は release-manifest-preview.v1.json（別スキーマ）で、このスキーマには適合しない",
+  "$id": "https://github.com/puttun777/jra-bot-web/docs/schemas/release-manifest.v2.json",
+  "title": "release-manifest (production, schema_version 2)",
+  "description": "CONTRACTS §10。デプロイ（infra）が入力にする本番用マニフェスト。仮値・未生成のイメージ・プレビューは受け付けない。ドライラン成果物は release-manifest-preview.v2.json（別スキーマ）で、このスキーマには適合しない",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -17,13 +17,14 @@
     "required_schema_version",
     "rollback",
     "model_schema_versions",
+    "feature_schemas",
     "feature_schema_hash",
     "runtime",
     "notes"
   ],
   "properties": {
     "schema_version": {
-      "const": 1
+      "const": 2
     },
     "release": {
       "type": "string",
@@ -134,9 +135,34 @@
       "minItems": 1,
       "uniqueItems": true
     },
+    "feature_schemas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "calibration",
+        "alpha",
+        "market"
+      ],
+      "description": "特徴量スキーマごとの hash（Kotlin の FeatureSchema が唯一の定義。calibration=40 次元、alpha=35 次元、market=5 次元）。監査用に名前付きで持つ",
+      "properties": {
+        "calibration": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "alpha": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "market": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
     "feature_schema_hash": {
       "type": "string",
-      "pattern": "^sha256:[0-9a-f]{64}$"
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "feature_schemas の正準 JSON（キー順・空白なし・UTF-8）の SHA-256 に sha256: を付けたもの（スキーマの集合全体の単一の値。infra は等価比較にだけ使う）。CONTRACTS §10 の feature_schema_hash の定義"
     },
     "runtime": {
       "type": "object",

@@ -17,6 +17,8 @@ import secrets
 import socket
 import subprocess
 import sys
+import base64
+import gzip
 import tarfile
 import tempfile
 import time
@@ -34,6 +36,7 @@ EXPECTED_ENTRYPOINT = {
     "ingest": ENTRYPOINT_JVM + ["-jar", "/app/app.jar"],
     "bot": ENTRYPOINT_JVM + ["-jar", "/app/app.jar"],
     "db-migration": ENTRYPOINT_JVM + ["-cp", "/app/lib/*", "jp.jrabot.dbmigration.DbMigrationMainKt"],
+    "ml-train": ["/opt/venv/bin/python", "-m", "ml_train"],
 }
 SECRET_ENV_NAME = re.compile(r"(PASSWORD|SECRET|TOKEN|CREDENTIAL|PRIVATE|API_?KEY|ACCESS_?KEY)", re.I)
 FORBIDDEN_FILE = re.compile(
@@ -153,11 +156,15 @@ class Smoke:
         self.r.check(f"[{name}] build history has no secret assignments / ARG secrets", not re.search(r"(?i)(password|secret|token|api_?key)\s*=", hist))
         self.r.check(f"[{name}] no HEALTHCHECK (Cloud Run uses service probes)", not cfg.get("Healthcheck"))
 
-        rc, out, err = self.run(name, args=["-version"], entrypoint="java", desc=f"{name} java -version")
-        self.r.check(f"[{name}] runs on JDK 25", rc == 0 and re.search(r'version "25\.', out + err) is not None, (out + err)[:120])
+        if name == "ml-train":
+            rc, out, err = self.run(name, args=["--version"], entrypoint="/opt/venv/bin/python", desc=f"{name} python --version")
+            self.r.check(f"[{name}] runs on Python 3.13", rc == 0 and re.search(r"Python 3\.13\.\d+", out + err) is not None, (out + err)[:120])
+        else:
+            rc, out, err = self.run(name, args=["-version"], entrypoint="java", desc=f"{name} java -version")
+            self.r.check(f"[{name}] runs on JDK 25", rc == 0 and re.search(r'version "25\.', out + err) is not None, (out + err)[:120])
         rc, out, _ = self.run(name, args=["-u"], entrypoint="id", desc=f"{name} id")
         self.r.check(f"[{name}] effective uid is 10001", out.strip() == "10001", out.strip())
-        rc, out, _ = self.run(name, args=["-c", "for c in javac jlink gradle mvn git curl wget gcc make unzip; do command -v $c; done"], entrypoint="sh", desc=f"{name} tools")
+        rc, out, _ = self.run(name, args=["-c", "for c in javac jlink gradle mvn git curl wget gcc cc make unzip; do command -v $c; done"], entrypoint="sh", desc=f"{name} tools")
         self.r.check(f"[{name}] no build tools / downloaders in the runtime image", out.strip() == "", out.strip())
         rc, _, _ = self.run(name, args=["-c", "touch /app/x"], entrypoint="sh", desc=f"{name} write /app")
         self.r.check(f"[{name}] /app is not writable by the app user", rc != 0)
@@ -179,13 +186,17 @@ class Smoke:
                 if m.name.startswith("app/") and m.isdir():
                     names.pop()  # ディレクトリは「ファイルの一覧」に含めない
         proc.wait()
-        user_areas = [n for n in names if re.match(r"^(app|home|root|tmp|srv|opt/(?!java))", n) or re.match(r"^etc/[^/]*\.env", n)]
+        user_areas = [n for n in names if re.match(r"^(app|home|root|tmp|srv|opt/(?!java|venv))", n) or re.match(r"^etc/[^/]*\.env", n)]
         bad = [n for n in user_areas if FORBIDDEN_FILE.search(n)]
         self.r.check(f"[{name}] no secret/real-data file names in app areas (/app /home /root /tmp /srv /opt)", not bad, str(bad[:5]))
         app_files = sorted(n for n in names if n.startswith("app/"))
         writable = [n for n, mode in modes.items() if mode & 0o022]
         self.r.check(f"[{name}] nothing under /app is writable, directories are traversable", not writable and all(m & 0o111 for n, m in modes.items() if n in ("app/lib",)), str(writable[:5]))
-        if name == "db-migration":
+        if name == "ml-train":
+            allowed = re.compile(r"app/(src/ml_train/[\w/]+\.py|tools/__init__\.py|tools/ml/(__init__|canonical|dataset_contract)\.py)")
+            ok = bool(app_files) and all(allowed.fullmatch(n) for n in app_files) and "app/tools/ml/signing.py" not in app_files
+            ok = ok and not [n for n in names if n.startswith("app/") and re.search(r"(^|/)(tests?|make_test_artifacts|signing)(/|\.|$)", n)]
+        elif name == "db-migration":
             ok = all(re.fullmatch(r"app/lib/[\w.\-]+\.jar", n) for n in app_files) and any("flyway-core" in n for n in app_files) and any("mysql-connector-j" in n for n in app_files)
         else:
             ok = app_files == ["app/app.jar"]
@@ -193,6 +204,8 @@ class Smoke:
         docker("rm", c)
 
     def jar_checks(self, name: str) -> None:
+        if name == "ml-train":
+            return self.ml_package_checks()
         c = text(docker("create", self.image(name), check=True).stdout).strip()
         self.created.append(c)
         required = repo_facts.required_schema_versions(self.facts)
@@ -328,11 +341,12 @@ class Smoke:
                 })
             )
             f.chmod(0o644)
-        base = {"APP_ENV": "local", "DB_URL": self.jdbc(), "DB_USER": "bot", "DB_PASSWORD": self.passwords["bot"], **CALENDAR_ENV}
+        base = {"APP_ENV": "local", "DB_URL": self.jdbc(), "DB_USER": "bot", "DB_PASSWORD": self.passwords["bot"], "MODEL_STORE_URI": "file:///tmp/store", **CALENDAR_ENV}
         mounts = [f"{d}:/ops:ro"]
         tasks = ["bot-run", "calendar-check", "reconcile", "retention", "export-dataset"]
+        extra_args = {"export-dataset": ["--dataset-id=smoke", "--from=2026-01-01", "--to=2026-01-31", "--feature-schema=calibration"]}
         before = self.connections()
-        codes = {t: self.run("bot", args=[f"--task={t}", "--tenant-id=1"], env={**base, "OPS_MODE_SOURCE": "/ops/STOPPED.json"}, network=self.network, mounts=mounts, desc=f"bot STOPPED {t}")[0] for t in tasks}
+        codes = {t: self.run("bot", args=[f"--task={t}", "--tenant-id=1", *extra_args.get(t, [])], env={**base, "OPS_MODE_SOURCE": "/ops/STOPPED.json"}, network=self.network, mounts=mounts, desc=f"bot STOPPED {t}")[0] for t in tasks}
         after = self.connections()
         self.r.check("[bot] STOPPED -> exit 0 for all 5 tasks", set(codes.values()) == {0}, str(codes))
         self.r.check("[bot] STOPPED never opens a DB connection (server Connections delta == 1: the probe itself)", after - before == 1, f"delta={after - before}")
@@ -388,6 +402,150 @@ class Smoke:
         st = json.loads(docker("inspect", cname).stdout)[0]["State"]
         self.r.check(f"[{name}] SIGTERM stops the JVM gracefully within the grace period (exit 0/143, not 137/OOM)", st["ExitCode"] in (0, 143) and not st["OOMKilled"] and took < 9.5, f"exit={st['ExitCode']} took={took:.1f}s")
 
+    # ------------------------------------------------------------------ ml-train（Python）
+    def ml_package_checks(self) -> None:
+        """依存が requirements.txt の固定どおりに入っていて、整合している（pip check）。import できる。"""
+        pins = dict(
+            line.split("==", 1) for line in (self.facts / "ml" / "requirements.txt").read_text().splitlines() if "==" in line and not line.startswith("#")
+        )
+        code = "import importlib.metadata as m, json; print(json.dumps({d.metadata['Name'].lower(): d.version for d in m.distributions()}))"
+        rc, out, _ = self.run("ml-train", args=["-c", code], entrypoint="/opt/venv/bin/python", desc="ml-train installed")
+        installed = _json_line(out)
+        norm = {k.lower().replace("_", "-"): v for k, v in installed.items()}
+        wrong = {k: (v, norm.get(k.lower().replace("_", "-"))) for k, v in pins.items() if norm.get(k.lower().replace("_", "-")) != v}
+        self.r.check("[ml-train] installed versions == ml/requirements.txt pins", rc == 0 and not wrong, str(wrong)[:300])
+        rc, out, err = self.run("ml-train", args=["-m", "pip", "check"], entrypoint="/opt/venv/bin/python", desc="ml-train pip check")
+        self.r.check("[ml-train] pip check: dependencies are consistent", rc == 0 and "No broken requirements" in out, (out + err)[:200])
+        rc, out, err = self.run(
+            "ml-train", args=["-c", "import ml_train, numpy, scipy, sklearn, cryptography, pymysql, tools.ml.canonical, tools.ml.dataset_contract; print('ok')"],
+            entrypoint="/opt/venv/bin/python", desc="ml-train import",
+        )
+        self.r.check("[ml-train] all runtime modules import", rc == 0 and out.strip() == "ok", (out + err)[:300])
+        rc, out, _ = self.run("ml-train", args=["-c", "import importlib.util as u; print(u.find_spec('tools.ml.signing') is None, u.find_spec('pytest') is None)"], entrypoint="/opt/venv/bin/python", desc="ml-train no test code")
+        self.r.check("[ml-train] test-only signing seeds and pytest are not in the image", out.strip() == "True True", out.strip())
+
+    def ml_env(self, **over: str) -> dict[str, str]:
+        env = {"APP_ENV": "local", "OPS_MODE_SOURCE": "file:///ops/NORMAL.json", "MODEL_STORE_URI": "file:///store", "MODEL_SIGNING_KEY": self.ml_key}
+        env.update(over)
+        return env
+
+    @property
+    def ml_key(self) -> str:
+        if not hasattr(self, "_ml_key"):
+            self._ml_key = base64.b64encode(secrets.token_bytes(32)).decode()  # 実行時に生成するテスト鍵（秘密でも本番鍵でもない）
+            self.canaries.append(self._ml_key)
+        return self._ml_key
+
+    def ml_checks_no_db(self) -> None:
+        rc, out, err = self.run("ml-train", desc="ml no args")
+        self.r.check("[ml-train] no args -> exit 2", rc == 2, f"rc={rc}")
+        rc, _, _ = self.run("ml-train", args=["nonsense"], desc="ml bad command")
+        self.r.check("[ml-train] unknown command -> exit 2", rc == 2)
+        rc, out, _ = self.run("ml-train", args=["train", "--tenant-id", "1", "--dataset-id", "x", "--config", "/nonexistent.json"], env={"APP_ENV": "local"}, desc="ml no env")
+        self.r.check("[ml-train] valid args but missing configuration -> exit 2 (touches neither DB nor store)", rc == 2, f"rc={rc} {out[-200:]}")
+        rc, out, _ = self.run(
+            "ml-train", args=["convert-pkl", "--pkl", "/x.pkl", "--out-dir", "/tmp/o", "--tenant-id", "1", "--model-id", "m", "--confirm-own-local-file"],
+            env={"APP_ENV": "prod", "MODEL_SIGNING_KEY": self.ml_key}, desc="ml convert refuses cloud",
+        )
+        self.r.check("[ml-train] convert-pkl refuses to run in a cloud-like environment (exit 2)", rc == 2 and "LOCAL_ONLY" in out, f"rc={rc} {out[-200:]}")
+
+    def _ml_result(self, out: str) -> dict:
+        for line in reversed(out.strip().splitlines()):
+            if "JOB_RESULT" in line:
+                return _json_line(line)
+        return {}
+
+    def ml_checks_with_db(self) -> None:
+        """合成データセット（Kotlin の DatasetExporter が書いたコミット済みの契約ファイル）で、実際に学習・署名・登録までを行う。コンテナが起動できただけでは成功にしない。"""
+        ops = self.tmp / "ops"
+        ops.mkdir(exist_ok=True)
+        ops.chmod(0o755)
+        for mode in ("NORMAL", "STOPPED"):
+            f = ops / f"{mode}.json"
+            if not f.exists():
+                f.write_text(json.dumps({"schema_version": 1, "seq": 1, "mode": mode, "desired": {"mode": "NORMAL" if mode == "NORMAL" else "STOPPED"}}))
+                f.chmod(0o644)
+        res = self.facts / "domain" / "src" / "test" / "resources" / "ml" / "dataset"
+        store = self.tmp / "ml-store"
+        (store / "1" / "datasets").mkdir(parents=True)
+        (store / "1" / "datasets" / "synthetic-calibration.csv.gz").write_bytes(gzip.compress((res / "synthetic-calibration.csv").read_bytes(), mtime=0))
+        (store / "1" / "datasets" / "synthetic-calibration.manifest.json").write_bytes((res / "synthetic-calibration.manifest.json").read_bytes())
+        for d in (store, store / "1", store / "1" / "datasets"):
+            d.chmod(0o777)
+        for f in (store / "1" / "datasets").iterdir():
+            f.chmod(0o666)
+        cfg = self.tmp / "ml-cfg"
+        cfg.mkdir(exist_ok=True)
+        cfg.chmod(0o755)
+        files = {
+            "train.json": {"kind": "calibration", "seed": 42, "l2_c": 1.0, "recency_halflife_days": 90},
+            "train2.json": {"kind": "calibration", "seed": 7, "l2_c": 0.5},
+            "gate-pass.json": {"purpose": "synthetic_test", "checks": {"min_valid_rows": 5, "max_valid_logloss": 5.0}},
+            "gate-strict.json": {"purpose": "synthetic_test", "checks": {"max_valid_logloss": 0.0001}},
+        }
+        for name, body in files.items():
+            (cfg / name).write_text(json.dumps(body))
+            (cfg / name).chmod(0o644)
+        mounts = [f"{ops}:/ops:ro", f"{store}:/store", f"{cfg}:/cfg:ro"]
+        db = {"DB_URL": self.jdbc(), "DB_USER": "mltrain", "DB_PASSWORD": self.passwords["mltrain"]}
+
+        def train(config: str, gate: str | None, env: dict[str, str] | None = None, desc: str = "ml train") -> tuple[int, str, dict]:
+            args = ["train", "--tenant-id", "1", "--dataset-id", "synthetic-calibration", "--config", f"/cfg/{config}"] + (["--gate", f"/cfg/{gate}"] if gate else [])
+            rc, out, err = self.run("ml-train", args=args, env=self.ml_env(**db, **(env or {})), network=self.network, mounts=mounts, desc=desc, timeout=180)
+            return rc, out + err, self._ml_result(out)
+
+        def models() -> list[str]:
+            return sorted(p.name for p in (store / "1" / "models").glob("*")) if (store / "1" / "models").exists() else []
+
+        def count(where: str = "1=1") -> int:
+            return int(self.mysql_exec(f"SELECT COUNT(*) FROM ml_model WHERE {where}", database="jrabot"))
+
+        rc, log, res_ = train("train.json", "gate-pass.json", desc="ml train pass")
+        ok = rc == 0 and res_.get("reason") == "CANDIDATE_REGISTERED"
+        self.r.check("[ml-train] trains on the synthetic dataset and registers a CANDIDATE -> exit 0", ok, f"rc={rc}\n{log[-600:]}")
+        mid = res_.get("model_id", "")
+        self.r.check("[ml-train] the registry row is CANDIDATE (never ACTIVE) and the signed model + report are in the store",
+                     bool(mid) and self.mysql_exec(f"SELECT status FROM ml_model WHERE tenant_id = 1 AND model_id = '{mid}'", database="jrabot") == "CANDIDATE"
+                     and {f"{mid}.json", f"{mid}.sig"} <= set(models()) and (store / "1" / "reports" / f"{mid}.report.json").exists(), f"{mid} {models()}")
+        sig = (store / "1" / "models" / f"{mid}.sig").read_bytes() if mid else b""
+        self.r.check("[ml-train] .sig is a raw 64-byte Ed25519 signature", len(sig) == 64, str(len(sig)))
+        self.r.check("[ml-train] no ACTIVE row and no active_flag after training", count("status = 'ACTIVE' OR active_flag IS NOT NULL") == 0)
+        rc, log, res2 = train("train.json", "gate-pass.json", desc="ml train rerun")
+        self.r.check("[ml-train] re-running the same job is idempotent (ALREADY_REGISTERED, no second row)", rc == 0 and res2.get("reason") == "ALREADY_REGISTERED" and count() == 1, f"rc={rc} {res2}")
+        rc, log, res3 = train("train2.json", "gate-strict.json", desc="ml train reject")
+        self.r.check("[ml-train] a model failing the (synthetic) quality gate is registered as REJECTED -> exit 0",
+                     rc == 0 and res3.get("reason") == "MODEL_REJECTED" and count("status = 'REJECTED'") == 1, f"rc={rc} {log[-300:]}")
+        rc, log, res4 = train("train2.json", None, desc="ml train no gate")
+        self.r.check("[ml-train] without a quality gate the model is REJECTED (fail closed)", rc == 0 and res4.get("reason") == "MODEL_REJECTED" and count("status = 'REJECTED'") == 2, f"rc={rc} {log[-300:]}")
+        before_models, before_rows = models(), count()
+        before_conn = self.connections()
+        rc, log, res5 = train("train.json", "gate-pass.json", env={"OPS_MODE_SOURCE": "file:///ops/STOPPED.json"}, desc="ml STOPPED")
+        after_conn = self.connections()
+        self.r.check("[ml-train] STOPPED -> exit 0 (MODE_STOPPED) without any DB connection", rc == 0 and res5.get("reason") == "MODE_STOPPED" and after_conn - before_conn == 1, f"rc={rc} delta={after_conn - before_conn}")
+        rc, log, res6 = train("train.json", "gate-pass.json", env={"OPS_MODE_SOURCE": "file:///ops/missing.json"}, desc="ml UNKNOWN")
+        self.r.check("[ml-train] mode UNKNOWN -> exit 75 (never treated as NORMAL)", rc == 75 and res6.get("reason") == "MODE_UNKNOWN", f"rc={rc}")
+        rc, log, res7 = train("train2.json", "gate-pass.json", env={"DB_PASSWORD": "wrong-" + secrets.token_hex(4)}, desc="ml wrong db password")
+        self.r.check("[ml-train] DB authentication failure -> exit 1 (not 75) and no artifacts are left behind", rc == 1 and res7.get("reason") == "DB_AUTH_FAILED" and models() == before_models and count() == before_rows, f"rc={rc} {res7} {models()}")
+        rc, log, res8 = train("train.json", "gate-pass.json", env={"MODEL_SIGNING_KEY": ""}, desc="ml no key")
+        self.r.check("[ml-train] missing MODEL_SIGNING_KEY -> exit 2", rc == 2, f"rc={rc}")
+        # データセットの改ざん（CSV を 1 バイト書き換え）→ 学習しない・登録しない
+        csv_path = store / "1" / "datasets" / "synthetic-calibration.csv.gz"
+        original = csv_path.read_bytes()
+        raw = bytearray(gzip.decompress(original))
+        raw[len(raw) // 2] ^= 1
+        csv_path.write_bytes(gzip.compress(bytes(raw), mtime=0))
+        rc, log, res9 = train("train2.json", "gate-pass.json", desc="ml tampered dataset")
+        csv_path.write_bytes(original)
+        self.r.check("[ml-train] a tampered dataset is rejected (exit 1 DATASET_INVALID), nothing is stored or registered",
+                     rc == 1 and res9.get("reason") == "DATASET_INVALID" and models() == before_models and count() == before_rows, f"rc={rc} {res9}")
+        # mltrain は昇格できない
+        try:
+            self.mysql_exec("UPDATE ml_model SET status = 'ACTIVE', active_flag = 1, activated_at = NOW(6)", user="mltrain", password=self.passwords["mltrain"], database="jrabot")
+            promoted = True
+        except RuntimeError:
+            promoted = False
+        self.r.check("[ml-train] the mltrain DB user cannot promote a model (UPDATE denied)", not promoted and count("status = 'ACTIVE'") == 0)
+
     # ------------------------------------------------------------------ 全体
     def secret_scan_outputs(self) -> None:
         leaked = [(d, c) for d, o in self.captured for c in self.canaries if c in o]
@@ -408,15 +566,17 @@ class Smoke:
                     infos[name] = info
                     self.filesystem_checks(name)
                     self.jar_checks(name)
-            self.r.check("all 4 buildable images exist (ml-train is intentionally not built: Stage 3)", set(infos) == set(repo_facts.BUILDABLE_IMAGES))
+            self.r.check("all 5 buildable images exist (dashboard, ingest, bot, db-migration, ml-train)", set(infos) == set(repo_facts.BUILDABLE_IMAGES))
             if set(infos) == set(repo_facts.BUILDABLE_IMAGES):
                 self.bot_checks_no_db()
                 self.dbm_checks_no_db()
+                self.ml_checks_no_db()
                 self.web_checks_no_db("ingest", {**INGEST_EXTRA})
                 self.web_checks_no_db("dashboard", {"IAP_AUDIENCE": "/projects/0/global/backendServices/0", "OPS_SA_EMAIL": "ops@example.invalid"})
                 if self.start_mysql():
                     self.dbm_checks_with_db()
                     self.bot_checks_with_db()
+                    self.ml_checks_with_db()
                     self.web_checks_with_db("ingest", "ingest", {**INGEST_EXTRA})
                     self.web_checks_with_db("dashboard", "app", {"IAP_AUDIENCE": "/projects/0/global/backendServices/0", "OPS_SA_EMAIL": "ops@example.invalid"})
             self.secret_scan_outputs()

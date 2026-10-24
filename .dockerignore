@@ -15,9 +15,18 @@
 !/ingest/
 !/dashboard/
 !/golden-runner/
+# ml-train（Python。T3.6-B）。tools はデータセット契約の参照実装 2 ファイルだけ（Dockerfile が個別に COPY する）
+!/ml/requirements.txt
+!/ml/src/
+!/tools/__init__.py
+!/tools/ml/__init__.py
+!/tools/ml/canonical.py
+!/tools/ml/dataset_contract.py
 
 # 許可したディレクトリの中でも除外する（ビルド生成物・IDE・秘密/実データの拡張子）
 **/build/
+**/__pycache__/
+**/*.pyc
 **/.gradle/
 **/.kotlin/
 **/out/

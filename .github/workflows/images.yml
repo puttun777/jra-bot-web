@@ -22,12 +22,12 @@ jobs:
           persist-credentials: false
       - name: Docker
         run: docker version --format 'client={{.Client.Version}} server={{.Server.Version}}'
-      - name: Build the 4 images (shared Gradle build stage; local only, no push)
+      - name: Build the 5 images (JVM 4 share one Gradle build stage; ml-train is Python; local only, no push)
         run: |
           set -euo pipefail
           GIT_SHA="$(git rev-parse HEAD)"
           start=$(date +%s)
-          for t in db-migration bot ingest dashboard; do
+          for t in db-migration bot ingest dashboard ml-train; do
             docker build --progress=plain --target "$t" --build-arg GIT_SHA="$GIT_SHA" -t "jra-bot/$t:$GIT_SHA" . 2>&1 | tail -n 40
           done
           echo "build seconds: $(( $(date +%s) - start ))"
@@ -56,7 +56,7 @@ jobs:
             echo "## images (dry run)"
             echo "- git_sha: \`$GIT_SHA\`"
             echo "- manifest-preview.json: deployable=false（レジストリへ push していないので digest は無い。ローカル image ID は digest ではない）"
-            echo "- ml-train: 未実装のためビルドしていない（Stage 3）"
+            echo "- ml-train: ビルドして合成データセットで学習・署名・登録のスモークを実行（push しない）"
             docker image ls --format '- {{.Repository}}:{{.Tag}} {{.Size}}' | grep 'jra-bot/' || true
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload dry-run artifacts (smoke report and manifest preview)

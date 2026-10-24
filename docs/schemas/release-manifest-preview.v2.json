@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/puttun777/jra-bot-web/docs/schemas/release-manifest-preview.v1.json",
-  "title": "release-manifest preview (dry run, schema_version 1)",
+  "$id": "https://github.com/puttun777/jra-bot-web/docs/schemas/release-manifest-preview.v2.json",
+  "title": "release-manifest preview (dry run, schema_version 2)",
   "description": "ドライラン成果物（manifest-preview.json）。レジストリに push していないため digest が無い。deployable は常に false で、本番のデプロイに使えない（release-manifest.v1.json には適合しない）",
   "type": "object",
   "additionalProperties": false,
@@ -20,13 +20,14 @@
     "required_schema_version",
     "rollback",
     "model_schema_versions",
+    "feature_schemas",
     "feature_schema_hash",
     "runtime",
     "notes"
   ],
   "properties": {
     "schema_version": {
-      "const": 1
+      "const": 2
     },
     "kind": {
       "const": "release-manifest-preview"
@@ -332,12 +333,34 @@
       "minItems": 1,
       "uniqueItems": true
     },
-    "feature_schema_hash": {
-      "type": [
-        "string",
-        "null"
+    "feature_schemas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "calibration",
+        "alpha",
+        "market"
       ],
-      "pattern": "^sha256:[0-9a-f]{64}$"
+      "description": "特徴量スキーマごとの hash（Kotlin の FeatureSchema が唯一の定義。calibration=40 次元、alpha=35 次元、market=5 次元）。監査用に名前付きで持つ",
+      "properties": {
+        "calibration": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "alpha": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "market": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "feature_schema_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "feature_schemas の正準 JSON（キー順・空白なし・UTF-8）の SHA-256 に sha256: を付けたもの（スキーマの集合全体の単一の値。infra は等価比較にだけ使う）。CONTRACTS §10 の feature_schema_hash の定義"
     },
     "runtime": {
       "type": "object",

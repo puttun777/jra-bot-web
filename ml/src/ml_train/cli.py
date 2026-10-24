@@ -12,13 +12,11 @@ import argparse
 import logging
 import os
 import re
-import signal
 import sys
 from collections.abc import Mapping, Sequence
-from types import FrameType
 from typing import NoReturn
 
-from . import modeljson
+from . import modeljson, sigterm
 from .config import GateConfig, TrainConfig, load_json_file
 from .errors import ExitCode, MlTrainError, UsageError
 from .job import JobDeps, run_train
@@ -54,14 +52,14 @@ def _parser() -> argparse.ArgumentParser:
 
 
 class Terminator:
-    def __init__(self) -> None:
-        self.requested = False
+    """SIGTERM の受信状態（実体は [sigterm]。`python -m ml_train` ではプロセスの最初に install 済み）。"""
+
+    @property
+    def requested(self) -> bool:
+        return sigterm.is_set()
 
     def install(self) -> None:
-        def handler(signum: int, _frame: FrameType | None) -> None:
-            self.requested = True
-
-        signal.signal(signal.SIGTERM, handler)
+        sigterm.install()
 
 
 def _result(code: int, reason: str, **fields: object) -> int:

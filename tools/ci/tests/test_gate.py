@@ -15,7 +15,7 @@ def needs_for(plan: classify.Plan, results: dict | None = None, changes_result: 
     expected = {
         "build": plan.run_build, "release-tools": plan.run_release, "golden": plan.run_golden,
         "db-integration": bool(plan.db_matrix), "images": plan.run_images, "connectorj26": plan.run_connectorj26,
-        "agent": plan.run_agent, "agent-windows": plan.run_agent_windows, "ml-tools": plan.run_ml_tools,
+        "agent": plan.run_agent, "agent-windows": plan.run_agent_windows, "ml-tools": plan.run_ml_tools, "ml-train": plan.run_ml_train,
     }
     needs = {"changes": {"result": changes_result, "outputs": o}}
     for job, ran in expected.items():
