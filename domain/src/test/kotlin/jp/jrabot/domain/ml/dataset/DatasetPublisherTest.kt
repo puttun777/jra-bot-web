@@ -42,7 +42,16 @@ class DatasetPublisherTest {
                 f.putEntry(tenant, raceId, u, "2020100%03d".format(u))
                 f.putHorse(
                     tenant,
-                    HorseMaster("2020100%03d".format(u), LocalDate.of(2022, 1, 1), "1", ChakuTable.EMPTY, ChakuTable.EMPTY, ChakuTable.EMPTY, listOf("s$u"), Instant.parse("2025-01-01T00:00:00Z")),
+                    HorseMaster(
+                        "2020100%03d".format(u),
+                        LocalDate.of(2022, 1, 1),
+                        "1",
+                        ChakuTable.EMPTY,
+                        ChakuTable.EMPTY,
+                        ChakuTable.EMPTY,
+                        listOf("s$u"),
+                        Instant.parse("2025-01-01T00:00:00Z"),
+                    ),
                 )
                 d.put(tenant, date, DatasetEntry(raceId, u, (u + day) % 3 + 1), listOf(OddsPoint(post.minusSeconds(3600), odds + u, u)))
             }

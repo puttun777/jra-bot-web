@@ -102,8 +102,7 @@ fun args(
     task: String = "calendar-check",
     tenant: String = "1",
     vararg more: String,
-): Array<String> =
-    arrayOf("--task=$task", "--tenant-id=$tenant", *more) + exportDefaults(task, more)
+): Array<String> = arrayOf("--task=$task", "--tenant-id=$tenant", *more) + exportDefaults(task, more)
 
 /** export-dataset は引数が必須。テストの既定値（呼び出し側が --dataset-id を指定していなければ補う）。 */
 fun exportDefaults(

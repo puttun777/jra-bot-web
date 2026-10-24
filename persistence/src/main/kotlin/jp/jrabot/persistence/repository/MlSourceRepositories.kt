@@ -45,7 +45,17 @@ internal class DbFeatureSource(
         raceId: String,
     ): RaceConditions? {
         val r = dao.selectRace(tenantId.value, raceId) ?: return null
-        val post = if (r.postTimeUnknown) null else r.postTime?.let { r.raceDate.atTime(it).atZone(JST).toInstant() }
+        val post =
+            if (r.postTimeUnknown) {
+                null
+            } else {
+                r.postTime?.let {
+                    r.raceDate
+                        .atTime(it)
+                        .atZone(JST)
+                        .toInstant()
+                }
+            }
         return RaceConditions(
             raceDate = r.raceDate,
             postTime = post,

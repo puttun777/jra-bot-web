@@ -97,7 +97,7 @@ class WorkflowRulesTest(unittest.TestCase):
         for needle in (":golden-runner:run", "tools.golden.kotlin_compare", "tools.golden.verify", "kotlin_coverage.json"):
             self.assertIn(needle, b)
         d = job_blocks(CI)["db-integration"]
-        for needle in ("integrationTest", ":persistence:integrationTest", ":bot:integrationTest :ingest:integrationTest :dashboard:integrationTest", "tests < 44", "tests < 167"):
+        for needle in ("integrationTest", ":persistence:integrationTest", ":bot:integrationTest :ingest:integrationTest :dashboard:integrationTest", "tests < 44", "tests < 175"):
             self.assertIn(needle, d)
         self.assertIn("check-repo-hygiene.sh", job_blocks(CI)["changes"])
         g = job_blocks(CI)["golden"]
@@ -118,7 +118,7 @@ class WorkflowRulesTest(unittest.TestCase):
             self.assertIn(needle, m)
         self.assertNotIn("secrets.", m)  # 本番の鍵・Secrets を使わない（テスト専用の決定的な鍵だけ）
         b = job_blocks(CI)["build"]
-        for needle in ("domain/build/test-results/test 811", "ModelLoaderTest", "ProbabilityPipelineTest", "FeatureBuilderTest", "GoldenMlTest"):
+        for needle in ("domain/build/test-results/test 822", "ModelLoaderTest", "ProbabilityPipelineTest", "FeatureBuilderTest", "GoldenMlTest"):
             self.assertIn(needle, b)
 
     def test_images_workflow_is_local_only(self):

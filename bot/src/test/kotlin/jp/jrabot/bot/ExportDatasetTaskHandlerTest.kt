@@ -41,14 +41,36 @@ class ExportDatasetTaskHandlerTest {
             f.putRace(tenant, raceId, RaceConditions(date, post, 1600, "11", "00", "1", "2", "3"))
             for (u in 1..3) {
                 f.putEntry(tenant, raceId, u, "2020100%03d".format(u))
-                f.putHorse(tenant, HorseMaster("2020100%03d".format(u), LocalDate.of(2022, 1, 1), "1", ChakuTable.EMPTY, ChakuTable.EMPTY, ChakuTable.EMPTY, listOf("s$u"), Instant.parse("2025-01-01T00:00:00Z")))
-                d.put(tenant, date, DatasetEntry(raceId, u, if (withResults) (u + day) % 3 + 1 else null), listOf(OddsPoint(post.minusSeconds(3600), 2.0 + u, u)))
+                f.putHorse(
+                    tenant,
+                    HorseMaster(
+                        "2020100%03d".format(u),
+                        LocalDate.of(2022, 1, 1),
+                        "1",
+                        ChakuTable.EMPTY,
+                        ChakuTable.EMPTY,
+                        ChakuTable.EMPTY,
+                        listOf("s$u"),
+                        Instant.parse("2025-01-01T00:00:00Z"),
+                    ),
+                )
+                d.put(
+                    tenant,
+                    date,
+                    DatasetEntry(raceId, u, if (withResults) (u + day) % 3 + 1 else null),
+                    listOf(OddsPoint(post.minusSeconds(3600), 2.0 + u, u)),
+                )
             }
         }
         return f to d
     }
 
-    private fun command(id: String = "ds1") = (BotArgsParser.parse(args("export-dataset", "1", "--dataset-id=$id", "--from=2026-01-01", "--to=2026-01-31", "--feature-schema=calibration")) as ParsedArgs.Valid).command
+    private fun command(id: String = "ds1") =
+        (
+            BotArgsParser.parse(
+                args("export-dataset", "1", "--dataset-id=$id", "--from=2026-01-01", "--to=2026-01-31", "--feature-schema=calibration"),
+            ) as ParsedArgs.Valid
+        ).command
 
     private fun handler(
         store: DatasetStore,
@@ -110,7 +132,12 @@ class ExportDatasetTaskHandlerTest {
     @Test
     fun `テナントが違えば別のデータ（他テナントのデータセットは作られない）`() {
         val store = InMemoryDatasetStore()
-        val other = (BotArgsParser.parse(args("export-dataset", "2", "--dataset-id=ds1", "--from=2026-01-01", "--to=2026-01-31", "--feature-schema=calibration")) as ParsedArgs.Valid).command
+        val other =
+            (
+                BotArgsParser.parse(
+                    args("export-dataset", "2", "--dataset-id=ds1", "--from=2026-01-01", "--to=2026-01-31", "--feature-schema=calibration"),
+                ) as ParsedArgs.Valid
+            ).command
         // テナント 2 の出走馬は無いので出力 0 行 → EMPTY（テナント 1 のデータは読まれない）
         assertEquals(JobResult(1, "DATASET_EMPTY"), handler(store).execute(other))
         assertNull(store.readManifest(TenantId.of(2), DatasetId.of("ds1")))
@@ -125,8 +152,14 @@ class ExportDatasetTaskHandlerTest {
         for (bad in listOf(null, "", "http://x/y", "/abs/path", "file://host/x")) {
             kotlin.test.assertFailsWith<IllegalStateException>("$bad") { BotSettings.from(baseEnv("/dev/null", "MODEL_STORE_URI" to bad), cmd.task) }
         }
-        kotlin.test.assertFailsWith<IllegalStateException> { BotSettings.from(baseEnv("/dev/null", "APP_ENV" to "prod", "DB_USER" to "bot"), cmd.task) } // 本番で file:///
-        assertEquals("gs://b/p", BotSettings.from(baseEnv("/dev/null", "APP_ENV" to "prod", "DB_USER" to "bot", "MODEL_STORE_URI" to "gs://b/p"), cmd.task).modelStoreUri)
+        // 本番で file:// のストアは使えない
+        kotlin.test.assertFailsWith<IllegalStateException> {
+            BotSettings.from(baseEnv("/dev/null", "APP_ENV" to "prod", "DB_USER" to "bot"), cmd.task)
+        }
+        assertEquals(
+            "gs://b/p",
+            BotSettings.from(baseEnv("/dev/null", "APP_ENV" to "prod", "DB_USER" to "bot", "MODEL_STORE_URI" to "gs://b/p"), cmd.task).modelStoreUri,
+        )
         assertNull(BotSettings.from(baseEnv("/dev/null"), BotTask.RECONCILE).modelStoreUri) // 他のタスクには要らない
     }
 }

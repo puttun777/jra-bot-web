@@ -8,10 +8,10 @@ import jp.jrabot.domain.calendar.RaceDayRepository
 import jp.jrabot.domain.calendar.ScheduleEventRepository
 import jp.jrabot.domain.calendar.ScheduleFetchFactReader
 import jp.jrabot.domain.ml.DatasetStore
+import jp.jrabot.domain.ml.ModelStore
 import jp.jrabot.domain.ml.dataset.DatasetSource
 import jp.jrabot.domain.ml.features.FeatureSource
 import jp.jrabot.domain.ml.features.HorseMasterHistoryStore
-import jp.jrabot.domain.ml.ModelStore
 import jp.jrabot.domain.odds.OddsSnapshotRepository
 import jp.jrabot.domain.race.RaceRepository
 import jp.jrabot.domain.race.RaceScheduleRepository

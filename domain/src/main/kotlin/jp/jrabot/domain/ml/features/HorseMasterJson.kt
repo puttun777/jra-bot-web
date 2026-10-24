@@ -39,7 +39,11 @@ object HorseMasterJson {
     fun chakuTable(text: String?): ChakuTable =
         ChakuTable(
             list(text).mapNotNull { row ->
-                (row as? JsonArray)?.items?.takeIf { it.isNotEmpty() }?.take(6)?.map(::count)
+                (row as? JsonArray)
+                    ?.items
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.take(6)
+                    ?.map(::count)
             },
         )
 

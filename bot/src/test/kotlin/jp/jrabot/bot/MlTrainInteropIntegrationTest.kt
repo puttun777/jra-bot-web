@@ -53,7 +53,8 @@ class MlTrainInteropIntegrationTest {
         private val t1 = TenantId.of(1)
         private val mlDir = File("../ml").canonicalFile
         private val repoRoot = File("..").canonicalFile
-        private val python: String = System.getenv("ML_TRAIN_PYTHON")?.takeIf { it.isNotBlank() } ?: fail("ML_TRAIN_PYTHON が未設定（ml/requirements.txt を入れた Python の実行ファイル）")
+        private val python: String =
+            System.getenv("ML_TRAIN_PYTHON")?.takeIf { it.isNotBlank() } ?: fail("ML_TRAIN_PYTHON が未設定（ml/requirements.txt を入れた Python の実行ファイル）")
         private val seed: ByteArray = ByteArray(32).also { SecureRandom().nextBytes(it) } // 実行時に生成するテスト鍵（秘密でも本番鍵でもない）
         private val seedB64: String = Base64.getEncoder().encodeToString(seed)
         private val ops: String = writeOpsState(Files.createTempDirectory(work, "ops")).toString()
@@ -109,9 +110,17 @@ class MlTrainInteropIntegrationTest {
             )
 
         val publicKeyB64: String by lazy {
-            val r = py("-c", "import base64,sys;from ml_train import modeljson as m;print(base64.b64encode(m.public_key_of(base64.b64decode(sys.argv[1]))).decode())", seedB64)
+            val r =
+                py(
+                    "-c",
+                    "import base64,sys;from ml_train import modeljson as m;print(base64.b64encode(m.public_key_of(base64.b64decode(sys.argv[1]))).decode())",
+                    seedB64,
+                )
             check(r.exit == 0) { "公開鍵を導出できない" }
-            r.out.trim().lines().last()
+            r.out
+                .trim()
+                .lines()
+                .last()
         }
 
         // ---------------------------------------------------------------- 合成データ（DB）
@@ -130,19 +139,49 @@ class MlTrainInteropIntegrationTest {
                 for (h in horses.indices) {
                     it.createStatement().use { s ->
                         s.execute(
-                            "INSERT INTO horses (tenant_id, ketto_num, birth_date, pedigree_json, created_at, updated_at) VALUES (1, '${horses[h]}', '2022-04-01', " +
+                            "INSERT INTO horses (tenant_id, ketto_num, birth_date, pedigree_json, created_at, updated_at) " +
+                                "VALUES (1, '${horses[h]}', '2022-04-01', " +
                                 "'[{\"name\":\"sire${h % 3}\"},{\"name\":\"dam$h\"}]', '$now', '2025-01-01 00:00:00.000000')",
                         )
                     }
                 }
-                val race = it.prepareStatement("INSERT INTO races (tenant_id, race_id, race_date, venue_code, race_no, post_time, post_time_unknown, distance_m, track_type_cd, course_kubun_cd, tenko_cd, shiba_baba_cd, dirt_baba_cd, created_at, updated_at) VALUES (1, ?, ?, '05', ?, ?, 0, 1600, '11', '00', '1', '2', '3', '$now', '$now')")
-                val rh = it.prepareStatement("INSERT INTO race_horses (tenant_id, race_id, umaban, ketto_num, created_at, updated_at) VALUES (1, ?, ?, ?, '$now', '$now')")
-                val odds = it.prepareStatement("INSERT INTO odds_snapshots (tenant_id, race_id, market, observed_at, umaban, odds, popularity) VALUES (1, ?, 'win', ?, ?, ?, ?)")
-                val res = it.prepareStatement("INSERT INTO results (tenant_id, race_id, umaban, finish, created_at, updated_at) VALUES (1, ?, ?, ?, '$now', '$now')")
-                val past = it.prepareStatement("INSERT INTO horse_past_runs (tenant_id, ketto_num, race_id, run_date, finish, created_at, updated_at) VALUES (1, ?, ?, ?, ?, '$now', '$now')")
-                for (h in horses.indices) for (k in 1..3) {
-                    past.setString(1, horses[h]); past.setString(2, "2025%02d%02d0%d11".format(10 + k % 3, 1 + k, k)); past.setDate(3, java.sql.Date.valueOf(LocalDate.of(2025, 10 + k % 3, 1 + k)))
-                    past.setInt(4, 1 + (h + k) % 8); past.addBatch()
+                val race =
+                    it.prepareStatement(
+                        "INSERT INTO races (tenant_id, race_id, race_date, venue_code, race_no, post_time, post_time_unknown, distance_m, track_type_cd, course_kubun_cd, tenko_cd, shiba_baba_cd, dirt_baba_cd, created_at, updated_at) VALUES (1, ?, ?, '05', ?, ?, 0, 1600, '11', '00', '1', '2', '3', '$now', '$now')",
+                    )
+                val rh =
+                    it.prepareStatement(
+                        "INSERT INTO race_horses (tenant_id, race_id, umaban, ketto_num, created_at, updated_at) VALUES (1, ?, ?, ?, '$now', '$now')",
+                    )
+                val odds =
+                    it.prepareStatement(
+                        "INSERT INTO odds_snapshots (tenant_id, race_id, market, observed_at, umaban, odds, popularity) VALUES (1, ?, 'win', ?, ?, ?, ?)",
+                    )
+                val res =
+                    it.prepareStatement(
+                        "INSERT INTO results (tenant_id, race_id, umaban, finish, created_at, updated_at) VALUES (1, ?, ?, ?, '$now', '$now')",
+                    )
+                val past =
+                    it.prepareStatement(
+                        "INSERT INTO horse_past_runs (tenant_id, ketto_num, race_id, run_date, finish, created_at, updated_at) VALUES (1, ?, ?, ?, ?, '$now', '$now')",
+                    )
+                for (h in horses.indices) {
+                    for (k in 1..3) {
+                        past.setString(1, horses[h])
+                        past.setString(2, "2025%02d%02d0%d11".format(10 + k % 3, 1 + k, k))
+                        past.setDate(
+                            3,
+                            java.sql.Date.valueOf(
+                                LocalDate.of(
+                                    2025,
+                                    10 + k % 3,
+                                    1 + k,
+                                ),
+                            ),
+                        )
+                        past.setInt(4, 1 + (h + k) % 8)
+                        past.addBatch()
+                    }
                 }
                 past.executeBatch()
                 for (d in 0 until 24) {
@@ -150,25 +189,48 @@ class MlTrainInteropIntegrationTest {
                     for (r in 1..5) {
                         val raceId = "%04d%02d%02d05%02d".format(date.year, date.monthValue, date.dayOfMonth, r)
                         val post = LocalTime.of(10 + r, 0)
-                        race.setString(1, raceId); race.setDate(2, java.sql.Date.valueOf(date)); race.setInt(3, r); race.setTime(4, java.sql.Time.valueOf(post)); race.addBatch()
+                        race.setString(1, raceId)
+                        race.setDate(2, java.sql.Date.valueOf(date))
+                        race.setInt(3, r)
+                        race.setTime(4, java.sql.Time.valueOf(post))
+                        race.addBatch()
                         val perm = (1..8).shuffled(rnd) // umaban → 馬のインデックス
                         val latent = DoubleArray(8) { i -> strengths[perm[i] - 1] + rnd.nextDouble(-0.4, 0.4) }
                         val pTrue = latent.map { exp(1.3 * it) }.let { w -> w.map { x -> x / w.sum() } }
                         var u = rnd.nextDouble()
                         var winner = 7
-                        for (i in 0 until 8) { u -= pTrue[i]; if (u <= 0) { winner = i; break } }
+                        for (i in 0 until 8) {
+                            u -= pTrue[i]
+                            if (u <= 0) {
+                                winner = i
+                                break
+                            }
+                        }
                         val pMkt = latent.map { exp(0.9 * it + rnd.nextDouble(-0.3, 0.3)) }.let { w -> w.map { x -> x / w.sum() } }
                         val oddsVal = pMkt.map { max(1.1, round(0.8 / it * 10) / 10) }
                         val rank = oddsVal.indices.sortedBy { i -> oddsVal[i] }
                         val finishOrder = (listOf(winner) + (0 until 8).filter { i -> i != winner }.shuffled(rnd))
                         val postUtc = date.atTime(post).minusHours(9)
                         for (i in 0 until 8) {
-                            rh.setString(1, raceId); rh.setInt(2, i + 1); rh.setString(3, horses[perm[i] - 1]); rh.addBatch()
+                            rh.setString(1, raceId)
+                            rh.setInt(2, i + 1)
+                            rh.setString(3, horses[perm[i] - 1])
+                            rh.addBatch()
                             for ((minutesBefore, o) in listOf(180 to oddsVal[i], 20 to oddsVal[i], 5 to 99.0)) { // 5 分前は as_of(10 分前)より後 → 使われない
-                                odds.setString(1, raceId); odds.setTimestamp(2, java.sql.Timestamp.valueOf(postUtc.minusMinutes(minutesBefore.toLong()))); odds.setInt(3, i + 1)
-                                odds.setDouble(4, o); odds.setInt(5, rank.indexOf(i) + 1); odds.addBatch()
+                                odds.setString(1, raceId)
+                                odds.setTimestamp(2, java.sql.Timestamp.valueOf(postUtc.minusMinutes(minutesBefore.toLong())))
+                                odds.setInt(
+                                    3,
+                                    i + 1,
+                                )
+                                odds.setDouble(4, o)
+                                odds.setInt(5, rank.indexOf(i) + 1)
+                                odds.addBatch()
                             }
-                            res.setString(1, raceId); res.setInt(2, i + 1); res.setInt(3, finishOrder.indexOf(i) + 1); res.addBatch()
+                            res.setString(1, raceId)
+                            res.setInt(2, i + 1)
+                            res.setInt(3, finishOrder.indexOf(i) + 1)
+                            res.addBatch()
                         }
                     }
                 }
@@ -177,7 +239,12 @@ class MlTrainInteropIntegrationTest {
             }
 
         private fun exportEnv() =
-            baseEnv(ops, "DB_URL" to MySqlSupport.jdbcUrl(db.name), "DB_PASSWORD" to MySqlSupport.PASSWORDS.getValue("bot"), "MODEL_STORE_URI" to "file://$storeDir")
+            baseEnv(
+                ops,
+                "DB_URL" to MySqlSupport.jdbcUrl(db.name),
+                "DB_PASSWORD" to MySqlSupport.PASSWORDS.getValue("bot"),
+                "MODEL_STORE_URI" to "file://$storeDir",
+            )
 
         fun export(
             id: String,
@@ -217,7 +284,12 @@ class MlTrainInteropIntegrationTest {
     ): ModelLoadResult {
         val id = ModelId.of(modelId)
         val artifact = assertNotNull(LocalFileModelStore(storeDir).read(t1, id), "成果物が保管されている")
-        val (sha, schemaHash) = db.query("SELECT sha256, feature_schema_hash FROM ml_model WHERE tenant_id = 1 AND model_id = '$modelId'") { it.getString(1) to it.getString(2) }.single()
+        val (sha, schemaHash) =
+            db
+                .query("SELECT sha256, feature_schema_hash FROM ml_model WHERE tenant_id = 1 AND model_id = '$modelId'") {
+                    it.getString(1) to
+                        it.getString(2)
+                }.single()
         return ModelLoader(ModelTrust.fromBase64(publicKeyB64)).load(t1, id, artifact, ExpectedModel(sha, schemaHash, kind))
     }
 
@@ -226,8 +298,11 @@ class MlTrainInteropIntegrationTest {
         // 既存の ACTIVE（別の種別）が学習の前後で変わらないことを見るため、先に置く
         val hex = { n: Int -> n.toString(16).padStart(64, '0') }
         db.exec(
-            "INSERT INTO ml_model (tenant_id, model_id, kind, schema_version, feature_schema_hash, artifact_uri, sha256, signature_sha256, status, active_flag, created_at, activated_at, activated_by) " +
-                "VALUES (1, 'active_alpha_1', 'alpha', 1, 'sha256:${hex(1)}', 'gs://synthetic/a', '${hex(2)}', '${hex(3)}', 'ACTIVE', 1, '2026-01-01 00:00:00.000000', '2026-01-02 00:00:00.000000', 'synthetic-admin')",
+            "INSERT INTO ml_model (tenant_id, model_id, kind, schema_version, feature_schema_hash, artifact_uri, sha256, signature_sha256, " +
+                "status, active_flag, created_at, activated_at, activated_by) " +
+                "VALUES (1, 'active_alpha_1', 'alpha', 1, 'sha256:${hex(
+                    1,
+                )}', 'gs://synthetic/a', '${hex(2)}', '${hex(3)}', 'ACTIVE', 1, '2026-01-01 00:00:00.000000', '2026-01-02 00:00:00.000000', 'synthetic-admin')",
         )
         val activeBefore = db.query("SELECT * FROM ml_model WHERE model_id = 'active_alpha_1'") { rs -> (1..rs.metaData.columnCount).map { rs.getString(it) } }
 
@@ -235,7 +310,10 @@ class MlTrainInteropIntegrationTest {
         assertEquals(0, export("it-cal-1"), "再実行は冪等（同じ内容）")
         val manifest = storeDir.resolve("1/datasets/it-cal-1.manifest.json")
         assertTrue(Files.isRegularFile(manifest) && Files.isRegularFile(storeDir.resolve("1/datasets/it-cal-1.csv.gz")))
-        val csv = GZIPInputStream(Files.newInputStream(storeDir.resolve("1/datasets/it-cal-1.csv.gz"))).readAllBytes().toString(Charsets.UTF_8).trimEnd('\n').split('\n')
+        val csv =
+            GZIPInputStream(
+                Files.newInputStream(storeDir.resolve("1/datasets/it-cal-1.csv.gz")),
+            ).readAllBytes().toString(Charsets.UTF_8).trimEnd('\n').split('\n')
         val header = csv[0].split(',')
         val oddsCol = header.indexOf("odds")
         assertEquals(960, csv.size - 1, "24 日 × 5 レース × 8 頭")
@@ -270,13 +348,24 @@ class MlTrainInteropIntegrationTest {
         assertEquals("REJECTED", statusOf(none.modelId))
 
         // 既存 ACTIVE は変わらず、ml-train の DB ユーザーは昇格・更新・削除できない
-        assertEquals(activeBefore, db.query("SELECT * FROM ml_model WHERE model_id = 'active_alpha_1'") { rs -> (1..rs.metaData.columnCount).map { rs.getString(it) } })
+        assertEquals(
+            activeBefore,
+            db.query("SELECT * FROM ml_model WHERE model_id = 'active_alpha_1'") { rs -> (1..rs.metaData.columnCount).map { rs.getString(it) } },
+        )
         assertEquals("1", db.scalar("SELECT COUNT(*) FROM ml_model WHERE status = 'ACTIVE'"))
         mltrainConnection().use { c ->
             c.createStatement().use { s ->
-                assertDenied { s.executeUpdate("UPDATE ml_model SET status = 'ACTIVE', active_flag = 1, activated_at = NOW(6) WHERE model_id = '${ok.modelId}'") }
+                assertDenied {
+                    s.executeUpdate(
+                        "UPDATE ml_model SET status = 'ACTIVE', active_flag = 1, activated_at = NOW(6) WHERE model_id = '${ok.modelId}'",
+                    )
+                }
                 assertDenied { s.executeUpdate("DELETE FROM ml_model WHERE model_id = 'active_alpha_1'") }
-                assertDenied { s.executeUpdate("INSERT INTO races (tenant_id, race_id, race_date, venue_code, race_no, created_at, updated_at) VALUES (1, '202601049911', '2026-01-04', '05', 11, NOW(6), NOW(6))") }
+                assertDenied {
+                    s.executeUpdate(
+                        "INSERT INTO races (tenant_id, race_id, race_date, venue_code, race_no, created_at, updated_at) VALUES (1, '202601049911', '2026-01-04', '05', 11, NOW(6), NOW(6))",
+                    )
+                }
             }
         }
     }
@@ -304,18 +393,54 @@ class MlTrainInteropIntegrationTest {
         val original = Files.readAllBytes(csvPath)
         val before = db.scalar("SELECT COUNT(*) FROM ml_model")
         val tampered = GZIPInputStream(original.inputStream()).readAllBytes().also { it[it.size / 2] = (it[it.size / 2].toInt() xor 1).toByte() }
-        Files.write(csvPath, java.io.ByteArrayOutputStream().also { o -> java.util.zip.GZIPOutputStream(o).use { it.write(tampered) } }.toByteArray())
+        Files.write(
+            csvPath,
+            java.io
+                .ByteArrayOutputStream()
+                .also { o ->
+                    java.util.zip
+                        .GZIPOutputStream(o)
+                        .use { it.write(tampered) }
+                }.toByteArray(),
+        )
         val r = train("it-bad-1", """{"kind":"%KIND%"}""", passGate)
         assertEquals(1, r.exit, r.out)
         assertEquals("DATASET_INVALID", r.reason)
         Files.write(csvPath, original)
         // 別テナントとして実行（テナント 2 にそのデータセットは無い）
         val cfg = writeJson("cfg-t2.json", """{"kind":"calibration"}""")
-        val t2 = py("-m", "ml_train", "train", "--tenant-id", "2", "--dataset-id", "it-bad-1", "--config", cfg, "--gate", writeJson("g2.json", passGate), env = trainEnv())
+        val t2 =
+            py(
+                "-m",
+                "ml_train",
+                "train",
+                "--tenant-id",
+                "2",
+                "--dataset-id",
+                "it-bad-1",
+                "--config",
+                cfg,
+                "--gate",
+                writeJson("g2.json", passGate),
+                env = trainEnv(),
+            )
         assertEquals(1, t2.exit, t2.out)
         // STOPPED は DB に触れず exit 0
         val stopped = writeOpsState(Files.createTempDirectory(work, "ops-stopped"), "STOPPED").toString()
-        val s = py("-m", "ml_train", "train", "--tenant-id", "1", "--dataset-id", "it-bad-1", "--config", cfg, env = trainEnv() + ("OPS_MODE_SOURCE" to "file://$stopped"))
+        val s =
+            py(
+                "-m",
+                "ml_train",
+                "train",
+                "--tenant-id",
+                "1",
+                "--dataset-id",
+                "it-bad-1",
+                "--config",
+                cfg,
+                env =
+                    trainEnv() + ("OPS_MODE_SOURCE" to "file://$stopped"),
+            )
         assertEquals(0, s.exit, s.out)
         assertEquals("MODE_STOPPED", s.reason)
         assertEquals(before, db.scalar("SELECT COUNT(*) FROM ml_model"), "不正・越境・STOPPED では行が増えない")
@@ -329,11 +454,24 @@ class MlTrainInteropIntegrationTest {
             val r = train("it-perm-1", """{"kind":"%KIND%","seed":99}""", passGate)
             assertEquals(1, r.exit, r.out) // 権限エラーは再試行しても直らない → 1
             assertEquals("DB_AUTH_FAILED", r.reason)
-            assertEquals(emptyList(), storeDir.resolve("1/models").toFile().listFiles()?.filter { it.name.contains("seed99") } ?: emptyList())
+            assertEquals(
+                emptyList(),
+                storeDir
+                    .resolve("1/models")
+                    .toFile()
+                    .listFiles()
+                    ?.filter { it.name.contains("seed99") } ?: emptyList(),
+            )
         } finally {
             db.exec("GRANT INSERT ON `${db.name}`.`ml_model` TO 'mltrain'@'%'")
         }
-        val models = storeDir.resolve("1/models").toFile().listFiles()?.map { it.name }.orEmpty()
+        val models =
+            storeDir
+                .resolve("1/models")
+                .toFile()
+                .listFiles()
+                ?.map { it.name }
+                .orEmpty()
         val registered = db.query("SELECT model_id FROM ml_model") { it.getString(1) }.toSet()
         assertTrue(models.all { f -> registered.any { f.startsWith(it) } }, "登録されていない成果物が残っている: $models / $registered")
     }
@@ -341,14 +479,31 @@ class MlTrainInteropIntegrationTest {
     @Test
     fun `旧 pkl 変換ツールの出力（合成の旧モデル 5・35・40 次元）を Kotlin が読める`() {
         val schemaDir = File(repoRoot, "domain/src/test/resources/ml").path
-        for ((kind, dims, modelKind) in listOf(Triple("market5", 5, ModelKind.LEGACY_COMPAT), Triple("alpha35", 35, ModelKind.ALPHA), Triple("calibration40", 40, ModelKind.LEGACY_COMPAT))) {
+        for ((kind, dims, modelKind) in listOf(
+            Triple("market5", 5, ModelKind.LEGACY_COMPAT),
+            Triple("alpha35", 35, ModelKind.ALPHA),
+            Triple("calibration40", 40, ModelKind.LEGACY_COMPAT),
+        )) {
             val pkl = work.resolve("old-$kind.pkl").toString()
             assertEquals(0, py("-m", "tests.make_legacy_pkl", pkl, kind).exit)
             val out = work.resolve("conv-$kind")
             val id = "legacy-it-$kind"
             val r =
                 py(
-                    "-m", "ml_train", "convert-pkl", "--pkl", pkl, "--out-dir", out.toString(), "--tenant-id", "1", "--model-id", id, "--schema-dir", schemaDir, "--confirm-own-local-file",
+                    "-m",
+                    "ml_train",
+                    "convert-pkl",
+                    "--pkl",
+                    pkl,
+                    "--out-dir",
+                    out.toString(),
+                    "--tenant-id",
+                    "1",
+                    "--model-id",
+                    id,
+                    "--schema-dir",
+                    schemaDir,
+                    "--confirm-own-local-file",
                     env = mapOf("MODEL_SIGNING_KEY" to seedB64),
                 )
             assertEquals(0, r.exit, r.out)
@@ -359,7 +514,25 @@ class MlTrainInteropIntegrationTest {
         // 次元不一致（feature_names は 40、重みは 35）は変換されない
         val bad = work.resolve("old-bad.pkl").toString()
         assertEquals(0, py("-m", "tests.make_legacy_pkl", bad, "calibration40", "--dim", "35").exit)
-        val r = py("-m", "ml_train", "convert-pkl", "--pkl", bad, "--out-dir", work.resolve("conv-bad").toString(), "--tenant-id", "1", "--model-id", "legacy-it-bad", "--schema-dir", schemaDir, "--confirm-own-local-file", env = mapOf("MODEL_SIGNING_KEY" to seedB64))
+        val r =
+            py(
+                "-m",
+                "ml_train",
+                "convert-pkl",
+                "--pkl",
+                bad,
+                "--out-dir",
+                work.resolve("conv-bad").toString(),
+                "--tenant-id",
+                "1",
+                "--model-id",
+                "legacy-it-bad",
+                "--schema-dir",
+                schemaDir,
+                "--confirm-own-local-file",
+                env =
+                    mapOf("MODEL_SIGNING_KEY" to seedB64),
+            )
         assertEquals(1, r.exit, r.out)
         assertFalse(work.resolve("conv-bad").toFile().exists())
     }

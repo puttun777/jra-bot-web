@@ -169,6 +169,7 @@ object BotArgsParser {
         fun bad(m: String) = ExportParse.Bad(m)
         val id = values["dataset-id"] ?: return bad("--dataset-id が必須です")
         val datasetId = DatasetId.ofOrNull(id) ?: return bad("--dataset-id は英数字・_・- の 1〜64 文字です")
+
         fun date(name: String): LocalDate? =
             values[name]?.let {
                 try {
@@ -181,9 +182,15 @@ object BotArgsParser {
         val from = date("from") ?: return bad("--from は YYYY-MM-DD です")
         val to = date("to") ?: return bad("--to は YYYY-MM-DD です")
         if (to.isBefore(from)) return bad("--to は --from 以降です")
-        if (java.time.temporal.ChronoUnit.DAYS.between(from, to) >= ExportArgs.MAX_RANGE_DAYS) return bad("期間は ${ExportArgs.MAX_RANGE_DAYS} 日未満です")
+        if (java.time.temporal.ChronoUnit.DAYS
+                .between(from, to) >= ExportArgs.MAX_RANGE_DAYS
+        ) {
+            return bad("期間は ${ExportArgs.MAX_RANGE_DAYS} 日未満です")
+        }
         val schemaName = values["feature-schema"] ?: return bad("--feature-schema が必須です")
-        val schema = ExportSchema.entries.firstOrNull { it.cliName == schemaName } ?: return bad("--feature-schema は ${ExportSchema.entries.joinToString("|") { it.cliName }} です")
+        val schema =
+            ExportSchema.entries.firstOrNull { it.cliName == schemaName }
+                ?: return bad("--feature-schema は ${ExportSchema.entries.joinToString("|") { it.cliName }} です")
         val fraction =
             values["valid-fraction"]?.let {
                 it.toDoubleOrNull()?.takeIf { v -> v > 0.0 && v < 1.0 } ?: return bad("--valid-fraction は 0 より大きく 1 より小さい数です")

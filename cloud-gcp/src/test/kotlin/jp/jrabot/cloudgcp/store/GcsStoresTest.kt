@@ -83,7 +83,8 @@ class GcsStoresTest {
     private val loc = GcsBucketPrefix.parse("gs://fake-model-store/env1")
     private val resources = File("../domain/src/test/resources/ml")
 
-    private fun fixture(name: String) = ModelArtifact(ModelId.of(name), File(resources, "models/$name.json").readBytes(), File(resources, "models/$name.sig").readBytes())
+    private fun fixture(name: String) =
+        ModelArtifact(ModelId.of(name), File(resources, "models/$name.json").readBytes(), File(resources, "models/$name.sig").readBytes())
 
     private fun trust(): ModelTrust {
         val expected = File(resources, "expected.json").readText()
@@ -180,11 +181,26 @@ class GcsStoresTest {
             f.putRace(t1, raceId, RaceConditions(date, post, 1600, "11", "00", "1", "2", "3"))
             for (u in 1..2) {
                 f.putEntry(t1, raceId, u, "2020100%03d".format(u))
-                f.putHorse(t1, HorseMaster("2020100%03d".format(u), LocalDate.of(2022, 1, 1), "1", ChakuTable.EMPTY, ChakuTable.EMPTY, ChakuTable.EMPTY, listOf("s"), Instant.parse("2025-01-01T00:00:00Z")))
+                f.putHorse(
+                    t1,
+                    HorseMaster(
+                        "2020100%03d".format(u),
+                        LocalDate.of(2022, 1, 1),
+                        "1",
+                        ChakuTable.EMPTY,
+                        ChakuTable.EMPTY,
+                        ChakuTable.EMPTY,
+                        listOf("s"),
+                        Instant.parse("2025-01-01T00:00:00Z"),
+                    ),
+                )
                 d.put(t1, date, DatasetEntry(raceId, u, (u + day) % 2 + 1), listOf(OddsPoint(post.minusSeconds(3600), 2.0 + u, u)))
             }
         }
-        return DatasetExporter(f, d).export(t1, DatasetId.of(id), FeatureSchema.ALPHA_35, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31), Instant.parse("2026-02-01T00:00:00Z"))
+        return DatasetExporter(
+            f,
+            d,
+        ).export(t1, DatasetId.of(id), FeatureSchema.ALPHA_35, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31), Instant.parse("2026-02-01T00:00:00Z"))
     }
 
     @Test
@@ -205,7 +221,9 @@ class GcsStoresTest {
         // 同じ ID で別の内容 → CONFLICT（既存は変わらない）
         val before = client.objects.mapValues { it.value.copyOf() }
         val f2 = exported("ds1")
-        val bigger = jp.jrabot.domain.ml.dataset.ExportedDataset(f2.datasetId, f2.csvGz(), f2.csvBytes, "0".repeat(64), f2.manifest, f2.csv)
+        val bigger =
+            jp.jrabot.domain.ml.dataset
+                .ExportedDataset(f2.datasetId, f2.csvGz(), f2.csvBytes, "0".repeat(64), f2.manifest, f2.csv)
         assertEquals(PublishOutcome.CONFLICT, pub.publish(t1, bigger))
         assertEquals(before.keys, client.objects.keys)
         before.forEach { (k, v) -> assertContentEquals(v, client.objects[k]) }

@@ -63,16 +63,20 @@ class MlSourceIntegrationTest {
         db.exec("INSERT IGNORE INTO tenant (tenant_id, name, created_at) VALUES (2, 'second', $now)")
         for ((t, rid, date) in listOf(Triple(1, raceId, "2026-01-04"), Triple(1, raceId2, "2026-01-05"), Triple(2, raceId, "2026-01-04"))) {
             db.exec(
-                "INSERT INTO races (tenant_id, race_id, race_date, venue_code, race_no, post_time, post_time_unknown, distance_m, track_type_cd, course_kubun_cd, tenko_cd, shiba_baba_cd, dirt_baba_cd, created_at, updated_at) " +
+                "INSERT INTO races (tenant_id, race_id, race_date, venue_code, race_no, post_time, post_time_unknown, distance_m, track_type_cd, " +
+                    "course_kubun_cd, tenko_cd, shiba_baba_cd, dirt_baba_cd, created_at, updated_at) " +
                     "VALUES ($t, '$rid', '$date', '05', 11, '15:25:00', 0, 1600, '11 ', '00', '1', '2', '3', $now, $now)",
             )
         }
         // 現在のマスタ行はレースの後（2026-03-01）に更新されている = 累積値は『レースの結果を含み得る』
         db.exec(
-            "INSERT INTO horses (tenant_id, ketto_num, birth_date, pedigree_json, style_tendency_json, chaku_by_surface_json, chaku_by_condition_json, chaku_by_distance_json, race_count, created_at, updated_at) " +
+            "INSERT INTO horses (tenant_id, ketto_num, birth_date, pedigree_json, style_tendency_json, chaku_by_surface_json, " +
+                "chaku_by_condition_json, chaku_by_distance_json, race_count, created_at, updated_at) " +
                 "VALUES (1, '$ketto', '2022-04-01', '[{\"name\":\"sire\"},{\"name\":\" \"},{\"name\":\"dam\"}]', '[\"9\"]', '[[9,0,0]]', '[[9,0,0]]', '[[9,0,0]]', 9, $now, '2026-03-01 00:00:00.000000')",
         )
-        db.exec("INSERT INTO race_horses (tenant_id, race_id, umaban, ketto_num, created_at, updated_at) VALUES (1, '$raceId', 3, '$ketto', $now, $now), (1, '$raceId', 4, NULL, $now, $now), (1, '$raceId2', 3, '$ketto', $now, $now)")
+        db.exec(
+            "INSERT INTO race_horses (tenant_id, race_id, umaban, ketto_num, created_at, updated_at) VALUES (1, '$raceId', 3, '$ketto', $now, $now), (1, '$raceId', 4, NULL, $now, $now), (1, '$raceId2', 3, '$ketto', $now, $now)",
+        )
         // 過去走: 前走・前々走・レース当日(自分自身=ラベル)・未来・着順 0・日付なし
         for ((rid, date, finish) in listOf(
             Triple("202512280611", "'2025-12-28'", 1),
@@ -82,14 +86,25 @@ class MlSourceIntegrationTest {
             Triple("202511160811", "'2025-11-16'", 0),
             Triple("202510260511", "NULL", 3),
         )) {
-            db.exec("INSERT INTO horse_past_runs (tenant_id, ketto_num, race_id, run_date, finish, created_at, updated_at) VALUES (1, '$ketto', '$rid', $date, $finish, $now, $now)")
+            db.exec(
+                "INSERT INTO horse_past_runs (tenant_id, ketto_num, race_id, run_date, finish, created_at, updated_at) VALUES (1, '$ketto', '$rid', $date, $finish, $now, $now)",
+            )
         }
         // 単勝オッズ: 3 時間前 / 20 分前 / as_of(10 分前)より後の 5 分前
         for ((t, secondsBefore, odds) in listOf(Triple(1, 10800, 5.0), Triple(1, 1200, 4.0), Triple(1, 300, 99.0), Triple(2, 1200, 7.7))) {
-            val ts = postTime.minusSeconds(secondsBefore.toLong()).toString().replace("T", " ").replace("Z", "")
-            db.exec("INSERT INTO odds_snapshots (tenant_id, race_id, market, observed_at, umaban, odds, popularity) VALUES ($t, '$raceId', 'win', '$ts', 3, $odds, 2)")
+            val ts =
+                postTime
+                    .minusSeconds(secondsBefore.toLong())
+                    .toString()
+                    .replace("T", " ")
+                    .replace("Z", "")
+            db.exec(
+                "INSERT INTO odds_snapshots (tenant_id, race_id, market, observed_at, umaban, odds, popularity) VALUES ($t, '$raceId', 'win', '$ts', 3, $odds, 2)",
+            )
         }
-        db.exec("INSERT INTO results (tenant_id, race_id, umaban, finish, created_at, updated_at) VALUES (1, '$raceId', 3, 1, $now, $now), (1, '$raceId', 4, 2, $now, $now)")
+        db.exec(
+            "INSERT INTO results (tenant_id, race_id, umaban, finish, created_at, updated_at) VALUES (1, '$raceId', 3, 1, $now, $now), (1, '$raceId', 4, 2, $now, $now)",
+        )
     }
 
     private fun req(umaban: Int = 3) = FeatureRequest(T1, raceId, umaban, asOf, dataset.oddsHistory(T1, raceId, umaban, asOf))
@@ -144,6 +159,7 @@ class MlSourceIntegrationTest {
         val k1 = Instant.parse("2025-10-01T00:00:00Z")
         val k2 = Instant.parse("2025-12-30T00:00:00Z")
         val k3 = Instant.parse("2026-02-15T00:00:00Z") // レースの後
+
         fun ver(
             at: Instant,
             wins: Int,
@@ -199,7 +215,10 @@ class MlSourceIntegrationTest {
     fun `出走馬と確定着順では、結果の無いレースは finish が null で、勝敗が確定したものとして扱われない`() {
         val entries = dataset.entries(T1, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31))
         assertEquals(listOf("$raceId:3:1", "$raceId:4:2", "$raceId2:3:null"), entries.map { "${it.raceId}:${it.umaban}:${it.finish}" })
-        assertEquals(listOf("$raceId:3", "$raceId:4"), dataset.entries(T1, LocalDate.of(2026, 1, 4), LocalDate.of(2026, 1, 4)).map { "${it.raceId}:${it.umaban}" })
+        assertEquals(
+            listOf("$raceId:3", "$raceId:4"),
+            dataset.entries(T1, LocalDate.of(2026, 1, 4), LocalDate.of(2026, 1, 4)).map { "${it.raceId}:${it.umaban}" },
+        )
         assertEquals(emptyList(), dataset.entries(T2, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31))) // T2 に出走馬は無い
     }
 
@@ -220,6 +239,7 @@ class MlSourceIntegrationTest {
         // umaban 3 は as_of 以前のオッズがある。umaban 4 は オッズが無い（calibration は出力しない）。raceId2 は結果が無い
         assertEquals(1, rows.size)
         val r = rows.single()
+
         fun col(name: String) = r[header.indexOf(name)]
         assertEquals("3", col("umaban"))
         assertEquals("1", col("label"))
@@ -233,6 +253,11 @@ class MlSourceIntegrationTest {
         assertEquals(JsonInt(0), skipped["result_incomplete"])
         val flags = (e.manifest["quality"] as JsonObject)["flags"] as JsonObject
         assertEquals(JsonInt(1), flags["master_newer_than_as_of"])
-        assertContentEquals(e.csv.toByteArray(), java.util.zip.GZIPInputStream(e.csvGz().inputStream()).readAllBytes())
+        assertContentEquals(
+            e.csv.toByteArray(),
+            java.util.zip
+                .GZIPInputStream(e.csvGz().inputStream())
+                .readAllBytes(),
+        )
     }
 }

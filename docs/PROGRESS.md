@@ -1,7 +1,37 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-10-24（第3段階 / Stage 3-F1: T3.6-A ML の Kotlin 推論基盤）
-旧: 2026-10-24（Stage 3-E: T3.5 Windows 取得エージェント）／2026-10-23（第3段階 / Stage 3-D: T3.4 取込 API・認証・冪等処理・取得の事実・バックフィル基盤 ＋ 要件変更（本人 1 名）と未解決事項の整理）
+最終更新: 2026-10-24（第3段階 / Stage 3-F2: T3.6-B ML の学習 Job・export-dataset・DB/GCS 実装）
+旧: 2026-10-24（Stage 3-F1: T3.6-A ML の Kotlin 推論基盤）／Stage 3-E（T3.5）／2026-10-23（Stage 3-D: T3.4）
+
+## Stage 3-F2（claude/stage3-ml-training）: T3.6-B ML の学習 Job・export-dataset・DB/GCS 実装
+### 結果（**合成データのみで検証。ML は本番利用可能ではない**。実データでの学習・精度・品質閾値・実 pkl の変換・実 GCS は未検証。Stage 3-G / T3.7 には進んでいない）
+- **実装**（判断 D-165〜D-179、詳細は ML_DESIGN §12・CONTRACTS 0.4.10・ml/README.md）:
+  - Kotlin: `bot --task=export-dataset`（`DatasetPublisher`: CSV → manifest〔確定の印〕）、`:persistence` の `DbFeatureSource`/`DbDatasetSource`/`HorseMasterHistoryStoreImpl`（SQL が asOf・レース日で時間を制限）、V4 `horse_master_history`（G-17 ⑤。`HorseMasterAtTime.resolve`）、`:cloud-gcp` の `GcsModelStore`/`GcsDatasetStore`（作成のみ・`ifGenerationMatch=0`・署名先/JSON 最後）、`DatasetStore` の manifest 読書き。スキーマ版は 4。
+  - Python `ml/`（`ml_train`）: データセット検証（`tools/ml` の契約を再利用）→ v2 学習（標準化 + L2 ロジスティック回帰 + Platt + 直近重み）→ 評価（valid 前半で校正・後半で評価）→ 品質ゲート（既定値なし・fail closed）→ 署名つきモデル JSON（Kotlin `ModelLoader` と同じ検証順）→ 保管 → `ml_model` へ CANDIDATE / REJECTED のみ登録（ACTIVE へ昇格しない・既存行を変更しない）。SIGTERM は確定前なら成果物を片付けて 75。
+  - 旧 pkl → JSON 変換（`ml_train.legacy_pkl`。許可リスト式 Unpickler。ローカル専用。**実 pkl の変換は未実施**）。
+  - ml-train イメージ（5 つ目）、release-manifest v2（`feature_schemas` + `feature_schema_hash`: G-17 ⑧）、CI `ml-train` ジョブ（`ci gate` に統合）、Dependabot pip `/ml`。
+- **範囲外のまま**: T3.7（Discord）、bot-run 統合（T3.8）、実 JRA-VAN データ、本番 GCP・Terraform、モデルの ACTIVE 昇格、v2 の有効化、品質閾値の確定（D-13）、本番 release-manifest、イメージの push。
+### テスト（ローカル: JDK 21・`LC_ALL=C.UTF-8`・MySQL 8.0.46〔ポート 3307〕。**JDK 25 と MySQL 8.4/9.7 の合否ではない**。完了判定の正は GitHub Actions: D-056、D-179）
+| 区分 | 結果 |
+|---|---|
+| `ml/`（pytest・ruff・mypy strict） | **128 件成功**・ruff・mypy 成功 |
+| `:domain` 単体 | 822 件成功 |
+| `:cloud-gcp` 単体 | 102 件成功（`GcsStoresTest`・`GoogleObjectClientHttpTest` を追加） |
+| `:persistence` 単体 / 統合 | 33 / 175 件。`MlSourceIntegrationTest`（8）成功。`WiringIntegrationTest.サーバは想定した版で動いている` は**ローカルが MySQL 8.0.46 のため失敗**（8.4 を期待する検査。F1 と同じ。CI の 8.4/9.7 で確認） |
+| `:bot` 単体 / 統合 | 75 / 36 件（`MlTrainInteropIntegrationTest` = Kotlin 出力 → Python 学習 → Kotlin `ModelLoader` 検証、5 件成功） |
+| `:ingest` 単体 / 統合、`:dashboard` 単体 / 統合 | 35 / 50、30 / 9 件 |
+| 並列実行時の注意 | 全モジュールを並列実行すると、サーバの接続数を数える 3 件（Bot/Ingest/Dashboard の「DB に接続しない」検査）が、同じ外部 MySQL を共有する他モジュールの接続で失敗する。`--max-workers=1` で単独実行すると成功（ローカル固有。CI は Testcontainers で独立） |
+| `tools/ci`・`tools/release`（Python） | 130 件成功（`python3 -m tools.ci.run_tests --min-tests 100`） |
+| ktlint・`checkModuleDependencies` | 成功 |
+| Docker イメージのビルド・スモーク | **ローカルでは未実施**（Docker デーモンなし）。GitHub Actions の `images` で確認 |
+### 未解決（UNRESOLVED.md が正本。今回解消したのは C-20〜C-26 のみ。新規 D-13〜D-15、G-19）
+T1.20（実 pkl・実 SQLite）、T1.21、品質ゲートの閾値（D-13）、署名鍵運用（D-14）、保持期間（D-15）、実 GCS での検証・`gs://` の直接読書き・履歴の追記（G-19）、E 項目（規約・仕様確認）、T3.0 Windows 実機。
+### 次の作業（**自動では進まない**）
+T3.7（Discord 通知。G-17 ⑥）／T3.8（bot-run 統合。G-17 ①②。履歴の追記）。第 5 段階前に T5.0（infra 同期。スキーマ版 4 の GRANT・`mltrain` ユーザー）。
+### ブランチ・PR・CI
+`claude/stage3-ml-training`（main の 8ab5f41 から）。PR・CI の結果は下記「CI」を参照（**マージはユーザーの判断**）。
+
+---
 
 ## Stage 3-F1（claude/stage3-ml-inference-h7e43j）: T3.6-A ML の Kotlin 推論基盤（特徴量・モデル検証・推論・ゴールデン比較）
 ### 結果（T3.6 の前半を完了。**本番で動作する推論ではない**: bot-run への統合は T3.8、学習は T3.6-B（Stage 3-F2）。本番の確率パイプラインは引き続き `legacy`。v2 は未承認・無効・自動切替なし）

@@ -100,7 +100,8 @@ class BotArgsParserTest {
         assertEquals(24, total)
     }
 
-    private val exportBase = arrayOf("--task=export-dataset", "--tenant-id=1", "--dataset-id=ds_1-A", "--from=2026-01-01", "--to=2026-03-31", "--feature-schema=alpha")
+    private val exportBase =
+        arrayOf("--task=export-dataset", "--tenant-id=1", "--dataset-id=ds_1-A", "--from=2026-01-01", "--to=2026-03-31", "--feature-schema=alpha")
 
     @Test
     fun `export-dataset の引数 — 必須と任意、既定値`() {
@@ -126,9 +127,22 @@ class BotArgsParserTest {
         }
         val bads =
             listOf(
-                "--dataset-id=../x", "--dataset-id=a b", "--dataset-id=" + "a".repeat(65), "--from=2026-13-01", "--from=2026/01/01", "--to=2025-12-31", "--to=2029-01-01",
-                "--feature-schema=market", "--feature-schema=CALIBRATION", "--valid-fraction=0", "--valid-fraction=1", "--valid-fraction=x", "--valid-fraction=NaN",
-                "--as-of-lead-minutes=0", "--as-of-lead-minutes=1441", "--as-of-lead-minutes=1.5",
+                "--dataset-id=../x",
+                "--dataset-id=a b",
+                "--dataset-id=" + "a".repeat(65),
+                "--from=2026-13-01",
+                "--from=2026/01/01",
+                "--to=2025-12-31",
+                "--to=2029-01-01",
+                "--feature-schema=market",
+                "--feature-schema=CALIBRATION",
+                "--valid-fraction=0",
+                "--valid-fraction=1",
+                "--valid-fraction=x",
+                "--valid-fraction=NaN",
+                "--as-of-lead-minutes=0",
+                "--as-of-lead-minutes=1441",
+                "--as-of-lead-minutes=1.5",
             )
         for (bad in bads) {
             val name = bad.substringBefore('=')

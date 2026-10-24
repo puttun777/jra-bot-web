@@ -112,8 +112,13 @@ internal class GoogleObjectClient(
             val millis = timeout.toMillis().toInt()
             return StorageOptions
                 .newBuilder()
-                .setTransportOptions(HttpTransportOptions.newBuilder().setConnectTimeout(millis).setReadTimeout(millis).build())
-                .setRetrySettings(
+                .setTransportOptions(
+                    HttpTransportOptions
+                        .newBuilder()
+                        .setConnectTimeout(millis)
+                        .setReadTimeout(millis)
+                        .build(),
+                ).setRetrySettings(
                     StorageOptions
                         .getDefaultRetrySettings()
                         .toBuilder()
