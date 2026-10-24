@@ -267,6 +267,31 @@ object IngestIt {
         return Resp(r.statusCode(), r.body(), r.headers().map())
     }
 
+    /** 署名つきの GET（`signed=false` なら署名なし）。 */
+    fun get(
+        agent: ItAgent,
+        path: String,
+        signed: Boolean = true,
+    ): Resp {
+        val b = HttpRequest.newBuilder(URI.create("http://127.0.0.1:$port$path")).timeout(Duration.ofSeconds(30))
+        if (signed) {
+            val ts = ItClock.now().epochSecond
+            val nonce = nonce()
+            val sig =
+                AgentSigning.sign(
+                    AgentSigning.deriveSigningKey(agent.token),
+                    AgentSigning.canonical("GET", path, ts, nonce, Hashing.sha256Hex(ByteArray(0))),
+                )
+            b
+                .header("X-Agent-Id", agent.id)
+                .header("X-Timestamp", ts.toString())
+                .header("X-Nonce", nonce)
+                .header("X-Signature", sig)
+        }
+        val r = client.send(b.GET().build(), HttpResponse.BodyHandlers.ofString())
+        return Resp(r.statusCode(), r.body(), r.headers().map())
+    }
+
     /** 取込 API に封筒を送る（署名つき）。 */
     fun ingest(
         agent: ItAgent,

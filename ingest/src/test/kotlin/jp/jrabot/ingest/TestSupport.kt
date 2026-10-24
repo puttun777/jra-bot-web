@@ -61,7 +61,7 @@ class ControllableModeProvider(
     override fun snapshot(): ModeSnapshot = if (mode == OpsMode.UNKNOWN) ModeSnapshot.unknown() else ModeSnapshot(mode, mode, 1, 0, "gcs")
 }
 
-/** Stage 3 のエージェント API の代わりに、ガードの先に到達したか（= DB に触れ得る処理が呼ばれたか）を数える受け皿。 */
+/** ガードの先に到達したか（= DB に触れ得る処理が呼ばれたか）を数える受け皿。T3.5 で本物のハンドラができたため増えない（常に 0 を確認する旧来の検査は残す）。 */
 class AgentProbe {
     val reached = AtomicInteger()
 }
@@ -74,9 +74,6 @@ class AgentGuardTestConfig {
     @Bean
     @Primary
     fun controllableModeProvider() = ControllableModeProvider()
-
-    @Bean
-    fun probeController(probe: AgentProbe) = jp.jrabot.ingesttest.ProbeController(probe)
 }
 
 class Resp(

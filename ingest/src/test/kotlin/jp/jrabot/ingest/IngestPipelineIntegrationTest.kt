@@ -459,7 +459,8 @@ class IngestPipelineIntegrationTest {
         // 古い timestamp の取得が後から完了しても後戻りしない
         val f2 = it.fetchId()
         val c = it.parse(it.ingest(it.one, raceFetch(f2, 0, true, "20261001000000")))
-        assertNull(c["cursor"])
+        // D-144: サーバのカーソルがこの取得の値以上なので『確認できた』として値を返す（エージェントの acked_ts も前進だけ）。サーバのカーソルは動かさない
+        assertEquals(mapOf("dataType" to "RACE:2", "lastFileTimestamp" to "20261001000000"), c["cursor"])
         assertEquals("20261031200000", it.db.scalar("SELECT last_file_timestamp FROM ingest_cursor WHERE data_type = 'RACE:2'"))
         // 新しければ前進
         val f3 = it.fetchId()

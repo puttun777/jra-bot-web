@@ -82,7 +82,7 @@ class ScenarioTest(unittest.TestCase):
         self.assertEqual(["migration", "persistence", "apps"], p.db_suites)
 
     def test_09_unknown_or_missing_files_fail_closed(self):
-        for files in ([], ["new-top-level/thing.bin"], ["docs/a.md", "agent/main.py"]):
+        for files in ([], ["new-top-level/thing.bin"], ["docs/a.md", "unmapped/main.py"]):
             p = classify.classify(files)
             self.assertEqual("full", p.mode, files)
             self.assertTrue(p.run_build and p.run_golden and p.run_release and p.run_images and p.db_matrix == ["8.4", "9.7"])
@@ -121,9 +121,41 @@ class ScenarioTest(unittest.TestCase):
         self.assertEqual(dict(mode="code", build=False, golden=False, release=True, images=False, c26=False, db=[], suites=[]), jobs(p))
 
     def test_every_rule_pattern_compiles_and_tags_known(self):
-        known = {"docs", "kotlin_app", "kotlin_core", "kotlin_db", "build_cfg", "golden", "kotlin_golden", "release", "docker", "connectorj", "ci"}
+        known = {"docs", "kotlin_app", "kotlin_core", "kotlin_db", "build_cfg", "golden", "kotlin_golden", "release", "docker", "connectorj", "ci", "agent", "agent_windows"}
         for pattern, tags in classify.RULES:
             self.assertTrue(set(tags) <= known, pattern)
+
+
+class AgentTest(unittest.TestCase):
+    """T3.5: agent/（Python）の変更判定。Windows ランナー（課金 2 倍）は Windows 固有のファイルとフル検証だけ。"""
+
+    def test_agent_docs_only_is_docs(self):
+        p = classify.classify(["agent/README.md", "agent/POC.md"])
+        self.assertEqual("docs", p.mode)
+        self.assertFalse(p.run_agent or p.run_agent_windows)
+
+    def test_agent_tests_and_poc_run_python_only(self):
+        for f in ("agent/tests/test_queue.py", "agent/poc/poc_mock.py"):
+            p = classify.classify([f])
+            self.assertTrue(p.run_agent, f)
+            self.assertFalse(p.run_agent_windows or p.run_build or p.db_matrix, f)
+
+    def test_agent_source_also_runs_kotlin_interop_on_8_4_only(self):
+        for f in ("agent/src/jra_agent/sender.py", "agent/interop/driver.py", "agent/tests/vectors/signing_vectors.json", "agent/pyproject.toml"):
+            p = classify.classify([f])
+            self.assertTrue(p.run_agent and p.run_build, f)
+            self.assertFalse(p.run_agent_windows, f)
+            self.assertEqual(["8.4"], p.db_matrix)
+            self.assertEqual(["apps"], p.db_suites)
+
+    def test_windows_specific_files_run_windows_runner(self):
+        for f in ("agent/src/jra_agent/winapi.py", "agent/src/jra_agent/lock.py", "agent/src/jra_agent/jvlink/supervisor.py", "agent/tests/test_winapi_windows.py", "agent/scripts/install-task.ps1"):
+            self.assertTrue(classify.classify([f]).run_agent_windows, f)
+
+    def test_full_runs_everything_including_agent_jobs(self):
+        p = classify.plan_for_event("workflow_dispatch")
+        self.assertTrue(p.run_agent and p.run_agent_windows)
+        self.assertTrue(classify.classify([".github/workflows/ci.yml"]).run_agent_windows)
 
 
 class EventTest(unittest.TestCase):

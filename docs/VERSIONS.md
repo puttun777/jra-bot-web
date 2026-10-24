@@ -190,3 +190,12 @@ GitHub Actions（`db-integration` 8.4 / 9.7、ubuntu-24.04、Temurin 25、PR #8�
 - **Connector/J 26.x の過去の検証結果（削除していない）**: §10。`26.10.0` × MySQL 8.4・9.7 で `:persistence:integrationTest` 86 件すべて合格（CI run 39898663936、Temurin 25）。T2.6 の run 39921807006 でも同ジョブが 8.4・9.7 で成功。**採否は未決**（D-070）。毎 PR の実行はやめ、手動・月次・関連依存の変更時に実行する（D-098）。
 - **MySQL 9.7**: 暫定の本番基準は 8.4 のまま。9.7 は D-069（複合の自己参照 FK を検査しない）が残るため、**本番採用を自動決定しない**。互換性確認は DB・JDBC・スキーマ・依存の変更時と月次/手動のフル検証で続ける。
 - **未確認**: Docker Hub のレート制限（429）はクラウドセッションで発生した（Docker Hub / Maven Central）。GitHub-hosted ランナーでの影響は CI の結果で確認する（PROGRESS）。Dockerfile の `HEALTHCHECK` を Cloud Run が使うかどうかは公式文書で明記を確認できていない（付けない: D-093）。
+
+## 14. T3.5 Windows エージェントの Python（2026-10-24。D-145）
+| 項目 | 採用 | 根拠 |
+|---|---|---|
+| Python | **3.13（64bit）を目標、3.12 を最小**（`>=3.12,<3.14`）。CI は Linux で 3.12/3.13、Windows ランナーで 3.13 | cryptography 50.0.2（2026-09-30）は cp311-abi3 の win_amd64 wheel、pywin32 312（2026-06-04）は cp312/cp313/cp314 の win_amd64 wheel があることを `pip download --platform win_amd64 --only-binary` で確認。**3.14 は公式サンプルが 3.14 でも、SDK・JV-Link・pywin32 の組合せを実機で確認していないので対象外**（3.14 の `JVRTOpen=-413` の報告もある: JVLINK_DESIGN §12.1） |
+| cryptography | 50.0.2（固定） | Ed25519 の署名検証（ビーコン・更新 manifest）。標準ライブラリに無い。唯一の実行時依存 |
+| pywin32 | 312（Windows 実機のオプション。COM のみ） | DPAPI は ctypes で呼ぶので不要 |
+| 開発ツール | pytest 9.1.1・pytest-timeout 2.4.0・ruff 0.17.2・mypy 2.4.0（固定） | 各 PyPI の最新安定版（pre-release なし） |
+| GitHub Actions | actions/setup-python v6.2.0（SHA 固定） | 既存の checkout/setup-java と同じ固定方式 |

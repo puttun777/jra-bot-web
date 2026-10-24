@@ -246,3 +246,8 @@ Reader/Writer は分かれており、`XxxRepository` は両方を継承する�
 - **bot の配線**: `JobLauncher` の本番実装は未設定（`UnconfiguredJobLauncher`。GCP 実装は T5 系）。calendar-check の `CALENDAR_*` の運用値（`watch_start` の 120/240 分の食い違い、`prestart` の解釈、`stale_after`）は**ユーザー確認待ち**。
 - **ローカル検証**: Docker が使えないセッションでは `JRABOT_TEST_MYSQL_EXTERNAL=host:port`（ローカルの MySQL）で統合テストを実行できる（8.4/9.7 の合否ではない。D-129）。
 
+
+### 14.11 T3.5 の結果と T3.6 以降への引き継ぎ（Windows 取得エージェント。2026-10-24。判断 D-144〜D-151）
+- **実装**: `agent/`（独立 Python）。構成と安全上の約束は `agent/README.md`、実機 PoC は `agent/POC.md`。サーバ側は `:ingest` の `AgentMetaController`（mode/plan/update）と `BatchIngestor` の重複 ACK の修正（D-144）。
+- **検証**: Python 単体・統合（Mock）、署名ベクトルの Python/Kotlin 照合、`AgentInteropIntegrationTest`（本物の署名クライアント + MySQL）、Windows ランナー（DPAPI・ジョブオブジェクト・ロック・ワーカー回復）。**実 JV-Link・実機は未検証**。
+- **T3.6 以降が前提にすること**: 実取得は `SpecRegistry` が確認済みになるまで始まらない（T1.17）。サーバの `RecordParser` は実データ形式を解析できない（保留）。P-1/P-2 の承認前に本番運用しない。

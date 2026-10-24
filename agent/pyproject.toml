@@ -1,0 +1,71 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jra-agent"
+version = "0.1.0"
+description = "JRA Bot Windows 取得エージェント（JV-Link → ローカル SQLite キュー → 署名付き HTTPS 送信）。本人 1 名の私的利用専用。"
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+license = { text = "Proprietary" }
+# 実行時の依存は cryptography のみ（Ed25519: ビーコンと更新 manifest の署名検証）。HTTP・SQLite・gzip・HMAC は標準ライブラリ。
+dependencies = ["cryptography==50.0.2"]
+
+[project.optional-dependencies]
+# Windows 実機だけ。COM（JV-Link）の呼出しに使う。DPAPI は ctypes で呼ぶので pywin32 は不要。
+windows = ["pywin32==312; sys_platform == 'win32'"]
+dev = ["pytest==9.1.1", "pytest-timeout==2.4.0", "ruff==0.17.2", "mypy==2.4.0"]
+
+[project.scripts]
+jra-agent = "jra_agent.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+timeout = 120
+addopts = "-ra --strict-markers"
+markers = [
+  "windows: Windows 上でだけ意味のあるテスト（SDK・実 JV-Link は不要）",
+  "slow: 数秒かかるテスト（プロセスの強制終了など）",
+]
+
+[tool.ruff]
+line-length = 140
+target-version = "py312"
+src = ["src", "tests", "poc"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF", "PL"]
+ignore = [
+  "PLR0913", # 引数の数
+  "PLR0911", "PLR0912", "PLR0915", "PLR2004", "PLR0917",
+  "PLC0415", # Windows 専用モジュール・重い依存の遅延 import は意図的
+  "SIM105",
+  "S101",    # テストの assert
+  "E501",    # 日本語コメントの長い行はフォーマッタに任せる
+  "RUF001", "RUF002", "RUF003", # 日本語の全角文字
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106", "S107", "RUF059", "S108", "S311", "S603", "S607", "PLC0415", "B017"]
+"poc/**" = ["S603", "S607", "T201"]
+"src/jra_agent/jvlink/worker_main.py" = ["S301"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src", "tests", "poc"]
+warn_unused_ignores = true
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+disallow_untyped_calls = false
+warn_unused_ignores = false
+check_untyped_defs = true
+disallow_any_generics = false
+[[tool.mypy.overrides]]
+module = ["win32com.*", "pythoncom.*", "pywintypes.*", "win32api.*", "win32job.*", "win32con.*"]
+ignore_missing_imports = true

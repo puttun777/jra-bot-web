@@ -51,7 +51,7 @@ class WorkflowRulesTest(unittest.TestCase):
 
     def test_every_gated_job_depends_on_changes_and_has_an_if(self):
         blocks = job_blocks(CI)
-        self.assertEqual({"changes", "build", "release-tools", "golden", "db-integration", "images", "connectorj26", "ci-gate"}, set(blocks))
+        self.assertEqual({"changes", "build", "release-tools", "golden", "db-integration", "images", "connectorj26", "agent", "agent-windows", "ci-gate"}, set(blocks))
         for name, b in blocks.items():
             if name in ("changes", "ci-gate"):
                 continue

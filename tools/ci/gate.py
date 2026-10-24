@@ -19,10 +19,12 @@ REQUIRED = {
     "golden": lambda o: o["run_golden"] == "true",
     "db-integration": lambda o: o["db_matrix"] not in ("[]", ""),
     "images": lambda o: o["run_images"] == "true",
+    "agent": lambda o: o["run_agent"] == "true",
+    "agent-windows": lambda o: o["run_agent_windows"] == "true",
 }
 INFORMATIONAL = ("connectorj26",)
 # 常に値がある出力。db_suites は DB ジョブが無いとき空文字で、GitHub は空文字の出力を needs から落とす（D-102）ので別扱い
-OUTPUT_KEYS = ("mode", "reason", "run_build", "run_golden", "run_release", "run_images", "run_connectorj26", "db_matrix")
+OUTPUT_KEYS = ("mode", "reason", "run_build", "run_golden", "run_release", "run_images", "run_connectorj26", "run_agent", "run_agent_windows", "db_matrix")
 
 
 def evaluate(needs: dict) -> tuple[bool, list[str], list[str]]:

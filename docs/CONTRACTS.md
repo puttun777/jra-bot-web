@@ -1,6 +1,6 @@
 # CONTRACTS（web ⇔ infra 受け渡し契約・正本は本ファイル）
 
-状態: **0.4.7（第3段階 / T3.4: V3、エージェント API の実装、環境変数の追加。§3.3 の署名方式と §3.4 の取得セッション・応答の追加は『提案 P-1 / P-2 / P-3』で、ユーザーの承認まで確定仕様ではない。0.4.5 以前の説明は下に残す）** — **0.4.5（第2段階 / T2.5 後半で §1・§10 にイメージの形式と manifest の検証規則を補足。T2.8 の 0.4.4 は §2・§3.2・§4.3・§9.1・§11。0.4.0 の契約の意味は変えていない）**。0.4.0 は第1段階 / T1.10 で確定した設計契約。infra の `docs/CONTRACTS.md` §2 の差異 D1〜D12 をすべて取り込んだ（対応表は §12）。実装・実リソースで確かめる必要がある箇所は「検証ゲート」として ID を書いている（一覧は `STAGE2_HANDOFF.md` §13）。
+状態: **0.4.8（第3段階 / T3.5: §3.2 の mode・plan・update の実装、§3.3.2 登録（register）の保留、§3.4 の重複 ACK への fetch・cursor の追加。P-1/P-2 は引き続き未承認）**。0.4.7（第3段階 / T3.4: V3、エージェント API の実装、環境変数の追加。§3.3 の署名方式と §3.4 の取得セッション・応答の追加は『提案 P-1 / P-2 / P-3』で、ユーザーの承認まで確定仕様ではない。0.4.5 以前の説明は下に残す）** — **0.4.5（第2段階 / T2.5 後半で §1・§10 にイメージの形式と manifest の検証規則を補足。T2.8 の 0.4.4 は §2・§3.2・§4.3・§9.1・§11。0.4.0 の契約の意味は変えていない）**。0.4.0 は第1段階 / T1.10 で確定した設計契約。infra の `docs/CONTRACTS.md` §2 の差異 D1〜D12 をすべて取り込んだ（対応表は §12）。実装・実リソースで確かめる必要がある箇所は「検証ゲート」として ID を書いている（一覧は `STAGE2_HANDOFF.md` §13）。
 - 正本はこのファイル。infra 側は版番号を参照し、変更点を同期する。infra の文書を直す必要がある箇所は `PROGRESS.md` の「infra への引継ぎ」に記録する。web のセッションから infra を直接変更しない。
 - 用語: **mode** は現在のフェーズ（`NORMAL | STARTING | STOPPING | STOPPED`）。**desired** は利用者の意図（`NORMAL | STOPPED`）。アプリが読み取りに失敗したときや、内容が不正なときの判定値は **`UNKNOWN`** とする。UNKNOWN はアプリ内部だけの値で、正本には書かない。旧版の `phase` は廃止して `mode` に統一した（実装はまだ無いため互換フィールドは置かない）。
 
@@ -60,12 +60,12 @@ web→Artifact Registry の push 権限と、infra 側の manifest 取得権限�
 | `GET /internal/ops/mode` | dashboard / ingest | infra（status） | 同上 | そのインスタンスの `ModeProvider` から見えるモード `{mode, desired, seq, cacheAgeMs, source:"gcs"\|"unknown"}`。**読み取り専用**。bot は使わない（bot は GCS を直接読む: §5.2）。**0.4.4**: 採用中の値だけを返し（15 秒キャッシュ。呼ぶたびに GCS を読まない）、UNKNOWN のときは `desired`/`seq`/`cacheAgeMs` が null で `source:"unknown"`。`APP_ENV=local` のローカルファイル実装では `source:"file"`（本番では現れない）。正本の JSON 全文・パス・`set_by` などは返さない |
 | `GET /api/v1/**` | dashboard | ブラウザ | IAP + `app_user` | DTO のみ返す。テナント境界は必須。一般/管理者の区別は §11.1 |
 | `POST/PUT/DELETE /api/v1/admin/**` | dashboard | ブラウザ（管理者） | IAP + `ROLE_ADMIN` + CSRF | 手動補正、手動起動（開催検証あり）、エージェントの発行/失効。**mode=NORMAL のときだけ**受け付け、それ以外は 409 `OPS_MODE_NOT_NORMAL` |
-| `GET /v1/agent/mode` | ingest | エージェント | トークン + 署名 | **DB に触れず**、現在のビーコンと同じ内容（署名付き）を返す |
-| `GET /v1/agent/plan` | ingest | エージェント | トークン + 署名 | 取得計画 `{planId, validUntil, items:[{dataspec, key, option, notBefore, interval}], idle}`。NORMAL 以外は 503（§3.6） |
+| `GET /v1/agent/mode` | ingest | エージェント | **認証なし**（0.4.8） | **DB に触れず**、ModeProvider が見ているモードと seq `{mode, seq}` を返す（NORMAL 以外でも 200）。署名はしない: ビーコンの署名鍵は Secret Manager で `sa-gha-ops` だけが読めるため ingest は署名できず、DB を使う認証は STOPPED 中の目的に反する。ビーコンと同じ公開情報だけ。エージェントは判定の主を署名付きビーコンに置き、これは「サーバが応答する」補助確認にだけ使う（§7.3） |
+| `GET /v1/agent/plan` | ingest | エージェント | トークン + 署名 | **0.4.8 実装済み**。`INGEST_VERIFIED_FETCH_SPECS`（公式仕様で確認済みと運用者が明示した `dataspec[:option]`。**既定は空 = 常に idle**）に無い項目は配らない。項目は `INGEST_PLAN_ITEMS_JSON`（本人専用）。YSCH の key が 16 桁なら `targetFrom`+`targetTo`。取得計画 `{planId, validUntil, items:[{dataspec, key, option, notBefore, interval}], idle}`。NORMAL 以外は 503（§3.6） |
 | `POST /v1/agent/ingest` | ingest | エージェント | トークン + 署名 | 生レコードのバッチ（§3.4）。NORMAL 以外は 503。**0.4.7 実装済み** |
 | `POST /v1/agent/heartbeat` | ingest | エージェント | トークン + 署名 | 状態通知（§3.5）。最終接続時刻の写しを GCS に書く（§5.4）。**0.4.7 実装済み**（DB の `agent_heartbeat`。GCS への写しは未実装で `SKIPPED`） |
-| `GET /v1/agent/update` | ingest | エージェント | トークン + 署名 | 署名付き更新 manifest（NORMAL のときだけ） |
-| `POST /v1/agent/register` | ingest | エージェント（初回） | 登録コード | `agent_id` とトークンを発行する。登録コードは管理者が事前に発行する 1 回限りのもの。**0.4.7 では未実装**（発行ロジック `AgentCredentialIssuer` と保存 `AgentRegistrar` はあり、HTTP は T3.5 / 管理操作 T4.4） |
+| `GET /v1/agent/update` | ingest | エージェント | トークン + 署名 | **0.4.8 実装済み**。`INGEST_UPDATE_MANIFEST_PATH` の署名済み manifest をそのまま返す（無ければ 204）。サーバは署名鍵を持たず検証もしない（オフラインで署名。エージェントが Ed25519 で検証: `{schema_version, version, platform, sha256, size, url, issuedAt, kid, sig}`）。NORMAL のときだけ |
+| `POST /v1/agent/register` | ingest | エージェント（初回） | 登録コード | `agent_id` とトークンを発行する。登録コードは管理者が事前に発行する 1 回限りのもの。**0.4.8 でも未実装（保留。§3.3.2）**（発行ロジック `AgentCredentialIssuer` と保存 `AgentRegistrar` はあり、HTTP は T3.5 / 管理操作 T4.4） |
 
 - `/v1` はエージェントプロトコルのメジャー版。破壊的な変更をするときは `/v2` を並行して提供する。
 - 人向けの HTML ルート（`/`、`/races/...` など）は `/api/v1` と同じアプリケーションサービスを使う（FRONTEND_DESIGN §4.4）。
@@ -80,6 +80,8 @@ web→Artifact Registry の push 権限と、infra 側の manifest 取得権限�
 - 保管: PC 側は DPAPI。ログにトークン・署名・nonce・本文を出さない（テスト `AgentAuthIntegrationTest` で検査）。
 - 失効・盗難時: 管理者 API で失効→以後 403。KEK の漏えい時は kid を切り替えて全エージェントのトークンを再発行する。
 
+#### 3.3.2 登録（register）と資格情報のライフサイクル（0.4.8。HTTP は保留、設計のみ）
+管理者認証（T4.1/T4.4）が無い段階で、誰でも登録コードを発行できる API は**作らない**。`POST /v1/agent/register` は次の条件が揃うまで実装しない: ① 登録コードは 256bit 乱数・SHA-256 だけを保存・1 回限り・15 分で失効・テナントとエージェント名に束縛（推測・使い回し不可）② 発行は管理者 API（IAP + ROLE_ADMIN + CSRF、T4.4）またはオフラインの運用タスクだけ ③ 失敗回数の制限（G-12）。それまでの本人の PC への導入は `agent set-credential`（手元で発行されたトークンを標準入力から DPAPI 保存）。失効はサーバ側 `status=REVOKED`（403）＋端末側 `clear-credential`、再発行は新トークンで上書き（古い署名鍵は即無効）。トークン期限（90 日）の 14 日前に警告する運用は T5 以降。
 #### 3.3.1 署名方式の検証と代替案（提案 P-1。T3.4 の調査結果・D-130）
 **暗号学的な検証**: HMAC の検証には、署名した側と同じ鍵（`token` または `token` から決定的に導いた値）をサーバが持つ必要がある。SHA-256(pepper‖token) は一方向関数で、ハッシュから `token` は復元できない（原像計算困難性）。したがってサーバが保存するのがハッシュだけなら、`HMAC(token, m)` を計算して照合することはできない。ハッシュそのものを HMAC の鍵にする（エージェントも同じハッシュを持つ）なら、保存値＝鍵になり、DB の漏えいだけで署名を偽造できる（ハッシュ化の意味が無い）。ペッパーをエージェントに配ると、ペッパーの秘匿が崩れる。単体テスト `AgentAuthTest` が、ハッシュを鍵にした署名は本物と一致しないことを確認している。
 
@@ -110,6 +112,7 @@ web→Artifact Registry の push 権限と、infra 側の manifest 取得権限�
 - 1 バッチ ≤ 1 MB（gzip 後）・≤ 200 レコード（1 レコード ≤ 256 KiB）。同一内容は**同一 `batchId` で再送**。
 - **検証（0.4.7 実装）**: 未知のキーは拒否（`tenantId` を含む。理由 `TENANT_FIELD_FORBIDDEN`）。`protocol`=1、`agentId` は認証したエージェントと一致（違えば 403）、`batchId` は小文字の UUIDv7、`class` は S/R で dataspec と整合（S: RACE・YSCH・RCVN・RCOV／R: 0B11・0B12・0B14・0B15・0B30・0B31・0B33・0B35。**一覧は二次情報**で公式表は T1.17）、`observedAt` は UTC（`Z`）で未来 5 分以内・速報は 7 日以内、`fromtime`/`lastFileTimestamp` は実在する `yyyyMMddHHmmss`、各レコードは厳密な標準 Base64 と SHA-256 の一致、EOF 以外の空バッチは拒否。
 - 応答: `200 {accepted, duplicates, quarantined, unsupported, duplicate, ackTs, serverTime, fetch, cursor}`。`accepted`=新しく保存した生レコード数、`duplicates`=既知の `record_hash`、`quarantined`=不正で隔離（FAILED）、`unsupported`=解析できず保留（PENDING）。`duplicate=true` は**同じ内容で完了済みのバッチの再送**（件数は最初の処理のもの）。`ackTs` を受けて初めてエージェントはチェックポイントを前進（JVLINK_DESIGN §5.2）。`cursor` は取得セッションが EOF まで連続して読了したときだけ（サーバのカーソルが進んだ印）。
+- **重複 ACK の追加項目（0.4.8・D-144。追加のみ）**: `duplicate=true` の応答にも、バッチが取得セッションに属するときは `fetch`（`id`・`status`・`nextSeq`）を付け、セッションが LIVE で成功していて**サーバのカーソルがその値以上**なら `cursor` も付ける。通常の完了応答も、カーソルが既に同値以上で `advance` が false だった場合に `cursor` を付ける。ACK の応答だけが失われて再送された場合に `acked_ts` が止まり続けるのを防ぐ（旧実装は `cursor=null`）。
 - 冪等: `ingest_batch` の `(tenant_id, batch_id)` と `payload_sha256`（検証済みの項目と各レコードの SHA-256 から作る指紋。JSON の整形・gzip の違いに依存しない）。同じ内容 → 重複 ACK（200）／同じ `batchId` で内容が違う、または別のエージェントが使った `batchId` → 422 `BATCH_ID_REUSED`／処理中 → 409 `BATCH_IN_PROGRESS`（120 秒以上放置された処理は再送で引き継ぐ）／失敗した（FAILED）バッチは再送で引き継ぐ。
 - `record_hash` = SHA-256(`dataspec`・`id`・`class`・（R のときだけ `observedAt`）・レコードの SHA-256)。蓄積系は同じバイト列なら同じ値（重なりを持たせた再取得を吸収）。速報は観測時刻ごとに別（同じオッズでも別時刻は時系列の別の点）。
 - **提案 P-2（未承認）取得セッション `fetch`**: 蓄積系（S）の 1 回の `JVOpen` が複数バッチに分かれるとき、`fetch.id`（UUID）・`seq`（0 始まりの連番）・`targetFrom`/`targetTo`（`yyyyMMdd`。YSCH の対象範囲）・`origin`（`LIVE`／`BACKFILL`）・`backfillId` を付ける。これが無いと**取得の完了（EOF まで欠けなく読了）をサーバが確認できない**ため、`fetch` なしのバッチは保存・適用されるが、取得の事実もカーソルの前進も作られない。サーバは `seq` が連続しない（先走りは 409 `FETCH_SEQ_AHEAD`、重複は 422 `FETCH_SEQ_REUSED`）、終了した取得への追加（422 `FETCH_CLOSED`）、属性の食い違い（422 `FETCH_MISMATCH`）を拒否する。
@@ -432,3 +435,5 @@ STOPPED 中の `ingest` 503、ビーコンのみ STOPPED、両方不達（UNKNOW
 0.4.6（第3段階 / T3.3）: §2 に calendar-check の設定の環境変数（既定なし）、§8.2 に `app` の `race_schedule_event` への INSERT（履歴の追記のみ）、§9.1 に calendar-check の終了コードと起動要求の重複の扱い。契約の意味は変えていない（追加のみ）。infra への影響: ① `bot` の calendar-check に `CALENDAR_*` の 4 つの環境変数を渡す（値はユーザー確認後。無いと exit 2）、② 起動基盤（Cloud Run Jobs の `JobLauncher`）は未実装で、calendar-check が起動を要求しても本番では `LAUNCHER_NOT_CONFIGURED`（exit 1）になる（T5 系）、③ 取得の事実（YSCH の成功）は T3.4/T3.5 まで存在しないので、行の無い日は `SCHEDULE_UNKNOWN`（exit 75）のまま、④ `R__grants.sql` の変更（`app` へ `race_schedule_event` の INSERT）は次回の migrate で適用される（T5.0 で同期）。
 
 0.4.7（第3段階 / T3.4）: §2 に `AGENT_KEK_KEYS`・`AGENT_KEK_ACTIVE_KID`・`INGEST_*`、§3.2 に ingest・heartbeat の実装状況と register の未実装、§3.3 に署名方式の検証と代替案の比較（§3.3.1）、§3.4 に検証規則・応答・冪等・`record_hash`・取得セッション（P-2）・取得の事実の条件・オッズ境界（P-3）、§3.6 に新しいコード、§4 に V3。**P-1（署名鍵の導出と KEK 暗号化）・P-2（`fetch`）・P-3（`0<odds<1` の隔離）は未承認の提案**で、承認までは確定仕様にしない（UNRESOLVED D-5・D-6・D-7）。infra への影響: ingest に KEK の Secret、V3 の GRANT、環境変数（UNRESOLVED G-9）。
+
+0.4.8（第3段階 / T3.5）: §3.2 の `mode`（認証なし・DB 不使用）・`plan`（検証済み仕様のみ・既定 idle）・`update`（署名済み manifest をそのまま返す）の実装、§3.3.2（register の保留と資格情報のライフサイクル）、§3.4 の重複 ACK に fetch・cursor を追加（加算のみ）。環境変数 `INGEST_PLAN_ITEMS_JSON`・`INGEST_VERIFIED_FETCH_SPECS`・`INGEST_UPDATE_MANIFEST_PATH` を追加（任意。infra は T5.0 で同期）。

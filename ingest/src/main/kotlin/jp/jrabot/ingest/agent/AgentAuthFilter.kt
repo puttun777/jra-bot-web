@@ -33,7 +33,9 @@ class AgentAuthFilter(
     private val log = LoggerFactory.getLogger(AgentAuthFilter::class.java)
     private val requests = AtomicLong()
 
-    override fun shouldNotFilter(request: HttpServletRequest): Boolean = !RequestPaths.isUnder(request.requestURI, PREFIX)
+    /** `/v1/agent/mode` は DB に触れず認証もしない（ビーコンと同じ公開情報。STOPPED でも応答する）。 */
+    override fun shouldNotFilter(request: HttpServletRequest): Boolean =
+        !RequestPaths.isUnder(request.requestURI, PREFIX) || RequestPaths.normalize(request.requestURI) == "$PREFIX/mode"
 
     override fun doFilterInternal(
         request: HttpServletRequest,

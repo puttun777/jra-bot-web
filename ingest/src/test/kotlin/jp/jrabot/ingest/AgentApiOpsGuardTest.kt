@@ -107,11 +107,13 @@ class AgentApiOpsGuardTest {
     }
 
     @Test
-    fun `v1 agent mode はモードガードの対象外（DB に触れずビーコンと同じ内容を返す API。実装は T3．5 の前提。認証は必要）`() {
+    fun `v1 agent mode はモードガードと認証の対象外（DB に触れずモードを返す。STOPPED でも 200）`() {
         mode.mode = OpsMode.STOPPED
         val r = http.get("/v1/agent/mode")
+        assertEquals(200, r.status)
         assertNull(r.header("X-Ops-Mode"), "ガードは掛からない")
-        assertEquals("""{"error":"AGENT_AUTH_NOT_CONFIGURED"}""", r.body, "ガードの次の層（認証）が判断する")
+        assertEquals(true, r.body.contains("STOPPED"), r.body)
+        assertNoDbAccess()
     }
 
     @Test
