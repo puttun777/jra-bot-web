@@ -37,8 +37,9 @@ object LegacyProbabilityPipeline {
         var source = ProbSource.MARKET_FALLBACK
         var horseSources: List<ProbSource> = emptyList()
         var label = ""
-        var coverageScores = List(n) { 1.0 }
-        var betaEffs = List(n) { beta }
+        // 旧: カバレッジは ensemble 種別のとき（DB とレース ID があれば）ML が成功したかに関係なく馬ごとに求める。取れなかった馬は coverage=1.0・β そのまま
+        val coverageScores = List(n) { if (modelType == ProbabilityModelType.ENSEMBLE) ProbabilityStages.coverageOf(coverage, it) else 1.0 }
+        val betaEffs = List(n) { if (modelType == ProbabilityModelType.ENSEMBLE && coverage?.getOrNull(it) != null) beta * coverageScores[it] else beta }
 
         fun note(
             stage: String,
@@ -101,19 +102,7 @@ object LegacyProbabilityPipeline {
                     val pa = (alpha as? RoleOutput.Scored)?.probabilities
                     val pc = (calib as? RoleOutput.Scored)?.probabilities
                     if (!aborted && (pa != null || pc != null)) {
-                        val scores = mutableListOf<Double>()
-                        val betas = mutableListOf<Double>()
-                        val finals = mutableListOf<Double>()
-                        for (i in 0 until n) {
-                            val cov = ProbabilityStages.coverageOf(coverage, i)
-                            // 旧: カバレッジが取れた馬は β × coverage、取れなかった馬は coverage=1.0・β そのまま
-                            val betaEff = if (coverage?.getOrNull(i) != null) beta * cov else beta
-                            scores += cov
-                            betas += betaEff
-                            finals += ProbabilityStages.ensembleOne(odds[i], pc?.get(i), pa?.get(i), betaEff)
-                        }
-                        coverageScores = scores
-                        betaEffs = betas
+                        val finals = List(n) { ProbabilityStages.ensembleOne(odds[it], pc?.get(it), pa?.get(it), betaEffs[it]) }
                         if (PythonCompat.sum(finals) > 0) {
                             preBlend = ProbabilityStages.normalizeWithCorrection(finals)
                             horseSources = List(n) { ProbabilityStages.ensembleSource(odds[it], pc != null, pa != null) }
@@ -145,8 +134,6 @@ object LegacyProbabilityPipeline {
             source = ProbSource.MARKET_FALLBACK
             horseSources = List(n) { ProbSource.MARKET_FALLBACK }
             if (label.isEmpty()) label = "market:fallback(ml_disabled)"
-            coverageScores = List(n) { 1.0 }
-            betaEffs = List(n) { beta }
         } else if (horseSources.isEmpty()) {
             horseSources = List(n) { source }
         }

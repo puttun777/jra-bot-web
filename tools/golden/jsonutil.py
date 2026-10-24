@@ -12,9 +12,9 @@ def normalize(obj):
         return obj
     if isinstance(obj, int):
         return int(obj)
-    if hasattr(obj, "item") and hasattr(obj, "dtype"):  # numpy scalar
-        return normalize(obj.item())
-    if hasattr(obj, "tolist") and hasattr(obj, "dtype"):  # numpy array
+    # numpy のスカラ・配列。**配列も `.item` を持つ**ので、`.tolist()`（スカラなら Python のスカラ、配列ならネストしたリスト）を先に使う。
+    # （以前は `.item()` を先に呼んでいたため、要素が 2 つ以上の配列が ValueError になり、G1-MODEL-001 の model_extract_features が例外として記録されていた: D-153）
+    if hasattr(obj, "tolist") and hasattr(obj, "dtype"):
         return normalize(obj.tolist())
     if isinstance(obj, float):
         if math.isnan(obj):

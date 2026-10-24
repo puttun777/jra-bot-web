@@ -94,5 +94,6 @@ def load(path):
         ns.features = importlib.import_module("jraev.ml.features")
         ns.model = importlib.import_module("jraev.ml.model")
         ns.models = importlib.import_module("jraev.data.models")
+        ns.db = importlib.import_module("jraev.storage.db")  # 合成 SQLite（特徴量 G6・ML 経路 G3〜G5）。ネットワーク・実 DB は使わない
     ns.inspect = inspect
     return ns

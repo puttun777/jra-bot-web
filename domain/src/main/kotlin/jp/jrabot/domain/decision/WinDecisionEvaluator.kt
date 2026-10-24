@@ -26,15 +26,27 @@ class WinDecisionEvaluator(
     private val stake =
         WinStake(config.evShrinkFactor, config.kellyFraction, config.bankroll, config.minBet, config.maxBet, config.probSource)
 
+    /**
+     * [mlInput] が null（既定）なら ML 無効の市場フォールバックで、T3.1/T3.2 の動作と完全に同じ。非 null のときは、ML 側（`ml.pipeline`）が計算した最終確率を
+     * 市場確率の代わりに使い、特徴量カバレッジを馬ごとに差し込む（EV・Kelly・買い目・ソートなど以降の計算は変えない）。確率源のラベルは [config] の `probSource`
+     * （Kelly の係数が文字列で決まる H10 のため、呼び出し側が結果のラベルを設定する）。
+     */
     fun evaluate(
         horses: List<DecisionHorse>,
         realOdds: ComboOdds = ComboOdds.EMPTY,
+        mlInput: MlProbabilityInput? = null,
     ): WinDecisionResult {
         if (horses.isEmpty()) return WinDecisionResult(emptyList(), null, emptyList(), config.probSource)
 
         val oddsValues = horses.map { it.odds }
-        val normalized = MarketProbability.estimateProbNormalized(oddsValues)
-        val probs = MarketBlend.apply(normalized, oddsValues, config.marketBlendAlpha, config.enableProbClip, config.probClipMax)
+        val probs =
+            if (mlInput != null) {
+                require(mlInput.probs.size == horses.size) { "ML の確率の数 ${mlInput.probs.size} が馬の数 ${horses.size} と違う" }
+                mlInput.probs
+            } else {
+                val normalized = MarketProbability.estimateProbNormalized(oddsValues)
+                MarketBlend.apply(normalized, oddsValues, config.marketBlendAlpha, config.enableProbClip, config.probClipMax)
+            }
 
         val race = ComboRaceContext(horses, probs, realOdds, config.combo)
         val counts = Counter()
@@ -134,7 +146,7 @@ class WinDecisionEvaluator(
                 }
             }
 
-            signals += betSignal(horse, prob, pMarket, ratio, winEv, bundle)
+            signals += betSignal(horse, prob, pMarket, ratio, winEv, bundle, mlInput?.coverage?.get(horse.umaban))
         }
 
         val sorted = sortSignals(signals)
@@ -172,6 +184,7 @@ class WinDecisionEvaluator(
         ratio: Double,
         winEv: Double,
         bundle: BetStrategyBundle,
+        coverageOverride: FeatureCoverage? = null,
     ): BetSignal {
         val best = bundle.best
         val bestOdds = best.odds
@@ -203,7 +216,8 @@ class WinDecisionEvaluator(
             pMkt = pMktCalc,
             ratio = Ratio(ratio),
             expectedReturn = expectedReturn,
-            coverage = FeatureCoverage(coverageScore = 1.0, betaEff = config.ensembleBeta, hasHorseMaster = false, hasPastRuns = false, pastN = 0),
+            coverage =
+                coverageOverride ?: FeatureCoverage(coverageScore = 1.0, betaEff = config.ensembleBeta, hasHorseMaster = false, hasPastRuns = false, pastN = 0),
             calcExpectedReturn = expectedReturn,
             calcEv = Ev(evCalc),
             calcPMkt = pMktCalc,
@@ -315,4 +329,16 @@ internal object SignalOrdering {
         } else {
             0
         }
+}
+
+/**
+ * ML 側が計算した確率（`jp.jrabot.domain.ml` の `ProbabilityResult.probs`: 判定側ブレンド・クリップ・再正規化まで済み）と、馬番ごとの特徴量カバレッジ。
+ * [WinDecisionEvaluator.evaluate] に渡すと、市場確率の代わりに使う。
+ */
+class MlProbabilityInput(
+    probs: List<Double>,
+    coverage: Map<Int, FeatureCoverage>,
+) {
+    val probs: List<Double> = probs.toList()
+    val coverage: Map<Int, FeatureCoverage> = coverage.toMap()
 }

@@ -69,13 +69,18 @@ class ChakuTable(
 ) {
     val rows: List<List<Long>> = rows.map { it.take(6).toList() }.filter { it.isNotEmpty() }
 
-    /** 旧 `(top3 / total) if total > 0 else 0.0`。 */
+    /**
+     * 旧 `(top3 / total) if total > 0 else 0.0`。**旧 `_sum_chaku_table` の癖をそのまま再現する**: 行の要素が 3 未満のとき、
+     * その行の `top3` に足すのは『その行の top2』ではなく**ここまでの全行の top2 の累計**（`top3 += top2`）。このため率が 1 を超えることがある
+     * （ゴールデン G6 の合成データで確認）。新方式でも式は共有する（学習・推論の一貫性が優先で、式の修正は未承認の数値変更）。
+     */
     fun placeRate(): Double {
         var total = 0L
+        var top2 = 0L
         var top3 = 0L
         for (vals in rows) {
             total += vals.sum()
-            val top2 = if (vals.size > 1) vals[0] + vals[1] else vals[0]
+            top2 += if (vals.size > 1) vals[0] + vals[1] else vals[0]
             top3 += if (vals.size > 2) vals[0] + vals[1] + vals[2] else top2
         }
         return if (total > 0) top3.toDouble() / total.toDouble() else 0.0

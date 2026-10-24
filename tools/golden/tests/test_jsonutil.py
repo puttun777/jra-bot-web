@@ -14,6 +14,14 @@ class NormalizeTest(unittest.TestCase):
     def test_dataclass_and_tuple(self):
         self.assertEqual(jsonutil.normalize({"x": D(1, 2.5), "t": (1, 2)}), {"x": {"a": 1, "b": 2.5}, "t": [1, 2]})
 
+    def test_numpy_scalar_and_arrays(self):
+        # 配列も .item を持つが、要素が 2 つ以上だと ValueError になる。.tolist() を使うこと（G1 の model_extract_features の不具合: D-153）
+        import numpy as np
+        self.assertEqual(jsonutil.normalize(np.float64(1.5)), 1.5)
+        self.assertEqual(jsonutil.normalize(np.array([[1.0, 2.0, 3.0]])), [[1.0, 2.0, 3.0]])
+        self.assertEqual(jsonutil.normalize(np.array([1.0])), [1.0])
+        self.assertEqual(jsonutil.normalize({"v": np.array([np.float64(0.5), 2.0])}), {"v": [0.5, 2.0]})
+
     def test_nonfinite_is_tagged(self):
         self.assertEqual(jsonutil.normalize(float("nan")), {"$float": "nan"})
         self.assertEqual(jsonutil.normalize(float("-inf")), {"$float": "-inf"})

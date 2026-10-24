@@ -477,57 +477,106 @@
       {
         "call_id": "mf-000",
         "outcome": {
-          "exception_type": "ValueError",
-          "message": "can only convert an array of size 1 to a Python scalar",
-          "status": "exception"
+          "status": "ok",
+          "value": [
+            [
+              100.0,
+              0.0,
+              4.605170185988092,
+              1.0,
+              0.0
+            ]
+          ]
         }
       },
       {
         "call_id": "mf-001",
         "outcome": {
-          "exception_type": "ValueError",
-          "message": "can only convert an array of size 1 to a Python scalar",
-          "status": "exception"
+          "status": "ok",
+          "value": [
+            [
+              0.1,
+              1.0,
+              -2.3025850929940455,
+              1.0,
+              0.1
+            ]
+          ]
         }
       },
       {
         "call_id": "mf-002",
         "outcome": {
-          "exception_type": "ValueError",
-          "message": "can only convert an array of size 1 to a Python scalar",
-          "status": "exception"
+          "status": "ok",
+          "value": [
+            [
+              1.0,
+              1.0,
+              0.0,
+              1.0,
+              1.0
+            ]
+          ]
         }
       },
       {
         "call_id": "mf-003",
         "outcome": {
-          "exception_type": "ValueError",
-          "message": "can only convert an array of size 1 to a Python scalar",
-          "status": "exception"
+          "status": "ok",
+          "value": [
+            [
+              2.5,
+              2.0,
+              0.9162907318741551,
+              0.5,
+              5.0
+            ]
+          ]
         }
       },
       {
         "call_id": "mf-004",
         "outcome": {
-          "exception_type": "ValueError",
-          "message": "can only convert an array of size 1 to a Python scalar",
-          "status": "exception"
+          "status": "ok",
+          "value": [
+            [
+              10.0,
+              5.0,
+              2.302585092994046,
+              0.2,
+              50.0
+            ]
+          ]
         }
       },
       {
         "call_id": "mf-005",
         "outcome": {
-          "exception_type": "ValueError",
-          "message": "can only convert an array of size 1 to a Python scalar",
-          "status": "exception"
+          "status": "ok",
+          "value": [
+            [
+              50.0,
+              12.0,
+              3.912023005428146,
+              0.08333333333333333,
+              600.0
+            ]
+          ]
         }
       },
       {
         "call_id": "mf-006",
         "outcome": {
-          "exception_type": "ValueError",
-          "message": "can only convert an array of size 1 to a Python scalar",
-          "status": "exception"
+          "status": "ok",
+          "value": [
+            [
+              999.0,
+              18.0,
+              6.906754778648554,
+              0.05555555555555555,
+              17982.0
+            ]
+          ]
         }
       },
       {

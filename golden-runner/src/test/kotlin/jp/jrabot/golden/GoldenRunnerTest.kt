@@ -72,7 +72,7 @@ class GoldenRunnerTest {
         val out =
             runOn(
                 "OK" to fixture("OK", """"function":"calc_ev","args":{"prob":0.5,"odds":2.0}"""),
-                "NG" to fixture("NG", """"function":"calc_ev","args":{"prob":0.5,"odds":2.0}""", """"function":"model_predict","args":{}"""),
+                "NG" to fixture("NG", """"function":"calc_ev","args":{"prob":0.5,"odds":2.0}""", """"function":"signature_defaults","args":{}"""),
             )
         assertEquals(
             setOf("OK"),
@@ -90,7 +90,7 @@ class GoldenRunnerTest {
                 .get(0)
                 .get("reason")
                 .stringValue()
-                .contains("model_predict"),
+                .contains("signature_defaults"),
         )
         assertEquals(1, out.coverage.get("supported").size())
     }
@@ -231,10 +231,18 @@ class GoldenRunnerTest {
                 "GD05-FILTER-009",
                 "GD07-COMBO-STAKE-010",
                 "GD06-EVAL-011",
+                // T3.6-A で対応（G1/G2 の既存フィクスチャと、ML 経路・特徴量の新規 5 ケース）
+                "G1-MODEL-001",
+                "G2-HASH-001",
+                "G6-FEATURES-001",
+                "G3-ML-NORM-002",
+                "G4-ENSEMBLE-002",
+                "G5-BLEND-002",
+                "G7-LEGACY-FAIL-001",
             ),
             supported.keys,
         )
-        assertEquals(setOf("G1-MODEL-001", "G2-HASH-001", "GD10-DEFAULTS-001"), unsupported.keys)
+        assertEquals(setOf("GD10-DEFAULTS-001"), unsupported.keys)
 
         // 出力されたケースは申告した対応ケースと一致し、全呼び出しに結果がある
         assertEquals(
@@ -255,10 +263,10 @@ class GoldenRunnerTest {
                 id,
             )
         }
-        // 旧 Python の 21 ケース・810 呼び出し（T2.6 の 10 ケース・447 + T3.1 の 4 ケース・115 + T3.2 の 7 ケース・248）
-        assertEquals(810, supported.values.sum() + unsupported.values.sum())
-        assertEquals(661, supported.values.sum()) // T3.1 の 380 + GD05-COMBO-001 の 33 + T3.2 で追加した 7 ケース 248
-        assertEquals(149, unsupported.values.sum())
+        // 旧 Python の 26 ケース・880 呼び出し（T3.2 時点の 21 ケース・810 + T3.6-A で追加した ML 経路 5 ケース・70）
+        assertEquals(880, supported.values.sum() + unsupported.values.sum())
+        assertEquals(874, supported.values.sum()) // T3.2 の 661 + G1(73)・G2(70) + 新規 5 ケース 70
+        assertEquals(6, unsupported.values.sum()) // GD10-DEFAULTS-001（旧関数の既定値。T1.20）だけ
     }
 
     // ---- T3.2: ワイド/三連複 -----------------------------------------------------------------------------------------

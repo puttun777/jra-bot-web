@@ -9,7 +9,7 @@ CATALOG = [
     dict(id="GD01", title="EV・Kelly", status="implemented", case_ids=["GD01-EV-001", "GD01-KELLY-002"],
          remaining="既存 scripts/test_*.py の入力の取り込みは未実施（手動実行スクリプト型で、合成グリッドで代替）"),
     dict(id="GD02", title="確率推定・正規化", status="partial", case_ids=["GD02-PROB-001", "GD02-NORM-002", "GD07-SIZING-004"],
-         remaining="市場確率のみ（use_ml=False）。decision 側のブレンド+クリップ+再正規化（G5）は GD07-SIZING-004 の evaluate_odds 経由で生成済み（T3.1）。ML 経由の正規化は未実施（T3.6）"),
+         remaining="市場確率のみ（use_ml=False）。ML 経由の正規化は G3-ML-NORM-002（T3.6-A）。decision 側のブレンド+クリップ+再正規化（G5）は GD07-SIZING-004 と G5-BLEND-002"),
     dict(id="GD03", title="急落・人気変動フィルタ", status="implemented", case_ids=["GD03-FILTER-001", "GD03-SNAPSHOT-002", "GD04-WIN-HITRATE-003"],
          remaining="DB のスナップショット取得（odds_snapshots の降順読み）は T3.4。連続変化を見る案（E14 の C）は旧実装に無いので対象外"),
     dict(id="GD04", title="閾値・時間帯境界", status="partial", case_ids=["GD09-EVAL-001", "GD04-WIN-HITRATE-003"],
@@ -29,27 +29,31 @@ CATALOG = [
          remaining="edge/hit_rate ソート・同点・max_signals・notify_skips は生成済み（単勝は T3.1、ワイド/三連複を含む並びは T3.2 の GD06-EVAL-011）。"
                    "賭式をまたぐ完全な同点（確率・EV が一致）は合成入力で作れないため、旧実装の比較は Kotlin の単体テスト（SignalOrdering）で固定している"),
     dict(id="GD09", title="異常系・フォールバック", status="partial", case_ids=["GD01-KELLY-002", "GD09-EVAL-001", "GD07-SIZING-004"],
-         remaining="odds=1.0（E5）・odds 0・人気 0・ML 無効時の市場フォールバックは生成済み。ML 例外時のラベル（E1）、bet_strategy 例外（ワイド/三連複）は未実施（T3.2/T3.6）"),
+         remaining="odds=1.0（E5）・odds 0・人気 0・ML 無効時の市場フォールバックは生成済み。ML 例外時のラベル（E1）は G7-LEGACY-FAIL-001（T3.6-A）。bet_strategy 例外（ワイド/三連複）は未実施"),
     dict(id="GD10", title="設定値・デフォルト", status="partial", case_ids=["GD10-DEFAULTS-001"],
          remaining="関数シグネチャの既定値のみ。config.example.yaml 全キーとの突合は実 config/example の読込が必要で未実施（T1.20）"),
     # --- ML_DESIGN §7.3 ---
     dict(id="G1", title="線形+Platt+市場ブレンド", status="implemented", case_ids=["G1-MODEL-001"],
-         remaining="合成重みの WinProbabilityModel のみ（実 pkl 不使用）"),
-    dict(id="G2", title="ハッシュ特徴", status="partial", case_ids=["G2-HASH-001"],
-         remaining="不正サロゲート（errors=ignore）の入力は JSON で表現できないため未実施"),
-    dict(id="G3", title="正規化・補正", status="partial", case_ids=["GD02-NORM-002"],
-         remaining="estimate_prob_normalized のみ。decision の _normalize_with_correction は内部関数で未実施"),
-    dict(id="G4", title="ensemble", status="planned", case_ids=[],
-         remaining="calib/alpha/coverage/β の組合せ。evaluate_odds 内部＋ calibration/alpha の pkl 相当の合成モデルが必要",
-         required_input="合成 calib/alpha モデル、odds 有無の組合せ、ensemble_beta"),
-    dict(id="G5", title="decision 側ブレンド+クリップ+再正規化", status="partial", case_ids=["GD07-SIZING-004"],
-         remaining="ML 無効の市場フォールバック経路を evaluate_odds 全体の出力（p_final・ratio・賭け額）で間接的に検証済み（α・クリップ上限の組合せ）。ブレンド単体の中間値は未抽出。ML 確率に対するブレンドは T3.6"),
-    dict(id="G6", title="特徴量ベクトル", status="planned", case_ids=[],
-         remaining="合成 SQLite（インメモリ）に馬・過去走・レース条件を投入し build_feature_vector を実行。age は固定時刻の注入が必要（storage.db 依存）",
-         required_input="合成 DB 行、固定時刻"),
-    dict(id="G7", title="失敗系（次元不一致・NaN・署名等）", status="planned", case_ids=[],
-         remaining="モデルロード拒否は新設計（スキーマ/署名）の仕様で旧実装に対応物が無い。旧実装側の挙動（pkl ロード失敗時のフォールバック）のみ後続で検討",
-         required_input="合成の壊れたモデル表現"),
+         remaining="合成重みの WinProbabilityModel のみ（実 pkl 不使用）。Kotlin は :golden-runner の互換モジュール（旧 _align_feature_matrix の切詰め/ゼロ埋めを含む）で比較し、"
+                   ":domain の安全なロード契約（次元が違えば拒否）とは分けている。T3.6-A で model_extract_features の 7 呼び出しを更新（ゴールデン基盤の正規化の不具合: D-153）"),
+    dict(id="G2", title="ハッシュ特徴", status="partial", case_ids=["G2-HASH-001", "G6-FEATURES-001"],
+         remaining="不正サロゲート（errors=ignore）の入力は JSON で表現できないため、ゴールデンではなく Kotlin 単体テスト（PedigreeHashTest）で旧 Python の値と照合。"
+                   "16 次元の集計は G6-FEATURES-001（祖先名の重複・全角・9 件目以降・空名）で検証"),
+    dict(id="G3", title="正規化・補正", status="implemented", case_ids=["GD02-NORM-002", "G3-ML-NORM-002"],
+         remaining="市場確率（GD02-NORM-002）と ML 経路（G3-ML-NORM-002: モデル出力 → _normalize_with_correction → 判定側ブレンド）。_normalize_with_correction は evaluate_odds の入れ子関数で"
+                   "直接呼べないため、evaluate_odds の出力（p_final・EV・賭け額）で検証する"),
+    dict(id="G4", title="ensemble", status="implemented", case_ids=["G4-ENSEMBLE-002"],
+         remaining="calibration + alpha + β × カバレッジの組合せ（オッズ無し・片方無し・両方無し・β の端/範囲外・最後の馬のラベル）。ensemble_beta=auto（外部ファイルと 14 日失効）と model_type=auto（ファイルの有無で選ぶ）は"
+                   "新仕様（成果物が β を持つ・レジストリの ACTIVE で決める）で置き換えるため対象外"),
+    dict(id="G5", title="decision 側ブレンド+クリップ+再正規化", status="implemented", case_ids=["GD07-SIZING-004", "G5-BLEND-002"],
+         remaining="ML 確率に対する判定側ブレンド（α の端・境界、モデル内ブレンドの実行時上書き H4）・上限クリップ・再正規化・引数と ml_cfg の優先順位を G5-BLEND-002 で検証"),
+    dict(id="G6", title="特徴量ベクトル", status="implemented", case_ids=["G6-FEATURES-001"],
+         remaining="合成 SQLite（旧スキーマ）と固定時刻で build_feature_vector / build_feature_vector_alpha を比較（40/35 次元・血統ハッシュ 16 次元・H3/H8 を含む旧挙動を再現）。"
+                   "新方式（point-in-time）は旧実装に対応物が無いので Kotlin 単体テスト（FeatureBuilderTest）で検証。format_reason_from_features（通知文）は T3.7"),
+    dict(id="G7", title="失敗系（次元不一致・NaN・署名等）", status="partial", case_ids=["G7-LEGACY-FAIL-001"],
+         remaining="旧実装側の失敗時の挙動（ML 無効・モデル無し・feature_names 不一致=H1・未知の model_type）は G7-LEGACY-FAIL-001 で数値とラベルを比較。"
+                   "新しいモデルのロード失敗（署名/ハッシュ/スキーマ/次元/NaN）は旧実装に対応物が無い新設計の仕様なので、旧出力ではなく Kotlin 単体テスト（ModelLoaderTest・MlEndToEndTest）と"
+                   "tools/ml の署名付き合成成果物で検証する。旧実装の『モデルがあるのに特徴量の作成で失敗 → ml:legacy(no_odds)』経路は再現しない（H2 と同種の無意味な予測）"),
 ]
 CATALOG_BY_ID = {c["id"]: c for c in CATALOG}
 VALID_STATUS = ("implemented", "partial", "planned")
@@ -65,10 +69,10 @@ KOTLIN_PORT = {
         "GD05-COMBO-001",                                                                                          # T3.2: 単純推定関数（推定オッズ・旧 calculate_*_prob）。既存フィクスチャ
         "GD05-PL-005", "GD05-FLOW-006", "GD05-BOX-007", "GD05-REAL-008", "GD05-FILTER-009",                        # T3.2 で追加: suggest_multiple_bet_strategies（直接）
         "GD07-COMBO-STAKE-010", "GD06-EVAL-011",                                                                   # T3.2 で追加: 賭け額・配分 / evaluate_odds のワイド・三連複
+        "G1-MODEL-001", "G2-HASH-001",                                                                             # T3.6-A: 既存フィクスチャ（線形+Platt+市場ブレンド / ハッシュ特徴）
+        "G6-FEATURES-001", "G3-ML-NORM-002", "G4-ENSEMBLE-002", "G5-BLEND-002", "G7-LEGACY-FAIL-001",             # T3.6-A で追加: 特徴量 / ML 経路（正規化・ensemble・ブレンド・失敗時）
     ],
     "unsupported": {
-        "G1-MODEL-001": "ML の線形+Platt+市場ブレンド推論（T3.6）",
-        "G2-HASH-001": "特徴量ハッシュ（T3.6）",
         "GD10-DEFAULTS-001": "旧関数のシグネチャ既定値の突合。運用の既定値は T1.20/T3.8 で決める（D-016）",
     },
 }

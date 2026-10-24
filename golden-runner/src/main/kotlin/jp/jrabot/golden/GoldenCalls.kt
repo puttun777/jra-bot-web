@@ -56,6 +56,13 @@ object GoldenCalls {
             "calculate_trifecta_prob",
             "suggest_multiple_bet_strategies",
             "evaluate_odds",
+            "evaluate_odds_ml",
+            "hash_bucket",
+            "hash_sign",
+            "model_extract_features",
+            "model_predict",
+            "model_predict_batch",
+            "build_features_batch",
         )
 
     /** 1 回の呼び出しを実行し、`{"status":"ok","value":…}` または `{"status":"exception",…}` を返す。 */
@@ -159,6 +166,34 @@ object GoldenCalls {
 
             "suggest_multiple_bet_strategies" -> {
                 suggestMultipleBetStrategies(a)
+            }
+
+            "hash_bucket" -> {
+                GoldenMl.hashBucket(a)
+            }
+
+            "hash_sign" -> {
+                GoldenMl.hashSign(a)
+            }
+
+            "model_extract_features" -> {
+                GoldenMl.modelExtractFeatures(a)
+            }
+
+            "model_predict" -> {
+                GoldenMl.modelPredict(a)
+            }
+
+            "model_predict_batch" -> {
+                GoldenMl.modelPredictBatch(a)
+            }
+
+            "build_features_batch" -> {
+                GoldenMl.buildFeaturesBatch(a)
+            }
+
+            "evaluate_odds_ml" -> {
+                evaluateOdds(a, ml = true)
             }
 
             "evaluate_odds" -> {
@@ -361,7 +396,10 @@ object GoldenCalls {
         return strategyJson(bundle)
     }
 
-    private fun evaluateOdds(a: JsonNode): JsonNode {
+    private fun evaluateOdds(
+        a: JsonNode,
+        ml: Boolean = false,
+    ): JsonNode {
         val k = kwargs(a, EVALUATE_KWARGS)
         val d = WinDecisionConfig.legacyFunctionDefaults()
 
@@ -438,7 +476,13 @@ object GoldenCalls {
                     snapshots(s.get(u.toString()) ?: nodes.arrayNode())
                 }
             }
-        val result = WinDecisionEvaluator(config, provider).evaluate(horses, comboOdds(k))
+        val result =
+            if (ml) {
+                val (mlConfig, mlInput) = GoldenMl.prepare(a, config, horses, k)
+                WinDecisionEvaluator(mlConfig, provider).evaluate(horses, comboOdds(k), mlInput)
+            } else {
+                WinDecisionEvaluator(config, provider).evaluate(horses, comboOdds(k))
+            }
 
         val rc = result.legacyRejectCounts
         return obj(
