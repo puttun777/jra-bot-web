@@ -497,6 +497,9 @@ class Smoke:
         def models() -> list[str]:
             return sorted(p.name for p in (store / "1" / "models").glob("*")) if (store / "1" / "models").exists() else []
 
+        # V1 は tenant に行を入れない（本番の行を持たない）。ml_model の複合 FK のため、CI 専用の合成 DB にだけテナント 1 を入れる
+        self.mysql_exec("INSERT IGNORE INTO tenant (tenant_id, name, created_at) VALUES (1, 'ci-synthetic', NOW(6))", database="jrabot")
+
         def count(where: str = "1=1") -> int:
             return int(self.mysql_exec(f"SELECT COUNT(*) FROM ml_model WHERE {where}", database="jrabot"))
 
