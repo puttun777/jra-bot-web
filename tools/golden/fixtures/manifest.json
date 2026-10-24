@@ -3,12 +3,37 @@
     {
       "case_id": "G1-MODEL-001",
       "path": "G1-MODEL-001.json",
-      "sha256": "0531810d65e419c387d0b4cd8ae87a3097e7e62316de8c4fe67cfa0d70140079"
+      "sha256": "fbc93e06c4bb07612c41fd93e4ea50b72e38432adc08fd62766be45c516a5a98"
     },
     {
       "case_id": "G2-HASH-001",
       "path": "G2-HASH-001.json",
       "sha256": "5136eeda72d08e98cbb0f1979403f0f543397a9e80c5e0fa49abc225587f9614"
+    },
+    {
+      "case_id": "G3-ML-NORM-002",
+      "path": "G3-ML-NORM-002.json",
+      "sha256": "b424773d8c0d40dc051695998d7a00a55237ed78f46f751f1371c7d5ea292fa7"
+    },
+    {
+      "case_id": "G4-ENSEMBLE-002",
+      "path": "G4-ENSEMBLE-002.json",
+      "sha256": "ec7cd8129d03b21ef19453520d2b9bb220351fc2642923c10f49f5ff8677f9a4"
+    },
+    {
+      "case_id": "G5-BLEND-002",
+      "path": "G5-BLEND-002.json",
+      "sha256": "e5ff194d7fe764c90ba66c62acd96e35447555a424461a58d989f66ec51049cc"
+    },
+    {
+      "case_id": "G6-FEATURES-001",
+      "path": "G6-FEATURES-001.json",
+      "sha256": "a2366b5fe496e5838a9b153ece76916b53b5bf83cd3fc0b11befd9041a3aac46"
+    },
+    {
+      "case_id": "G7-LEGACY-FAIL-001",
+      "path": "G7-LEGACY-FAIL-001.json",
+      "sha256": "ca3601a3db2b7380924e44d249a4d610cf9e0e49bd926fcccc806ed42b1c69fa"
     },
     {
       "case_id": "GD01-EV-001",

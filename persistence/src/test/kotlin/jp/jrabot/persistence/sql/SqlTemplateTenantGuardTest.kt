@@ -113,6 +113,7 @@ class SqlTemplateTenantGuardTest {
                 "IngestFetchDao",
                 "IngestGapDao",
                 "IngestRawDao",
+                "MlModelDao",
                 "OddsSnapshotDao",
                 "RaceDao",
                 "RaceDayDao",

@@ -2,7 +2,7 @@
 from dataclasses import dataclass, field
 from itertools import product
 
-from . import constants as C
+from . import constants as C, scenarios_ml as M
 
 ABS = lambda path, tol: {"path": path, "mode": "abs_tol", "abs_tol": tol}  # noqa: E731
 
@@ -18,6 +18,7 @@ class Case:
     overrides: tuple = ()
     known_defects: tuple = ()
     notes: str = ""
+    ml: bool = False  # ML 経路（合成 SQLite + 合成モデルの pickle）。execution_parameters に記録する
 
 
 def _calls(prefix, function, arg_dicts):
@@ -647,6 +648,32 @@ CASES = [
          ("jraev.ev.decision.evaluate_odds",), _eval_011(), known_defects=("E6", "E7", "E8", "E9", "E11")),
     Case("GD10-DEFAULTS-001", ("GD10",), "関数シグネチャの既定値（D-016: 関数既定と example config の食い違い確認用）",
          ("inspect.signature(jraev.ev.decision.evaluate_odds ほか)",), _defaults_001(), default_abs_tol=0.0),
+]
+
+# ---- T3.6-A: ML 経路（G3〜G7）。既存フィクスチャは変えず `generate --add-new` で追加する ------------------------------------------------
+_REASON_IGNORE = {"path": "results.*.outcome.value.signals.*.reason", "mode": "ignore"}  # 通知文（馬名・近走の要約を含む）は T3.7 で別に検証する
+
+CASES += [
+    Case("G6-FEATURES-001", ("G6", "G2"),
+         "特徴量ベクトル（build_feature_vector 40 次元 / build_feature_vector_alpha 35 次元 / 血統ハッシュ 16 次元の集計）。合成 SQLite・固定時刻（age_years は now 基準: H8）。"
+         "対象レース当日・未来の過去走を含む（H3）、脚質・着回数・生年月日・祖先名の癖、db=None",
+         ("jraev.ml.features.build_feature_vector", "jraev.ml.features.build_feature_vector_alpha", "jraev.ml.features.get_horse_feature_summary"),
+         M.g6_calls(), default_abs_tol=C.TOL_NORMALIZED, known_defects=("H3", "H8"), ml=True),
+    Case("G3-ML-NORM-002", ("G3", "G1"),
+         "evaluate_odds の ML 経路（単体モデル: legacy / calibration / alpha）。モデル出力 → レース内正規化と ±10% 補正 → 判定側ブレンド・クリップ・再正規化。"
+         "重みの次元の切詰め/ゼロ埋め（H2）・z の飽和・頭数 1/2・オッズ 0/負を含む",
+         ("jraev.ev.decision.evaluate_odds", "jraev.ml.predict.get_model", "jraev.ml.model.WinProbabilityModel.predict_proba_from_features"),
+         M.g3_calls(), overrides=(_REASON_IGNORE,), known_defects=("H2", "H4"), ml=True),
+    Case("G4-ENSEMBLE-002", ("G4",),
+         "evaluate_odds の ensemble（calibration + alpha + β × カバレッジ）。オッズ無し・片方無し・両方無し・β の端と範囲外・最後の馬のオッズ 0 によるラベル・カバレッジ 0",
+         ("jraev.ev.decision.evaluate_odds",), M.g4_calls(), overrides=(_REASON_IGNORE,), known_defects=("E2", "H4", "H10"), ml=True),
+    Case("G5-BLEND-002", ("G5",),
+         "evaluate_odds の判定側ブレンド（α の端・境界、モデルに保存された α の実行時上書き）・確率上限クリップ・再正規化・引数と ml_cfg の優先順位・hit_rate の確率フィルタ",
+         ("jraev.ev.decision.evaluate_odds",), M.g5_calls(), overrides=(_REASON_IGNORE,), known_defects=("H4",), ml=True),
+    Case("G7-LEGACY-FAIL-001", ("G7", "GD09"),
+         "旧実装の ML 失敗時の挙動（新しいロード契約の仕様テストではない）: ML 無効・モデル無し・feature_names 不一致（旧 H1: 例外を握り潰して市場確率）・feature_names が空・"
+         "未知の model_type・legacy でパス未指定。確率は市場確率に落ち、prob_source は旧ラベルのまま",
+         ("jraev.ev.decision.evaluate_odds",), M.g7_legacy_calls(), overrides=(_REASON_IGNORE,), known_defects=("E1", "H1", "H10"), ml=True),
 ]
 
 CASES_BY_ID = {c.case_id: c for c in CASES}

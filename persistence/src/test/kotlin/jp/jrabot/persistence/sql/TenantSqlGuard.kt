@@ -32,6 +32,7 @@ internal object TenantSqlGuard {
             "ingest_cursor",
             "ingest_gap",
             "ingest_backfill",
+            "ml_model",
         )
 
     val TENANT_BIND = Regex("""tenant_id\s*=\s*/\*\s*(?:entity\.|rows\.)?tenantId\s*\*/\s*[^\s,)]+""")

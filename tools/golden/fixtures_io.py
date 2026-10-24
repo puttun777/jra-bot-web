@@ -35,7 +35,10 @@ def build_fixture(case: Case, expected_output):
             "timezone": C.TIMEZONE,
             "cwd": "empty temporary directory",
             "network": "blocked",
-            "ml_cfg": {"enabled": False},
+            "ml_cfg": (
+                "per call (input.calls[].args.ml_cfg). 合成 SQLite + 合成モデルの pickle（サンドボックスの一時ディレクトリ。リポジトリには入らない）。"
+                "datetime.now は固定時刻（input.calls[].args.now）" if getattr(case, "ml", False) else {"enabled": False}
+            ),
             "libraries": {"numpy": C.PINNED_NUMPY},
         },
         "comparison_rules": build_rules(case),

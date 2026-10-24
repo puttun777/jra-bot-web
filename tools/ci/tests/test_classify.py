@@ -121,7 +121,7 @@ class ScenarioTest(unittest.TestCase):
         self.assertEqual(dict(mode="code", build=False, golden=False, release=True, images=False, c26=False, db=[], suites=[]), jobs(p))
 
     def test_every_rule_pattern_compiles_and_tags_known(self):
-        known = {"docs", "kotlin_app", "kotlin_core", "kotlin_db", "build_cfg", "golden", "kotlin_golden", "release", "docker", "connectorj", "ci", "agent", "agent_windows"}
+        known = {"docs", "kotlin_app", "kotlin_core", "kotlin_db", "build_cfg", "golden", "kotlin_golden", "release", "docker", "connectorj", "ci", "agent", "agent_windows", "ml_tools"}
         for pattern, tags in classify.RULES:
             self.assertTrue(set(tags) <= known, pattern)
 
@@ -156,6 +156,30 @@ class AgentTest(unittest.TestCase):
         p = classify.plan_for_event("workflow_dispatch")
         self.assertTrue(p.run_agent and p.run_agent_windows)
         self.assertTrue(classify.classify([".github/workflows/ci.yml"]).run_agent_windows)
+
+
+class MlToolsTest(unittest.TestCase):
+    """T3.6-A: tools/ml（Python）と合成成果物の変更判定。Kotlin のテストも合成成果物を使うので build は走らせるが、DB 統合は要らない。"""
+
+    def test_ml_docs_only_is_docs(self):
+        p = classify.classify(["tools/ml/README.md"])
+        self.assertEqual("docs", p.mode)
+        self.assertFalse(p.run_ml_tools)
+
+    def test_ml_python_runs_only_the_python_job(self):
+        p = classify.classify(["tools/ml/canonical.py", "tools/ml/tests/test_artifacts.py"])
+        self.assertTrue(p.run_ml_tools)
+        self.assertFalse(p.run_build or p.run_golden or p.db_matrix)
+
+    def test_synthetic_artifacts_run_python_and_kotlin_build_without_db(self):
+        p = classify.classify(["domain/src/test/resources/ml/models/cal_test_001.json"])
+        self.assertTrue(p.run_ml_tools and p.run_build)
+        self.assertEqual([], p.db_matrix)
+
+    def test_full_runs_ml_tools(self):
+        self.assertTrue(classify.plan_for_event("workflow_dispatch").run_ml_tools)
+        self.assertTrue(classify.classify([".github/workflows/ci.yml"]).run_ml_tools)
+        self.assertFalse(classify.classify(["bot/src/main/kotlin/A.kt"]).run_ml_tools)
 
 
 class EventTest(unittest.TestCase):

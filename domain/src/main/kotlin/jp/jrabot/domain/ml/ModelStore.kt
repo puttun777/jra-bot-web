@@ -82,10 +82,15 @@ enum class ArtifactWriteOutcome {
 }
 
 /** 保存先の I/O に失敗した（到達不能・権限・タイムアウトなど）。Job としては一時的な失敗（exit 75。CONTRACTS §9.1）。 */
-class StorageException(
+open class StorageException(
     message: String,
     cause: Throwable? = null,
 ) : RuntimeException(message, cause)
+
+/** 成果物はあるが署名（`.sig`）が無い。**未署名のモデルは存在しないものとして扱わず、署名不正として拒否する**（[jp.jrabot.domain.ml.pipeline.FallbackReason.MODEL_SIGNATURE_INVALID]）。 */
+class MissingSignatureException(
+    message: String,
+) : StorageException(message)
 
 /**
  * モデルの読取り（bot が使う。IAM は models の読取りのみ）。

@@ -202,8 +202,8 @@ P0 の順: F26/F04/F05/F06/F07（基礎純関数）→ F16（DB）→ F08/F09（
 `pipeline_version=legacy`、`fixes.*` はすべて false（C の改善案は**未実装**。有効化は `UnsupportedDecisionScopeException`）。ゴールデンは Kotlin が検証したケースだけを数える（`tools/golden/catalog.py` の `KOTLIN_PORT`）。
 | # | 分類 | Kotlin（T3.1）の扱い | 検証 |
 |---|---|---|---|
-| E1 | R | 未実装（ML 経路は T3.6。T3.1 は ML 無効の市場フォールバックのみ） | - |
-| E2 | R | 未実装（ensemble は T3.6） | - |
+| E1 | R | **実装（T3.6-A）**: `LegacyProbabilityPipeline`/`V2ProbabilityPipeline` が理由コード（`FallbackReason`）と段階（`FallbackStep`）を必ず残す。数値は旧と同じ（市場フォールバック）。アラート・`race_evaluations` への保存の配線は T3.8 | G7-LEGACY-FAIL-001（数値・旧ラベル）・`ProbabilityPipelineTest`・`MlEndToEndTest` |
+| E2 | R | **実装（T3.6-A）**: 馬ごとの出どころ（`horseSources`）と、レース単位の `source`（同じ源ならその源、混在は `MIXED`）。旧ラベル（最後の馬の変数で決まる）は `legacyLabel` に保持 | G4-ENSEMBLE-002（旧ラベル）・`ProbabilityPipelineTest` |
 | E3 | R | **実装**: 全除外経路に `DecisionReason`。旧集計と同じ数値の `LegacyRejectCounts` も返す（旧集計に無い経路: `WIN_OVER_MARKET`・`NO_STRATEGY`・`ODDS_AT_PAR`） | 単体 + GD04/GD08 |
 | E4 | R | **実装**: `ProbRaw`/`ProbUsed`/`Ev`/`Ratio` を別項目で保持（`ev` は縮小後基準、`prob`/`ratio` は縮小前基準、`_calc_*` は検算値） | 単体 + GD07 |
 | E5 | R | **実装**: `odds==1.0` で `LegacyZeroDivisionException`（旧 ZeroDivisionError）。判定側は除外し理由 `ODDS_AT_PAR`。数値は不変。`0<odds<1` の Kelly は旧実装では正の値（補正せず再現。D-105） | GD01-KELLY-002・GD09 |
@@ -245,3 +245,19 @@ P0 の順: F26/F04/F05/F06/F07（基礎純関数）→ F16（DB）→ F08/F09（
 | F01 レコードのパース（旧 `jvlink_provider.py`） | **段階移行**（サーバ側 `RecordParser`） | 登録方式のみ。**実データ形式（YS/RA/TC/オッズ）のパーサは公式仕様の確認（T1.17）後**。それまで実データは保留（PENDING）で解析成功にしない |
 | F21 過去データ/補てん取込・バックフィル | **段階移行** | `ingest_backfill`（要求・再開・ギャップ解消）の基盤を T3.4 で実装。過去取得の実行は T3.5 以降。旧 `backfill_*` スクリプトの人手運用は残る |
 | `jvlink_timestamps`（旧） | **Kotlin 移行**（`ingest_cursor`） | ACK 後（EOF まで連続読了）にだけ前進。後戻りしない |
+
+## 10. T3.6-A での分類の追記（2026-10-24。既存機能を黙って削除しない）
+| 機能（旧） | 分類 | T3.6-A の状況 |
+|---|---|---|
+| `ml/features.py` `build_feature_vector[_alpha]`・`get_horse_feature_summary`・`_hash_bucket/_hash_sign` | **Kotlin 移行**（`LegacyFeatureBuilder` = 旧互換、`PointInTimeFeatureBuilder` = 新方式） | 旧互換は G6/G2 で旧 Python と一致（誤差 0）。新方式は H3/H8 を構造的に解消。旧 `_sum_chaku_table` の癖（`top3 += 累計 top2`）は式として再現（D-159）。旧の `format_reason_from_features`（通知文）は T3.7 |
+| `ml/model.py` `WinProbabilityModel` の推論（`predict`・`predict_batch`・`predict_proba_from_features`・`_postprocess_prob`） | **Kotlin 移行**（`LogisticScoring`） | G1/G3 で一致（最大誤差 6e-15）。**`_align_feature_matrix`（次元の切詰め/ゼロ埋め）は本番に移さない**: 検証専用の `GoldenMl` にだけ再現 |
+| `ml/model.py` `fit`（学習）・`train.py`・`retrain_models.py`・`tune_params.py`・`build_dataset.py` | **段階移行**（Python の ml-train ジョブ = T3.6-B / Stage 3-F2。データセットの書出しは `DatasetExporter` が契約を実装済み） | 学習は未実装（今回の対象外）。出力契約・品質ゲート案は ML_DESIGN §11.7・§11.8 |
+| `ml/predict.py` `get_model`（mtime キャッシュ・失敗時 None・古いキャッシュで継続）・`load_model`（pickle） | **廃止 → 置換**（レジストリの ACTIVE + `ModelRunPin`（run 開始時に固定）+ 署名/sha256 検証つき JSON） | pickle は読まない（D-008・D-164）。「読み込めなければ古いキャッシュで継続」はしない（理由つきで市場確率へ） |
+| `decision.py` `model_type=auto`（ファイルの有無で選ぶ） | **廃止 → 置換**（レジストリの ACTIVE な種別。設定は `legacy|calibration|alpha|ensemble` の明示） | `GoldenMl` は `auto` を未対応として拒否（旧仕様はファイル依存） |
+| `decision.py` `ensemble_beta=auto`（`ensemble_params_latest.json`・14 日失効・β<0.05 なら 0.25） | **廃止 → 置換**（ensemble セット成果物が β と coverage_weights を持つ。ML_DESIGN §4.2） | 数値設定の β は再現（G4）。`auto` は未対応として拒否 |
+| `decision.py` legacy 種別でモデルがあるのに特徴量作成に失敗 → `estimate_prob_normalized(model_path)` による『ml:legacy(no_odds)』（5 市場特徴量 + 次元パディングの予測） | **廃止**（H2 と同種の無意味な予測） | 市場フォールバックにして理由を記録（`MODEL_PREDICTION_FAILED` など）。旧との差は MIGRATION_MATRIX §8 E1 の範囲（記録の修正）を超えるが、旧の数値自体が欠陥（未承認の数値変更ではなく、再現しない旨をここに記録） |
+| `decision.py` ML 例外の握り潰し・`prob_source` の誤表示（E1・E2・H10） | **Kotlin 移行（分類 R）** | 理由コード・段階の記録・馬ごとの正確な出どころ（`ProbSource`）を実装。旧 `prob_source` 文字列は `legacyLabel` に保持（Kelly 係数 H10 の数値は不変。enum 化 `kellyMultiplierBySourceEnum` は未承認で未実装） |
+| `decision.py` 二重市場ブレンド（H4） | **Kotlin 移行（旧のまま）** | `legacy` で再現（G5）。v2（1 回）は独立実装・未承認・本番で無効 |
+| `run_daemon.py` `auto_retrain`（F12） | **廃止**（独立ジョブへ。変更なし） | Stage 3-F2 以降 |
+| モデルの pkl 保存 | **廃止**（JSON + Ed25519 署名） | 旧 pkl → JSON の変換は利用者のローカル操作（ML_DESIGN §11.9。実行は未実施） |
+

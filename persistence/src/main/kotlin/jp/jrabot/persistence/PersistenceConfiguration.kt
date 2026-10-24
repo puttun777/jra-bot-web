@@ -15,6 +15,7 @@ import jp.jrabot.domain.ingest.IngestGapStore
 import jp.jrabot.domain.ingest.NonceStore
 import jp.jrabot.domain.ingest.RawRecordStore
 import jp.jrabot.domain.ingest.UnitOfWork
+import jp.jrabot.domain.ml.registry.ModelRegistryReader
 import jp.jrabot.domain.odds.ComboOddsSnapshotRepository
 import jp.jrabot.domain.odds.OddsSnapshotRepository
 import jp.jrabot.domain.race.RaceRepository
@@ -35,6 +36,7 @@ import jp.jrabot.persistence.dao.IngestCursorDaoImpl
 import jp.jrabot.persistence.dao.IngestFetchDaoImpl
 import jp.jrabot.persistence.dao.IngestGapDaoImpl
 import jp.jrabot.persistence.dao.IngestRawDaoImpl
+import jp.jrabot.persistence.dao.MlModelDaoImpl
 import jp.jrabot.persistence.dao.OddsSnapshotDaoImpl
 import jp.jrabot.persistence.dao.RaceDaoImpl
 import jp.jrabot.persistence.dao.RaceDayDaoImpl
@@ -56,6 +58,7 @@ import jp.jrabot.persistence.repository.FetchStoreImpl
 import jp.jrabot.persistence.repository.IngestBatchStoreImpl
 import jp.jrabot.persistence.repository.IngestCursorStoreImpl
 import jp.jrabot.persistence.repository.IngestGapStoreImpl
+import jp.jrabot.persistence.repository.MlModelRegistryRepository
 import jp.jrabot.persistence.repository.NonceStoreImpl
 import jp.jrabot.persistence.repository.OddsSnapshotRepositoryImpl
 import jp.jrabot.persistence.repository.RaceDayRepositoryImpl
@@ -98,6 +101,10 @@ class PersistenceConfiguration {
         config: Config,
         clock: Clock,
     ): RaceRepository = RaceRepositoryImpl(RaceDaoImpl(config), clock)
+
+    /** モデルレジストリの読取り（bot が run の開始時に ACTIVE を固定する: T3.8）。書込み（昇格）は Stage 4 の管理操作で、ここには無い。 */
+    @Bean
+    fun modelRegistryReader(config: Config): ModelRegistryReader = MlModelRegistryRepository(MlModelDaoImpl(config))
 
     @Bean
     fun oddsSnapshotRepository(

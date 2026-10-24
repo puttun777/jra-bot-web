@@ -51,7 +51,7 @@ class WorkflowRulesTest(unittest.TestCase):
 
     def test_every_gated_job_depends_on_changes_and_has_an_if(self):
         blocks = job_blocks(CI)
-        self.assertEqual({"changes", "build", "release-tools", "golden", "db-integration", "images", "connectorj26", "agent", "agent-windows", "ci-gate"}, set(blocks))
+        self.assertEqual({"changes", "build", "release-tools", "golden", "db-integration", "images", "connectorj26", "agent", "agent-windows", "ml-tools", "ci-gate"}, set(blocks))
         for name, b in blocks.items():
             if name in ("changes", "ci-gate"):
                 continue
@@ -97,12 +97,21 @@ class WorkflowRulesTest(unittest.TestCase):
         for needle in (":golden-runner:run", "tools.golden.kotlin_compare", "tools.golden.verify", "kotlin_coverage.json"):
             self.assertIn(needle, b)
         d = job_blocks(CI)["db-integration"]
-        for needle in ("integrationTest", ":persistence:integrationTest", ":bot:integrationTest :ingest:integrationTest :dashboard:integrationTest", "tests < 44", "tests < 161"):
+        for needle in ("integrationTest", ":persistence:integrationTest", ":bot:integrationTest :ingest:integrationTest :dashboard:integrationTest", "tests < 44", "tests < 167"):
             self.assertIn(needle, d)
         self.assertIn("check-repo-hygiene.sh", job_blocks(CI)["changes"])
         g = job_blocks(CI)["golden"]
-        for needle in ("--min-tests 45 --max-skipped 0", "--check", "tools.golden.verify"):
+        for needle in ("--min-tests 85 --max-skipped 0", "--check", "tools.golden.verify"):
             self.assertIn(needle, g)
+
+    def test_ml_tools_job_checks_signatures_schema_and_datasets_without_secrets(self):
+        m = job_blocks(CI)["ml-tools"]
+        for needle in ("tools/ml/requirements.txt", "tools.ml.run_tests --min-tests 20 --max-skipped 0", "tools.ml.make_test_artifacts", "--check", "tools.ml.dataset_contract"):
+            self.assertIn(needle, m)
+        self.assertNotIn("secrets.", m)  # 本番の鍵・Secrets を使わない（テスト専用の決定的な鍵だけ）
+        b = job_blocks(CI)["build"]
+        for needle in ("domain/build/test-results/test 811", "ModelLoaderTest", "ProbabilityPipelineTest", "FeatureBuilderTest", "GoldenMlTest"):
+            self.assertIn(needle, b)
 
     def test_images_workflow_is_local_only(self):
         t = WORKFLOWS["images.yml"]

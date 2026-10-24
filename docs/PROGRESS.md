@@ -1,7 +1,42 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-10-24（第3段階 / Stage 3-E: T3.5 Windows 取得エージェント）
-旧: 2026-10-23（第3段階 / Stage 3-D: T3.4 取込 API・認証・冪等処理・取得の事実・バックフィル基盤 ＋ 要件変更（本人 1 名）と未解決事項の整理）
+最終更新: 2026-10-24（第3段階 / Stage 3-F1: T3.6-A ML の Kotlin 推論基盤）
+旧: 2026-10-24（Stage 3-E: T3.5 Windows 取得エージェント）／2026-10-23（第3段階 / Stage 3-D: T3.4 取込 API・認証・冪等処理・取得の事実・バックフィル基盤 ＋ 要件変更（本人 1 名）と未解決事項の整理）
+
+## Stage 3-F1（claude/stage3-ml-inference-h7e43j）: T3.6-A ML の Kotlin 推論基盤（特徴量・モデル検証・推論・ゴールデン比較）
+### 結果（T3.6 の前半を完了。**本番で動作する推論ではない**: bot-run への統合は T3.8、学習は T3.6-B（Stage 3-F2）。本番の確率パイプラインは引き続き `legacy`。v2 は未承認・無効・自動切替なし）
+- **範囲外のまま**: Python の学習・ml-train イメージ・実 pkl の読込み/変換の実行・実 JRA-VAN データ・Windows 実機・GCP・Terraform・Discord・bot-run・モデルの ACTIVE 昇格・v2 への切替。**Stage 3-F2 には進んでいない。**
+- **実装したクラス**（`:domain` の `jp.jrabot.domain.ml.*`。ML_DESIGN §11.1）: `StrictJson`/`CanonicalJson`、`FeatureSchema`/`FeatureNames`/`PedigreeHash`、`LegacyFeatureBuilder`/`PointInTimeFeatureBuilder`/`FeatureSource`/`InMemoryFeatureSource`/`LegacyRows`、`LogisticScoring`/`ModelDocument`/`ModelLoader`/`ModelTrust`/`VerifiedModel`、`LegacyProbabilityPipeline`/`V2ProbabilityPipeline`/`FallbackReason`/`ProbSource`、`ModelRegistryReader`/`ModelRunPin`/`ModelSession`/`LocalFileModelStore`/`InMemoryModelRegistry`、`DatasetExporter`、`MlInference`。`:persistence`: `MlModelRegistryRepository`（`ml_model` の SELECT のみ）。`WinDecisionEvaluator.evaluate` に任意引数 `mlInput`（既定 null で T3.1/T3.2 は不変）。`:golden-runner`: 旧 `WinProbabilityModel` の互換モジュール `GoldenMl`（次元の切詰め/ゼロ埋めはここだけ）。Python: `tools/ml`（正準 JSON・署名・データセット契約と合成成果物）。
+- **feature_schema**: `{version, names, pedigree_dim, hash_algo, missing_policy, hash}`。`hash` = `sha256:` + 正準 JSON の SHA-256。calibration=40 次元（`sha256:66e188f1…e418`）、alpha=35 次元（`sha256:adc23ffb…e87a`）、market=5 次元（`sha256:b86195e2…8959`）。名前の順序が変わるとハッシュが変わる（テスト済み）。Kotlin が JSON を書き、Python が名前の一覧を持たずに hash を独立に再計算して一致を確認。ユーザー指示の項目名 `sha256` は ML_DESIGN §5.2 に合わせて `hash` に（D-154）。
+- **legacy / v2 の差**（ML_DESIGN §11.5）: legacy は旧の分岐順・二重ブレンド（H4）・旧 `prob_source` 文字列（H10）を再現し、理由コード・段階・馬ごとの出どころ（E1/E2）だけ追加。v2 は単回ブレンド・段階的フォールバック・正確なラベル・市場のみのときはブレンドなし。合成 calibration モデルで、市場確率との L1 距離は legacy 0.5882 / v2 0.5908、legacy と v2 の最大絶対差 0.0138。**v2 が高精度かは未証明（実データ・バックテスト前）。**
+- **Kotlin 推論の計算精度**: すべて `Double`。`dot` は特徴量順の逐次加算、`exp/ln` は `kotlin.math`。旧 Python との差は**最大絶対誤差 1.066e-14**（ML_DESIGN §7.2 の許容 1e-9 に対して十分小さい。特徴量ベクトル G6 は誤差 0）。NaN/Infinity は拒否（`NonFiniteComputationException`・`JsonFloat` の不変条件）。
+- **モデル署名検証の結果**: Ed25519（RFC 8032 のテストベクトルを Python で確認、Kotlin は JDK の `Signature`）。未署名（0 埋め）・別鍵の署名・署名の 1 ビット反転・内容 1 バイト改ざん・別モデルの署名の流用 → すべて `MODEL_SIGNATURE_INVALID`。署名は有効だが中身が不正な 13 種（sha256 不一致・次元不一致・スキーマ hash 不一致・kind とスキーマの不整合・他テナント・未対応版・未知キー・algorithm 不正・非正準・NaN・範囲外の数値）が期待の理由コードで拒否される。検証前のモデルは `VerifiedModel` 以外では推論できない（型で保証）。テスト用の鍵は決定的なシード（秘密ではない。本番の鍵は不要）。
+- **ModelStore / レジストリの完成範囲**: 読取り契約（`find`/`active`）・run 開始時の固定（`ModelRunPin`）・検証つき読込み（`ModelSession`。レジストリの sha256・feature_schema_hash・kind と照合）・ensemble セット（メンバー検証）・CANDIDATE は使わず自動昇格しない・合成のローカル `ModelStore`（作成のみ・上書きしない）。**昇格 API は作っていない（Stage 4）。GCS の実バケットには書いていない。** bot-run への統合は T3.8。
+- **ゴールデン**: 旧 Python（f7dbf69・numpy 2.5.3 固定）から **26 ケース / 880 呼び出し**（T3.2 時点の 21 / 810 + 新規 5 ケース / 70）。**Kotlin が検証したのは 25 ケース / 874 呼び出し（全一致）**。未対応は `GD10-DEFAULTS-001`（旧関数の既定値。T1.20）の 1 ケース / 6 呼び出しだけ（成功に数えない）。新規: `G6-FEATURES-001`（特徴量 40/35・血統ハッシュ・H3/H8）、`G3-ML-NORM-002`、`G4-ENSEMBLE-002`、`G5-BLEND-002`、`G7-LEGACY-FAIL-001`（旧実装側の失敗時の挙動。フォールバックの数値・旧ラベルが一致）。G1/G2 の既存フィクスチャも Kotlin で比較。既存フィクスチャは `--add-new` で不変（例外は G1 の 7 呼び出し: 下記）。新しいロード契約の失敗系（G7 の新設計の仕様）は旧出力ではなく Kotlin 単体テストと `tools/ml` の署名つき成果物で検証。
+- **ゴールデンが見つけた欠陥・不具合**（実装前の精読では見落としていた）: ①**旧 `_sum_chaku_table` の癖**: 要素が 3 未満の行は `top3 += 全行の top2 の累計`（距離/馬場/状態の 3 着内率が 1 を超え得る）。Kotlin の `ChakuTable` に再現（D-159）。②**ゴールデン基盤の不具合**: `jsonutil.normalize` が numpy 配列を `.item()` していたため、G1-MODEL-001 の `model_extract_features` 7 呼び出しは旧実装の戻り値ではなく基盤の `ValueError` が期待値として記録されていた（T2.6 から）。修正し、その 7 呼び出しだけを更新（D-153。**既存フィクスチャの更新はこの 1 件だけで、許容誤差の拡大ではない**）。
+- **旧互換と新方式の区別**: 旧互換（`Legacy*`）は旧の欠陥（H3 過去走リーク・H8 `now` 基準・H2 切詰め・H4 二重ブレンド）を**そのまま**再現してゴールデンの基準にし、新方式（`PointInTime*`・v2・ロード契約）は別のクラス・別のテスト。新方式の数値を旧互換の期待値へ上書きしていない。旧実装の再現対象外（`model_type=auto`・`ensemble_beta=auto`・『ml:legacy(no_odds)』・mtime キャッシュ・pickle）は MIGRATION_MATRIX §10 に分類。
+- **H1〜H10 の確認**: ML_DESIGN §11.10。H1/H10 は記録を是正（数値不変）、H2 はロード契約で拒否、H3/H8 は新方式で構造的に解消、H4 は legacy で維持・v2 で解消案（未承認）。実データでの影響は未確認（G-ML-1/2）。
+- **学習側への引き継ぎ契約**（ML_DESIGN §11.7・§11.8）: データセット（gzip CSV + manifest・列・split・as_of・sha256・`sample_weight` の式）、モデル出力形式、署名、品質ゲート案を定義。合成入力で CSV を生成し、Python（`tools/ml/dataset_contract.py`）が独立に検証。旧 pkl 変換ツールの仕様とローカル手順（実装・実行は未実施）。
+### テスト（ローカル: JDK 21・`LC_ALL=C.UTF-8`・MySQL 8.0.46。**JDK 25 と MySQL 8.4/9.7 の合否ではない**: D-163）
+| 区分 | 結果 |
+|---|---|
+| `:domain` 単体 | **811 件成功**（T3.5 時点の 667 + 新規 144: `StrictJsonTest` 34・`ModelLoaderTest` 28・`PedigreeHashTest` 17・`FeatureBuilderTest` 16・`ProbabilityPipelineTest` 15・`MlEndToEndTest` 12・`DatasetExporterTest` 11・`CanonicalJsonTest` 5・`FeatureSchemaTest` 5・`FeatureSchemaFixtureTest` 1）。うちモデル署名検証・fail closed は `ModelLoaderTest`、FeatureBuilder は `FeatureBuilderTest`、ProbabilityPipeline は `ProbabilityPipelineTest`/`MlEndToEndTest` |
+| `:golden-runner` 単体 | 20 件成功（旧 14 + `GoldenMlTest` 6） |
+| Kotlin vs 旧 Python ゴールデン | **25 ケース / 874 呼び出し 全一致、最大絶対誤差 1.066e-14**（未対応 1 ケース / 6 呼び出し） |
+| `tools/golden`（Python） | 90 件成功（`GOLDEN_LEGACY_PATH` あり・スキップ 0）、`generate --check`・`verify` 成功 |
+| `tools/ml`（Python） | 20 件成功（正準 JSON・RFC 8032 ベクトル・署名・成果物の決定的再生成・データセット契約） |
+| `tools/ci` | 119 件成功（`ml_tools` の判定とゲートを追加） |
+| `:persistence` 単体 / 統合（MySQL 8.0.46） | 33 / **167 件中 166 成功**（新規 6: `MlModelRegistryIntegrationTest` 5 + `EnumContractIntegrationTest` 1）。失敗 1 件は `WiringIntegrationTest.サーバは想定した版で動いている`（`mysql:8.4` 固定の版確認。ローカルが 8.0 のため。T3.4 から同じ。CI は 8.4/9.7） |
+| ktlint・`checkModuleDependencies`・repo hygiene | 成功 |
+| `:cloud-gcp`・`:bot`・`:ingest`・`:dashboard`・`:build-logic` のテスト | **ローカルでは未実施**（Maven Central の 429 で依存を解決できなかった: `google-cloud-storage`・`junit-platform-launcher`）。これらは変更していない。**CI の結果が正（D-056）** |
+### 未解決（詳細は UNRESOLVED.md。今回解消したのは C-14〜C-19 のみ）
+T1.20（実 SQLite・実 config・実 pkl）、T1.21（legacy/v2 の切替はユーザー判断待ち）、P-1/P-2/P-3（承認待ち）、T1.16（クラウド保存・Discord 等の規約確認待ち）、T1.17（公式仕様書の確認待ち）、T3.0（Windows 実機 PoC 未完了）、T5.0（infra 同期待ち。`MODEL_VERIFY_PUBKEY` の書式を追加）、本番 GCP（未検証）、MySQL 9.7・Connector/J 26.x（本番採用未決）。**Windows エージェントの実機検証が済んだことにはしていない。** 新規: F-5（ML の実データ検証）・G-17（T3.6-B/T3.8 への引き継ぎ）・G-18（ML の未承認の改善案）。
+### Stage 3-F2（T3.6-B）への引き継ぎ（**自動では進まない**）
+ML_DESIGN §11.7・§11.8、STAGE2_HANDOFF §14.12、UNRESOLVED G-17。要点: ①データセット契約を `export-dataset` に配線（`FeatureSource`/`DatasetSource` の `:persistence` 実装、`DatasetStore` への manifest 保管）②Python 学習 Job（`dataset_contract` で検証してから学習。正準形のモデル JSON + Ed25519 署名 + `CANDIDATE` の INSERT。昇格しない）と ml-train イメージ ③品質ゲートの数値をユーザーと確定 ④pkl 変換ツールの実装（実行は利用者のローカル）⑤馬マスタの時点履歴 ⑥release-manifest の `feature_schema_hash` の単一値問題（UNRESOLVED G-17 ⑧）。
+### ブランチ・PR・CI
+`claude/stage3-ml-inference-h7e43j`（main の 2e4fa11 から）。PR: https://github.com/puttun777/jra-bot-web/pull/22 （**マージはユーザーの判断**）。
+CI（head 6b446a8, run 40080811615）: build (Temurin 25)・db integration (MySQL 8.4 / 9.7)・golden・ml tools・release tools・agent python 3.12/3.13・agent windows・images・changes and repo hygiene・**ci gate がすべて成功**（connectorj26 は非ゲートで skipped）。
+経緯: 初回 CI（ae3fe45）は `ml tools` が失敗した。合成データセットを `*.csv.gz` で置いたが、実データ混入防止のガード（`.gitignore`・`check-repo-hygiene.sh`）が `*.csv.gz` を禁止していたため Git に入っていなかった。ガードは緩めず、フィクスチャを非圧縮 `.csv` で保持し、テスト/CI がメモリ上・一時ファイルで gzip してから契約検証する形に直した（実行時の保管形式 `{dataset_id}.csv.gz` は変更なし）。
 
 ## Stage 3-E（claude/stage3-windows-agent）: T3.5 Windows 取得エージェント（Python）と ingest の mode/plan/update
 ### 結果（T3.5 の Mock・CI 範囲で完了。**実機（JV-Link・DPAPI・タスクスケジューラ）は未検証。実取得は公式仕様の確認待ちで開始されない。P-1/P-2 は承認待ちのまま**）

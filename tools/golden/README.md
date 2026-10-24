@@ -51,7 +51,7 @@ git -C /path/to/jra-bot checkout --detach f7dbf69fd8940121782870de902e8c449e6ca1
 # コミット済みフィクスチャの静的検証（旧実装不要。失敗は非 0、ファイルは書き換えない）
 python3 -m tools.golden.verify
 # 単体テスト（0 件・過少・スキップ過多は失敗）。旧実装を使う再生成テストは GOLDEN_LEGACY_PATH 指定時のみ実行
-GOLDEN_LEGACY_PATH=/path/to/jra-bot .venv-golden/bin/python -m tools.golden.run_tests --min-tests 45 --max-skipped 0
+GOLDEN_LEGACY_PATH=/path/to/jra-bot .venv-golden/bin/python -m tools.golden.run_tests --min-tests 85 --max-skipped 0
 ```
 
 生成は、空の一時ディレクトリを cwd にし、TZ=`Asia/Tokyo`・seed 固定・ネットワーク遮断・通知/トークン系の環境変数を除去した状態で旧関数を呼ぶ（`legacy.py`）。各ケースを 2 回実行して一致を確認する。対象関数は現在時刻・乱数を使わない（`datetime.now` を使う ensemble の経路は対象外）。
@@ -88,7 +88,7 @@ python3 -m tools.golden.kotlin_compare --actual build/golden/kotlin_out.json --c
 ```
 - ランナーは**全呼び出しを実行できたケースだけ**を出力し、未対応のケースは理由つきで `coverage` に載せる（空で埋めて成功に見せない）。
 - `kotlin_compare` は各フィクスチャ自身の `comparison_rules`（許容誤差・型・キー・順序）で比較し、**対応/未対応のケース数・呼び出し数を別に報告**、最大絶対誤差を出す。申告が `catalog.KOTLIN_PORT`（対応表）と違えば失敗（終了コード 2）。差分があれば 1。
-- 現在（T3.2 完了時点）: 21 ケース/810 呼び出しのうち、**Kotlin が検証したのは 18 ケース/661 呼び出し**（全一致、最大絶対誤差 0、比較した浮動小数 62,903 個）。内訳: T3.1 の 10 ケース/380 呼び出し + T3.2 で対応した既存の `GD05-COMBO-001`（33 呼び出し）+ T3.2 で追加した 7 ケース/248 呼び出し。未対応は `G1-MODEL-001`・`G2-HASH-001`（T3.6）、`GD10-DEFAULTS-001`（T1.20）の 3 ケース/149 呼び出しで、**成功に数えない**。CI は `build` ジョブの中で実行する。
+- 現在（T3.6-A 完了時点）: 26 ケース/880 呼び出しのうち、**Kotlin が検証したのは 25 ケース/874 呼び出し**（全一致、最大絶対誤差 1.066e-14）。内訳: T3.2 までの 18 ケース/661 呼び出し + T3.6-A で対応した `G1-MODEL-001`（73）・`G2-HASH-001`（70）+ T3.6-A で追加した 5 ケース/70 呼び出し（`G6-FEATURES-001`・`G3-ML-NORM-002`・`G4-ENSEMBLE-002`・`G5-BLEND-002`・`G7-LEGACY-FAIL-001`）。未対応は `GD10-DEFAULTS-001`（旧関数の既定値。T1.20）の 1 ケース/6 呼び出しだけで、**成功に数えない**。CI は `build` ジョブの中で実行する。
 
 比較の一般形（`compare` 単体）:
 
@@ -106,13 +106,28 @@ python3 -m tools.golden.kotlin_compare --actual build/golden/kotlin_out.json --c
 .venv-golden/bin/python -m tools.golden.generate --legacy-path /path/to/jra-bot --add-new
 ```
 
-## 実装済みケース（旧実装から生成済み: 21 ケース / 810 呼び出し）
+## 実装済みケース（旧実装から生成済み: 26 ケース / 880 呼び出し）
 
 `GD01-EV-001` `GD01-KELLY-002`（odds=1.0 の ZeroDivisionError=E5 を含む）`GD02-PROB-001` `GD02-NORM-002` `G2-HASH-001` `G1-MODEL-001` `GD03-FILTER-001` `GD05-COMBO-001` `GD09-EVAL-001`（evaluate_odds 全体、ML 無効の市場フォールバック）`GD10-DEFAULTS-001`（関数既定値）。T3.1 で追加（`evaluate_odds` の単勝判定。D-108）: `GD03-SNAPSHOT-002`（急落・人気急上昇フィルタ）`GD04-WIN-HITRATE-003`（hit_rate モード）`GD08-SELECT-003`（選別・見送り・賭式絞り込み・総投資上限）`GD07-SIZING-004`（縮小係数・Kelly・ブレンド・頭数）。 T3.2 で追加（ワイド/三連複。D-119。`generate --add-new`、既存 14 ケースのフィクスチャは不変）: `GD05-PL-005`（`suggest_multiple_bet_strategies` を直接呼ぶ。Plackett–Luce の確率: 3/5/18 頭・全馬同確率・人気集中・極端に低い確率・確率 0/負/1 超・α の端・2 頭/1 頭）`GD05-FLOW-006`（流しの相手選び）`GD05-BOX-007`（BOX 候補・点数上限・重複した買い目）`GD05-REAL-008`（実オッズ あり/一部/なし/空/0.0・`require_real_odds_for_combo`・見送りエントリ）`GD05-FILTER-009`（縮小 → 上限 → 市場比上限 → 下限 → EV の境界）`GD07-COMBO-STAKE-010`（賭け額・`ticket_allocation`・min/max_bet・確率源の係数）`GD06-EVAL-011`（`evaluate_odds` 全体: best_only・総投資上限での tickets の縮小・hit_rate・見送りシグナル・18/3/2/1 頭）。実オッズは JSON ではタプルのキーを表せないので配列（ワイド `[[a, b, 下限, 上限], …]`、三連複 `[[a, b, c, オッズ], …]`。**キーは昇順**）で与え、`adapter.py` が旧実装の辞書に直す。
 
+## T3.6-A で追加した ML 経路のケース（`generate --add-new`。既存フィクスチャは不変。D-153）
+
+旧実装の ML 経路は、**サンドボックスの一時ディレクトリ**に合成 SQLite（旧スキーマ・`scenarios_ml.py`）と合成モデルの pickle（旧実装の `save_model` で、このプロセスが直前に書いたものだけを旧 `get_model` が読む）を作って動かす。pickle・SQLite はリポジトリに入らない。`datetime.now` は固定時刻（`input.calls[].args.now`）。
+
+| ケース | 内容 |
+|---|---|
+| `G6-FEATURES-001` | `build_feature_vector`（40）/ `build_feature_vector_alpha`（35）/ 血統ハッシュ 16 次元。H3（対象レース当日・未来の過去走）・H8（`now` を 4 通り）・`ketto_num` の空白・不正な生年月日・脚質や着回数の癖・日付の NULL/空/別形式・db=None |
+| `G3-ML-NORM-002` | 単体モデル（legacy / calibration / alpha）→ 正規化と ±10% 補正 → 判定側ブレンド。Platt、重みの次元の切詰め/ゼロ埋め（H2）、z の飽和、頭数 1/2、オッズ 0/負 |
+| `G4-ENSEMBLE-002` | ensemble（β・カバレッジ・オッズ無し・片方/両方無し・最後の馬のラベル E2・β の範囲外） |
+| `G5-BLEND-002` | 判定側ブレンドの α の端・境界、モデルに保存された α の実行時上書き（H4）、確率上限クリップ、引数と `ml_cfg` の優先順位、hit_rate の確率フィルタ |
+| `G7-LEGACY-FAIL-001` | **旧実装側**の失敗時の挙動（ML 無効・モデル無し・`feature_names` 不一致 = H1・空・未知の `model_type`）。新しいモデルのロード失敗（署名/ハッシュ等）は旧実装に対応物が無いので Kotlin 単体テストで検証 |
+- `evaluate_odds_ml` は全馬のシグナルが出る設定（EV 閾値なし・単勝のみ・Kelly 全額・`notify_skips`）で、シグナルの全項目を比較する（通知文 `reason` だけは T3.7 で別に検証するので比較から除外）。
+- `model_type=auto`・`ensemble_beta=auto` は旧仕様のファイル依存なので Kotlin ランナーが**未対応として拒否**する（新仕様では置き換え: MIGRATION_MATRIX §10）。
+- **G1 の更新（D-153）**: `model_extract_features` の 7 呼び出しは、基盤の正規化の不具合（numpy 配列を `.item()`）で旧実装の戻り値ではなく `ValueError` が記録されていた。`jsonutil.normalize` を修正し、その 7 呼び出しだけを再生成（他は 1 バイトも変わらない）。
+
 ## 登録のみ・未実装（Stage 3 へ引き継ぎ）
 
-`catalog.py` が正本（`verify` が整合を検査）。状況（T3.2 完了時点）: 登録 17 項目のうち **implemented=6（GD01・GD03・GD05・GD06・GD07・G1）/ partial=8（GD02・GD04・GD08・GD09・GD10・G2・G3・G5）/ planned=3（G4・G6・G7）**。partial は一部の関数のみ生成済みで、各項目の `remaining` に未実施の範囲を記載。主な未実施: ML 例外時のラベル（E1）、時間帯スケジュール・adaptive_relaxation（daemon 側）、賭式をまたぐ完全な同点の並び（合成入力では作れないので Kotlin の単体テストで固定）、合成 SQLite を使う特徴量ベクトル（G6）、ensemble（G4）。（ワイド/三連複の Plackett–Luce 経路 E8〜E11・hit_rate モード・比例縮小 E6 の旧挙動・`ticket_allocation` は生成済み。）
+`catalog.py` が正本（`verify` が整合を検査）。状況（T3.6-A 完了時点）: 登録 17 項目のうち **implemented=10（GD01・GD03・GD05・GD06・GD07・G1・G3・G4・G5・G6）/ partial=7（GD02・GD04・GD08・GD09・GD10・G2・G7）/ planned=0**。partial は一部の関数のみ生成済みで、各項目の `remaining` に未実施の範囲を記載。主な未実施: ML 例外時のラベル（E1）、時間帯スケジュール・adaptive_relaxation（daemon 側）、賭式をまたぐ完全な同点の並び（合成入力では作れないので Kotlin の単体テストで固定）、合成 SQLite を使う特徴量ベクトル（G6）、ensemble（G4）。（ワイド/三連複の Plackett–Luce 経路 E8〜E11・hit_rate モード・比例縮小 E6 の旧挙動・`ticket_allocation` は生成済み。）
 
 ## トラブルシューティング
 
