@@ -5,6 +5,9 @@ scipy==1.18.1
 scikit-learn==1.9.1
 joblib==1.6.0
 threadpoolctl==3.7.0
+# scikit-learn / joblib の推移的依存（--no-deps で入れるので明示する。pip check がイメージのスモークで検査する）
+narwhals==2.27.1
+cloudpickle==3.1.2
 cryptography==50.0.2
 PyMySQL==1.2.3
 # cryptography の推移的依存（pip freeze 相当。再現性のため固定）
