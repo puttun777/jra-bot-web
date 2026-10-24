@@ -281,18 +281,16 @@ class DatasetExporterTest {
     fun `合成データセットの契約ファイルは Kotlin の出力と一致する`() {
         for ((schema, name) in listOf(FeatureSchema.CALIBRATION_40 to "synthetic-calibration", FeatureSchema.ALPHA_35 to "synthetic-alpha")) {
             val e = export(schema)
-            val csvGz = e.csvGz()
             val manifest = CanonicalJson.encodeBytes(e.manifest) + "\n".toByteArray()
             if (update) {
                 val dir = Path.of("src/test/resources/ml/dataset")
                 Files.createDirectories(dir)
-                Files.write(dir.resolve("$name.csv.gz"), csvGz)
+                Files.write(dir.resolve("$name.csv"), e.csv.toByteArray(Charsets.UTF_8)) // 実データ混入の防止で *.csv.gz は Git に入れない（hygiene）。非圧縮の合成 CSV を置く
                 Files.write(dir.resolve("$name.manifest.json"), manifest)
                 continue
             }
-            val gz = javaClass.getResourceAsStream("/ml/dataset/$name.csv.gz")?.readAllBytes() ?: error("fixture が無い: $name.csv.gz")
-            // gzip のバイト列は zlib の版で変わり得るので、展開した CSV 本文と manifest を比べる
-            assertEquals(e.csv, String(GZIPInputStream(ByteArrayInputStream(gz)).readAllBytes(), Charsets.UTF_8), "$name.csv.gz の中身")
+            val csv = javaClass.getResourceAsStream("/ml/dataset/$name.csv")?.readAllBytes() ?: error("fixture が無い: $name.csv")
+            assertEquals(e.csv, String(csv, Charsets.UTF_8), "$name.csv の中身")
             val mf = javaClass.getResourceAsStream("/ml/dataset/$name.manifest.json")?.readAllBytes() ?: error("fixture が無い: $name.manifest.json")
             assertEquals(String(manifest, Charsets.UTF_8), String(mf, Charsets.UTF_8), "$name.manifest.json")
         }

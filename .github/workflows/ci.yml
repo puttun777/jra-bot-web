@@ -430,7 +430,8 @@ jobs:
       - name: Verify the synthetic datasets (contract used by the Stage 3-F2 training job)
         run: |
           for n in synthetic-calibration synthetic-alpha; do
-            "$RUNNER_TEMP/venv/bin/python" -m tools.ml.dataset_contract --csv-gz "domain/src/test/resources/ml/dataset/$n.csv.gz" --manifest "domain/src/test/resources/ml/dataset/$n.manifest.json"
+            gzip -c "domain/src/test/resources/ml/dataset/$n.csv" > "$RUNNER_TEMP/$n.csv.gz"
+            "$RUNNER_TEMP/venv/bin/python" -m tools.ml.dataset_contract --csv-gz "$RUNNER_TEMP/$n.csv.gz" --manifest "domain/src/test/resources/ml/dataset/$n.manifest.json"
           done
 
   # 最終集約チェック。**分岐保護の required check はこれだけ**にする。常に実行され、docs だけの変更でも正常に終わる。

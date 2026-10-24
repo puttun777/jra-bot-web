@@ -10,7 +10,8 @@ DS = RES / "dataset"
 
 
 def _load(name):
-    return (DS / f"{name}.csv.gz").read_bytes(), (DS / f"{name}.manifest.json").read_bytes()
+    # 合成 CSV は非圧縮で Git に置く（*.csv.gz は実データ混入防止のため Git に入れない）。gzip はここで作る
+    return gzip.compress((DS / f"{name}.csv").read_bytes(), mtime=0), (DS / f"{name}.manifest.json").read_bytes()
 
 
 def _rewrite(csv_gz, manifest_raw, csv_edit=None, manifest_edit=None):
@@ -86,10 +87,14 @@ class DatasetContractTest(unittest.TestCase):
             dc.verify(g, m)
 
     def test_cli(self):
-        self.assertEqual(
-            dc.main(["--csv-gz", str(DS / "synthetic-calibration.csv.gz"), "--manifest", str(DS / "synthetic-calibration.manifest.json"),
-                     "--feature-schema", str(RES / "feature_schema.calibration40.json")]), 0)
-        self.assertEqual(dc.main(["--csv-gz", str(DS / "missing.csv.gz"), "--manifest", str(DS / "synthetic-calibration.manifest.json")]), 1)
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            gz = pathlib.Path(d) / "x.csv.gz"
+            gz.write_bytes(_load("synthetic-calibration")[0])
+            self.assertEqual(
+                dc.main(["--csv-gz", str(gz), "--manifest", str(DS / "synthetic-calibration.manifest.json"),
+                         "--feature-schema", str(RES / "feature_schema.calibration40.json")]), 0)
+            self.assertEqual(dc.main(["--csv-gz", str(pathlib.Path(d) / "missing.csv.gz"), "--manifest", str(DS / "synthetic-calibration.manifest.json")]), 1)
 
 
 if __name__ == "__main__":
