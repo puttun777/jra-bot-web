@@ -73,6 +73,12 @@ class IngestOptions(
     val acceptNormalizedRecords: Boolean,
     val maxBodyBytes: Int,
     val maxInflatedBytes: Int,
+    /** 取得計画の項目（JSON 配列。運用者が明示したものだけ。既定は空 = idle）。 */
+    val planItemsJson: String = "",
+    /** 公式仕様で確認済みの取得（`dataspec:option` または速報は `dataspec`）。**既定は空**: ここに無い項目は計画に載せない（未確認の仕様を配らない）。 */
+    val verifiedFetchSpecs: Set<String> = emptySet(),
+    /** 署名済みの更新 manifest のファイル（オフラインで署名したもの。サーバは署名鍵を持たない）。未設定なら更新なし。 */
+    val updateManifestPath: String = "",
 ) {
     companion object {
         const val DEFAULT_MAX_BODY = 1024 * 1024
@@ -96,6 +102,14 @@ class IngestOptions(
                 normalized,
                 int(get, "INGEST_MAX_BODY_BYTES", DEFAULT_MAX_BODY, 1024, 8 * 1024 * 1024),
                 int(get, "INGEST_MAX_INFLATED_BYTES", DEFAULT_MAX_INFLATED, 1024, 128 * 1024 * 1024),
+                get("INGEST_PLAN_ITEMS_JSON")?.trim().orEmpty(),
+                get("INGEST_VERIFIED_FETCH_SPECS")
+                    ?.split(',')
+                    ?.map { it.trim() }
+                    ?.filter { it.isNotEmpty() }
+                    ?.toSet()
+                    .orEmpty(),
+                get("INGEST_UPDATE_MANIFEST_PATH")?.trim().orEmpty(),
             )
         }
 

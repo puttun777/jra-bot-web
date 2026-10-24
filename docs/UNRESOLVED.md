@@ -1,6 +1,6 @@
 # UNRESOLVED（未解決事項の管理表）
 
-作成: 2026-10-23（Stage 3-D / T3.4）。**未解決事項の正本はこの表**。PROGRESS.md の各段階の「未解決」は履歴で、現在の状態はここを見る。
+作成: 2026-10-23（Stage 3-D / T3.4）。**2026-10-24 Stage 3-E（T3.5）で更新**。**未解決事項の正本はこの表**。PROGRESS.md の各段階の「未解決」は履歴で、現在の状態はここを見る。
 **根拠のない項目を「解決済み」にしない**。A は根拠（出典）を必ず書く。出典が検索抜粋で原文を直接読めていないものは、その旨を書く（本環境のプロキシは jra-van.jp / developer.jra-van.jp を 403 で拒否する）。
 
 | 分類 | 意味 |
@@ -46,6 +46,9 @@
 | C-7 | バックフィル基盤 | `ingest_backfill` の状態管理・重複排除・再開・取りこぼし区間（`ingest_gap`）の解消（D-138）。実際の過去取得は T3.5 以降 |
 | C-8 | T3.3 引き継ぎ: `STALE`・`FETCH_FAILURE` イベントの生成元 | `FETCH_FAILURE` は取得失敗時に生成（実装済み）。`STALE` は reconcile（T3.8）→ G-6 |
 | C-9 | テナント越境の防止（ingest） | エージェントの行からテナントを決める（本文は信用しない）。複合 FK で `ingest_fetch`・`ingest_backfill` の越境参照を DB が拒否（D-131） |
+| C-11 | **T3.5 Windows エージェント（Mock・Linux CI・結合テストで検証した範囲）**: 署名クライアント（P-1。既知ベクトルを Python/Kotlin 両方が検査）、gzip・再送・バックオフ、SQLite WAL キュー、取得セッション `fetch`（P-2）の生成・保存・送信・再開、ACK/カーソル（`acked_ts` はサーバの cursor でだけ前進）、Ed25519 ビーコン、状態機械（STOPPED/UNKNOWN で取得も送信もしない・復帰手順）、COM ワーカーのウォッチドッグ、取得計画、多重起動防止、DPAPI（Fake で検証。実 DPAPI は Windows ランナー）、署名付き更新の検証 | agent/ の Python 203+4 件、Kotlin ingest との結合（`AgentInteropIntegrationTest`）。**実 JV-Link・実機の動作は未検証（F-1）。P-1/P-2 の本番採用は D-5/D-6 の承認待ち** |
+| C-12 | **T3.4 の実装の穴: ACK 応答の喪失で `acked_ts` が止まる**（重複 ACK に cursor が無い。D-144） | サーバに加算のみの修正（重複 ACK に fetch・cursor）。結合テストで確認 |
+| C-13 | `GET /v1/agent/mode`・`plan`・`update` の HTTP（G-2 の一部） | 実装（D-149）。plan は検証済み仕様のみ・既定 idle |
 | C-10 | app の `race_schedule_event` INSERT の最小権限の妥当性（T3.3 の確認事項） | **妥当性を検証**: app は手動補正の履歴（MANUAL_OVERRIDE・MANUAL_REVOKE）の INSERT だけで、UPDATE・DELETE は不可（`GrantsIntegrationTest`）。ingest・bot も INSERT のみ。→ ユーザーの承認と infra 同期は D-9 / G-9 |
 
 ## D. ユーザーの運用判断待ち（承認するまで「承認済み」にしない）
@@ -94,7 +97,7 @@
 ## F. 実機・実環境での検証待ち
 | ID | 内容 |
 |---|---|
-| F-1 | **T3.0**: Windows 実機 PoC（G-AGENT-1〜6）。**未完了**。手順は SDK 5.0.0 対応に更新済み（JVLINK_DESIGN §12.3）。64bit の動作（COM 生成、`JVRTOpen=-413` の報告への対処）は実機で確認するまで「動作する」と書かない |
+| F-1 | **T3.0**: Windows 実機 PoC（G-AGENT-1〜6）。**未完了**（T3.5 で `agent/poc/` と手順 `agent/POC.md` を用意。Mock の合格のみ。**実機では何も実行していない**）。実機でだけ確認できること: COM 生成、JVRead/JVGets のバイト列、蓄積系/速報系の取得、実 COM のハング、DPAPI、タスクスケジューラ・スリープ復帰。手順は SDK 5.0.0 対応に更新済み（JVLINK_DESIGN §12.3）。64bit の動作（COM 生成、`JVRTOpen=-413` の報告への対処）は実機で確認するまで「動作する」と書かない |
 | F-2 | 実 GCP での検証ゲート（G-OPS-1〜9、G-AUTH-1、G-APP-1、G-JOB-1、G-DB-1/5/6/7）。**本番 GCP は Stage 5 まで保留**（Terraform 変更・作成・apply はしない） |
 | F-3 | 本 PR の CI（MySQL 8.4 / 9.7 の統合テスト、JDK 25）。ローカルは MySQL 8.0.46 での事前確認のみ（8.4/9.7 の合否ではない） |
 | F-4 | 実データでの ingest の検証（COMP-4 のゲートが先。合成データだけで進める） |
@@ -102,8 +105,8 @@
 ## G. 後続タスク待ち
 | ID | 内容 | 予定 |
 |---|---|---|
-| G-1 | Windows 取得エージェント本体（署名クライアント P-1、取得セッション P-2、キュー、ビーコン） | T3.5（D-5・D-6 の承認が前提） |
-| G-2 | `GET /v1/agent/plan`・`/mode`・`/update`、`POST /v1/agent/register`（登録コード）。**今回は未実装**（認証フィルタの下では 404。未認証で応答しない） | T3.5 / T4.4 |
+| G-1 | ~~Windows 取得エージェント本体~~ → **T3.5 で実装（C-11）**。残り: 実機検証（F-1）、公式仕様の確認後に実取得のゲート（`jvlink/spec.py`）を外す、P-1/P-2 の承認（D-5/D-6） | T3.5 完了 / 実機 |
+| G-2 | `POST /v1/agent/register`（登録コード）は**保留**（管理者認証 T4.1/T4.4 が前提。設計は CONTRACTS §3.3.2。それまでは `agent set-credential`）。`plan`・`mode`・`update` は T3.5 で実装済み（C-13）。**自動更新の公開配布・署名鍵の運用は未実装・未決** | T4.4 |
 | G-3 | 署名鍵 KEK の発行・保管・ローテーション、エージェント登録の運用手順 | 第 5 段階の前（D-12） |
 | G-4 | 最終接続の GCS への写し（`HeartbeatMirror` の GCS 実装。今回は `SKIPPED` を返す未配線の実装） | `:cloud-gcp` の後続 |
 | G-5 | 実データ形式（JV-Data）のレコードパーサ（E-5 の確認後に `RecordParser` を追加） | T1.17 後 |
@@ -114,3 +117,7 @@
 | G-10 | 本番 release-manifest、ml-train イメージ、branch protection の required checks | 第 5 段階 |
 | G-11 | Spring Boot 4.2.0 の GA 後の移行（VERSIONS §7） | GA 後 |
 | G-12 | レート制限（429）。契約にはあるが未実装。認証前の要求は本文 1 MiB までの読取りとエージェントの 1 件検索（DB）で、単一利用者・Cloud Run の同時実行数の制限で当面は許容 | T3.5 / 第 5 段階（Cloud Armor・同時実行数の設定と合わせて） |
+| G-13 | **ビーコンの NORMAL の再署名**: infra は NORMAL を start 時にしか書かない。エージェントは『有効と確認してから 6 時間』を鮮度にしている（D-148）が、古い NORMAL（署名は有効）の再生を seq だけでは防げない（STOPPED→NORMAL の seq は増えるので巻き戻りは拒否できる。同じ seq の再生は防げない）。infra が NORMAL を定期的（例 1 時間）に再署名し `validUntil` を付けると窓を縮められる | T5.0（infra に確認） |
+| G-14 | **T5.0 への追加（T3.5 分）**: エージェントの配布（Python 同梱 exe・署名）、ビーコン公開鍵の同梱と鍵ローテーション手順、`INGEST_VERIFIED_FETCH_SPECS`・`INGEST_PLAN_ITEMS_JSON`・`INGEST_UPDATE_MANIFEST_PATH`、`/v1/agent/mode` が未認証であること（Cloud Armor・同時実行数で保護: G-12）、トークン期限の運用、更新 manifest の署名鍵（オフライン） | 第 5 段階の前 |
+| G-15 | 取得計画の実際の生成（開催カレンダー + 欠損検知から `plan` を作る）。現在は運用者が与えた項目のうち検証済みのものだけ。YSCH の対象範囲は key の 16 桁（仮の表現。確認後に正式化） | T3.8 |
+| G-16 | 実データ形式（JV-Data）のパーサ（サーバ）と、`SpecRegistry` の確認の記録（T1.17 の 12 項目。確認が 0 件のうちは実取得は始まらない） | T1.17 後 |

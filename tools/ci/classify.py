@@ -16,6 +16,9 @@
   release     tools/release・スキーマ・契約・マイグレーション・アプリの build 定義  → release-tools（Python 単体）
   docker      Dockerfile / .dockerignore  → images（ビルド + スモーク）
   connectorj  Connector/J などの DB ドライバ関連の依存設定  → connector/j 26.x 互換性チェック（非ゲート）
+  agent       agent/（Windows 取得エージェント。Python）  → agent（Linux, Python 3.12/3.13: lint・型・単体）
+  agent_windows  agent/ の Windows 固有部分（DPAPI・ジョブオブジェクト・ロック・起動スクリプト）  → agent-windows（Windows ランナー。課金が 2 倍なのでこの変更とフル検証だけ）
+              agent/src・interop・署名ベクトルは Kotlin ingest との結合（AgentInteropIntegrationTest）に使われるので kotlin_app も付ける
   ci          CI 自体（ワークフロー・tools/ci）  → すべて（connector/j 26.x は除く）
 実行されなかったジョブは「テストされた」ことにならない（最終ゲートが skipped を成功として数えず、表に『未実施（不要と判定）』と出す）。
 """
@@ -49,6 +52,12 @@ RULES: list[tuple[str, tuple[str, ...]]] = [
     # --- Connector/J・DB ドライバ関連の依存設定（gradle/libs.versions.toml は build_cfg でもある）
     (r"^gradle/libs\.versions\.toml$", ("build_cfg", "connectorj")),
     (r"^(persistence|db-migration)/build\.gradle\.kts$", ("kotlin_db", "connectorj", "docker")),
+    # --- Windows エージェント（T3.5）。.md は docs。Windows 固有のファイルだけ Windows ランナーでも検証する
+    (r"^agent/.*\.md$", ("docs",)),
+    (r"^agent/src/jra_agent/(winapi|secrets_store|lock)\.py$|^agent/src/jra_agent/jvlink/(procutil|supervisor|com_adapter|worker_main)\.py$", ("agent", "agent_windows", "kotlin_app")),
+    (r"^agent/(tests/test_winapi_windows\.py|scripts/)", ("agent", "agent_windows")),
+    (r"^agent/(src/|interop/|tests/vectors/|pyproject\.toml$|requirements)", ("agent", "kotlin_app")),
+    (r"^agent/", ("agent",)),
     # --- ドキュメント（モジュール内の README なども docs。上の規則に当たらなかったもの）
     (r"^(docs/.*|.*\.md|LICENSE|\.gitignore)$", ("docs",)),
     # --- Kotlin
@@ -76,6 +85,8 @@ class Plan:
     run_release: bool = False
     run_images: bool = False
     run_connectorj26: bool = False
+    run_agent: bool = False
+    run_agent_windows: bool = False
     db_matrix: list[str] = field(default_factory=list)
     db_suites: list[str] = field(default_factory=list)
     files: int = 0
@@ -87,13 +98,14 @@ class Plan:
             "mode": self.mode, "reason": reason, "files": str(self.files),
             "run_build": b(self.run_build), "run_golden": b(self.run_golden), "run_release": b(self.run_release),
             "run_images": b(self.run_images), "run_connectorj26": b(self.run_connectorj26),
+            "run_agent": b(self.run_agent), "run_agent_windows": b(self.run_agent_windows),
             "db_matrix": json.dumps(self.db_matrix), "db_suites": ",".join(self.db_suites),
         }
 
 
 def full_plan(reason: str, files: int = 0, connectorj: bool = False) -> Plan:
     """すべて実行（Connector/J 26.x は `connectorj` が True のときだけ。本番採用が未決で、非ゲートの互換性確認なので）。"""
-    return Plan("full", reason, True, True, True, True, connectorj, list(FULL_MATRIX), list(ALL_SUITES), files)
+    return Plan("full", reason, True, True, True, True, connectorj, True, True, list(FULL_MATRIX), list(ALL_SUITES), files)
 
 
 def tags_for(path: str) -> tuple[str, ...]:
@@ -130,6 +142,8 @@ def classify(files: list[str]) -> Plan:
     p.run_release = "release" in tags
     p.run_images = "docker" in tags or "build_cfg" in tags
     p.run_connectorj26 = "connectorj" in tags
+    p.run_agent = "agent" in tags
+    p.run_agent_windows = "agent_windows" in tags
     p.reason = "変更タグ: " + ",".join(sorted(tags))
     return p
 

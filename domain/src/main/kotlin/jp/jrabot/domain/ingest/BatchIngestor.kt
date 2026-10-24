@@ -123,8 +123,13 @@ class BatchIngestor(
                 }
 
                 is ClaimResult.AlreadyCompleted -> {
+                    // 重複 ACK にも取得セッションの状態とカーソルを付ける（D-144。追加のみ）。ACK の応答が失われて再送されたとき、
+                    // 完了を確認できずに acked_ts が止まり続けるのを防ぐ。カーソルは「サーバの保存値がこの取得の値以上」のときだけ
+                    val f = env.fetch?.let { fetches.peek(tenantId, it.fetchId) }
+                    val progress = f?.let { FetchProgress(it.fetchId, it.status, it.nextSeq) }
+                    val cursor = f?.let { confirmedCursor(tenantId, it) }
                     return IngestOutcome.Accepted(
-                        IngestAck(c.accepted, c.duplicates, 0, 0, c.completedAt, duplicateBatch = true, fetch = null, cursor = null),
+                        IngestAck(c.accepted, c.duplicates, 0, 0, c.completedAt, duplicateBatch = true, fetch = progress, cursor = cursor),
                     )
                 }
 
@@ -268,6 +273,18 @@ class BatchIngestor(
         return IngestAck(accepted, duplicates, quarantined, unsupported, now, duplicateBatch = false, fetch = progress, cursor = cursorAck)
     }
 
+    /** サーバのカーソルがこの取得の値以上なら、その値を返す（前進したか既に同値以上かを区別しない。後戻りはしない）。LIVE の成功だけ。 */
+    private fun confirmedCursor(
+        tenantId: TenantId,
+        f: FetchRecord,
+    ): CursorAck? {
+        if (f.status != FetchStatus.SUCCEEDED || f.origin != FetchOrigin.LIVE) return null
+        val last = f.lastFileTimestamp ?: return null
+        val type = IngestCursors.dataType(f.dataspec, f.option)
+        val stored = cursors.find(tenantId, type) ?: return null
+        return if (stored >= last) CursorAck(type, last) else null
+    }
+
     /** 取得セッションが終わったときの後始末。カーソルは **SUCCEEDED の LIVE だけ**進める（バックフィルは過去を埋めるだけで、現在位置は動かさない）。 */
     private fun finishFetch(
         caller: IngestCaller,
@@ -285,7 +302,8 @@ class BatchIngestor(
             }
             val last = f.lastFileTimestamp ?: return null
             val type = IngestCursors.dataType(f.dataspec, f.option)
-            return if (cursors.advance(tenantId, type, last, now)) CursorAck(type, last) else null
+            cursors.advance(tenantId, type, last, now)
+            return confirmedCursor(tenantId, f)
         }
         // FAILED
         val reason = f.failReason ?: "FAILED"

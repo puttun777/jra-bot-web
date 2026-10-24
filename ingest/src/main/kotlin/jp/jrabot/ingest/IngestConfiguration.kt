@@ -30,8 +30,10 @@ import jp.jrabot.domain.race.RaceScheduleRepository
 import jp.jrabot.domain.time.Clock
 import jp.jrabot.domain.time.SystemClock
 import jp.jrabot.ingest.agent.AgentApiController
+import jp.jrabot.ingest.agent.AgentMetaController
 import jp.jrabot.ingest.agent.JsonTrees
 import jp.jrabot.ingest.agent.NormalizedJsonRecordParser
+import jp.jrabot.ingest.agent.PlanProvider
 import jp.jrabot.ingest.agent.UnavailableHeartbeatMirror
 import jp.jrabot.persistence.PersistenceConfiguration
 import jp.jrabot.persistence.jdbc.DataSourceFactory
@@ -143,6 +145,21 @@ class IngestConfiguration {
         mirror: HeartbeatMirror,
         clock: Clock,
     ): HeartbeatService = HeartbeatService(store, mirror, clock)
+
+    @Bean
+    fun planProvider(
+        settings: IngestSettings,
+        json: JsonTrees,
+        clock: Clock,
+    ): PlanProvider = PlanProvider(settings.ingest.planItemsJson, settings.ingest.verifiedFetchSpecs, json, clock)
+
+    @Bean
+    fun agentMetaController(
+        mode: InspectableModeProvider,
+        plans: PlanProvider,
+        json: JsonTrees,
+        settings: IngestSettings,
+    ): AgentMetaController = AgentMetaController(mode, plans, json, settings.ingest.updateManifestPath)
 
     @Bean
     fun agentApiController(
