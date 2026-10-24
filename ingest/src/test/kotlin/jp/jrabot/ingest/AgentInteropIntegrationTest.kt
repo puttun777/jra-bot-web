@@ -75,7 +75,8 @@ class AgentInteropIntegrationTest {
         it.mode.mode = OpsMode.STOPPED
         val r = runDriver("stopped")
         assertEquals("STOPPED", r["probe_mode"])
-        assertEquals("DEFERRED", r["step"])
+        assertEquals("HALTED", r["step"], "mode の確認で STOPPED_CONFIRMED になるため、claim も送信もしない")
+        assertEquals(mapOf("QUEUED" to 1), r["queued"])
         assertEquals("STOPPED_CONFIRMED", r["mode"])
         assertEquals(0, it.count("SELECT COUNT(*) FROM ingest_batch"))
     }
