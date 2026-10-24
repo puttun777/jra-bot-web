@@ -34,7 +34,9 @@ T1.20（実 SQLite・実 config・実 pkl）、T1.21（legacy/v2 の切替はユ
 ### Stage 3-F2（T3.6-B）への引き継ぎ（**自動では進まない**）
 ML_DESIGN §11.7・§11.8、STAGE2_HANDOFF §14.12、UNRESOLVED G-17。要点: ①データセット契約を `export-dataset` に配線（`FeatureSource`/`DatasetSource` の `:persistence` 実装、`DatasetStore` への manifest 保管）②Python 学習 Job（`dataset_contract` で検証してから学習。正準形のモデル JSON + Ed25519 署名 + `CANDIDATE` の INSERT。昇格しない）と ml-train イメージ ③品質ゲートの数値をユーザーと確定 ④pkl 変換ツールの実装（実行は利用者のローカル）⑤馬マスタの時点履歴 ⑥release-manifest の `feature_schema_hash` の単一値問題（UNRESOLVED G-17 ⑧）。
 ### ブランチ・PR・CI
-`claude/stage3-ml-inference-h7e43j`（main の 2e4fa11 から）。PR・CI の結果は下に追記する（マージはユーザー）。
+`claude/stage3-ml-inference-h7e43j`（main の 2e4fa11 から）。PR: https://github.com/puttun777/jra-bot-web/pull/22 （**マージはユーザーの判断**）。
+CI（head 6b446a8, run 40080811615）: build (Temurin 25)・db integration (MySQL 8.4 / 9.7)・golden・ml tools・release tools・agent python 3.12/3.13・agent windows・images・changes and repo hygiene・**ci gate がすべて成功**（connectorj26 は非ゲートで skipped）。
+経緯: 初回 CI（ae3fe45）は `ml tools` が失敗した。合成データセットを `*.csv.gz` で置いたが、実データ混入防止のガード（`.gitignore`・`check-repo-hygiene.sh`）が `*.csv.gz` を禁止していたため Git に入っていなかった。ガードは緩めず、フィクスチャを非圧縮 `.csv` で保持し、テスト/CI がメモリ上・一時ファイルで gzip してから契約検証する形に直した（実行時の保管形式 `{dataset_id}.csv.gz` は変更なし）。
 
 ## Stage 3-E（claude/stage3-windows-agent）: T3.5 Windows 取得エージェント（Python）と ingest の mode/plan/update
 ### 結果（T3.5 の Mock・CI 範囲で完了。**実機（JV-Link・DPAPI・タスクスケジューラ）は未検証。実取得は公式仕様の確認待ちで開始されない。P-1/P-2 は承認待ちのまま**）
