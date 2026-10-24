@@ -1,0 +1,2 @@
+# 実行時の依存（固定）。Windows 実機では更に requirements-windows.txt。
+cryptography==50.0.2
