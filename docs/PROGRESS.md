@@ -1,6 +1,31 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-10-23（第3段階 / Stage 3-D: T3.4 取込 API・認証・冪等処理・取得の事実・バックフィル基盤 ＋ 要件変更（本人 1 名）と未解決事項の整理）
+最終更新: 2026-10-24（第3段階 / Stage 3-E: T3.5 Windows 取得エージェント）
+旧: 2026-10-23（第3段階 / Stage 3-D: T3.4 取込 API・認証・冪等処理・取得の事実・バックフィル基盤 ＋ 要件変更（本人 1 名）と未解決事項の整理）
+
+## Stage 3-E（claude/stage3-windows-agent）: T3.5 Windows 取得エージェント（Python）と ingest の mode/plan/update
+### 結果（T3.5 の Mock・CI 範囲で完了。**実機（JV-Link・DPAPI・タスクスケジューラ）は未検証。実取得は公式仕様の確認待ちで開始されない。P-1/P-2 は承認待ちのまま**）
+- **再開の経緯**: 使用上限で中断後、`agent/` は未コミットのまま残っていた（ブランチ・ファイルとも無事）。203 件の再実行を確認してからコミットして保護（e8c470b）。
+- **Python**: 目標 3.13（64bit）・最小 3.12（`>=3.12,<3.14`）。根拠は VERSIONS §14（cryptography 50.0.2・pywin32 312 の win_amd64 wheel を 3.12〜3.14 で確認。**3.14 は実機未検証なので対象外**）。実行時の依存は `cryptography` のみ。
+- **agent/ の構成と機能**: `agent/README.md`。署名（P-1）・gzip・再送・バックオフ、SQLite WAL（取得済み＝FETCHED／投入済み・送信待ち＝QUEUED／送信中＝SENDING／再試行待ち＝RETRY_WAIT／ACK 済み／DEAD）、取得セッション `fetch`（P-2）、`fetched_ts`/`queued_ts`/`acked_ts`、Ed25519 ビーコン、状態機械、COM ワーカー（別プロセス・ウォッチドッグ・再起動上限）、`SpecRegistry` の仕様ゲート、取得計画、更新 manifest、多重起動防止、DPAPI（ctypes）、CLI（verify-config / verify-queue / status / diagnose / run ほか）、PoC、`scripts/*.ps1`（既定ドライラン。実機には何もインストールしていない）。
+- **サーバ側**: `GET /v1/agent/mode`（認証なし・DB 不使用）・`plan`（検証済み仕様のみ・既定 idle）・`update`（署名済み manifest をそのまま返す）。**`register` は管理者認証が無いため保留**（CONTRACTS §3.3.2）。
+- **T3.4 の実装の穴を発見・修正（D-144）**: ACK の応答だけが失われて再送されると、重複 ACK に cursor が付かず `acked_ts` が止まる（データ欠損ではなく活性の問題。セキュリティ問題は見つかっていない）。加算だけの修正で、結合テストで確認。
+### テスト
+| 区分 | 結果 |
+|---|---|
+| Python 単体・統合（Mock）、ローカル Python 3.13 | **203 件成功**（署名ベクトル 21・キュー 33・送信 24・ビーコン/状態機械 24・設定/秘密 33・ワーカー 8・取得 13・シナリオ 8・計画/更新/ロック 39 ほか）。Windows 専用 4 件は Linux では skip（Windows ランナーで実行） |
+| ruff / mypy（strict） | 成功（55 ファイル） |
+| `tools/ci` | 114 件成功（agent の判定 5 件を追加） |
+| Kotlin（ingest 単体 35・統合 50 の下限、`AgentSigningVectorsTest`・`PlanProviderTest`・`AgentInteropIntegrationTest`） | **ローカルでは未実施**（Maven Central の 429 で Gradle が解決できなかった）。CI の結果が正（D-056） |
+| 実 JV-Link・実 DPAPI・タスクスケジューラ・スリープ復帰 | **未実施**（実機。`agent/POC.md`） |
+### 実機未検証・未完了
+G-AGENT-1〜6 の実機確認、JVRead/JVGets のバイト列、実 COM のハング回復、DPAPI（Windows ランナーのみ）、`register`、更新の公開配布、取得計画の自動生成、実データのパーサ（T1.17）。
+### ユーザー承認待ち
+D-5（P-1）・D-6（P-2）・D-7（P-3）は**承認済みにしていない**。他は UNRESOLVED の D 分類のまま。
+### T3.6 への引き継ぎ
+ML（T3.6）は agent と独立。前提: 実データ形式のパーサは未実装。T5.0 に G-13/G-14（ビーコンの再署名、配布、環境変数）。
+### ブランチ・PR
+`claude/stage3-windows-agent`（main の 5aa8672 から）。**PR #21**（main 向け、マージはユーザー）。CI の結果は下。
 
 ## Stage 3-D（claude/stage3-ingest-api）: T3.4 取込 API・認証・冪等・取得の事実・バックフィル基盤
 ### 結果（T3.4 の範囲で完了。**本番で動作する取込ではない**: 実データ形式のパーサは未実装、署名方式は承認待ち、Windows エージェント本体は T3.5）
