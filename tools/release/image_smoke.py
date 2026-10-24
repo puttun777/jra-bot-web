@@ -491,7 +491,7 @@ class Smoke:
 
         def train(config: str, gate: str | None, env: dict[str, str] | None = None, desc: str = "ml train") -> tuple[int, str, dict]:
             args = ["train", "--tenant-id", "1", "--dataset-id", "synthetic-calibration", "--config", f"/cfg/{config}"] + (["--gate", f"/cfg/{gate}"] if gate else [])
-            rc, out, err = self.run("ml-train", args=args, env=self.ml_env(**db, **(env or {})), network=self.network, mounts=mounts, desc=desc, timeout=180)
+            rc, out, err = self.run("ml-train", args=args, env=self.ml_env(**{**db, **(env or {})}), network=self.network, mounts=mounts, desc=desc, timeout=180)
             return rc, out + err, self._ml_result(out)
 
         def models() -> list[str]:

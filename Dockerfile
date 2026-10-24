@@ -115,11 +115,12 @@ RUN groupadd --system --gid 10001 app \
     && useradd --system --uid 10001 --gid 10001 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin app
 ENV TZ=Asia/Tokyo PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/app/src:/app \
     OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
-COPY --from=ml-train-deps --chmod=a=rX /opt/venv /opt/venv
+# venv は実行可能ファイルを含むので --chmod は付けない（a=rX にすると python が起動できなかった）。ビルダーの既定（root 所有・他者は読取り+実行）のまま
+COPY --from=ml-train-deps /opt/venv /opt/venv
 WORKDIR /app
-COPY --chmod=a=rX ml/src/ml_train /app/src/ml_train
-COPY --chmod=a=rX tools/__init__.py /app/tools/__init__.py
-COPY --chmod=a=rX tools/ml/__init__.py tools/ml/canonical.py tools/ml/dataset_contract.py /app/tools/ml/
+COPY ml/src/ml_train /app/src/ml_train
+COPY tools/__init__.py /app/tools/__init__.py
+COPY tools/ml/__init__.py tools/ml/canonical.py tools/ml/dataset_contract.py /app/tools/ml/
 USER 10001:10001
 ARG GIT_SHA=unknown
 LABEL org.opencontainers.image.title="jra-bot ml-train" \
