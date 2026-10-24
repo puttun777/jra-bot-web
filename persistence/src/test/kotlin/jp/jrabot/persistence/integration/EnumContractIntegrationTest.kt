@@ -7,6 +7,8 @@ import jp.jrabot.domain.calendar.OverrideScope
 import jp.jrabot.domain.calendar.RaceDayStatus
 import jp.jrabot.domain.calendar.ScheduleEventSource
 import jp.jrabot.domain.calendar.ScheduleEventType
+import jp.jrabot.domain.ml.model.ModelKind
+import jp.jrabot.domain.ml.registry.ModelStatus
 import jp.jrabot.domain.odds.Market
 import jp.jrabot.domain.race.RaceScheduleStatus
 import jp.jrabot.domain.signal.NotificationState
@@ -95,5 +97,11 @@ class EnumContractIntegrationTest {
                 ),
             )
         for (name in holding) assertEquals(true, check.contains(name), "ck_bot_run_slot に $name が無い: $check")
+    }
+
+    @Test
+    fun `ml_model の kind と status はドメインの ModelKind・ModelStatus と一致する`() {
+        assertEquals(ModelKind.entries.map { it.json }.toSet(), enumValues("ml_model", "kind"))
+        assertEquals(ModelStatus.entries.map { it.name }.toSet(), enumValues("ml_model", "status"))
     }
 }

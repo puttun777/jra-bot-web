@@ -36,7 +36,7 @@ for t in db-migration bot ingest dashboard; do docker build --target $t --build-
 python3 -m tools.release.image_smoke --git-sha $SHA --report-dir out   # 起動スモーク（Docker と mysql:8.4 が必要。合成データのみ）
 python3 -m tools.release.cli preview --git-sha $SHA --built-at "$(date -u -d @$(git show -s --format=%ct HEAD) +%FT%TZ)" --local-images out/images-local.json --out out/manifest-preview.json
 ```
-**ml-train イメージは未実装**（Stage 3）。bot の業務処理はスタブで、イメージが動くことは Bot の機能が完成した証明ではない。手順・設計の詳細は `docs/CI_AND_IMAGES.md`、判断は D-093〜D-096。
+**ml-train イメージは未実装**（Stage 3-F2 / T3.6-B）。bot の業務処理はスタブで、イメージが動くことは Bot の機能が完成した証明ではない。手順・設計の詳細は `docs/CI_AND_IMAGES.md`、判断は D-093〜D-096。
 
 ## release-manifest（ドライランまで）
 `docs/schemas/release-manifest.v1.json`（本番）と `release-manifest-preview.v1.json`（ドライラン）。`tools/release` が生成・検証する（`python3 -m tools.release.cli validate --kind preview|production FILE`）。プレビュー（`manifest-preview.json`）は `deployable:false` で、レジストリ digest が無く、**本番用として拒否される**。本番の `release-manifest.json` はレジストリへの push 後の実 digest・ml-train・検証済みのロールバック範囲が揃うまで生成できない（第5段階）。単体テスト: `python3 -m tools.ci.run_tests --min-tests 100`。
@@ -46,6 +46,10 @@ python3 -m tools.release.cli preview --git-sha $SHA --built-at "$(date -u -d @$(
 
 ## 開催日制御（T3.3）
 開催の有無は **DB の予定と取得の事実だけ**で判断する（曜日・祝日は使わない）。`:domain` の `jp.jrabot.domain.calendar`（有効予定の導出 `EffectiveCalendar`、起動判断 `CalendarCheckPolicy`、手動補正、状態遷移、履歴）、`:persistence`（`race_day`・`race_schedule_event`・`calendar_override`・`bot_run` のリース。更新と履歴は同一トランザクション）、`:bot` の `--task=calendar-check`。結果・設定（既定値なし: `CALENDAR_*`）・C01〜C28 の対応は `docs/RACE_CALENDAR_DESIGN.md` §11、判断は `docs/DECISIONS.md` D-122〜D-129。**本番の起動基盤（Cloud Run Jobs）と取得の事実は未実装**で、calendar-check が起動を要求しても本番では exit 1（`LAUNCHER_NOT_CONFIGURED`）、行の無い日は exit 75（不明）になる。bot-run の業務ループは T3.8。
+
+## ML の Kotlin 推論基盤（T3.6-A）
+`:domain` の `jp.jrabot.domain.ml.*`: 特徴量（`FeatureSchema` 40/35/5 次元・血統ハッシュ・旧互換 `LegacyFeatureBuilder` と point-in-time の `PointInTimeFeatureBuilder`）、ロジスティック回帰推論、`ProbabilityPipeline`（`legacy` = 本番の初期値 / `v2` = **未承認・無効**）、モデル JSON の検証（正準 JSON・sha256・Ed25519 署名・feature_schema_hash・次元。**署名の検証前のモデルは推論に使えない**）、モデルレジストリの読取りと bot-run 開始時の固定（`ModelRunPin`）、学習用データセットの出力契約（`DatasetExporter`）。昇格（ACTIVE 化）の操作は無い（Stage 4）。学習（Python）・`ml-train` イメージ・bot-run への統合は T3.6-B / T3.8。
+Python の参照実装と合成成果物: `tools/ml`（`python3 -m tools.ml.run_tests --min-tests 20 --max-skipped 0` ほか。cryptography が要る: `pip install -r tools/ml/requirements.txt`）。ゴールデン（旧 Python との比較）は `tools/golden/README.md`。設計・契約・学習側への引き継ぎは `docs/ML_DESIGN.md` §11、判断は D-152〜D-164。**実データ・実 pkl・本番の署名鍵は使っていない（合成のみ）**。
 
 ## cloud-gcp（ModeProvider）
 `:cloud-gcp` が domain の `ModeProvider` を実装する（CONTRACTS §5.2）。GCS の `ops-state.json`（`OPS_MODE_SOURCE=gs://…`、ADC、**読取りのみ**）を 3 秒以内に読み、成功を 15 秒キャッシュ、失敗後 5 秒は再取得せず、`seq` の巻き戻りは UNKNOWN。読めない・検証できないときは必ず UNKNOWN（NORMAL にしない）。ローカル開発・テストでは `OPS_MODE_SOURCE=/path/to/ops-state.json` と **`APP_ENV=local`**（明示したときだけ）でファイル実装を使える（GCP・認証情報不要、合成データのみ）。`APP_ENV` が `local` 以外でファイルを指定すると起動失敗（本番で黙ってフォールバックしない）。生成は `OpsModeProviders.fromEnvironment(env, clock)`。判断は D-076〜D-080、T2.8 への引き継ぎは `docs/STAGE2_HANDOFF.md` §14.4。単体テストは GCP に接続しない（`./gradlew :cloud-gcp:test`）。

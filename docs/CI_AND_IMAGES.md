@@ -10,6 +10,7 @@ CI の実行範囲の決め方、分岐保護の設定、イメージのビル�
 | `db integration (MySQL x)` | Testcontainers の MySQL。スイート: `migration`（:db-migration）/ `persistence`（:persistence）/ `apps`（:bot :ingest :dashboard） | 下表のとおり範囲が変わる |
 | `release tools and ci scripts (Python)` | `tools/release`（manifest・Dockerfile 静的検査）と `tools/ci`（判定・ゲート・ワークフロー規則）の単体テスト（Docker 不要） | リリース関連・Dockerfile・Dependabot 設定・マイグレーション・CI の変更 |
 | `golden tests (Python 3.12)` | T2.6 のゴールデンテスト | `tools/golden`・CI の変更 |
+| `ml tools (Python 3.12)` | T3.6-A: `tools/ml`（正準 JSON・feature_schema の hash・Ed25519 署名・学習用データセットの契約）の単体テスト、合成成果物（`domain/src/test/resources/ml`）の決定的な再生成の一致、合成データセットの契約検証。cryptography 50.0.2 のみ。本番の鍵・Secrets は使わない | `tools/ml`・`domain/src/test/resources/ml`（後者は Kotlin の build も走る。DB 統合は不要）・CI の変更 |
 | `images / images (build + smoke, no push)` | 4 イメージのビルド、スモーク、ドライラン manifest（`images.yml`） | Dockerfile・リリース・ビルド定義・マイグレーション・アプリの build 定義/リソース・CI の変更、フル検証 |
 | `connectorj26 / connector/j 26.x check (MySQL x)` | Connector/J 26.x の互換性確認（**非ゲート**、`compat-connectorj26.yml`） | Connector/J・DB 関連の依存設定の変更、手動、月次 |
 | `ci gate` | 最終集約。**常に実行**。実行が必要なジョブが success でなければ失敗 | 常に |
@@ -30,6 +31,7 @@ CI の実行範囲の決め方、分岐保護の設定、イメージのビル�
 | `Dockerfile` `.dockerignore` | - | - | - | ○ | ○ | - |
 | `tools/release/` `docs/schemas/` `docs/release/` `docs/CONTRACTS.md` | - | - | - | ○ | `tools/release` のみ ○ | - |
 | `tools/golden/`（`*.md` 以外） | ○（Kotlin との比較が build ジョブの中にあるため。DB 統合は不要） | - | ○ | - | - | - |
+| `tools/ml/`（`*.md` 以外） | - | - | - | - | - | - |（`ml tools` ジョブだけ）
 | `golden-runner`（Kotlin ランナー） | ○ | -（`:domain` に依存するだけで、persistence/アプリは使わない） | - | - | -（イメージの jar には入らない。Dockerfile は COPY のみ） | - |
 | `.github/dependabot.yml` | - | - | - | ○ | - | - |
 | `.github/workflows/`・`.github/scripts/`・`tools/ci/` | ○ | 8.4 + 9.7 × 全 | ○ | ○ | ○ | 本ワークフローのみ ○ |

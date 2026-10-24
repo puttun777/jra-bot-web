@@ -251,3 +251,11 @@ Reader/Writer は分かれており、`XxxRepository` は両方を継承する�
 - **実装**: `agent/`（独立 Python）。構成と安全上の約束は `agent/README.md`、実機 PoC は `agent/POC.md`。サーバ側は `:ingest` の `AgentMetaController`（mode/plan/update）と `BatchIngestor` の重複 ACK の修正（D-144）。
 - **検証**: Python 単体・統合（Mock）、署名ベクトルの Python/Kotlin 照合、`AgentInteropIntegrationTest`（本物の署名クライアント + MySQL）、Windows ランナー（DPAPI・ジョブオブジェクト・ロック・ワーカー回復）。**実 JV-Link・実機は未検証**。
 - **T3.6 以降が前提にすること**: 実取得は `SpecRegistry` が確認済みになるまで始まらない（T1.17）。サーバの `RecordParser` は実データ形式を解析できない（保留）。P-1/P-2 の承認前に本番運用しない。
+
+### 14.12 T3.6-A の結果と T3.6-B / T3.8 への引き継ぎ（ML の Kotlin 推論基盤。2026-10-24。判断 D-152〜D-164、詳細は ML_DESIGN §11、未解決は UNRESOLVED.md）
+- **実装済み（`:domain` の `jp.jrabot.domain.ml.*`）**: 厳密 JSON・正準化 / `FeatureSchema`（40・35・5 次元）/ `PedigreeHash` / `LegacyFeatureBuilder`・`PointInTimeFeatureBuilder` / `LogisticScoring` / `ModelLoader`（署名 → 正準形 → sha256 → スキーマ → 次元）/ `VerifiedModel` / `LegacyProbabilityPipeline`・`V2ProbabilityPipeline` / `ModelRegistryReader`・`ModelRunPin`・`ModelSession` / `LocalFileModelStore`・`InMemoryModelRegistry` / `DatasetExporter` / `MlInference`。`:persistence` に `MlModelRegistryRepository`（SELECT のみ）。`WinDecisionEvaluator.evaluate` に任意引数 `mlInput`（既定 null で T3.1/T3.2 の動作は不変）。
+- **検証ゲートの状況（§13）**: G-ML-1（H1 の実証）・G-ML-2（実データのリプレイ）・G-ML-3（v2 のバックテスト）は**未実施**（実 pkl・実 DB が無い）。合成モデルでの Kotlin と旧 Python の算術の一致（ゴールデン 874 呼び出し、最大誤差 1.07e-14）は確認済みだが、**実データでの正しさ・精度の証明ではない**。
+- **T3.6-B（Stage 3-F2）が最初にやること**: ML_DESIGN §11.7 のデータセット契約を `export-dataset` タスクに配線（`FeatureSource`/`DatasetSource` の `:persistence` 実装、`DatasetStore` への manifest 保管、`APP_ENV=local` の合成で疎通）→ Python の学習 Job（`tools/ml/dataset_contract.py` で入力を検証してから学習。モデル JSON は正準形・`training.dataset_sha256`・Ed25519 署名・CANDIDATE の INSERT。昇格しない）→ ml-train イメージ → 品質ゲートの数値をユーザーと確定。
+- **T3.8 が最初にやること**: bot-run の開始時に `ModelRunPin.capture`、`MlInference` を `WinDecisionEvaluator.evaluate(mlInput=…)` へ配線、使った `model_id` と `fallback_reason` を `race_evaluations` に保存、ML 有効で市場確率のみ（`ProbabilityResult.isMarketFallback`）のときのアラート。
+- **実行環境（クラウドセッション）**: JDK 21 + `LC_ALL=C.UTF-8`（日本語のテスト名でロケール未設定だとコンパイラが失敗する）。MySQL は apt の 8.0.46 を `--user=mysql --datadir=<mysql が書ける場所>` で起動し `JRABOT_TEST_MYSQL_EXTERNAL=127.0.0.1:3307`（D-163。8.4/9.7 の合否ではない）。`repo.maven.apache.org` の 429 は時間を空けて再実行。
+

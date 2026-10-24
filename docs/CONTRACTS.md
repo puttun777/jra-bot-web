@@ -1,6 +1,6 @@
 # CONTRACTS（web ⇔ infra 受け渡し契約・正本は本ファイル）
 
-状態: **0.4.8（第3段階 / T3.5: §3.2 の mode・plan・update の実装、§3.3.2 登録（register）の保留、§3.4 の重複 ACK への fetch・cursor の追加。P-1/P-2 は引き続き未承認）**。0.4.7（第3段階 / T3.4: V3、エージェント API の実装、環境変数の追加。§3.3 の署名方式と §3.4 の取得セッション・応答の追加は『提案 P-1 / P-2 / P-3』で、ユーザーの承認まで確定仕様ではない。0.4.5 以前の説明は下に残す）** — **0.4.5（第2段階 / T2.5 後半で §1・§10 にイメージの形式と manifest の検証規則を補足。T2.8 の 0.4.4 は §2・§3.2・§4.3・§9.1・§11。0.4.0 の契約の意味は変えていない）**。0.4.0 は第1段階 / T1.10 で確定した設計契約。infra の `docs/CONTRACTS.md` §2 の差異 D1〜D12 をすべて取り込んだ（対応表は §12）。実装・実リソースで確かめる必要がある箇所は「検証ゲート」として ID を書いている（一覧は `STAGE2_HANDOFF.md` §13）。
+状態: **0.4.9（第3段階 / T3.6-A: §5.1 のモデル成果物・データセットの契約を具体化（正準 JSON・sha256・Ed25519 署名の対象と書式・検証鍵の書式・理由コード・データセットの列と manifest・レジストリの読取り）。契約の意味は変えない）**。0.4.8（第3段階 / T3.5: §3.2 の mode・plan・update の実装、§3.3.2 登録（register）の保留、§3.4 の重複 ACK への fetch・cursor の追加。P-1/P-2 は引き続き未承認）**。0.4.7（第3段階 / T3.4: V3、エージェント API の実装、環境変数の追加。§3.3 の署名方式と §3.4 の取得セッション・応答の追加は『提案 P-1 / P-2 / P-3』で、ユーザーの承認まで確定仕様ではない。0.4.5 以前の説明は下に残す）** — **0.4.5（第2段階 / T2.5 後半で §1・§10 にイメージの形式と manifest の検証規則を補足。T2.8 の 0.4.4 は §2・§3.2・§4.3・§9.1・§11。0.4.0 の契約の意味は変えていない）**。0.4.0 は第1段階 / T1.10 で確定した設計契約。infra の `docs/CONTRACTS.md` §2 の差異 D1〜D12 をすべて取り込んだ（対応表は §12）。実装・実リソースで確かめる必要がある箇所は「検証ゲート」として ID を書いている（一覧は `STAGE2_HANDOFF.md` §13）。
 - 正本はこのファイル。infra 側は版番号を参照し、変更点を同期する。infra の文書を直す必要がある箇所は `PROGRESS.md` の「infra への引継ぎ」に記録する。web のセッションから infra を直接変更しない。
 - 用語: **mode** は現在のフェーズ（`NORMAL | STARTING | STOPPING | STOPPED`）。**desired** は利用者の意図（`NORMAL | STOPPED`）。アプリが読み取りに失敗したときや、内容が不正なときの判定値は **`UNKNOWN`** とする。UNKNOWN はアプリ内部だけの値で、正本には書かない。旧版の `phase` は廃止して `mode` に統一した（実装はまだ無いため互換フィールドは置かない）。
 
@@ -34,7 +34,7 @@ web→Artifact Registry の push 権限と、infra 側の manifest 取得権限�
 | `ALLOWED_USERS` / `ADMIN_USERS` | Terraform | dashboard | 許可リスト（メール）。**空なら全拒否**。DB の `app_user` との突合は §11.1 |
 | `MODEL_STORE_URI` | Terraform | bot / ml-train | `gs://<prj>-model-store`（非公開）（§5.1） |
 | `MODEL_SIGNING_KEY` | **Secret Manager**（`model-signing-key`） | ml-train のみ | モデル JSON の Ed25519 署名 |
-| `MODEL_VERIFY_PUBKEY` | Terraform（公開値） | bot | 署名検証 |
+| `MODEL_VERIFY_PUBKEY` | Terraform（公開値） | bot | 署名検証。Ed25519 公開鍵の生 32 バイトの Base64（カンマ区切りで複数 = ローテーション。§5.1） |
 | `INGEST_TOKEN_PEPPER` | **Secret Manager**（`ingest-token-pepper`） | ingest / dashboard（発行） | エージェントトークンの**識別用**ハッシュのペッパー（§3.3。**署名の検証には使えない**: §3.3.1） |
 | `AGENT_KEK_KEYS` / `AGENT_KEK_ACTIVE_KID` | **Secret Manager**（`agent-kek`）（**0.4.7・提案 P-1**） | ingest（本番は必須。無いと起動失敗） | エージェントの署名鍵を暗号化する鍵（KEK、256bit）。`AGENT_KEK_KEYS` は `kid:base64` のカンマ区切り（ローテーション用に複数）、`AGENT_KEK_ACTIVE_KID` が暗号化に使う kid。**DB には置かない**（DB だけが漏れても署名を偽造できない）。未設定の local は認証できず `/v1/agent/**` は 503 |
 | `INGEST_ODDS_BELOW_PAR` / `INGEST_STORE_COMBO_ODDS` | Terraform（**0.4.7**） | ingest | `quarantine`（既定。`0<odds<1` を隔離。**提案 P-3**）／`accept`。ワイド・三連複オッズの保存（`true`／既定 `false`: D-043） |
@@ -173,6 +173,13 @@ web→Artifact Registry の push 権限と、infra 側の manifest 取得権限�
 - **モード**: Job の開始時に §5.2 の方法でモードを確認し、NORMAL 以外なら何もせず終える（§9）。
 - **infra の義務**: ①バケット（東京・非公開・バージョニング・データセットはライフサイクル 90 日）と IAM（ml-train: models の書込とデータセットの読取 / bot: models の読取とデータセットの書込〔export-dataset〕）、②署名鍵の Secret、③`ml-train` Job の定義（Scheduler は最初 paused）、④STOPPED のときに Job を起動しない。
 - 互換性: bot は `model_schema_version` の N と N-1 を読める。
+- **0.4.9（T3.6-A）での具体化**（詳細と根拠は ML_DESIGN §11、判断は D-154〜D-161）:
+  - **正準 JSON**: UTF-8・空白なし・キーはコードポイント順・文字列は `"`・`\`・制御文字だけをエスケープ・整数と浮動小数は別（`1` と `1.0` は別の正準形）・浮動小数は Python の `repr(float)`・NaN/Infinity/重複キーは不可。Python の `json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)` と同一バイト。**モデル JSON ファイルは正準形で書く**。
+  - **ハッシュ**: モデルの `sha256` = `sha256` を除いた正準 JSON の SHA-256（小文字 16 進 64 桁）。`feature_schema.hash` = `"sha256:"` + `hash` を除いた正準 JSON の SHA-256（`ml_model.feature_schema_hash CHAR(71)`）。`ensemble_set` の `feature_schema_hash` は `ensemble` オブジェクトの正準 JSON の SHA-256（`sha256:` 付き）。
+  - **署名**: Ed25519（RFC 8032 pure）。`.sig` は生の 64 バイトで、対象は**モデル JSON ファイルのバイト列そのもの**。bot は署名の検証を JSON の解析より前に行う。`MODEL_VERIFY_PUBKEY` は公開鍵の生 32 バイトの Base64（カンマ区切りで複数 = ローテーション）。鍵が無い・不正なら全モデルを拒否。
+  - **検証の順序と理由コード**: 署名（`MODEL_SIGNATURE_INVALID`）→ 構文・正準形・型（`MODEL_INVALID`）→ スキーマ版（`MODEL_SCHEMA_MISMATCH`）→ `sha256`・レジストリの記録（`MODEL_HASH_INVALID`）→ `feature_schema`（`FEATURE_SCHEMA_MISMATCH`）→ 重み・前処理の長さ（`INVALID_MODEL_DIMENSION`）→ テナント・ID・種別の取り違え（`MODEL_INVALID`）。成果物が無い（`MODEL_NOT_FOUND`）・ACTIVE が無い（`MODEL_NOT_ACTIVE`）・I/O 失敗（`MODEL_STORAGE_ERROR`）・推論失敗（`MODEL_PREDICTION_FAILED`）・最終的に市場確率のみ（`MARKET_FALLBACK`）。`race_evaluations.fallback_reason VARCHAR(64)` にこの名前を保存する。
+  - **データセット**: `{dataset_id}.csv.gz` + manifest。列は `tenant_id,race_id,umaban,race_date,as_of` + 特徴量（`feature_schema` の順）+ `label` + `split`。`split` は Kotlin が日付で決め（train より後の日だけが valid）、学習側は再分割しない。正本のハッシュは非圧縮 CSV の SHA-256（manifest の `csv.sha256`）。学習側は `tools/ml/dataset_contract.py` 相当の検証に通ったデータセットだけで学習する。manifest の保管（`DatasetStore` への追加）は T3.6-B。
+  - **レジストリ**: bot は `ml_model` を SELECT する（run の開始時に ACTIVE を固定: `ModelRunPin`）。昇格・退役の書込みは dashboard の管理操作（Stage 4）だけ。ml-train は `CANDIDATE`/`REJECTED` の INSERT だけ。
 
 ### 5.2 正本と `ModeProvider`（D1・D4）
 - **正本**は GCS の `ops-state.json`（infra OPERATIONS_DESIGN §2.2、`schema_version: 1`）。DB には依存しない。DB 内のモードは表示用の写し（D-005）。
@@ -219,7 +226,7 @@ web→Artifact Registry の push 権限と、infra 側の manifest 取得権限�
 - **エージェントが送信してよいのは mode=NORMAL のときだけ**。STARTING、STOPPING、不明のときはすべて「送らない」。
 
 ## 6. 契約バージョン
-`contract_version: 0.4.7`（0.4.0 から意味を変える変更は無いが、§3.3 の署名方式は P-1 の承認で確定する）。破壊的な変更はメジャー版を上げ、`release-manifest.json` に含める。エージェントプロトコルは `/v1`（`protocol: 1`）。第2段階以降に実装でずれが見つかったら 0.4.x / 0.5.0 として本ファイルで管理する。1.0.0 は第6段階の統合レビューで凍結する。
+`contract_version: 0.4.9`（0.4.0 から意味を変える変更は無いが、§3.3 の署名方式は P-1 の承認で確定する）。破壊的な変更はメジャー版を上げ、`release-manifest.json` に含める。エージェントプロトコルは `/v1`（`protocol: 1`）。第2段階以降に実装でずれが見つかったら 0.4.x / 0.5.0 として本ファイルで管理する。1.0.0 は第6段階の統合レビューで凍結する。
 
 ## 7. Windows エージェントの STOPPED 時動作契約（T1.15）
 
@@ -437,3 +444,5 @@ STOPPED 中の `ingest` 503、ビーコンのみ STOPPED、両方不達（UNKNOW
 0.4.7（第3段階 / T3.4）: §2 に `AGENT_KEK_KEYS`・`AGENT_KEK_ACTIVE_KID`・`INGEST_*`、§3.2 に ingest・heartbeat の実装状況と register の未実装、§3.3 に署名方式の検証と代替案の比較（§3.3.1）、§3.4 に検証規則・応答・冪等・`record_hash`・取得セッション（P-2）・取得の事実の条件・オッズ境界（P-3）、§3.6 に新しいコード、§4 に V3。**P-1（署名鍵の導出と KEK 暗号化）・P-2（`fetch`）・P-3（`0<odds<1` の隔離）は未承認の提案**で、承認までは確定仕様にしない（UNRESOLVED D-5・D-6・D-7）。infra への影響: ingest に KEK の Secret、V3 の GRANT、環境変数（UNRESOLVED G-9）。
 
 0.4.8（第3段階 / T3.5）: §3.2 の `mode`（認証なし・DB 不使用）・`plan`（検証済み仕様のみ・既定 idle）・`update`（署名済み manifest をそのまま返す）の実装、§3.3.2（register の保留と資格情報のライフサイクル）、§3.4 の重複 ACK に fetch・cursor を追加（加算のみ）。環境変数 `INGEST_PLAN_ITEMS_JSON`・`INGEST_VERIFIED_FETCH_SPECS`・`INGEST_UPDATE_MANIFEST_PATH` を追加（任意。infra は T5.0 で同期）。
+
+0.4.9（第3段階 / T3.6-A）: §5.1 に ML 成果物・データセットの契約の具体化（正準 JSON・sha256・Ed25519 署名の対象と書式・検証鍵の書式・検証順序と理由コード・データセットの列と split・レジストリの読取り）を追加。契約の意味は変えていない（infra への影響: `MODEL_VERIFY_PUBKEY` の書式（Base64 の生 32 バイト、複数可）を鍵の発行手順（G-3/T5.0）に反映。実バケット・Terraform の変更は無い）。

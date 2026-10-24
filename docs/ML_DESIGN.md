@@ -1,5 +1,7 @@
 # ML_DESIGN（T1.9 MLの学習・推論方式の設計）
 
+**2026-10-24 更新（Stage 3-F1 / T3.6-A）**: Kotlin の `FeatureBuilder`・確率パイプライン・モデル JSON/署名・レジストリ読取りを実装した。実装結果と、学習側（Stage 3-F2）への引き継ぎ契約は **§11**。§1〜§10 は設計時（T1.9/T1.10）の記述で、実装との対応は §11 に書く。
+
 調査日: 2026-10-22。範囲: 設計のみ。参照元 `jra-bot`（main f7dbf69）の `src/jraev/ml/`、`ev/decision.py`、`ev/probability.py`、`scripts/{train,retrain_models,tune_params,build_dataset,evaluate_model}.py`、`models/*.json`（同梱の 2 ファイル）を精読。**学習済み `*.pkl`・データセット・実 DB はリポジトリに無いため未確認**（実物は利用者の PC）。実データ・モデルは Git に含めない（DATA_SOURCE_COMPLIANCE §5）。
 
 ## 1. 現行 ML の実態
@@ -233,3 +235,108 @@ data class ProbabilityResult(val probs: List<Double>, val source: ProbSource, va
 - **確率パイプラインの本番初期値は `legacy`**。`v2` は新設計の目標だが**高精度とは未証明**。旧新比較（G-ML-2）・バックテスト（T3.9, G-ML-3）・閾値再検討の後、ユーザー承認で切替える。**自動切替はしない**（D-037）。
 - 欠陥候補との対応（H1/H2/H3/H4/H10, E1/E5）と各項目の承認要否は `MIGRATION_MATRIX.md` §8。
 - 検証ゲート: G-ML-1（実データで H1 の実証: `prob_source` 分布, T1.20）、G-ML-2（実データのリプレイで legacy と旧記録値の一致, ローカルのみ）、G-ML-3（v2 vs legacy のバックテスト）。
+
+## 11. T3.6-A の実装結果と、学習側（Stage 3-F2）への引き継ぎ契約（2026-10-24）
+
+**範囲**: Kotlin による特徴量生成・モデル検証・推論・ゴールデン比較（T3.6 の前半）。Python の本格的な再学習・`ml-train` イメージ・`export-dataset` タスクの配線・pkl 変換の実行・bot-run への統合は含まない（T3.6-B / T3.8 / 利用者のローカル操作）。判断は DECISIONS D-152〜D-164、進捗は PROGRESS の Stage 3-F1。
+
+### 11.1 実装したクラス（`:domain` の `jp.jrabot.domain.ml`）
+| パッケージ | 主なクラス | 役割 |
+|---|---|---|
+| `json` | `StrictJson`・`CanonicalJson`・`JsonValue` | 重複キー/NaN/孤立サロゲート/先頭ゼロを拒否する厳密パーサと、Python と同一バイトの正準 JSON（§11.3） |
+| `features` | `FeatureSchema`・`FeatureNames`・`PedigreeHash` | 40/35/5 次元のスキーマと hash、血統ハッシュ（md5-le32-mod16） |
+| `features` | `LegacyFeatureBuilder` / `PointInTimeFeatureBuilder` / `FeatureSource` / `InMemoryFeatureSource` / `LegacyRows` | 旧互換（G6 の比較対象）と point-in-time（新方式）。入力は `FeatureSource` ポート（`:persistence` は後続で実装） |
+| `model` | `LogisticScoring` / `ModelDocument` / `ModelLoader` / `ModelTrust` / `VerifiedModel` | `X·w+b`・clip・sigmoid・Platt・市場ブレンド、モデル JSON の検証（署名 → 正準形 → sha256 → スキーマ → 次元）、Ed25519 |
+| `pipeline` | `LegacyProbabilityPipeline` / `V2ProbabilityPipeline` / `FallbackReason` / `ProbSource` | 確率パイプライン（§11.5）と理由コード |
+| `registry` `store` | `ModelRegistryReader` / `ModelRunPin` / `ModelSession` / `LocalFileModelStore` / `InMemoryModelRegistry` | レジストリ読取り・bot-run 開始時の固定・検証つき読込み・ローカルの合成ストア |
+| `dataset` | `DatasetExporter` / `DatasetSource` | 学習用データセットの書出し契約（§11.7） |
+| （直下） | `MlInference` | 固定済みモデルで馬ごとの確率を計算（特徴量の作成 → 検証済みモデル → パイプライン） |
+`:persistence`: `MlModelRegistryRepository`（`ml_model` の SELECT のみ）。`:golden-runner`: 旧 `WinProbabilityModel` の互換モジュール `GoldenMl`（**次元の切詰め/ゼロ埋めはここだけ**）。Python: `tools/ml`（正準 JSON・署名・データセット契約の参照実装とテスト用成果物）。
+
+### 11.2 feature_schema の JSON 契約（Python は再実装せずに読む）
+```json
+{"version":1,"names":["…"],"pedigree_dim":16,"hash_algo":"md5-le32-mod16","missing_policy":"zero_with_flags","hash":"sha256:<hex64>"}
+```
+- `hash` = `"sha256:"` + SHA-256(正準 JSON(`hash` を除いたオブジェクト))。名前の順序が 1 つでも変わると変わる。alpha（35 次元: 追加 19 + 血統 16）と calibration（40 次元: 市場 5 + 追加 19 + 血統 16）は**別のスキーマ・別の hash**。旧 5 次元モデル用に `MARKET_5`（`pedigree_dim=0`、`hash_algo="none"`）。
+- **正本は Kotlin の `FeatureSchema`**。`domain/src/test/resources/ml/feature_schema.{calibration40,alpha35,market5}.json` に正準 JSON で書き出し（`FeatureSchemaFixtureTest` が Kotlin の定義と一致を検査）、Python（`tools/ml`）が**名前の一覧を持たずに** hash を独立に再計算して検証する。学習側はこのファイル（またはデータセットの manifest に同梱された `feature_schema`）を読み、列の順序をこれに従わせる。
+- 暗黙の補正をしない: モデルの `feature_schema` がこのランタイムの作れるスキーマ（上の 3 つ）で、かつ `kind` が許すもの（calibration=40、alpha=35、legacy_compat=5 または 40）でなければロード拒否。
+
+### 11.3 正準 JSON・sha256・署名（D-154・D-155・D-156）
+- 正準 JSON: UTF-8（BOM なし）、空白なし、キーはコードポイント順、文字列は `"`・`\`・制御文字だけをエスケープ、**整数と浮動小数は別**（`1` と `1.0` は別の正準形）、浮動小数は Python の `repr(float)`、NaN/Infinity/重複キー拒否。Python の `json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)` と同一バイト（`tools/ml/canonical.py`）。**浮動小数のフィールドは必ず小数点か指数をつけて書く**（学習側の出力で `weights` の `0` を整数で書くと別のハッシュになる）。
+- モデル JSON（§5.2）: `model_schema_version`=1、`model_id`、`tenant_id`、`kind`（`calibration|alpha|legacy_compat|ensemble_set`）、`algorithm`（`logistic_regression` / `ensemble_set`）、`feature_schema`、`preprocessing`（`null` または `standardize`: `mean`・`std`（正の有限））、`weights`、`bias`、`calibration`（`null` または `platt`: `a`・`b`）、`market_blend.alpha_default`、`ensemble`（`ensemble_set` のみ: `members.{calibration,alpha}`・`beta`∈[0,1]・`coverage_weights`（3 要素の非負））、`training`、`metrics`、`created_at`（ISO-8601 UTC）、`producer`、`sha256`。未知のキーは拒否。`sha256` = `sha256` を除いた正準 JSON の SHA-256（小文字 16 進 64 桁）。
+- 署名: Ed25519（RFC 8032 pure）、`.sig` は生の 64 バイト、**対象はモデル JSON ファイルのバイト列そのもの（= 正準 JSON）**。検証鍵 `MODEL_VERIFY_PUBKEY` は生 32 バイトの Base64（カンマ区切りで複数 = ローテーション）。ml-train の秘密鍵（`MODEL_SIGNING_KEY`）は Secret Manager だけ。
+- 読込み順序（fail closed。`ModelLoader`）と理由コード:
+| 順 | 検査 | 理由コード |
+|---|---|---|
+| 1 | 署名が無い/64 バイトでない/どの鍵でも不一致（**JSON の解析より前**） | `MODEL_SIGNATURE_INVALID` |
+| 2 | 厳密 JSON・正準形・必須/未知のキー・型・NaN/Infinity | `MODEL_INVALID` |
+| 3 | `model_schema_version` が未対応 | `MODEL_SCHEMA_MISMATCH` |
+| 4 | `sha256` が内容・レジストリの記録と不一致 | `MODEL_HASH_INVALID` |
+| 5 | `feature_schema` の hash が内容と不一致/種別が許さない/レジストリの記録と不一致 | `FEATURE_SCHEMA_MISMATCH` |
+| 6 | 重み・前処理の長さがスキーマと違う、前処理の値が不正 | `INVALID_MODEL_DIMENSION` |
+| 7 | `tenant_id`・`model_id`・`kind` の取り違え | `MODEL_INVALID` |
+他の理由コード: `MODEL_NOT_FOUND`（成果物が無い）・`MODEL_NOT_ACTIVE`（ACTIVE 行が無い）・`MODEL_STORAGE_ERROR`（保存先の I/O）・`MODEL_PREDICTION_FAILED`（推論中の例外/非有限）・`ML_DISABLED`・`MARKET_FALLBACK`（最終的に市場確率のみ）。MIGRATION_MATRIX §8 E1 の名称との対応は `FallbackReason` の KDoc。
+- 推論に使えるのは `VerifiedModel` だけ（非公開コンストラクタ。検証前の `ModelDocument`・`ModelArtifact` からは推論できない）。拒否の詳細メッセージに重み・署名・鍵を含めない。
+
+### 11.4 特徴量: 旧互換と point-in-time（D-157・D-159）
+| 観点 | `LegacyFeatureBuilder`（旧互換。学習に使わない） | `PointInTimeFeatureBuilder`（新方式） |
+|---|---|---|
+| 過去走（H3） | 日付で絞らない（対象レース自身・未来を含み得る）。直近 5 走（`finish>0`、日付降順 → race_id 降順） | `run_date < レース日`（当日を含まない）。供給元が絞り損ねても二重に除外してフラグ |
+| `age_years`（H8） | 引数の `now` 基準（ゴールデンでは固定時刻） | **レース日**基準 |
+| `days_since_last_run` | レース日（race_id 先頭 8 桁）− 直近走。負は 0 | レース日 − 直近走（常に正） |
+| オッズ | 呼び出し側の値（`≤0` は 100.0） | `ts <= asOf` の最新だけ。無ければ 100.0 と `ODDS_MISSING` |
+| 発走後の asOf | 検査なし | `LeakageException`（発走時刻不明も拒否） |
+| 馬マスタ（累積値） | そのまま | `updatedAt > asOf` なら着回数の表・脚質傾向を 0 にして `MASTER_NEWER_THAN_AS_OF`（`TRUST_LATEST` で無効化可） |
+共通の式（`FeatureMath`）: base 5 = `[odds, popularity, ln(max(odds,0.1)), 1/max(pop,1), odds×pop]`（`odds≤0` は 100.0 に置換してから）、追加 19、血統 16（祖先名の先頭 8 件、`vec[bucket] += sign`、正規化しない・重複もそのまま）。**限界**: 馬マスタは最新版 1 行しか持たないため、学習用データでは多くの馬で累積値が 0 になる（時点ごとのマスタ履歴の保管は未実装 = UNRESOLVED）。旧 `_sum_chaku_table` の癖（要素が 3 未満の行は `top3 += 全行の top2 の累計`）も式として共有している（D-159）。
+
+### 11.5 確率パイプライン: legacy と v2（D-158）
+| 観点 | `legacy`（本番の初期値・旧互換） | `v2`（新仕様。**未承認・自動切替なし**） |
+|---|---|---|
+| モデル内の市場ブレンド | 実行時に α（既定 0.25）を上書きして適用（H4） | なし（入力が内部ブレンド済みなら拒否） |
+| 判定側のブレンド | 適用（2 回目） | 適用（これが唯一の 1 回） |
+| 市場確率のみ（フォールバック） | 市場確率 → 判定側ブレンド（旧どおり） | 市場確率そのまま（ブレンド・クリップなし） |
+| フォールバック | ロードできたモデルのスキーマ不一致/推論失敗は ML 全体を市場確率へ（旧の例外）。無かったモデルは無いものとして続行 | ensemble → calibration → alpha → legacy_compat → 市場確率の段階的。外した段階をすべて記録 |
+| 出どころ | 旧 `prob_source` 文字列（`legacyLabel`。Kelly の確率ソース係数 H10 が文字列の一致で決まるため数値を変えない）＋馬ごとの正確な `ProbSource`（E2） | 正確な `ProbSource` |
+| alpha の特徴量 | 35 次元スキーマで作る（暗黙のスライス/ゼロ埋めはしない）。旧実装の切詰め（H2）は互換検証専用の `GoldenMl` にだけある | 同じ |
+実測（合成モデル・合成レース）: 同じ calibration モデルでも legacy と v2 は市場確率からの L1 距離が 0.5882 と 0.5908、最大絶対差 0.0138（legacy はモデルの寄与が ≈0.0625、v2 は 0.25）。**これは v2 が高精度であることを示さない**（実データ・バックテスト前）。
+
+### 11.6 レジストリ・固定・保存先（D-160）
+`ModelRegistryReader.find/active`（読取りのみ。昇格は Stage 4）→ `ModelRunPin.capture`（run の開始時に各種別の ACTIVE を 1 回だけ固定）→ `ModelSession`（固定した ID の成果物を `ModelStore` から読み、レジストリの sha256・feature_schema_hash・kind と照合して `ModelLoader` で検証。結果は run の間不変）。ensemble セットのメンバーはレジストリに記録があり REJECTED でないこと。CANDIDATE は使われず、市場確率に落ちて `MODEL_NOT_ACTIVE` が残る（自動昇格しない）。`:persistence` の `MlModelRegistryRepository` は bot の SELECT のみで足りる（`mltrain` は `ml_model` の SELECT/INSERT のみ）。
+
+### 11.7 学習用データセットの出力契約（D-161。Stage 3-F2 の入力）
+- ファイル: `{dataset_id}.csv.gz`（gzip CSV）+ manifest（canonical JSON + 改行 1 つ）。置き場は CONTRACTS §5.1（`MODEL_STORE_URI/{tenant_id}/datasets/`）。manifest の保管場所の拡張（`DatasetStore` への追加）は T3.6-B。
+- CSV: UTF-8・LF・ヘッダあり。列 = `tenant_id,race_id,umaban,race_date,as_of` + 特徴量（`feature_schema.names` の順）+ `label`（1 着 = 1、他 = 0。取消・除外・結果なしは出力しない）+ `split`（`train` / `valid`）。浮動小数は Python の `repr`（`pandas.read_csv` でそのまま読める）。行は (レース日, race_id, 馬番) の昇順。
+- `split`: Kotlin がレース日の昇順に分ける（先頭の約 80% の**日**が train、残りが valid。同じ日のレースは分けない）。**Python は再分割しない**（walk-forward などは valid の中でだけ行う）。
+- `as_of` = 発走時刻 − 10 分（manifest の `as_of_policy.lead_seconds`）。オッズは `as_of` 以前の最新だけ。calibration は `as_of` 以前のオッズが無い行を出力しない（旧 `dataset_builder` と同じ）。
+- manifest の主な項目: `dataset_schema_version`・`dataset_id`・`tenant_id`・`feature_schema`（同梱）・`columns`・`csv.{sha256,bytes}`（**非圧縮 CSV** の SHA-256。gzip のバイト列は zlib の版で変わるので正本にしない）・`rows`・`range`・`label`・`as_of_policy`・`split`（件数・`valid_starts_at`）・`builder.{mode:"point_in_time", legacy_compat_used:false}`・`quality.{has_horse_master_ratio, has_past_runs_ratio, constant_features, flags, skipped}`・`sha256`（自己ハッシュ）。出力しなかった行は理由別に `quality.skipped` へ（黙って捨てない）。
+- `sample_weight`（Python が計算）: `w_i = 0.5 ** ((ref − race_date_i).days / halflife)`、`ref` = train の最大 `race_date`、`halflife` ∈ {90, 180, 240}（旧 `retrain_models.py` と同じ候補）。計算後に train の平均 1 へ正規化（旧 `fit` と同じ）。
+- 検証: `python3 -m tools.ml.dataset_contract --csv-gz X.csv.gz --manifest X.manifest.json`（manifest の自己ハッシュ・`feature_schema.hash` の再計算・列の構成と順序・CSV の SHA-256・行の昇順・数値の有限性・label が 0/1・valid が train より後の日・as_of（JST）がレース日と一致・`legacy_compat_used=false`）。**学習側は検証に失敗したデータセットで学習しない。**
+
+### 11.8 学習ジョブ（`ml-train`、Stage 3-F2）の入出力と品質ゲートの仕様案
+入力: `--tenant-id`・`--dataset-id`・学習設定 JSON（`seed`・`lr`・`epochs`・`l2`・`class_weight`（v2 は `none`）・`recency_halflife_days`・`kind`）。DB の業務テーブルには触れない。手順: ①§11.7 の検証 → ②学習（v2 案: 特徴量標準化 + L2 + 決定的なソルバ。`class_weight` なし。valid で Platt 校正。互換モード `legacy_compat` の再学習は旧 GD + 旧ハイパーパラメータで、互換検証にだけ使う）→ ③評価（valid の LogLoss/Brier/AUC/校正傾き・切片、**市場確率ベースライン（1/odds の正規化）**との比較）→ ④モデル JSON を §11.3 の正準形で書く（`training.dataset_sha256` = manifest の `csv.sha256`、`git_sha`、`libs`）→ ⑤Ed25519 署名（`.sig`）→ ⑥`ml_model` に `CANDIDATE`（ゲート不合格は `REJECTED`）を INSERT。成果物は一時パスに書き、sha256 を確認してから確定する（原子性）。
+品質ゲート（**暫定案。数値は F2 で実データなしに決めず、ユーザー承認後に確定**）: 最小サンプル数（valid の勝ち馬数）、valid の LogLoss が市場ベースライン以下、校正傾きが [0.8, 1.2]、定数特徴量の割合の上限、`has_horse_master_ratio` の下限（警告）、直前の ACTIVE より悪化していない。不合格でも成果物とレポートは残す。**ACTIVE への昇格はしない**（Stage 4 の管理者操作）。pickle は読まない・出力しない。
+
+### 11.9 旧 pkl → JSON 変換ツールの仕様（T1.20。**実行は利用者のローカル操作。クラウドで pkl を読まない**）
+- 入力: 利用者の PC にある**自分の** `*.pkl`（ファイル名・サイズ・更新日は UNRESOLVED D-2 の手順 4 で記録済みのもの）。ネットワークなしの環境で実行。リポジトリ・クラウドに pkl も出力 JSON も置かない。
+- 読み方: `pickle.load` を直接使わず、**許可リスト式の `Unpickler`**（`jraev.ml.model.WinProbabilityModel`・numpy の配列の再構成に必要なクラスだけを解決でき、他のグローバルは拒否）で読む。旧 `jraev` を import せず、同名のクラスを空の入れ物として許可リストに渡す。
+- 出力: `kind=legacy_compat`・`feature_schema`（`feature_names` から構築: 5 名 → `MARKET_5`、旧 40 名 → `CALIBRATION_40`、35 名 → **`ALPHA_35` に一致すれば alpha**。それ以外は変換を中止）・`weights`・`bias`・`calibration`（`calib_a`/`calib_b` が両方あるときだけ platt）・`market_blend.alpha_default`。**次元不一致（H1/H2 の疑い）は警告して中止**（パディング/スライスで合わせない）。正準 JSON で書き、ローカルの鍵で署名。
+- 検証: ランダムな特徴量 N 件を、旧クラス（参照元 f7dbf69）と Kotlin 実装の両方に通して差が許容内か確認（G-ML-2）。旧実装の出力は『旧挙動の記録』で、新仕様の正解ではない。
+- 状態: **仕様のみ。実装・実行は未実施**（実 pkl が無いため）。
+
+### 11.10 H1〜H10 の扱い
+| # | 旧互換（`legacy`） | 新方式 |
+|---|---|---|
+| H1 | 再現（feature_names 不一致 → ML 全体を市場確率へ）。ただし理由コードとアラート対象フラグ（`isMarketFallback`）を必ず残す | v2: 段階的フォールバック + 理由 |
+| H2 | 互換検証専用の `GoldenMl` が切詰め/ゼロ埋めを再現（G1/G3/G4）。**本番のロードは拒否** | alpha は 35 次元スキーマで作る |
+| H3 | `LegacyFeatureBuilder` が再現（G6） | `PointInTimeFeatureBuilder` が構造的に解消 |
+| H4 | 再現（二重ブレンド）。未承認のため変えない | v2 は 1 回 |
+| H5 | 校正の欠如は学習側の問題。推論は Platt を持つモデルに適用 | F2 で valid の Platt/等張 |
+| H8 | 引数の `now` 基準で再現（ゴールデンは固定時刻） | レース日基準 |
+| H10 | `legacyLabel` を旧文字列のまま保ち Kelly 係数は 0.8 のまま（数値不変）。正確な `ProbSource` を別に持つ | 正確なラベル。Kelly 係数の enum 化（`kellyMultiplierBySourceEnum`）は未承認 |
+H6・H7・H9 は学習側/データ側（F2・T1.20）。
+
+### 11.11 検証結果（T3.6-A）
+- Kotlin と旧 Python のゴールデン: 26 ケース / 880 呼び出し中 **25 ケース / 874 呼び出しが全一致、最大絶対誤差 1.066e-14**（G5-BLEND-002、許容 1e-9）。未対応は `GD10-DEFAULTS-001`（旧関数の既定値。T1.20）だけ。G6 の特徴量は誤差 0（許容 1e-12）。
+- 新規 5 ケース: `G6-FEATURES-001`（特徴量）・`G3-ML-NORM-002`（単体モデル → 正規化・補正）・`G4-ENSEMBLE-002`・`G5-BLEND-002`・`G7-LEGACY-FAIL-001`（旧実装側の失敗時の挙動）。G1（`model_extract_features` の 7 呼び出しを更新: D-153）と G2 は Kotlin で比較。
+- 新しいロード契約の失敗系（署名/ハッシュ/スキーマ/次元/NaN）は旧実装に対応物が無い新設計の仕様なので、ゴールデン（旧出力）ではなく Kotlin 単体テスト（`ModelLoaderTest`・`MlEndToEndTest`）と `tools/ml` の署名つき合成成果物（決定的に再生成可能）で検証した。
+

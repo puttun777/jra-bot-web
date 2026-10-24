@@ -1,6 +1,6 @@
 # UNRESOLVED（未解決事項の管理表）
 
-作成: 2026-10-23（Stage 3-D / T3.4）。**2026-10-24 Stage 3-E（T3.5）で更新**。**未解決事項の正本はこの表**。PROGRESS.md の各段階の「未解決」は履歴で、現在の状態はここを見る。
+作成: 2026-10-23（Stage 3-D / T3.4）。**2026-10-24 Stage 3-E（T3.5）・Stage 3-F1（T3.6-A）で更新**。**未解決事項の正本はこの表**。PROGRESS.md の各段階の「未解決」は履歴で、現在の状態はここを見る。
 **根拠のない項目を「解決済み」にしない**。A は根拠（出典）を必ず書く。出典が検索抜粋で原文を直接読めていないものは、その旨を書く（本環境のプロキシは jra-van.jp / developer.jra-van.jp を 403 で拒否する）。
 
 | 分類 | 意味 |
@@ -14,6 +14,23 @@
 | **G** | 後続タスク待ち |
 
 ---
+
+## 重点項目の現在の状態（Stage 3-F1 / T3.6-A 時点。詳細は各 ID）
+**今回の ML 実装で解消できたのは C-14〜C-19 だけ**。以下はいずれも**未解決のまま**（Windows エージェントの実機検証が済んだことにしない）。
+| 項目 | ID | 状態 | T3.6-A での変化 |
+|---|---|---|---|
+| T1.20: 実 SQLite・実 config・実 pkl | D-2・F-5 | 利用者の取得待ち。pkl はクラウドで読まない | 変換ツールの**仕様**とローカル手順を書いた（ML_DESIGN §11.9。実装・実行は未実施）。合成モデルのゴールデンは実施済み |
+| T1.21: legacy / v2 の切替 | D-3 | ユーザー判断待ち（現状維持 = `legacy` が推奨） | v2 を独立実装したが**未承認・本番で無効・自動切替なし**。高精度とは未証明 |
+| P-1: エージェント認証方式 | D-5 | 承認待ち | 変化なし |
+| P-2: fetch フィールド | D-6 | 承認待ち | 変化なし |
+| P-3: 1 倍未満のオッズの隔離 | D-7 | 承認待ち | 変化なし |
+| T1.16: クラウド保存・Discord 等の規約確認 | E-1〜E-3・COMP-3/4 | 公式確認待ち。**公式回答まで実データをクラウドへ投入しない** | 変化なし（テストは合成データのみ） |
+| T1.17: 公式仕様書の詳細確認 | E-5・G-16 | 12 項目すべて未確認 | 変化なし |
+| T3.0: Windows 実機 PoC | F-1 | 未完了 | 変化なし |
+| T5.0: infra 同期 | G-9・G-14 | 第 5 段階の前の必須前提 | `MODEL_VERIFY_PUBKEY` の書式（CONTRACTS 0.4.9）を追加 |
+| 本番 GCP | F-2 | 未検証（Stage 5 まで保留） | 変化なし（GCS の実バケットに書いていない） |
+| MySQL 9.7 の本番採用 | D-10 | 未決（8.4 を本番既定のまま） | 変化なし |
+| Connector/J 26.x の採用 | D-10 | 未決 | 変化なし |
 
 ## A. 公式資料で解決済み
 | ID | 内容 | 根拠 | 注意 |
@@ -50,13 +67,19 @@
 | C-12 | **T3.4 の実装の穴: ACK 応答の喪失で `acked_ts` が止まる**（重複 ACK に cursor が無い。D-144） | サーバに加算のみの修正（重複 ACK に fetch・cursor）。結合テストで確認 |
 | C-13 | `GET /v1/agent/mode`・`plan`・`update` の HTTP（G-2 の一部） | 実装（D-149）。plan は検証済み仕様のみ・既定 idle |
 | C-10 | app の `race_schedule_event` INSERT の最小権限の妥当性（T3.3 の確認事項） | **妥当性を検証**: app は手動補正の履歴（MANUAL_OVERRIDE・MANUAL_REVOKE）の INSERT だけで、UPDATE・DELETE は不可（`GrantsIntegrationTest`）。ingest・bot も INSERT のみ。→ ユーザーの承認と infra 同期は D-9 / G-9 |
+| C-14 | **T3.6-A: ML の Kotlin 推論基盤**（Stage 3-F1）: `FeatureBuilder`（40/35 次元・血統ハッシュ 16 次元・旧互換と point-in-time）、ロジスティック回帰推論（Platt・市場ブレンド・±50 クリップ）、`ProbabilityPipeline`（legacy/v2・ensemble・市場フォールバック・理由コード）、モデル JSON の検証（正準 JSON・sha256・Ed25519・feature_schema_hash・次元）、レジストリの読取りと run 開始時の固定、合成のローカル `ModelStore` | Kotlin と旧 Python のゴールデン 26 ケース/880 呼び出し中 25 ケース/874 呼び出しが全一致（最大絶対誤差 1.07e-14）。Kotlin 単体・MySQL 統合（ローカル 8.0）・Python（tools/ml）。ML_DESIGN §11、D-152〜D-164。**本番で動作する推論ではない**: bot-run への統合は T3.8、学習は T3.6-B（G-17） |
+| C-15 | H3（過去走のラベルリーク）・H8（`age_years` の時刻依存）の**新方式での構造的な解消** | `PointInTimeFeatureBuilder`（過去走は `run_date < レース日`、age はレース日基準、asOf が発走後なら拒否）。旧互換 `LegacyFeatureBuilder` は H3/H8 を**そのまま**再現（G6、旧新比較の基準）。**H3/H8 の実データでの影響の大きさは未確認**（G-ML-1/T1.20） |
+| C-16 | H2（alpha の特徴量ミスアライン）の**ロード契約での拒否** | 重み長 ≠ スキーマの次元は `INVALID_MODEL_DIMENSION` で拒否（切詰め/ゼロ埋めをしない）。旧挙動は検証専用の `GoldenMl` でのみ再現。**旧 pkl の実際の次元は未確認**（T1.20） |
+| C-17 | H1/H10 の**記録の是正**（E1・E2: 分類 R） | 理由コード・段階・馬ごとの正確な出どころを保持。旧ラベルは `legacyLabel` に残し Kelly 係数の数値は不変。H1 の**実態**（旧 Bot が実際に市場確率だったか）は実データの `prob_source` 分布が必要で未確認（D-2 の手順 2） |
+| C-18 | モデル署名・改ざん検知・署名前の推論禁止 | `ModelLoader`（署名 → 正準形 → sha256 → スキーマ → 次元の順に fail closed）、`VerifiedModel`。テスト用の決定的な鍵（本番の秘密鍵は不要・Git に無い）。**本番の鍵の発行・保管・ローテーションは未決（G-3/D-12）** |
+| C-19 | 学習側（Stage 3-F2）への引き継ぎ契約の定義 | データセットの列・split・as_of・sha256・manifest、`sample_weight` の式、モデル出力形式、署名、品質ゲートの**案**（ML_DESIGN §11.7・§11.8）。Python の検証（`tools/ml/dataset_contract.py`）と合成データセットで確認。**品質ゲートの数値は未確定（承認後）** |
 
 ## D. ユーザーの運用判断待ち（承認するまで「承認済み」にしない）
 | ID | 判断事項 | 選択肢（推奨を先頭） |
 |---|---|---|
 | D-1 | **規約本文（第7条・第9条）を一読し、JRA-VAN に Q1〜Q3 を送るか**（DATA_SOURCE_COMPLIANCE §0） | ① 一読して Q1〜Q3 を送る（推奨）／② 送らず、実データは当面ローカルだけで運用 |
 | D-2 | **T1.20: 旧データ・設定の取得**（次の「T1.20 の具体的な手順」参照） | 手順に沿って集計値だけ報告 |
-| D-3 | **T1.21**: ① ML の確率パイプライン `legacy`（推奨。現状維持）／`v2`（D-037）② E6/E11/E12/E14/H10・H2 は **承認するまで無効**（既定 off。「実装なし」が既定）③ フロント案 A（Thymeleaf＋htmx。D-032）の承認 | ①〜③ をそれぞれ「現状維持／承認」の二択で返答 |
+| D-3 | **T1.21**: ① ML の確率パイプライン `legacy`（推奨。現状維持。**T3.6-A で v2 を独立実装したが未承認・本番で無効・自動切替なし**）／`v2`（D-037）② E6/E11/E12/E14/H10・H2 は **承認するまで無効**（既定 off。「実装なし」が既定）③ フロント案 A（Thymeleaf＋htmx。D-032）の承認 | ①〜③ をそれぞれ「現状維持／承認」の二択で返答 |
 | D-4 | **T3.3 の運用値（暫定推奨）**: `watch_start`=120 分、`prestart`=10 分、`settle_deadline`=90 分、`stale_after`=120 分、リース期限=300 秒、heartbeat 間隔=60 秒 | 暫定推奨値で承認／変更。**本番の既定値は確定していない**（`CALENDAR_*` に既定なし＝未設定なら起動失敗） |
 | D-5 | **P-1 エージェント認証方式**（CONTRACTS §3.3.1）: 導出鍵 HMAC＋KEK 暗号化（実装済み。推奨）／Ed25519 署名（より強い。T3.5 の依存追加が必要） | どちらかを承認。承認前は契約の旧記述（0.4.6 の §3.3 本文）を正本とせず、T3.5 は P-1 で実装する |
 | D-6 | **P-2 取込の追加フィールド**（`fetch`: id・seq・targetFrom/To・origin・backfillId）と応答の追加項目 | 承認（推奨）／別案。承認前は `fetch` なしで送ればデータは保存されるが、**取得の事実もカーソルも作られない** |
@@ -101,6 +124,8 @@
 | F-2 | 実 GCP での検証ゲート（G-OPS-1〜9、G-AUTH-1、G-APP-1、G-JOB-1、G-DB-1/5/6/7）。**本番 GCP は Stage 5 まで保留**（Terraform 変更・作成・apply はしない） |
 | F-3 | 本 PR の CI（MySQL 8.4 / 9.7 の統合テスト、JDK 25）。ローカルは MySQL 8.0.46 での事前確認のみ（8.4/9.7 の合否ではない） |
 | F-4 | 実データでの ingest の検証（COMP-4 のゲートが先。合成データだけで進める） |
+| F-5 | **T1.20 / G-ML-1・G-ML-2（ML の実データ検証）**: 実 pkl の所在・次元・`feature_names`、旧 `signals.prob_source` の分布（H1）、旧記録値との一致（legacy パイプライン）。**pkl はクラウドで読まない**。変換ツールの仕様とローカル手順は ML_DESIGN §11.9（**実装・実行は未実施**）。合成モデルのゴールデンは実 pkl が無くても実施済み |
+| F-6 | T3.6-A のローカル検証は JDK 21・MySQL 8.0.46。**JDK 25 と MySQL 8.4/9.7 の合否は GitHub Actions の結果だけが正**（D-163） |
 
 ## G. 後続タスク待ち
 | ID | 内容 | 予定 |
@@ -111,7 +136,7 @@
 | G-4 | 最終接続の GCS への写し（`HeartbeatMirror` の GCS 実装。今回は `SKIPPED` を返す未配線の実装） | `:cloud-gcp` の後続 |
 | G-5 | 実データ形式（JV-Data）のレコードパーサ（E-5 の確認後に `RecordParser` を追加） | T1.17 後 |
 | G-6 | reconcile（`STALE` イベントの生成、YSCH から消えた開催日の扱い、結果欠損の補完）、MONITORING 以降の履歴の種類（V3 でさらに ENUM を足すか）、bot-run の checkpoint・SIGTERM | T3.8 / T3.9 |
-| G-7 | ML（FeatureBuilder・ProbabilityPipeline・ml-train・pkl→JSON） | T3.6 |
+| G-7 | ~~ML（FeatureBuilder・ProbabilityPipeline）~~ → **T3.6-A で実装（C-14）**。残り: ml-train（Python の学習 Job）・`export-dataset` タスクの配線と `DatasetStore` への manifest 保管・ml-train イメージ・pkl→JSON 変換の実装（実行は F-5）・品質ゲートの確定 | T3.6-B（Stage 3-F2） |
 | G-8 | Discord 通知（BACKFILL では通知しない） | T3.7 |
 | G-9 | **T5.0（必須の前提）**: infra の文書を web CONTRACTS に追従（I-H1〜I-H9 ＋ 今回の追加: V3 の GRANT、環境変数 `AGENT_KEK_KEYS`・`AGENT_KEK_ACTIVE_KID`・`INGEST_*`、ingest の Secret、`app` の `race_schedule_event` INSERT） | 第 5 段階の前 |
 | G-10 | 本番 release-manifest、ml-train イメージ、branch protection の required checks | 第 5 段階 |
@@ -121,3 +146,5 @@
 | G-14 | **T5.0 への追加（T3.5 分）**: エージェントの配布（Python 同梱 exe・署名）、ビーコン公開鍵の同梱と鍵ローテーション手順、`INGEST_VERIFIED_FETCH_SPECS`・`INGEST_PLAN_ITEMS_JSON`・`INGEST_UPDATE_MANIFEST_PATH`、`/v1/agent/mode` が未認証であること（Cloud Armor・同時実行数で保護: G-12）、トークン期限の運用、更新 manifest の署名鍵（オフライン） | 第 5 段階の前 |
 | G-15 | 取得計画の実際の生成（開催カレンダー + 欠損検知から `plan` を作る）。現在は運用者が与えた項目のうち検証済みのものだけ。YSCH の対象範囲は key の 16 桁（仮の表現。確認後に正式化） | T3.8 |
 | G-16 | 実データ形式（JV-Data）のパーサ（サーバ）と、`SpecRegistry` の確認の記録（T1.17 の 12 項目。確認が 0 件のうちは実取得は始まらない） | T1.17 後 |
+| G-17 | **T3.6-B / T3.8 への引き継ぎ（ML）**: ①bot-run の開始時に `ModelRunPin.capture`、使った `model_id` を `race_evaluations` に保存、`fallback_reason`・アラート（ML 有効で市場確率のみ）②`MlInference` を判定（`WinDecisionEvaluator` の `MlProbabilityInput`）へ配線 ③`FeatureSource`・`DatasetSource` の `:persistence` 実装（現在は合成のメモリ実装のみ）④`ModelStore`/`DatasetStore` の GCS 実装（`:cloud-gcp`）と manifest の保管 ⑤馬マスタの**時点ごとの履歴**（PIT で累積値を使えるように。現状は `asOf` より新しい行の累積値を 0 にする）⑥`format_reason_from_features`（通知文。T3.7）⑦`SnapshotsNewestFirst` など判定側の既存課題は変更なし ⑧**release-manifest の `feature_schema_hash` は単一値だが、スキーマは calibration(40)・alpha(35)・market(5) の複数**。単一値の定義（例: 各 hash を配列/連想にする、または正準 JSON のハッシュを 1 つ取る）を契約で決める（第 5 段階の manifest 生成の前。現在のプレビューは `FEATURE_SCHEMA_HASH_UNDEFINED` のまま） | T3.6-B / T3.8 |
+| G-18 | **ML の未承認の改善案は未実装のまま**: v2 の本番有効化（旧新比較・バックテスト G-ML-3・閾値の再検討・承認の後）、H4 の二重ブレンド解消、H10 の Kelly 係数 enum 化（`kellyMultiplierBySourceEnum`）、`ensemble_beta` の自動調整、`class_weight` を使わない学習 | T1.21 / T3.9 |

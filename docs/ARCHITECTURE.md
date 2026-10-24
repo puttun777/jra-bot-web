@@ -41,7 +41,7 @@ Python の 3 つ（`agent/`、`ml/`、`tools/`）は依存を別々に管理す�
 ## 2. Gradle モジュール（Gradle Kotlin DSL）
 | モジュール | 責務 | 依存してよいもの | 禁止 |
 |---|---|---|---|
-| `:domain` | 業務モデル、値オブジェクト（`TenantId`・`RaceId`・`Odds`・`Probability`・`OpsMode` など）、計算・判定（EV/Kelly/確率パイプライン/買い目/急落フィルタ/開催判定）、JV-Data パーサ（固定長 cp932）、成績集計、**ポート**（Repository・`ModeProvider`・`JobLauncher`・`Clock`・`ModelStore`・`DatasetStore`・`Notifier`・`HeartbeatMirror`） | Kotlin 標準ライブラリ、kotlinx の小さなもの（日時・直列化）だけ | Spring、Doma、JDBC、クラウド SDK、HTTP クライアント |
+| `:domain` | 業務モデル、値オブジェクト（`TenantId`・`RaceId`・`Odds`・`Probability`・`OpsMode` など）、計算・判定（EV/Kelly/確率パイプライン/買い目/急落フィルタ/開催判定）、**ML 推論基盤 `jp.jrabot.domain.ml`（T3.6-A: 厳密 JSON・正準化、`FeatureSchema`・`FeatureBuilder`（旧互換と point-in-time）、ロジスティック回帰、`ProbabilityPipeline`（legacy/v2）、モデル JSON の署名・sha256 検証、レジストリの読取りと run 固定、データセット書出し。JSON は Jackson ではなく自前の厳密パーサ。ML_DESIGN §11）**、JV-Data パーサ（固定長 cp932）、成績集計、**ポート**（Repository・`ModeProvider`・`JobLauncher`・`Clock`・`ModelStore`・`DatasetStore`・`Notifier`・`HeartbeatMirror`） | Kotlin 標準ライブラリ、kotlinx の小さなもの（日時・直列化）だけ | Spring、Doma、JDBC、クラウド SDK、HTTP クライアント |
 | `:persistence` | Doma の DAO・SQL・Entity、Repository の実装、Entity⇔domain の変換、トランザクション | `:domain`、Doma、Spring JDBC/TX | Web、クラウド SDK。**Entity をモジュール外へ公開しない**（`internal`） |
 | `:db-migration` | Flyway の SQL（`V*`・`R__grants.sql`）と CLI（`--mode`） | Flyway、Connector/J（Boot の BOM に依存しない） | 他のモジュールすべて |
 | `:cloud-gcp`（D-045） | ポートの GCP 実装: GCS の `ModeProvider`・`ModelStore`・`DatasetStore`・`HeartbeatMirror`、Cloud Run Jobs の `JobLauncher`、Google の JWT/ID トークン検証部品 | `:domain`、Google Cloud のクライアントライブラリ | Spring Web、Doma、アプリのモジュール |
@@ -155,3 +155,10 @@ dashboard ─読取（DTO）─▶ MySQL        export-dataset ─▶ GCS datase
 - T1.20: 実 SQLite、`prob_source` の分布、実 `config.yaml`、`*.pkl`。
 - T1.21: フロント案 A の承認、`legacy`/`v2`、E 項目の挙動変更。
 - infra 側のユーザー確認: G-COST-1 と G-DB-1（作成画面を見るだけ）、GCP プロジェクトと請求、第5段階での apply の承認。
+
+## T3.6-A（Stage 3-F1）で追加した ML の構成（2026-10-24）
+- `:domain` の `jp.jrabot.domain.ml.*`: `json`（厳密パーサ・正準 JSON）/ `features`（スキーマ・ハッシュ・旧互換と point-in-time のビルダ・`FeatureSource` ポート）/ `model`（推論の算術・`ModelLoader`・`ModelTrust`・`VerifiedModel`）/ `pipeline`（`LegacyProbabilityPipeline`・`V2ProbabilityPipeline`・`FallbackReason`）/ `registry`（`ModelRegistryReader`・`ModelRunPin`・`ModelSession`）/ `store`（ローカル/メモリの実装）/ `dataset`（`DatasetExporter`）と `MlInference`。外部依存は JDK の標準（`java.security` の Ed25519・MD5・SHA-256）だけ。
+- `:persistence`: `MlModelRegistryRepository`（`ml_model` の SELECT のみ。bot の権限で足りる）。`FeatureSource`・`DatasetSource` の実装は T3.6-B。
+- `:golden-runner`: 旧 `WinProbabilityModel` の互換モジュール `GoldenMl`（次元の切詰め/ゼロ埋め = 旧 H2 をここにだけ置く。本番の 3 アプリは `:golden-runner` に依存しない）。
+- 流れ（bot-run。T3.8 で配線）: `ModelRunPin.capture`（ACTIVE を固定）→ `ModelSession`（`ModelStore` から読み、sha256・署名・スキーマ・次元を検証）→ `MlInference`（そのモデルのスキーマで特徴量を作り、検証済みモデルで確率）→ `ProbabilityPipeline`（正規化・ensemble・判定側ブレンド）→ `WinDecisionEvaluator`（`MlProbabilityInput` で確率を受け取る。EV・Kelly・買い目の計算は T3.1/T3.2 のまま）。
+- Python: `tools/ml`（正準 JSON・feature_schema の hash・Ed25519・データセット契約の参照実装と合成成果物。Gradle の外）。学習 Job（`ml-train`）は T3.6-B。
