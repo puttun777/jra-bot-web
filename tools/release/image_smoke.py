@@ -510,6 +510,8 @@ class Smoke:
         self.r.check("[ml-train] the registry row is CANDIDATE (never ACTIVE) and the signed model + report are in the store",
                      bool(mid) and self.mysql_exec(f"SELECT status FROM ml_model WHERE tenant_id = 1 AND model_id = '{mid}'", database="jrabot") == "CANDIDATE"
                      and {f"{mid}.json", f"{mid}.sig"} <= set(models()) and (store / "1" / "reports" / f"{mid}.report.json").exists(), f"{mid} {models()}")
+        # 成果物はコンテナの uid 10001 が所有する（0600 など）。検査側（runner）が読めるよう、同じイメージの中で読取り権限だけを足す
+        self.run("ml-train", entrypoint="/bin/chmod", args=["-R", "a+rX", "/store"], mounts=[f"{store}:/store"], network=None, desc="ml make artifacts readable")
         sig = (store / "1" / "models" / f"{mid}.sig").read_bytes() if mid else b""
         self.r.check("[ml-train] .sig is a raw 64-byte Ed25519 signature", len(sig) == 64, str(len(sig)))
         self.r.check("[ml-train] no ACTIVE row and no active_flag after training", count("status = 'ACTIVE' OR active_flag IS NOT NULL") == 0)
