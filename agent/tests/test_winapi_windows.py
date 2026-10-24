@@ -45,9 +45,8 @@ def test_job_object_kills_child_tree_and_terminate_tree_releases() -> None:
 def test_instance_lock_on_windows(tmp_path: Path) -> None:
     from jra_agent.lock import AlreadyRunningError, InstanceLock
 
-    with InstanceLock(tmp_path / "l"):
-        with pytest.raises(AlreadyRunningError):
-            InstanceLock(tmp_path / "l").acquire()
+    with InstanceLock(tmp_path / "l"), pytest.raises(AlreadyRunningError):
+        InstanceLock(tmp_path / "l").acquire()
     subprocess.run([sys.executable, "-c", "print(1)"], check=True, capture_output=True)
 
 
@@ -60,7 +59,11 @@ def test_worker_hang_recovery_on_windows(tmp_path: Path) -> None:
 
     p = tmp_path / "s.json"
     p.write_text(FakeScript(files=[[b"RA0001"]], hang_after=0).to_json(), encoding="utf-8")
-    sup = WorkerSupervisor([sys.executable, "-m", "jra_agent.jvlink.worker_main", "--backend", "fake", "--script", str(p)], WorkerConfig(call_timeout_seconds=2.0), FakeClock())
+    sup = WorkerSupervisor(
+        [sys.executable, "-m", "jra_agent.jvlink.worker_main", "--backend", "fake", "--script", str(p)],
+        WorkerConfig(call_timeout_seconds=2.0),
+        FakeClock(),
+    )
     try:
         sup.call("open_stored", {"dataspec": "RACE", "fromtime": "0" * 14, "option": 1})
         with pytest.raises(WorkerTimeout):

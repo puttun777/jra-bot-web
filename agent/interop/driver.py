@@ -35,7 +35,7 @@ class LoseAckOnce:
     def __init__(self, inner: UrllibTransport) -> None:
         self.inner, self.armed = inner, False
 
-    def request(self, method, url, headers, body, timeout):  # type: ignore[no-untyped-def]  # noqa: ANN001, ANN201
+    def request(self, method, url, headers, body, timeout):  # type: ignore[no-untyped-def]
         resp = self.inner.request(method, url, headers, body, timeout)
         if self.armed and url.endswith("/v1/agent/ingest"):
             self.armed = False
@@ -59,13 +59,17 @@ def main() -> int:
         transport = LoseAckOnce(UrllibTransport())
         client = SignedClient(base_url, RequestSigner(agent_id, token), transport, clock)  # type: ignore[arg-type]
         api = AgentApi(client, modes)
-        modes.on_beacon(BeaconResult(BeaconStatus.VALID, Beacon("NORMAL", 1, "k", datetime.now(UTC), None)))  # ビーコンは Mock（実 GCP には接続しない）
+        modes.on_beacon(
+            BeaconResult(BeaconStatus.VALID, Beacon("NORMAL", 1, "k", datetime.now(UTC), None))
+        )  # ビーコンは Mock（実 GCP には接続しない）
         probe = api.probe_mode()
         out["probe_mode"] = probe.mode
         sender = Sender(q, client, modes, SenderConfig(sends_per_second=10.0), clock, "fp")
         if phase == "stopped":
             bid = uuid7()
-            payload = build_envelope(agent_id=agent_id, batch_id=bid, dataspec="0B12", observed_at=clock.now(), records=[nys("20261101")], eof=True)
+            payload = build_envelope(
+                agent_id=agent_id, batch_id=bid, dataspec="0B12", observed_at=clock.now(), records=[nys("20261101")], eof=True
+            )
             q.enqueue(batch_id=bid, cls="R", dataspec="0B12", payload=payload, record_count=1, eof=True)
             step = sender.send_next()
             out.update(step=step.step.value, mode=modes.evaluate().mode.value, queued=q.stats().by_status)
@@ -77,7 +81,9 @@ def main() -> int:
         out["plan_status"] = plan_res.classified.status
         out["plan_items"] = len(plan.items)
         out["plan_idle"] = not plan.usable(clock.now())
-        out["heartbeat"] = api.post_heartbeat({"agentVersion": "0.1.0", "queueDepth": 0, "mode": "NORMAL", "ackedTs": {"RACE.2": TS}}).classified.status
+        out["heartbeat"] = api.post_heartbeat(
+            {"agentVersion": "0.1.0", "queueDepth": 0, "mode": "NORMAL", "ackedTs": {"RACE.2": TS}}
+        ).classified.status
         fid = uuid7()
         q.begin_session(fid, "YSCH:2", "YSCH", 2, "20261030000000", TS, "20261101", "20261130")
         for i in range(3):
@@ -89,14 +95,18 @@ def main() -> int:
                 agent_id=agent_id, batch_id=bid, dataspec="YSCH", observed_at=clock.now(), records=[nys(f"202611{i + 1:02d}")], eof=eof,
                 option=2, fromtime="20261030000000", last_file_timestamp=TS, fetch=FetchInfo(fid, s.next_seq, "20261101", "20261130"),
             )  # fmt: skip
-            q.enqueue(batch_id=bid, cls="S", dataspec="YSCH", payload=payload, record_count=1, eof=eof, fetch_id=fid, last_file_timestamp=TS)
+            q.enqueue(
+                batch_id=bid, cls="S", dataspec="YSCH", payload=payload, record_count=1, eof=eof, fetch_id=fid, last_file_timestamp=TS
+            )
         steps = []
         steps.append(sender.send_next().step.value)
         steps.append(sender.send_next().step.value)
         transport.armed = True  # 最後（EOF）のバッチ: サーバは保存するが ACK が届かない
         steps.append(sender.send_next().step.value)
         out["acked_ts_after_lost_ack"] = q.checkpoint("YSCH:2").acked_ts
-        modes.on_server(__import__("jra_agent.responses", fromlist=["x"]).Classified(__import__("jra_agent.responses", fromlist=["x"]).Outcome.OK, 200))
+        modes.on_server(
+            __import__("jra_agent.responses", fromlist=["x"]).Classified(__import__("jra_agent.responses", fromlist=["x"]).Outcome.OK, 200)
+        )
         clock_wait = q.next_eligible_at()
         out["retry_scheduled"] = clock_wait is not None
         # 再送時刻まで待つ代わりに、キューの待機を解除して同じバッチを再送する
