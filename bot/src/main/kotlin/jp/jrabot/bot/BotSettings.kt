@@ -17,6 +17,8 @@ class BotSettings(
     val releaseIdOverride: String?,
     /** `calendar-check` だけが必要とする設定（他のタスクでは null）。環境変数は [CalendarSettingsParser]。 */
     val calendar: CalendarSettings? = null,
+    /** `export-dataset` だけが必要とする保管先（`MODEL_STORE_URI`: `gs://<bucket>[/<prefix>]`、`APP_ENV=local` では `file:///絶対パス`）。他のタスクでは null。 */
+    val modelStoreUri: String? = null,
 ) {
     companion object {
         const val DB_USER = "bot" // CONTRACTS §8.2: bot（全 --task）
@@ -31,7 +33,18 @@ class BotSettings(
             check(appEnv == AppEnv.LOCAL || db.user == DB_USER) { "DB_USER が bot 用のユーザー($DB_USER)ではない" }
             val opsEnv = env.filterKeys { it == OpsModeProviders.ENV_SOURCE || it == OpsModeProviders.ENV_APP }
             val calendar = if (task == BotTask.CALENDAR_CHECK) CalendarSettingsParser.fromEnv(env) else null
-            return BotSettings(appEnv, db, opsEnv, env["RELEASE_ID"], calendar)
+            val storeUri =
+                if (task == BotTask.EXPORT_DATASET) {
+                    val uri = env["MODEL_STORE_URI"]?.trim().orEmpty()
+                    check(uri.isNotEmpty()) { "MODEL_STORE_URI がありません（export-dataset の保管先）" }
+                    check(uri.startsWith("gs://") || (appEnv == AppEnv.LOCAL && uri.startsWith("file:///"))) {
+                        "MODEL_STORE_URI は gs://（本番）または file:///（APP_ENV=local のみ）の形式にしてください"
+                    }
+                    uri
+                } else {
+                    null
+                }
+            return BotSettings(appEnv, db, opsEnv, env["RELEASE_ID"], calendar, storeUri)
         }
     }
 }

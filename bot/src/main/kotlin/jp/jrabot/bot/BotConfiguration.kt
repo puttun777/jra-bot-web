@@ -6,6 +6,8 @@ import jp.jrabot.domain.calendar.CalendarCheckService
 import jp.jrabot.domain.calendar.CalendarOverrideRepository
 import jp.jrabot.domain.calendar.RaceDayRepository
 import jp.jrabot.domain.calendar.ScheduleFetchFactReader
+import jp.jrabot.domain.ml.dataset.DatasetSource
+import jp.jrabot.domain.ml.features.FeatureSource
 import jp.jrabot.domain.ops.ModeProvider
 import jp.jrabot.domain.race.RaceScheduleRepository
 import jp.jrabot.domain.time.Clock
@@ -60,7 +62,7 @@ class BotConfiguration {
     // DB に事実が無い日は null（= 行の無い日は「不明」のまま。開催なしを確認したことにしない）。
 
     /**
-     * タスクごとの実装。**calendar-check（T3.3）だけが実装済み**で、他（bot-run・reconcile・retention・export-dataset）は未実装のスタブ
+     * タスクごとの実装。**calendar-check（T3.3）と export-dataset（T3.6-B）が実装済み**で、他（bot-run・reconcile・retention）は未実装のスタブ
      * （[StubTaskHandler]。T3.8 以降で差し替える）。
      */
     @Bean
@@ -73,11 +75,18 @@ class BotConfiguration {
         runs: BotRunRepository,
         facts: ScheduleFetchFactReader,
         launcher: JobLauncher,
+        features: FeatureSource,
+        datasets: DatasetSource,
     ): BotTaskHandler =
         when (runtime.command.task) {
             BotTask.CALENDAR_CHECK -> {
                 val settings = checkNotNull(runtime.settings.calendar) { "calendar-check の設定が無い（BotSettings が検証しているはず）" }
                 CalendarCheckTaskHandler(CalendarCheckService(clock, runtime.modeProvider, days, schedules, overrides, facts, runs, launcher, settings))
+            }
+
+            BotTask.EXPORT_DATASET -> {
+                val uri = checkNotNull(runtime.settings.modelStoreUri) { "export-dataset の保管先が無い（BotSettings が検証しているはず）" }
+                ExportDatasetTaskHandler(features, datasets, DatasetStoreFactory.create(uri), clock)
             }
 
             else -> {

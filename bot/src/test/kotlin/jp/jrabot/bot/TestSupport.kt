@@ -86,6 +86,8 @@ fun baseEnv(
             "DB_USER" to "bot",
             "DB_PASSWORD" to "synthetic-password-never-logged",
             "OPS_MODE_SOURCE" to opsSource,
+            // export-dataset の保管先（APP_ENV=local のローカルのパス。実バケットではない）
+            "MODEL_STORE_URI" to "file:///tmp/jrabot-test-store",
             // calendar-check の設定（テスト用の固定値。運用の既定値ではない）
             "CALENDAR_WATCH_START_MINUTES" to "120",
             "CALENDAR_PRESTART_MINUTES" to "10",
@@ -100,4 +102,16 @@ fun args(
     task: String = "calendar-check",
     tenant: String = "1",
     vararg more: String,
-): Array<String> = arrayOf("--task=$task", "--tenant-id=$tenant", *more)
+): Array<String> =
+    arrayOf("--task=$task", "--tenant-id=$tenant", *more) + exportDefaults(task, more)
+
+/** export-dataset は引数が必須。テストの既定値（呼び出し側が --dataset-id を指定していなければ補う）。 */
+fun exportDefaults(
+    task: String,
+    more: Array<out String> = emptyArray(),
+): Array<String> =
+    if (task == "export-dataset" && more.none { it.startsWith("--dataset-id") }) {
+        arrayOf("--dataset-id=ds-test", "--from=2026-01-01", "--to=2026-01-31", "--feature-schema=calibration")
+    } else {
+        emptyArray()
+    }

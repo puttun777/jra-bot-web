@@ -15,7 +15,7 @@ class BotArgsParserTest {
     @Test
     fun `5 つのタスクを識別する`() {
         for (t in BotTask.entries) {
-            val c = valid("--task=${t.cliName}", "--tenant-id=7")
+            val c = valid("--task=${t.cliName}", "--tenant-id=7", *exportDefaults(t.cliName))
             assertEquals(t, c.task)
             assertEquals(7L, c.tenantId.value)
         }
@@ -98,5 +98,45 @@ class BotArgsParserTest {
         // 全体の最大 24 接続（dashboard 6 + ingest 6 + bot-run 4 + 定期 Job 3 + export 2 + db-migration 2 + ml-train 1）
         val total = 3 * 2 + 3 * 2 + 4 + 1 * 3 + 2 + 2 + 1
         assertEquals(24, total)
+    }
+
+    private val exportBase = arrayOf("--task=export-dataset", "--tenant-id=1", "--dataset-id=ds_1-A", "--from=2026-01-01", "--to=2026-03-31", "--feature-schema=alpha")
+
+    @Test
+    fun `export-dataset の引数 — 必須と任意、既定値`() {
+        val c = valid(*exportBase)
+        val e = c.export!!
+        assertEquals("ds_1-A", e.datasetId.value)
+        assertEquals(LocalDate.of(2026, 1, 1), e.from)
+        assertEquals(LocalDate.of(2026, 3, 31), e.to)
+        assertEquals(ExportSchema.ALPHA, e.schema)
+        assertEquals(0.2, e.validFraction)
+        assertEquals(10L, e.asOfLead.toMinutes())
+        val full = valid(*exportBase, "--valid-fraction=0.3", "--as-of-lead-minutes=15").export!!
+        assertEquals(0.3, full.validFraction)
+        assertEquals(15L, full.asOfLead.toMinutes())
+        assertEquals(ExportSchema.CALIBRATION, valid(*exportBase.dropLast(1).toTypedArray(), "--feature-schema=calibration").export!!.schema)
+        assertEquals(null, valid("--task=reconcile", "--tenant-id=1").export)
+    }
+
+    @Test
+    fun `export-dataset の不正な引数は拒否し、メッセージに値を含めない`() {
+        for (missing in listOf("--dataset-id", "--from", "--to", "--feature-schema")) {
+            invalid(*exportBase.filterNot { it.startsWith(missing + "=") }.toTypedArray())
+        }
+        val bads =
+            listOf(
+                "--dataset-id=../x", "--dataset-id=a b", "--dataset-id=" + "a".repeat(65), "--from=2026-13-01", "--from=2026/01/01", "--to=2025-12-31", "--to=2029-01-01",
+                "--feature-schema=market", "--feature-schema=CALIBRATION", "--valid-fraction=0", "--valid-fraction=1", "--valid-fraction=x", "--valid-fraction=NaN",
+                "--as-of-lead-minutes=0", "--as-of-lead-minutes=1441", "--as-of-lead-minutes=1.5",
+            )
+        for (bad in bads) {
+            val name = bad.substringBefore('=')
+            val m = invalid(*exportBase.filterNot { it.startsWith(name + "=") }.toTypedArray(), bad)
+            assertFalse(m.contains(bad.substringAfter('=')) && bad.substringAfter('=').length > 3, "$bad: $m")
+        }
+        invalid(*exportBase, "--dry-run")
+        invalid(*exportBase, "--date=2026-01-01")
+        invalid("--task=bot-run", "--tenant-id=1", "--dataset-id=a") // 他のタスクに export の引数は渡せない
     }
 }
