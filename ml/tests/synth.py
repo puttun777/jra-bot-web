@@ -128,7 +128,7 @@ def _finalize(
         "quality": {
             "has_horse_master_ratio": 1.0, "has_past_runs_ratio": 1.0, "constant_features": constant,
             "flags": {"master_newer_than_as_of": 0, "odds_missing": 0, "source_returned_future_runs": 0},
-            "skipped": {"as_of_not_before_post_time": 0, "no_odds_at_as_of": 0, "no_result": 0, "post_time_unknown": 0, "race_date_unknown": 0, "race_not_found": 0},
+            "skipped": {"as_of_not_before_post_time": 0, "no_odds_at_as_of": 0, "no_result": 0, "result_incomplete": 0, "post_time_unknown": 0, "race_date_unknown": 0, "race_not_found": 0},
         },
     }  # fmt: skip
     if manifest["split"]["valid_starts_at"] is not None:

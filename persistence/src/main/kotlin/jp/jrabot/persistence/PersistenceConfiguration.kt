@@ -15,6 +15,9 @@ import jp.jrabot.domain.ingest.IngestGapStore
 import jp.jrabot.domain.ingest.NonceStore
 import jp.jrabot.domain.ingest.RawRecordStore
 import jp.jrabot.domain.ingest.UnitOfWork
+import jp.jrabot.domain.ml.dataset.DatasetSource
+import jp.jrabot.domain.ml.features.FeatureSource
+import jp.jrabot.domain.ml.features.HorseMasterHistoryStore
 import jp.jrabot.domain.ml.registry.ModelRegistryReader
 import jp.jrabot.domain.odds.ComboOddsSnapshotRepository
 import jp.jrabot.domain.odds.OddsSnapshotRepository
@@ -30,6 +33,7 @@ import jp.jrabot.persistence.dao.AppUserDaoImpl
 import jp.jrabot.persistence.dao.BotRunDaoImpl
 import jp.jrabot.persistence.dao.CalendarOverrideDaoImpl
 import jp.jrabot.persistence.dao.ComboOddsSnapshotDaoImpl
+import jp.jrabot.persistence.dao.HorseMasterHistoryDaoImpl
 import jp.jrabot.persistence.dao.IngestBackfillDaoImpl
 import jp.jrabot.persistence.dao.IngestBatchDaoImpl
 import jp.jrabot.persistence.dao.IngestCursorDaoImpl
@@ -37,6 +41,7 @@ import jp.jrabot.persistence.dao.IngestFetchDaoImpl
 import jp.jrabot.persistence.dao.IngestGapDaoImpl
 import jp.jrabot.persistence.dao.IngestRawDaoImpl
 import jp.jrabot.persistence.dao.MlModelDaoImpl
+import jp.jrabot.persistence.dao.MlSourceDaoImpl
 import jp.jrabot.persistence.dao.OddsSnapshotDaoImpl
 import jp.jrabot.persistence.dao.RaceDaoImpl
 import jp.jrabot.persistence.dao.RaceDayDaoImpl
@@ -53,8 +58,11 @@ import jp.jrabot.persistence.repository.BackfillStoreImpl
 import jp.jrabot.persistence.repository.BotRunRepositoryImpl
 import jp.jrabot.persistence.repository.CalendarOverrideRepositoryImpl
 import jp.jrabot.persistence.repository.ComboOddsSnapshotRepositoryImpl
+import jp.jrabot.persistence.repository.DbDatasetSource
+import jp.jrabot.persistence.repository.DbFeatureSource
 import jp.jrabot.persistence.repository.DbScheduleFetchFactReader
 import jp.jrabot.persistence.repository.FetchStoreImpl
+import jp.jrabot.persistence.repository.HorseMasterHistoryStoreImpl
 import jp.jrabot.persistence.repository.IngestBatchStoreImpl
 import jp.jrabot.persistence.repository.IngestCursorStoreImpl
 import jp.jrabot.persistence.repository.IngestGapStoreImpl
@@ -105,6 +113,22 @@ class PersistenceConfiguration {
     /** モデルレジストリの読取り（bot が run の開始時に ACTIVE を固定する: T3.8）。書込み（昇格）は Stage 4 の管理操作で、ここには無い。 */
     @Bean
     fun modelRegistryReader(config: Config): ModelRegistryReader = MlModelRegistryRepository(MlModelDaoImpl(config))
+
+    /** 特徴量の入力（学習用データセット・推論）。読取りだけ。すべての SQL が tenant_id と時刻の上限（asOf・レース日）を持つ。 */
+    @Bean
+    fun featureSource(config: Config): FeatureSource = DbFeatureSource(MlSourceDaoImpl(config))
+
+    /** 学習用データセットの元データ（出走馬・確定着順・asOf 以前のオッズ）。読取りだけ。 */
+    @Bean
+    fun datasetSource(config: Config): DatasetSource = DbDatasetSource(MlSourceDaoImpl(config))
+
+    /** 馬マスタの累積値の版（追記専用。書込みは取込側。bot は SELECT のみで読む）。 */
+    @Bean
+    fun horseMasterHistoryStore(
+        config: Config,
+        tx: TransactionOperations,
+        clock: Clock,
+    ): HorseMasterHistoryStore = HorseMasterHistoryStoreImpl(HorseMasterHistoryDaoImpl(config), tx, clock)
 
     @Bean
     fun oddsSnapshotRepository(

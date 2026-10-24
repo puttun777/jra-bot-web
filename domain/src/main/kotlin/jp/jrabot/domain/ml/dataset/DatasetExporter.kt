@@ -42,11 +42,15 @@ interface DatasetSource {
         to: LocalDate,
     ): List<DatasetEntry>
 
-    /** 馬ごとのオッズの履歴（順不同）。 */
+    /**
+     * 馬ごとのオッズの履歴のうち **[asOf] 以前（含む）のものだけ**（順不同でよい）。供給元（DB）は asOf より後の点を**返さない**
+     * （SQL の条件。呼び出し側のフィルタに頼らない）。
+     */
     fun oddsHistory(
         tenantId: TenantId,
         raceId: String,
         umaban: Int,
+        asOf: Instant,
     ): List<OddsPoint>
 }
 
@@ -74,11 +78,12 @@ class InMemoryDatasetSource : DatasetSource {
         tenantId: TenantId,
         raceId: String,
         umaban: Int,
-    ): List<OddsPoint> = odds[Triple(tenantId.value, raceId, umaban)] ?: emptyList()
+        asOf: Instant,
+    ): List<OddsPoint> = (odds[Triple(tenantId.value, raceId, umaban)] ?: emptyList()).filter { !it.ts.isAfter(asOf) }
 }
 
 /** 行を出力しなかった理由（件数を manifest に記録する。黙って捨てない）。 */
-enum class SkipReason { NO_RESULT, RACE_NOT_FOUND, RACE_DATE_UNKNOWN, POST_TIME_UNKNOWN, AS_OF_NOT_BEFORE_POST_TIME, NO_ODDS_AT_AS_OF }
+enum class SkipReason { NO_RESULT, RESULT_INCOMPLETE, RACE_NOT_FOUND, RACE_DATE_UNKNOWN, POST_TIME_UNKNOWN, AS_OF_NOT_BEFORE_POST_TIME, NO_ODDS_AT_AS_OF }
 
 class ExportedDataset(
     val datasetId: DatasetId,
@@ -149,6 +154,8 @@ class DatasetExporter(
 
         val rows = ArrayList<Row>()
         val entries = source.entries(tenantId, from, to)
+        // 1 着の馬が結果に 1 頭もいないレースは、勝敗が確定したものとして扱わない（全員を負例にしない）。同着は 1 着が複数でもよい
+        val racesWithWinner = entries.filter { (it.finish ?: 0) == 1 }.map { it.raceId }.toSet()
         for (e in entries) {
             val rc = features.raceConditions(tenantId, e.raceId)
             if (rc == null) {
@@ -170,10 +177,14 @@ class DatasetExporter(
                 skip(SkipReason.NO_RESULT)
                 continue
             }
+            if (e.raceId !in racesWithWinner) {
+                skip(SkipReason.RESULT_INCOMPLETE)
+                continue
+            }
             val asOf = post.minus(asOfLead)
             val v =
                 try {
-                    builder.build(schema, FeatureRequest(tenantId, e.raceId, e.umaban, asOf, source.oddsHistory(tenantId, e.raceId, e.umaban)))
+                    builder.build(schema, FeatureRequest(tenantId, e.raceId, e.umaban, asOf, source.oddsHistory(tenantId, e.raceId, e.umaban, asOf)))
                 } catch (ex: LeakageException) {
                     skip(SkipReason.AS_OF_NOT_BEFORE_POST_TIME)
                     continue
