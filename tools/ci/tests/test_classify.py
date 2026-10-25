@@ -121,7 +121,7 @@ class ScenarioTest(unittest.TestCase):
         self.assertEqual(dict(mode="code", build=False, golden=False, release=True, images=False, c26=False, db=[], suites=[]), jobs(p))
 
     def test_every_rule_pattern_compiles_and_tags_known(self):
-        known = {"docs", "kotlin_app", "kotlin_core", "kotlin_db", "build_cfg", "golden", "kotlin_golden", "release", "docker", "connectorj", "ci", "agent", "agent_windows", "ml_tools"}
+        known = {"docs", "kotlin_app", "kotlin_core", "kotlin_db", "build_cfg", "golden", "kotlin_golden", "release", "docker", "connectorj", "ci", "agent", "agent_windows", "ml_tools", "ml_train"}
         for pattern, tags in classify.RULES:
             self.assertTrue(set(tags) <= known, pattern)
 
@@ -167,19 +167,54 @@ class MlToolsTest(unittest.TestCase):
         self.assertFalse(p.run_ml_tools)
 
     def test_ml_python_runs_only_the_python_job(self):
-        p = classify.classify(["tools/ml/canonical.py", "tools/ml/tests/test_artifacts.py"])
+        p = classify.classify(["tools/ml/make_test_artifacts.py", "tools/ml/tests/test_artifacts.py"])
         self.assertTrue(p.run_ml_tools)
-        self.assertFalse(p.run_build or p.run_golden or p.db_matrix)
+        self.assertFalse(p.run_build or p.run_golden or p.db_matrix or p.run_ml_train)
+
+    def test_contract_reference_used_by_the_training_job_also_runs_it(self):
+        p = classify.classify(["tools/ml/canonical.py"])  # ml-train のイメージと Kotlin⇄Python の結合テストが使う
+        self.assertTrue(p.run_ml_tools and p.run_ml_train and p.run_images and p.run_build)
 
     def test_synthetic_artifacts_run_python_and_kotlin_build_without_db(self):
         p = classify.classify(["domain/src/test/resources/ml/models/cal_test_001.json"])
-        self.assertTrue(p.run_ml_tools and p.run_build)
+        self.assertTrue(p.run_ml_tools and p.run_build and p.run_ml_train)  # ml-train のテストも feature_schema の定義ファイルを読む
         self.assertEqual([], p.db_matrix)
 
     def test_full_runs_ml_tools(self):
         self.assertTrue(classify.plan_for_event("workflow_dispatch").run_ml_tools)
         self.assertTrue(classify.classify([".github/workflows/ci.yml"]).run_ml_tools)
         self.assertFalse(classify.classify(["bot/src/main/kotlin/A.kt"]).run_ml_tools)
+
+
+class MlTrainTest(unittest.TestCase):
+    """T3.6-B: ml/（Python の学習 Job）。ml/ だけの変更でも学習テストが必ず走る。無関係な変更では走らない。重いイメージは中身が変わるときだけ。"""
+
+    def test_ml_docs_only_is_docs(self):
+        p = classify.classify(["ml/README.md"])
+        self.assertEqual("docs", p.mode)
+        self.assertFalse(p.run_ml_train or p.run_images)
+
+    def test_ml_tests_only_run_the_python_job_and_the_kotlin_interop_without_images(self):
+        p = classify.classify(["ml/tests/test_job.py"])
+        self.assertTrue(p.run_ml_train and p.run_build)
+        self.assertFalse(p.run_images or p.run_release)
+        self.assertEqual(["8.4"], p.db_matrix)
+        self.assertEqual(["apps"], p.db_suites)  # Kotlin⇄Python の結合テスト(:bot)
+
+    def test_ml_source_and_requirements_also_rebuild_the_image(self):
+        for f in ("ml/src/ml_train/job.py", "ml/requirements.txt", "ml/pyproject.toml", "tools/ml/canonical.py", "tools/ml/dataset_contract.py"):
+            p = classify.classify([f])
+            self.assertTrue(p.run_ml_train and p.run_images, f)
+
+    def test_unrelated_changes_do_not_run_ml_train(self):
+        for f in ("docs/PROGRESS.md", "agent/src/jra_agent/sender.py", "tools/golden/catalog.py", "dashboard/src/main/kotlin/A.kt"):
+            self.assertFalse(classify.classify([f]).run_ml_train, f)
+        self.assertFalse(classify.classify(["tools/ml/signing.py"]).run_images)  # イメージに入らないテスト専用のファイル
+        self.assertFalse(classify.classify(["tools/ml/signing.py"]).run_ml_train)
+
+    def test_full_runs_ml_train(self):
+        self.assertTrue(classify.plan_for_event("workflow_dispatch").run_ml_train)
+        self.assertTrue(classify.classify([".github/workflows/ci.yml"]).run_ml_train)
 
 
 class EventTest(unittest.TestCase):

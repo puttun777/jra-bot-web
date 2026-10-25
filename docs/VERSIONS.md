@@ -199,3 +199,15 @@ GitHub Actions（`db-integration` 8.4 / 9.7、ubuntu-24.04、Temurin 25、PR #8�
 | pywin32 | 312（Windows 実機のオプション。COM のみ） | DPAPI は ctypes で呼ぶので不要 |
 | 開発ツール | pytest 9.1.1・pytest-timeout 2.4.0・ruff 0.17.2・mypy 2.4.0（固定） | 各 PyPI の最新安定版（pre-release なし） |
 | GitHub Actions | actions/setup-python v6.2.0（SHA 固定） | 既存の checkout/setup-java と同じ固定方式 |
+
+## 15. ml-train（Python）の版（2026-10-24, T3.6-B。D-165・D-176）
+調査日 2026-10-24（PyPI の公開日で『公開から 2 週間以上』を確認）。ml-train は独立した依存環境（`ml/requirements.txt`）で、`tools/golden`（numpy 2.5.3）・`agent`（cryptography 50.0.2）とは別に管理する。
+| 項目 | 版 | 理由 |
+|---|---|---|
+| Python | **3.13.17**（Docker: `python:3.13.17-slim-bookworm@sha256:e32be0e5…8530`）、CI は 3.13 | agent の目標と同じ。numpy 2.5 は 3.12 以上、scipy 1.18 は 3.12 以上。slim-bookworm は glibc で manylinux の wheel が使える（alpine の musl は避ける） |
+| numpy | 2.5.3（公開 2026-09-06） | ゴールデンと同じ版（2.5.4 は 2026-10-10 公開で 2 週間をわずかに超えるが、ゴールデンの 2.5.3 を更新しない方針で据え置き） |
+| scipy / scikit-learn / joblib / threadpoolctl | 1.18.1 / 1.9.1 / 1.6.0 / 3.7.0 | いずれも安定版。scikit-learn は `LogisticRegression(lbfgs)` と警告→例外化（収束しないものを黙って使わない）に使う。pandas は使わない（CSV は標準ライブラリ + numpy） |
+| cryptography / cffi / pycparser | 50.0.2 / 2.1.1 / 3.12 | Ed25519 署名（agent と同じ版） |
+| PyMySQL | 1.2.3 | 純 Python の MySQL クライアント（ml_model の SELECT/INSERT だけ）。MySQL 8 の既定認証 `caching_sha2_password` は cryptography で処理。**Cloud SQL 接続（TLS・コネクタ）は未検証** |
+| pytest / ruff / mypy（開発） | 9.1.1 / 0.17.2 / 2.4.0 | agent と同系 |
+| Docker ベース | `python:3.13.17-slim-bookworm`（digest 固定） | 更新は Dependabot（docker・pip）で digest/版の PR を出す想定（`.github/dependabot.yml` への pip `/ml` の追加は未実施: UNRESOLVED G-19） |

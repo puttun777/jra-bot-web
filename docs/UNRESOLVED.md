@@ -1,6 +1,6 @@
 # UNRESOLVED（未解決事項の管理表）
 
-作成: 2026-10-23（Stage 3-D / T3.4）。**2026-10-24 Stage 3-E（T3.5）・Stage 3-F1（T3.6-A）で更新**。**未解決事項の正本はこの表**。PROGRESS.md の各段階の「未解決」は履歴で、現在の状態はここを見る。
+作成: 2026-10-23（Stage 3-D / T3.4）。**2026-10-24 Stage 3-E（T3.5）・Stage 3-F1（T3.6-A）・Stage 3-F2（T3.6-B）で更新**。**未解決事項の正本はこの表**。PROGRESS.md の各段階の「未解決」は履歴で、現在の状態はここを見る。
 **根拠のない項目を「解決済み」にしない**。A は根拠（出典）を必ず書く。出典が検索抜粋で原文を直接読めていないものは、その旨を書く（本環境のプロキシは jra-van.jp / developer.jra-van.jp を 403 で拒否する）。
 
 | 分類 | 意味 |
@@ -28,6 +28,7 @@
 | T1.17: 公式仕様書の詳細確認 | E-5・G-16 | 12 項目すべて未確認 | 変化なし |
 | T3.0: Windows 実機 PoC | F-1 | 未完了 | 変化なし |
 | T5.0: infra 同期 | G-9・G-14 | 第 5 段階の前の必須前提 | `MODEL_VERIFY_PUBKEY` の書式（CONTRACTS 0.4.9）を追加 |
+| ML 品質ゲートの閾値・署名鍵運用（T3.6-B） | D-13・D-14・D-15 | 未承認。閾値の既定値は持たず、設定が無ければ REJECTED（fail closed） | 新規（Stage 3-F2）。実データでの学習・評価は未実施 |
 | 本番 GCP | F-2 | 未検証（Stage 5 まで保留） | 変化なし（GCS の実バケットに書いていない） |
 | MySQL 9.7 の本番採用 | D-10 | 未決（8.4 を本番既定のまま） | 変化なし |
 | Connector/J 26.x の採用 | D-10 | 未決 | 変化なし |
@@ -73,6 +74,13 @@
 | C-17 | H1/H10 の**記録の是正**（E1・E2: 分類 R） | 理由コード・段階・馬ごとの正確な出どころを保持。旧ラベルは `legacyLabel` に残し Kelly 係数の数値は不変。H1 の**実態**（旧 Bot が実際に市場確率だったか）は実データの `prob_source` 分布が必要で未確認（D-2 の手順 2） |
 | C-18 | モデル署名・改ざん検知・署名前の推論禁止 | `ModelLoader`（署名 → 正準形 → sha256 → スキーマ → 次元の順に fail closed）、`VerifiedModel`。テスト用の決定的な鍵（本番の秘密鍵は不要・Git に無い）。**本番の鍵の発行・保管・ローテーションは未決（G-3/D-12）** |
 | C-19 | 学習側（Stage 3-F2）への引き継ぎ契約の定義 | データセットの列・split・as_of・sha256・manifest、`sample_weight` の式、モデル出力形式、署名、品質ゲートの**案**（ML_DESIGN §11.7・§11.8）。Python の検証（`tools/ml/dataset_contract.py`）と合成データセットで確認。**品質ゲートの数値は未確定（承認後）** |
+| C-20 | **T3.6-B: `export-dataset` の配線**（Stage 3-F2）: `FeatureSource`/`DatasetSource` の MySQL 実装（`:persistence`。SQL 自体が asOf・レース日で時間を制限する）、`DatasetPublisher`（CSV → manifest の順。manifest が確定の印）、`bot --task=export-dataset`（D-174） | `MlSourceIntegrationTest`（過去走は `run_date < レース日`、オッズは `observed_at <= asOf`、他テナント不可視、結果なしのレースは `RESULT_INCOMPLETE`）、`ExportDatasetTaskHandlerTest`、`MlTrainInteropIntegrationTest`（Kotlin 出力 → Python 学習 → Kotlin `ModelLoader` で検証）。合成データのみ。**実データでの出力は未実施** |
+| C-21 | **G-17 ⑤ 馬マスタの時点履歴**（D-166） | V4 `horse_master_history`（追記専用）と `HorseMasterAtTime.resolve`（現行 `updated_at ≤ asOf` なら現行、そうでなければ asOf 以前の最新履歴、無ければ累積値を空にして `MASTER_NEWER_THAN_AS_OF`）。履歴の追記は `HorseMasterHistoryStore`。**実運用での追記（取込側が版を足す）は T3.8 以降**。既存データに履歴は無いので、過去分の PIT は履歴が貯まるまで不完全 |
+| C-22 | **G-17 ④ GCS の `ModelStore`/`DatasetStore`**（D-172） | `GcsModelStore`/`GcsDatasetStore`（作成のみ・`ifGenerationMatch=0`・署名先/JSON 最後）。**偽の `ObjectClient` による単体テストと、HTTP クライアントのローカル疎通のみ**。実 GCS への接続は未検証（G-19） |
+| C-23 | **ml-train（Python の学習 Job）**（D-165〜D-171）: データセット検証・v2 学習（L2 ロジスティック回帰 + Platt + 直近重み）・評価・品質ゲート（fail closed）・署名つきモデル JSON・保管・レジストリ登録（CANDIDATE/REJECTED のみ。ACTIVE へ昇格しない・削除/更新しない） | pytest 128 件・ruff・mypy strict。生成したモデル JSON を Kotlin `ModelLoader` が検証できる（署名・正準形・sha256・スキーマ・次元）。**合成データのみ。実データでの精度・品質ではない** |
+| C-24 | **G-17 ⑧ release-manifest の `feature_schema_hash`**（D-177） | schema v2: `feature_schemas`（calibration/alpha/market の hash）+ `feature_schema_hash`（その正準 JSON の sha256）。プレビューは Kotlin のフィクスチャから算出。**本番 manifest は生成しない（第 5 段階のゲート）** |
+| C-25 | **旧 pkl → JSON 変換ツールの実装**（D-175。T1.20 の一部） | 許可リスト式 Unpickler（任意の pickle を安全にするものではない）、次元不一致は中止、署名、ローカル専用。**合成の旧形式 pkl だけで検証。実 pkl の変換は未実施（F-5）** |
+| C-26 | **ml-train イメージ（5 つ目）と CI**（D-176・D-178） | Dockerfile の `ml-train` ステージ、イメージのスモーク（合成データで学習・署名・登録）、`ci.yml` の `ml-train` ジョブと `ci gate` への統合。**イメージのビルドとスモークの合否は GitHub Actions（images）で確認。push はしない** |
 
 ## D. ユーザーの運用判断待ち（承認するまで「承認済み」にしない）
 | ID | 判断事項 | 選択肢（推奨を先頭） |
@@ -89,6 +97,9 @@
 | D-10 | MySQL 9.7・Connector/J 26.x の本番採否（検証は維持。CI で 8.4/9.7 を毎回、Connector/J 26 は変更時のみ） | 8.4 を本番既定のまま維持（推奨）／9.7 へ |
 | D-11 | 生レコードの保持期間（30 日案。E-1 の回答に依存） | 回答後に確定 |
 | D-12 | KEK（署名鍵の暗号鍵）の運用: Secret Manager に置く／ローテーション手順／エージェント登録手順（`/v1/agent/register` と管理操作） | 第 5 段階の前に設計して承認（G-3） |
+| D-13 | **ML の品質ゲートの数値閾値**（ECE・logloss・Brier・市場ベースラインとの比較・最小サンプル数 等）。現在は**既定値を持たず、設定が無ければ REJECTED（fail closed）**。閾値は未承認で、実装は暗黙の閾値を持たない（D-168） | 承認された閾値を設定ファイルで与える（実データの検証 G-ML-3 の後） |
+| D-14 | **モデル署名鍵の運用**: 秘密鍵（`MODEL_SIGNING_KEY`）の置き場所（Secret Manager）・ローテーション・検証用公開鍵（`MODEL_VERIFY_PUBKEY`）の配布。REJECTED の通知と終了コードの扱い（D-170） | 第 5 段階の前に設計して承認 |
+| D-15 | **モデル・データセットの保持期間と掃除**（CANDIDATE/REJECTED が増える。ml-train は削除しない設計） | 保持期間を決めて掃除の手順を設計（第 5 段階） |
 
 ### T1.20 の具体的な手順（まだ何も取得していない。取得済みとは扱わない）
 | # | 取得するもの | 手順（利用者のローカルで。実データ・パスワード・利用キーは貼らない） | 報告する集計値 |
@@ -136,15 +147,16 @@
 | G-4 | 最終接続の GCS への写し（`HeartbeatMirror` の GCS 実装。今回は `SKIPPED` を返す未配線の実装） | `:cloud-gcp` の後続 |
 | G-5 | 実データ形式（JV-Data）のレコードパーサ（E-5 の確認後に `RecordParser` を追加） | T1.17 後 |
 | G-6 | reconcile（`STALE` イベントの生成、YSCH から消えた開催日の扱い、結果欠損の補完）、MONITORING 以降の履歴の種類（V3 でさらに ENUM を足すか）、bot-run の checkpoint・SIGTERM | T3.8 / T3.9 |
-| G-7 | ~~ML（FeatureBuilder・ProbabilityPipeline）~~ → **T3.6-A で実装（C-14）**。残り: ml-train（Python の学習 Job）・`export-dataset` タスクの配線と `DatasetStore` への manifest 保管・ml-train イメージ・pkl→JSON 変換の実装（実行は F-5）・品質ゲートの確定 | T3.6-B（Stage 3-F2） |
+| G-7 | ~~ML（FeatureBuilder・ProbabilityPipeline）~~ → T3.6-A（C-14）。~~ml-train・`export-dataset` の配線・`DatasetStore` への manifest 保管・ml-train イメージ・pkl→JSON 変換の実装~~ → **T3.6-B で実装（C-20〜C-26。合成データのみ）**。残り: 実データでの検証（F-5・G-ML-1〜3）・品質ゲートの閾値（D-13）・Cloud Run Job 化（第 5 段階） | 第 5 段階 / T1.20 |
 | G-8 | Discord 通知（BACKFILL では通知しない） | T3.7 |
 | G-9 | **T5.0（必須の前提）**: infra の文書を web CONTRACTS に追従（I-H1〜I-H9 ＋ 今回の追加: V3 の GRANT、環境変数 `AGENT_KEK_KEYS`・`AGENT_KEK_ACTIVE_KID`・`INGEST_*`、ingest の Secret、`app` の `race_schedule_event` INSERT） | 第 5 段階の前 |
-| G-10 | 本番 release-manifest、ml-train イメージ、branch protection の required checks | 第 5 段階 |
+| G-10 | 本番 release-manifest（`feature_schemas` を含む v2 の本番生成は第 5 段階のゲートが揃うまで禁止）、~~ml-train イメージ~~（T3.6-B で追加。レジストリへの push・digest は第 5 段階）、branch protection の required checks（`ci gate`。ml-train ジョブは gate に統合済み） | 第 5 段階 |
 | G-11 | Spring Boot 4.2.0 の GA 後の移行（VERSIONS §7） | GA 後 |
 | G-12 | レート制限（429）。契約にはあるが未実装。認証前の要求は本文 1 MiB までの読取りとエージェントの 1 件検索（DB）で、単一利用者・Cloud Run の同時実行数の制限で当面は許容 | T3.5 / 第 5 段階（Cloud Armor・同時実行数の設定と合わせて） |
 | G-13 | **ビーコンの NORMAL の再署名**: infra は NORMAL を start 時にしか書かない。エージェントは『有効と確認してから 6 時間』を鮮度にしている（D-148）が、古い NORMAL（署名は有効）の再生を seq だけでは防げない（STOPPED→NORMAL の seq は増えるので巻き戻りは拒否できる。同じ seq の再生は防げない）。infra が NORMAL を定期的（例 1 時間）に再署名し `validUntil` を付けると窓を縮められる | T5.0（infra に確認） |
 | G-14 | **T5.0 への追加（T3.5 分）**: エージェントの配布（Python 同梱 exe・署名）、ビーコン公開鍵の同梱と鍵ローテーション手順、`INGEST_VERIFIED_FETCH_SPECS`・`INGEST_PLAN_ITEMS_JSON`・`INGEST_UPDATE_MANIFEST_PATH`、`/v1/agent/mode` が未認証であること（Cloud Armor・同時実行数で保護: G-12）、トークン期限の運用、更新 manifest の署名鍵（オフライン） | 第 5 段階の前 |
 | G-15 | 取得計画の実際の生成（開催カレンダー + 欠損検知から `plan` を作る）。現在は運用者が与えた項目のうち検証済みのものだけ。YSCH の対象範囲は key の 16 桁（仮の表現。確認後に正式化） | T3.8 |
 | G-16 | 実データ形式（JV-Data）のパーサ（サーバ）と、`SpecRegistry` の確認の記録（T1.17 の 12 項目。確認が 0 件のうちは実取得は始まらない） | T1.17 後 |
-| G-17 | **T3.6-B / T3.8 への引き継ぎ（ML）**: ①bot-run の開始時に `ModelRunPin.capture`、使った `model_id` を `race_evaluations` に保存、`fallback_reason`・アラート（ML 有効で市場確率のみ）②`MlInference` を判定（`WinDecisionEvaluator` の `MlProbabilityInput`）へ配線 ③`FeatureSource`・`DatasetSource` の `:persistence` 実装（現在は合成のメモリ実装のみ）④`ModelStore`/`DatasetStore` の GCS 実装（`:cloud-gcp`）と manifest の保管 ⑤馬マスタの**時点ごとの履歴**（PIT で累積値を使えるように。現状は `asOf` より新しい行の累積値を 0 にする）⑥`format_reason_from_features`（通知文。T3.7）⑦`SnapshotsNewestFirst` など判定側の既存課題は変更なし ⑧**release-manifest の `feature_schema_hash` は単一値だが、スキーマは calibration(40)・alpha(35)・market(5) の複数**。単一値の定義（例: 各 hash を配列/連想にする、または正準 JSON のハッシュを 1 つ取る）を契約で決める（第 5 段階の manifest 生成の前。現在のプレビューは `FEATURE_SCHEMA_HASH_UNDEFINED` のまま） | T3.6-B / T3.8 |
+| G-17 | **T3.6-B / T3.8 への引き継ぎ（ML）**: ①bot-run の開始時に `ModelRunPin.capture`、使った `model_id` を `race_evaluations` に保存、`fallback_reason`・アラート（ML 有効で市場確率のみ）②`MlInference` を判定（`WinDecisionEvaluator` の `MlProbabilityInput`）へ配線 ~~③`FeatureSource`・`DatasetSource` の `:persistence` 実装~~ → C-20 ~~④`ModelStore`/`DatasetStore` の GCS 実装と manifest の保管~~ → C-22（実 GCS は未検証: G-19）~~⑤馬マスタの時点履歴~~ → C-21（履歴の追記を取込側がいつ行うかは T3.8 以降）⑥`format_reason_from_features`（通知文。T3.7）⑦`SnapshotsNewestFirst` など判定側の既存課題は変更なし ~~⑧release-manifest の `feature_schema_hash`~~ → C-24 | T3.7 / T3.8 |
 | G-18 | **ML の未承認の改善案は未実装のまま**: v2 の本番有効化（旧新比較・バックテスト G-ML-3・閾値の再検討・承認の後）、H4 の二重ブレンド解消、H10 の Kelly 係数 enum 化（`kellyMultiplierBySourceEnum`）、`ensemble_beta` の自動調整、`class_weight` を使わない学習 | T1.21 / T3.9 |
+| G-19 | **T3.6-B の後続**: ①ml-train は `file://`（GCS ボリュームのマウント）のみ。`gs://` の直接読書きは未対応（D-171。Stage 5 で決める）②GCS アダプタの実 GCS・実認証での検証（Stage 5。本番 GCP に接続していない）③Dependabot の pip `/ml`（numpy は除外）④履歴の追記・過去分の PIT は履歴が貯まるまで不完全（C-21）⑤REJECTED の通知（D-14）| 第 5 段階 |

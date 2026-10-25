@@ -35,6 +35,15 @@ interface DatasetReader {
         tenantId: TenantId,
         datasetId: DatasetId,
     ): InputStream?
+
+    /**
+     * manifest（正準 JSON + 改行 1 つ。`{dataset_id}.manifest.json`）。**manifest があることがデータセットの確定の印**（CSV の後に書く）。
+     * 無ければ null。I/O の失敗は [StorageException]。
+     */
+    fun readManifest(
+        tenantId: TenantId,
+        datasetId: DatasetId,
+    ): ByteArray?
 }
 
 /**
@@ -48,6 +57,16 @@ interface DatasetWriter {
         datasetId: DatasetId,
         content: InputStream,
     ): DatasetWriteResult
+
+    /**
+     * manifest の書込み。CSV の書込みが済んだ後に呼ぶ（確定の印）。作成のみで上書きしない:
+     * 同一内容なら [ArtifactWriteOutcome.UNCHANGED]、異なれば [ArtifactWriteOutcome.CONFLICT]。I/O の失敗は [StorageException]。
+     */
+    fun writeManifest(
+        tenantId: TenantId,
+        datasetId: DatasetId,
+        manifest: ByteArray,
+    ): ArtifactWriteOutcome
 }
 
 interface DatasetStore :

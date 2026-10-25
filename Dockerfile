@@ -1,6 +1,7 @@
-# 実行イメージ（T2.5 後半）。1 つの Dockerfile から 4 つのイメージをビルドする:
-#   docker build --target dashboard|ingest|bot|db-migration --build-arg GIT_SHA=<40桁> -t jra-bot/<target>:<git sha> .
-# - 全ターゲットが同じ `build` ステージ（Gradle Wrapper で bootJar / installDist）を共有するので、4 つ続けてビルドしても Gradle は 1 回だけ。
+# 実行イメージ（T2.5 後半 + T3.6-B）。1 つの Dockerfile から 5 つのイメージをビルドする:
+#   docker build --target dashboard|ingest|bot|db-migration|ml-train --build-arg GIT_SHA=<40桁> -t jra-bot/<target>:<git sha> .
+# - JVM の 4 ターゲットは同じ `build` ステージ（Gradle Wrapper で bootJar / installDist）を共有するので、続けてビルドしても Gradle は 1 回だけ。
+#   ml-train は Python（独立した依存環境。Gradle を使わない。下の ml-train ステージ）。
 # - 実行イメージは JRE だけ（JDK・Gradle・ソース・テストを含まない）。root 以外（uid 10001）で動く。
 # - ENTRYPOINT は exec 形式の `java` を PID 1 にする。SIGTERM は JVM がそのまま受け、終了コードはアプリの終了コードのまま返る（シェルを挟まない）。
 # - OCI ラベル revision / version は Git SHA（ベースイメージの version=24.04 を上書きする）。リリース番号は release-manifest が持つ。
@@ -94,3 +95,37 @@ LABEL org.opencontainers.image.title="jra-bot db-migration" \
       org.opencontainers.image.revision="${GIT_SHA}" \
       org.opencontainers.image.version="${GIT_SHA}"
 ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75.0", "-XX:+ExitOnOutOfMemoryError", "-cp", "/app/lib/*", "jp.jrabot.dbmigration.DbMigrationMainKt"]
+
+# ---------------------------------------------------------------- ml-train (Python)
+# ML 学習 Job（T3.6-B。ML_DESIGN §4.2・CONTRACTS §5.1）。常駐しない。必要時に Cloud Run Job として `args` で `train ...` を渡す。
+# - 依存は ml/requirements.txt（推移的依存まで固定。numpy 2.5.3・scikit-learn 1.9.1 など）だけを --no-deps・wheel のみでインストールする（ソースビルドしない）。
+#   ビルド用のステージ（ml-train-deps）と実行ステージを分け、実行イメージに pip のキャッシュ・コンパイラ・ソース以外のものを入れない。
+# - 特徴量は再計算しない（Kotlin の export-dataset が作る）。データセットの契約検証は tools/ml の canonical.py・dataset_contract.py（署名のテスト用シードを含む signing.py や
+#   合成成果物の生成器、テストは入れない）。DB は `mltrain`（ml_model の SELECT/INSERT のみ）。実データ・学習済みモデル・秘密鍵はイメージに入れない（MODEL_SIGNING_KEY は実行時の Secret）。
+# - ENTRYPOINT は exec 形式の python（PID 1）。SIGTERM は ml_train が受け、確定（レジストリ登録）の前なら成果物を片付けて 75 で終わる。終了コードは CONTRACTS §9.1。
+# - BLAS のスレッド数は 1 に固定（再現性）。ログは標準出力の JSON 1 行。
+FROM python:3.13.17-slim-bookworm@sha256:e32be0e55814a08977501ca863271d9bd02443710db8f2afaf8372e2c4508530 AS ml-train-deps
+ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
+COPY ml/requirements.txt /tmp/requirements.txt
+RUN python -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-deps --only-binary=:all: -r /tmp/requirements.txt
+
+FROM python:3.13.17-slim-bookworm@sha256:e32be0e55814a08977501ca863271d9bd02443710db8f2afaf8372e2c4508530 AS ml-train
+RUN groupadd --system --gid 10001 app \
+    && useradd --system --uid 10001 --gid 10001 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin app
+ENV TZ=Asia/Tokyo PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/app/src:/app \
+    OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+# venv は実行可能ファイルを含むので --chmod は付けない（a=rX にすると python が起動できなかった）。ビルダーの既定（root 所有・他者は読取り+実行）のまま
+COPY --from=ml-train-deps /opt/venv /opt/venv
+WORKDIR /app
+COPY ml/src/ml_train /app/src/ml_train
+COPY tools/__init__.py /app/tools/__init__.py
+COPY tools/ml/__init__.py tools/ml/canonical.py tools/ml/dataset_contract.py /app/tools/ml/
+USER 10001:10001
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.title="jra-bot ml-train" \
+      org.opencontainers.image.description="JRA Bot ML training Job (Python). Registers CANDIDATE/REJECTED models only; never promotes to ACTIVE" \
+      org.opencontainers.image.source="https://github.com/puttun777/jra-bot-web" \
+      org.opencontainers.image.revision="${GIT_SHA}" \
+      org.opencontainers.image.version="${GIT_SHA}"
+ENTRYPOINT ["/opt/venv/bin/python", "-m", "ml_train"]

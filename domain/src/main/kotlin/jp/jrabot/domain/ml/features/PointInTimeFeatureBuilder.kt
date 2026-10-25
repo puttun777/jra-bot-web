@@ -63,8 +63,8 @@ data class FeatureRequest(
  * - `age_years` は**レース日**基準（推論時刻でも学習データの生成時刻でもない）。
  * - オッズは `ts <= asOf` の最新だけ（asOf より後のスナップショットは見ない）。無ければ旧互換の既定値（odds=100.0・人気=0）で [FeatureFlag.ODDS_MISSING]。
  * - asOf が発走時刻以降なら [LeakageException]（発走時刻が不明でも拒否）。
- * - 馬マスタの累積値は [MasterTimeline] に従う。**限界**: 馬マスタは最新版 1 行しか持たないため、`updatedAt` がレース後の行では累積値を使えない
- *   （学習用データでは多くの馬で 0 になる。時点ごとのマスタ履歴の保管は未実装: UNRESOLVED）。
+ * - 馬マスタは [FeatureSource.horseAsOf]（asOf 時点で判明していた版。履歴の規則は [HorseMasterAtTime]）。累積値は [MasterTimeline] に従う。
+ *   **限界**: 履歴が無い時点の累積値は欠損（空）になる。過去データの復元は、時点を特定できる実データが得られた後（UNRESOLVED）。
  * 時刻は [Instant] の引数で受け取り、現在時刻を読まない。旧互換の数値を上書きしない（別のクラス・別のテスト）。
  */
 class PointInTimeFeatureBuilder(
@@ -113,7 +113,7 @@ class PointInTimeFeatureBuilder(
         val kettoNum = source.entry(req.tenantId, req.raceId, req.umaban)?.kettoNum?.let(PythonText::strip) ?: ""
         if (kettoNum.isEmpty()) return HorseSummary.NONE
 
-        val h = source.horse(req.tenantId, kettoNum)
+        val h = source.horseAsOf(req.tenantId, kettoNum, req.asOf)
         var age = 0.0
         var style = ""
         var dist = 0.0

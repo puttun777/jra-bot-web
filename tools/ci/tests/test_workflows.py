@@ -51,7 +51,7 @@ class WorkflowRulesTest(unittest.TestCase):
 
     def test_every_gated_job_depends_on_changes_and_has_an_if(self):
         blocks = job_blocks(CI)
-        self.assertEqual({"changes", "build", "release-tools", "golden", "db-integration", "images", "connectorj26", "agent", "agent-windows", "ml-tools", "ci-gate"}, set(blocks))
+        self.assertEqual({"changes", "build", "release-tools", "golden", "db-integration", "images", "connectorj26", "agent", "agent-windows", "ml-tools", "ml-train", "ci-gate"}, set(blocks))
         for name, b in blocks.items():
             if name in ("changes", "ci-gate"):
                 continue
@@ -97,12 +97,20 @@ class WorkflowRulesTest(unittest.TestCase):
         for needle in (":golden-runner:run", "tools.golden.kotlin_compare", "tools.golden.verify", "kotlin_coverage.json"):
             self.assertIn(needle, b)
         d = job_blocks(CI)["db-integration"]
-        for needle in ("integrationTest", ":persistence:integrationTest", ":bot:integrationTest :ingest:integrationTest :dashboard:integrationTest", "tests < 44", "tests < 167"):
+        for needle in ("integrationTest", ":persistence:integrationTest", ":bot:integrationTest :ingest:integrationTest :dashboard:integrationTest", "tests < 44", "tests < 175"):
             self.assertIn(needle, d)
         self.assertIn("check-repo-hygiene.sh", job_blocks(CI)["changes"])
         g = job_blocks(CI)["golden"]
         for needle in ("--min-tests 85 --max-skipped 0", "--check", "tools.golden.verify"):
             self.assertIn(needle, g)
+
+    def test_ml_train_job_runs_lint_types_and_tests_and_rejects_zero_or_skipped(self):
+        m = job_blocks(CI)["ml-train"]
+        self.assertRegex(m, r"run_ml_train == 'true'")
+        for needle in ("ruff check", "mypy", "pytest", "requirements-dev.txt", "skipped"):
+            self.assertIn(needle, m)
+        self.assertNotRegex(m, r"(?i)secrets\.")
+        self.assertIn("ml-train", gate.REQUIRED)
 
     def test_ml_tools_job_checks_signatures_schema_and_datasets_without_secrets(self):
         m = job_blocks(CI)["ml-tools"]
@@ -110,7 +118,7 @@ class WorkflowRulesTest(unittest.TestCase):
             self.assertIn(needle, m)
         self.assertNotIn("secrets.", m)  # 本番の鍵・Secrets を使わない（テスト専用の決定的な鍵だけ）
         b = job_blocks(CI)["build"]
-        for needle in ("domain/build/test-results/test 811", "ModelLoaderTest", "ProbabilityPipelineTest", "FeatureBuilderTest", "GoldenMlTest"):
+        for needle in ("domain/build/test-results/test 822", "ModelLoaderTest", "ProbabilityPipelineTest", "FeatureBuilderTest", "GoldenMlTest"):
             self.assertIn(needle, b)
 
     def test_images_workflow_is_local_only(self):
@@ -131,17 +139,21 @@ class DependabotTest(unittest.TestCase):
         return [e.replace('"', "", 2) for e in re.split(r"(?m)^  - package-ecosystem: ", self.TEXT)[1:]]
 
     def test_ecosystems_and_directories_match_the_repository(self):
-        found = {}
+        found = []
         for e in self.entries():
             eco = e.splitlines()[0].strip().strip('"')
             d = re.search(r'(?m)^    directory: "([^"]+)"', e).group(1)
-            found[eco] = d
+            found.append((eco, d))
             self.assertTrue((ROOT / d.lstrip("/")).is_dir(), d)
             self.assertIn('interval: "weekly"', e, eco)
-        self.assertEqual({"gradle": "/", "github-actions": "/", "docker": "/", "pip": "/tools/golden"}, found)
+        self.assertEqual(
+            [("gradle", "/"), ("github-actions", "/"), ("docker", "/"), ("pip", "/tools/golden"), ("pip", "/ml")],
+            found,
+        )
         self.assertTrue((ROOT / "gradle" / "libs.versions.toml").exists())
         self.assertTrue((ROOT / "Dockerfile").exists())
         self.assertTrue((ROOT / "tools" / "golden" / "requirements.txt").exists())
+        self.assertTrue((ROOT / "ml" / "requirements.txt").exists())
         self.assertTrue((ROOT / ".github" / "workflows").is_dir())
 
     def test_updates_are_grouped_and_limited(self):
@@ -159,8 +171,8 @@ class DependabotTest(unittest.TestCase):
         docker = [e for e in self.entries() if e.startswith("docker")][0]
         self.assertIn('dependency-name: "eclipse-temurin"', docker)  # JDK 25 LTS 固定。メジャーは VERSIONS で判断
         self.assertIn("version-update:semver-major", docker)
-        pip = [e for e in self.entries() if e.startswith("pip")][0]
-        self.assertRegex(pip, r'(?m)^      - dependency-name: "numpy"\n(?!\s+update-types:)')  # numpy は全版を ignore（D-103。golden の固定版と一体）
+        for pip in [e for e in self.entries() if e.startswith("pip")]:
+            self.assertRegex(pip, r'(?m)^      - dependency-name: "numpy"\n(?!\s+update-types:)')  # numpy は全版を ignore（D-103。golden・ml の固定版と一体）
 
     def test_no_automerge_and_no_prerelease_opt_in(self):
         code = "\n".join(l for l in self.TEXT.splitlines() if not l.lstrip().startswith("#"))

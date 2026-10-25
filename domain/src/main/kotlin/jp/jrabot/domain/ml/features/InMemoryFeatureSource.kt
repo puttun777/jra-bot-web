@@ -1,6 +1,7 @@
 package jp.jrabot.domain.ml.features
 
 import jp.jrabot.domain.tenant.TenantId
+import java.time.Instant
 import java.time.LocalDate
 
 /**
@@ -18,6 +19,7 @@ class InMemoryFeatureSource : FeatureSource {
     private val entries = HashMap<Key, EntryHorse>()
     private val horses = HashMap<Key, HorseMaster>()
     private val runs = HashMap<Key, MutableList<PastRun>>()
+    private val history = HashMap<Key, MutableList<HorseCumulative>>()
 
     fun putRace(
         tenantId: TenantId,
@@ -43,6 +45,15 @@ class InMemoryFeatureSource : FeatureSource {
         horses[Key(tenantId.value, horse.kettoNum)] = horse
     }
 
+    /** 馬マスタの累積値の版を追加する。版を 1 つでも追加した馬は、[horseAsOf] が [HorseMasterAtTime] の規則で時点を解決する（DB と同じ規則）。 */
+    fun putHorseHistory(
+        tenantId: TenantId,
+        kettoNum: String,
+        version: HorseCumulative,
+    ) {
+        history.getOrPut(Key(tenantId.value, kettoNum)) { ArrayList() }.add(version)
+    }
+
     fun putPastRun(
         tenantId: TenantId,
         kettoNum: String,
@@ -66,6 +77,16 @@ class InMemoryFeatureSource : FeatureSource {
         tenantId: TenantId,
         kettoNum: String,
     ): HorseMaster? = horses[Key(tenantId.value, kettoNum)]
+
+    override fun horseAsOf(
+        tenantId: TenantId,
+        kettoNum: String,
+        asOf: Instant,
+    ): HorseMaster? {
+        val versions = history[Key(tenantId.value, kettoNum)] ?: return horse(tenantId, kettoNum)
+        val latest = versions.filter { !it.knownAt.isAfter(asOf) }.maxByOrNull { it.knownAt }
+        return HorseMasterAtTime.resolve(horse(tenantId, kettoNum), latest, asOf)
+    }
 
     override fun pastRuns(
         tenantId: TenantId,

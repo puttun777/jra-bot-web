@@ -12,6 +12,9 @@
   build_cfg   Gradle・版数・build-logic・ktlint 設定  → build、DB 統合（全・8.4 + 9.7）、images
   ml_tools    tools/ml（正準 JSON・署名・データセット契約の Python 参照実装）と、その合成成果物 domain/src/test/resources/ml  → ml-tools（Python 3.12。cryptography）。
               合成成果物は Kotlin のテスト（モデルのロード・署名検証）の入力でもあるので kotlin_golden も付ける（build は走るが DB 統合は不要）
+  ml_train    ml/（ML 学習 Job。Python。T3.6-B）  → ml-train（Python 3.13: ruff・mypy・単体）。Kotlin⇄Python の結合テスト（:bot の MlTrainInteropIntegrationTest）が ml/ を使うので
+              kotlin_app も付ける（build + DB 統合 8.4 のアプリのスイート）。ml/src・requirements は ml-train イメージの中身なので docker も付ける。
+              tools/ml の canonical.py・dataset_contract.py（イメージに入る契約の参照実装）も ml_train + docker
   golden      tools/golden  → golden（Python）
   kotlin_golden  tools/golden（.md 以外）・golden-runner  → build（Kotlin と旧 Python の比較は build ジョブの中。DB 統合は不要）。
               :domain の変更は kotlin_core で build に入るので、比較も必ず走る
@@ -62,8 +65,13 @@ RULES: list[tuple[str, tuple[str, ...]]] = [
     (r"^agent/", ("agent",)),
     # --- ML ツール（T3.6-A）。合成成果物は Kotlin のテストも使う
     (r"^tools/ml/.*\.md$", ("docs",)),
+    (r"^tools/ml/(canonical|dataset_contract)\.py$", ("ml_tools", "ml_train", "docker", "kotlin_app")),
     (r"^tools/ml/", ("ml_tools",)),
-    (r"^domain/src/test/resources/ml/", ("ml_tools", "kotlin_golden")),
+    (r"^domain/src/test/resources/ml/", ("ml_tools", "ml_train", "kotlin_golden")),
+    # --- ML 学習 Job（T3.6-B）。ml/ だけの変更でも Python の学習テストが必ず走る。イメージの中身（src・requirements）が変わったらイメージも
+    (r"^ml/.*\.md$", ("docs",)),
+    (r"^ml/(src/|requirements[^/]*\.txt$|pyproject\.toml$)", ("ml_train", "kotlin_app", "docker")),
+    (r"^ml/", ("ml_train", "kotlin_app")),
     # --- ドキュメント（モジュール内の README なども docs。上の規則に当たらなかったもの）
     (r"^(docs/.*|.*\.md|LICENSE|\.gitignore)$", ("docs",)),
     # --- Kotlin
@@ -89,6 +97,7 @@ class Plan:
     run_build: bool = False
     run_golden: bool = False
     run_ml_tools: bool = False
+    run_ml_train: bool = False
     run_release: bool = False
     run_images: bool = False
     run_connectorj26: bool = False
@@ -103,7 +112,7 @@ class Plan:
         reason = re.sub(r"[\x00-\x1f\x7f]", " ", self.reason)[:300]  # GITHUB_OUTPUT を壊す改行などを入れない（ファイル名は PR の作者が決める）
         return {
             "mode": self.mode, "reason": reason, "files": str(self.files),
-            "run_build": b(self.run_build), "run_golden": b(self.run_golden), "run_ml_tools": b(self.run_ml_tools), "run_release": b(self.run_release),
+            "run_build": b(self.run_build), "run_golden": b(self.run_golden), "run_ml_tools": b(self.run_ml_tools), "run_ml_train": b(self.run_ml_train), "run_release": b(self.run_release),
             "run_images": b(self.run_images), "run_connectorj26": b(self.run_connectorj26),
             "run_agent": b(self.run_agent), "run_agent_windows": b(self.run_agent_windows),
             "db_matrix": json.dumps(self.db_matrix), "db_suites": ",".join(self.db_suites),
@@ -112,7 +121,10 @@ class Plan:
 
 def full_plan(reason: str, files: int = 0, connectorj: bool = False) -> Plan:
     """すべて実行（Connector/J 26.x は `connectorj` が True のときだけ。本番採用が未決で、非ゲートの互換性確認なので）。"""
-    return Plan("full", reason, True, True, True, True, True, connectorj, True, True, list(FULL_MATRIX), list(ALL_SUITES), files)
+    return Plan(
+        "full", reason, run_build=True, run_golden=True, run_ml_tools=True, run_ml_train=True, run_release=True, run_images=True, run_connectorj26=connectorj,
+        run_agent=True, run_agent_windows=True, db_matrix=list(FULL_MATRIX), db_suites=list(ALL_SUITES), files=files,
+    )
 
 
 def tags_for(path: str) -> tuple[str, ...]:
@@ -147,6 +159,7 @@ def classify(files: list[str]) -> Plan:
         p.db_matrix, p.db_suites = ["8.4"], ["apps"]
     p.run_golden = "golden" in tags
     p.run_ml_tools = "ml_tools" in tags
+    p.run_ml_train = "ml_train" in tags
     p.run_release = "release" in tags
     p.run_images = "docker" in tags or "build_cfg" in tags
     p.run_connectorj26 = "connectorj" in tags

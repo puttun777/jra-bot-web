@@ -88,8 +88,8 @@ class BotJobExecutorTest {
     }
 
     @Test
-    fun `5 つのタスクのどれもスタブで、本番では完了扱いにならない`() {
-        for (t in BotTask.entries) {
+    fun `未実装の 4 つのタスクはスタブで、本番では完了扱いにならない（export-dataset は実装済み）`() {
+        for (t in BotTask.entries.filter { it != BotTask.EXPORT_DATASET }) {
             val cmd = (BotArgsParser.parse(args(t.cliName)) as ParsedArgs.Valid).command
             assertEquals(1, StubTaskHandler(AppEnv.PROD).execute(cmd).exitCode, t.cliName)
         }

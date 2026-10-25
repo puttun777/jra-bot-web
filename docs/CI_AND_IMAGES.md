@@ -11,7 +11,8 @@ CI の実行範囲の決め方、分岐保護の設定、イメージのビル�
 | `release tools and ci scripts (Python)` | `tools/release`（manifest・Dockerfile 静的検査）と `tools/ci`（判定・ゲート・ワークフロー規則）の単体テスト（Docker 不要） | リリース関連・Dockerfile・Dependabot 設定・マイグレーション・CI の変更 |
 | `golden tests (Python 3.12)` | T2.6 のゴールデンテスト | `tools/golden`・CI の変更 |
 | `ml tools (Python 3.12)` | T3.6-A: `tools/ml`（正準 JSON・feature_schema の hash・Ed25519 署名・学習用データセットの契約）の単体テスト、合成成果物（`domain/src/test/resources/ml`）の決定的な再生成の一致、合成データセットの契約検証。cryptography 50.0.2 のみ。本番の鍵・Secrets は使わない | `tools/ml`・`domain/src/test/resources/ml`（後者は Kotlin の build も走る。DB 統合は不要）・CI の変更 |
-| `images / images (build + smoke, no push)` | 4 イメージのビルド、スモーク、ドライラン manifest（`images.yml`） | Dockerfile・リリース・ビルド定義・マイグレーション・アプリの build 定義/リソース・CI の変更、フル検証 |
+| `ml-train (Python 3.13)` | T3.6-B: `ml/` の ruff・mypy(strict)・pytest（128 件。0 件・スキップ・失敗を許さない）。独立した依存環境（`ml/requirements-dev.txt`）。Kotlin⇄Python の結合テストは `db integration` の `apps` スイート（MySQL 8.4/9.7）が実行 | `ml/`・`tools/ml` の契約・データセットのフィクスチャの変更 |
+| `images / images (build + smoke, no push)` | 5 イメージ（JVM 4 + ml-train）のビルド、スモーク、ドライラン manifest（`images.yml`） | Dockerfile・リリース・ビルド定義・マイグレーション・アプリの build 定義/リソース・CI の変更、フル検証 |
 | `connectorj26 / connector/j 26.x check (MySQL x)` | Connector/J 26.x の互換性確認（**非ゲート**、`compat-connectorj26.yml`） | Connector/J・DB 関連の依存設定の変更、手動、月次 |
 | `ci gate` | 最終集約。**常に実行**。実行が必要なジョブが success でなければ失敗 | 常に |
 
@@ -100,7 +101,7 @@ run 39921807006（T2.6、head 6f24519。全ジョブが毎回実行）。壁時�
 ### 4.2 スモークが確認すること（`tools/release/image_smoke.py`、D-096）
 | 区分 | 内容 |
 |---|---|
-| 静的（4 イメージ） | ENTRYPOINT が設計どおりの exec 形式で CMD なし／USER=10001:10001／OCI ラベル revision・version=Git SHA／ENV に秘密らしい名前がない・履歴に秘密の代入がない・TZ=Asia/Tokyo・HEALTHCHECK なし／JDK 25／実効 uid 10001／javac・gradle・mvn・git・curl・wget・gcc・make・unzip がない／`/app` に書けない／ファイルシステムに秘密・実データらしい名前（.env・鍵・sqlite・pkl・PDF 等）がない／`/app` の構成（jar だけ、db-migration は lib/ だけ）が想定どおり・書込み不可 |
+| 静的（5 イメージ） | ENTRYPOINT が設計どおりの exec 形式で CMD なし／USER=10001:10001／OCI ラベル revision・version=Git SHA／ENV に秘密らしい名前がない・履歴に秘密の代入がない・TZ=Asia/Tokyo・HEALTHCHECK なし／JDK 25／実効 uid 10001／javac・gradle・mvn・git・curl・wget・gcc・make・unzip がない／`/app` に書けない／ファイルシステムに秘密・実データらしい名前（.env・鍵・sqlite・pkl・PDF 等）がない／`/app` の構成（jar だけ、db-migration は lib/ だけ）が想定どおり・書込み不可 |
 | jar | 焼き込みの `requiredSchemaVersion` が `build.gradle.kts` と一致、`releaseId` = Git SHA／アプリに Flyway が入っていない／MySQL ドライバがある／jar 内に秘密・実データ名がない／自前リソースに秘密らしい代入がない。db-migration は同梱マイグレーションがリポジトリの `V*/R*.sql` と一致 |
 | bot（DB なし、`--network none`） | 引数なし・不正 `--task`・設定不足・`--tenant-id` 欠落 = 2、ModeProvider UNKNOWN = 75、prod でローカルファイルのモード = 2、prod で GCS 不達 = 75（0 にならない）、prod で bot 以外の DB ユーザー = 2 |
 | db-migration（DB なし） | 引数なし/不正 `--mode`/環境変数不足 = 2（stdout 空）、DB 不達 = 75 + JSON 1 行 |
@@ -115,7 +116,7 @@ run 39921807006（T2.6、head 6f24519。全ジョブが毎回実行）。壁時�
 - 検証項目: `tools/release/tests/test_manifest.py`（正常、必須欠落、未知フィールド、不正 SHA、タグのみ/短い/大文字/他レジストリ/他名前/仮値の digest、不正スキーマ版、未対応 contract_version、CONTRACTS との不一致、焼き込み値との不一致、flyway 不一致、アプリ間の食い違い、不正・未検証のロールバック範囲、プレビューの本番利用拒否、プレビューへの digest 混入、ブロッカー隠し、生成の再現性、CLI の終了コード）。
 
 ## 6. Dependabot（`.github/dependabot.yml`、D-100）
-gradle / github-actions / docker（`Dockerfile`）/ pip（`tools/golden`）。週次（月・火・水・木）、minor/patch は 1 グループ、PR 上限 3/2/2/1、自動マージなし。Spring Boot の minor/major、Connector/J の major、eclipse-temurin の major は提案しない。pip（`tools/golden`）の numpy は 2.5.3 固定のため全版を提案しない（D-103。セキュリティ更新と手動更新は妨げない設計）。設定とディレクトリ構成の整合は `tools/ci/tests/test_workflows.py` が検査。**未検証**: Dependabot の実 PR（有効化後の最初の PR で、ignore・グループ化・build-logic の検出を確認）。Dependabot version updates / security updates の有効化はリポジトリ設定（ユーザー作業）。
+gradle / github-actions / docker（`Dockerfile`）/ pip（`tools/golden`）/ pip（`ml`。numpy は除外。D-178）。週次（月・火・水・木）、minor/patch は 1 グループ、PR 上限 3/2/2/1、自動マージなし。Spring Boot の minor/major、Connector/J の major、eclipse-temurin の major は提案しない。pip（`tools/golden`）の numpy は 2.5.3 固定のため全版を提案しない（D-103。セキュリティ更新と手動更新は妨げない設計）。設定とディレクトリ構成の整合は `tools/ci/tests/test_workflows.py` が検査。**未検証**: Dependabot の実 PR（有効化後の最初の PR で、ignore・グループ化・build-logic の検出を確認）。Dependabot version updates / security updates の有効化はリポジトリ設定（ユーザー作業）。
 
 ## 7. ローカルでの確認
 ```bash
@@ -123,3 +124,7 @@ python3 -m tools.ci.run_tests --min-tests 100                       # tools/ci �
 python3 -c "from tools.ci import classify; print(classify.classify(['docs/a.md']).outputs())"   # 変更判定の確認
 PYTHONPATH=. python3 -m tools.ci.classify                            # EVENT_NAME=push BEFORE_SHA=<sha> など。git 履歴が必要
 ```
+
+## 8. T3.6-B の追加（ml-train イメージと release-manifest v2）
+- **ml-train イメージ**（`--target ml-train`。D-176）: `python:3.13.17-slim-bookworm`（digest 固定）、`ml/requirements.txt` を `--no-deps --only-binary` で入れた venv、non-root 10001、ENTRYPOINT は exec 形式の python。スモーク（`image_smoke`）は合成データセットで学習・署名・登録（CI 専用 MySQL）を実行する。**push しない・本番 GCP に接続しない**。
+- **release-manifest v2**（D-177）: `feature_schemas`（calibration / alpha / market の hash）と、その正準 JSON の sha256 である `feature_schema_hash`。スキーマは `docs/schemas/release-manifest(.preview).v2.json`。本番 manifest の生成は第 5 段階のゲートが揃うまで禁止のまま（プレビューのみ）。

@@ -20,7 +20,7 @@ def synthetic_production(**over) -> dict:
     """テスト専用の合成 manifest。digest は実在しない。実際のレジストリ・イメージとは無関係。"""
     images = {n: f"{REG}/{n}@{digest(i + 1)}" for i, n in enumerate(repo_facts.IMAGE_NAMES)}
     doc = manifest.build_production(
-        ROOT, SHA, "2026.11.0", "2026-11-01T00:00:00Z", images, "2026.11.0", "sha256:" + "ab12" * 16, "3.12.3", "synthetic test manifest"
+        ROOT, SHA, "2026.11.0", "2026-11-01T00:00:00Z", images, "2026.11.0", "3.13.17", "synthetic test manifest"
     )
     doc.update(over)
     return doc
@@ -43,6 +43,10 @@ def make_root(tmp: Path, verified: list | None = None) -> Path:
     for app in repo_facts.APPS:
         (tmp / app).mkdir()
         shutil.copy(ROOT / app / "build.gradle.kts", tmp / app / "build.gradle.kts")
+    fs = tmp / repo_facts.FEATURE_SCHEMA_DIR
+    fs.mkdir(parents=True)
+    for fname in repo_facts.FEATURE_SCHEMA_FILES.values():
+        shutil.copy(ROOT / repo_facts.FEATURE_SCHEMA_DIR / fname, fs / fname)
     mig = tmp / "db-migration" / "src" / "main" / "resources" / "db" / "migration"
     mig.mkdir(parents=True)
     for p in (ROOT / "db-migration" / "src" / "main" / "resources" / "db" / "migration").glob("*.sql"):
@@ -58,7 +62,7 @@ class ProductionManifestTest(unittest.TestCase):
         self.assertEqual([], self.errors(synthetic_production(), sha=SHA))
 
     def test_missing_required_field(self):
-        for field in ("git_sha", "images", "flyway", "rollback", "feature_schema_hash", "runtime", "notes", "contract_version"):
+        for field in ("git_sha", "images", "flyway", "rollback", "feature_schema_hash", "feature_schemas", "runtime", "notes", "contract_version"):
             doc = synthetic_production()
             del doc[field]
             self.assertTrue(any("必須フィールド" in e and field in e for e in self.errors(doc)), field)
@@ -103,7 +107,7 @@ class ProductionManifestTest(unittest.TestCase):
         self.assertTrue(any("images.ml-train" in e for e in self.errors(doc)))
 
     def test_unsupported_schema_version(self):
-        for bad in (2, 0, "1", True, None):
+        for bad in (1, 3, 0, "2", True, None):
             self.assertTrue(any("schema_version" in e for e in self.errors(synthetic_production(schema_version=bad))), repr(bad))
 
     def test_unsupported_contract_version(self):
@@ -132,7 +136,7 @@ class ProductionManifestTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             root = make_root(Path(t))
             f = root / "ingest" / "build.gradle.kts"
-            f.write_text(f.read_text().replace('"3"', '"4"'))
+            f.write_text(f.read_text().replace('"4"', '"5"'))
             self.assertTrue(any("食い違" in e for e in manifest.validate_production(synthetic_production(), root)))
 
     def test_rollback_range(self):
@@ -162,7 +166,7 @@ class ProductionManifestTest(unittest.TestCase):
         for field, bad in (
             ("release", "latest"), ("built_at", "2026-11-01"), ("agent_protocol", 2), ("model_schema_versions", []),
             ("model_schema_versions", [1, 1]), ("feature_schema_hash", "sha256:abc"), ("feature_schema_hash", None),
-            ("runtime", {"jdk": "21", "python": "3.12.3"}), ("runtime", {"jdk": "25", "python": None}), ("notes", "x" * 2001),
+            ("runtime", {"jdk": "21", "python": "3.12.3"}), ("feature_schemas", {}), ("feature_schemas", {"calibration": "sha256:" + "1" * 64}), ("runtime", {"jdk": "25", "python": None}), ("notes", "x" * 2001),
         ):
             self.assertTrue(self.errors(synthetic_production(**{field: bad})), f"{field}={bad!r}")
 
@@ -178,11 +182,9 @@ class ProductionManifestTest(unittest.TestCase):
         images = synthetic_production()["images"]
         for bad_images in ({k: v for k, v in images.items() if k != "ml-train"}, {**images, "bot": f"{REG}/bot:{SHA}"}, {}):
             with self.assertRaises(ValueError):
-                manifest.build_production(*args, bad_images, "2026.11.0", "sha256:" + "ab12" * 16, "3.12.3")
+                manifest.build_production(*args, bad_images, "2026.11.0", "3.13.17")
         with self.assertRaises(ValueError):  # 検証されていないロールバック範囲
-            manifest.build_production(*args, images, "2026.10.0", "sha256:" + "ab12" * 16, "3.12.3")
-        with self.assertRaises(ValueError):  # 未定義の feature hash
-            manifest.build_production(*args, images, "2026.11.0", "", "3.12.3")
+            manifest.build_production(*args, images, "2026.10.0", "3.13.17")
 
 
 class PreviewManifestTest(unittest.TestCase):
@@ -195,8 +197,9 @@ class PreviewManifestTest(unittest.TestCase):
         self.assertIs(doc["deployable"], False)
         self.assertIn("IMAGES_NOT_PUSHED", doc["blockers"])
         self.assertIn("ROLLBACK_RANGE_UNVERIFIED", doc["blockers"])
-        self.assertIn("IMAGE_NOT_BUILT", doc["blockers"])  # ml-train
-        self.assertFalse(doc["images"]["ml-train"]["built"])
+        self.assertNotIn("IMAGE_NOT_BUILT", doc["blockers"])  # 5 つすべてビルド済み（ml-train を含む。T3.6-B）
+        self.assertNotIn("FEATURE_SCHEMA_HASH_UNDEFINED", doc["blockers"])  # feature_schema_hash は定義済み（schema_version 2）
+        self.assertTrue(all(i["built"] for i in doc["images"].values()))
         self.assertIsNone(doc["images"]["bot"]["registry_digest"])
         self.assertFalse(doc["rollback"]["verified"])
 
@@ -233,14 +236,54 @@ class PreviewManifestTest(unittest.TestCase):
         doc["deployable"] = True
         self.assertTrue(manifest.validate_preview(doc, ROOT))
 
-    def test_preview_cannot_claim_verified_rollback_or_hash(self):
+    def test_preview_with_an_unbuilt_image_has_the_blocker(self):
+        imgs = local_images()
+        del imgs["ml-train"]
+        doc = self.preview(images=imgs)
+        self.assertIn("IMAGE_NOT_BUILT", doc["blockers"])
+        self.assertFalse(doc["images"]["ml-train"]["built"])
+        self.assertEqual([], manifest.validate_preview(doc, ROOT, SHA))
+        doc["blockers"] = [b for b in doc["blockers"] if b != "IMAGE_NOT_BUILT"]
+        self.assertTrue(any("blockers" in e for e in manifest.validate_preview(doc, ROOT)))
+
+    def test_preview_cannot_claim_verified_rollback(self):
         doc = self.preview()
         doc["rollback"]["verified"] = True
         self.assertTrue(manifest.validate_preview(doc, ROOT))
+
+    def test_feature_schema_hash_is_the_hash_of_the_named_schema_set(self):
+        """G-17 ⑧: 単一値の曖昧さの解消。名前付きの hash 集合の正準 JSON の hash（監査用に feature_schemas も持つ）。"""
         doc = self.preview()
-        doc["feature_schema_hash"] = None
-        doc["blockers"] = [b for b in doc["blockers"] if b != "FEATURE_SCHEMA_HASH_UNDEFINED"]
-        self.assertTrue(any("blockers" in e for e in manifest.validate_preview(doc, ROOT)))
+        schemas = repo_facts.feature_schemas(ROOT)
+        self.assertEqual({"calibration", "alpha", "market"}, set(schemas))
+        self.assertEqual(schemas, doc["feature_schemas"])
+        self.assertEqual(repo_facts.combined_feature_schema_hash(schemas), doc["feature_schema_hash"])
+        # 一部の変更・入れ替え・欠落・余分なキーで値が変わる／拒否される
+        base = repo_facts.combined_feature_schema_hash(schemas)
+        swapped = {**schemas, "calibration": schemas["alpha"], "alpha": schemas["calibration"]}
+        self.assertNotEqual(base, repo_facts.combined_feature_schema_hash(swapped))
+        self.assertNotEqual(base, repo_facts.combined_feature_schema_hash({**schemas, "market": "sha256:" + "0" * 64}))
+        for bad in ({k: v for k, v in schemas.items() if k != "market"}, {**schemas, "extra": schemas["market"]}):
+            with self.assertRaises(ValueError):
+                repo_facts.combined_feature_schema_hash(bad)
+        # 個々の schema の hash は Kotlin の定義（40/35/5 次元）で、種別が違えば違う値
+        self.assertEqual(3, len(set(schemas.values())))
+        # 改ざんされた doc は拒否される
+        bad_doc = self.preview()
+        bad_doc["feature_schema_hash"] = "sha256:" + "ab12" * 16
+        self.assertTrue(any("feature_schema_hash" in e for e in manifest.validate_preview(bad_doc, ROOT)))
+        bad_doc = self.preview()
+        bad_doc["feature_schemas"]["alpha"] = "sha256:" + "ab12" * 16
+        errs = manifest.validate_preview(bad_doc, ROOT)
+        self.assertTrue(any("feature_schemas" in e for e in errs) and any("feature_schema_hash" in e for e in errs), errs)
+
+    def test_production_feature_schema_fields_are_validated(self):
+        doc = synthetic_production()
+        doc["feature_schemas"]["calibration"] = "sha256:" + "ab12" * 16
+        self.assertTrue(any("feature_schemas" in e for e in manifest.validate_production(doc, ROOT)))
+        doc = synthetic_production()
+        doc["feature_schema_hash"] = "sha256:" + "ab12" * 16
+        self.assertTrue(any("feature_schema_hash" in e for e in manifest.validate_production(doc, ROOT)))
 
     def test_preview_local_image_id_is_not_a_registry_reference(self):
         doc = self.preview()
@@ -298,7 +341,7 @@ class CliTest(unittest.TestCase):
             t = Path(t)
             (t / "reg.json").write_text(json.dumps({"bot": f"{REG}/bot:{SHA}"}))
             rc = self.run_cli("production", "--git-sha", SHA, "--release", "2026.11.0", "--built-at", "2026-11-01T00:00:00Z", "--registry-images", str(t / "reg.json"),
-                              "--min-app-release", "2026.11.0", "--feature-schema-hash", "sha256:" + "ab12" * 16, "--python-version", "3.12.3", "--out", str(t / "release-manifest.json"))
+                              "--min-app-release", "2026.11.0", "--python-version", "3.13.17", "--out", str(t / "release-manifest.json"))
             self.assertEqual(1, rc)
             self.assertFalse((t / "release-manifest.json").exists())
 
@@ -335,7 +378,7 @@ class RepoFactsTest(unittest.TestCase):
     def test_facts(self):
         self.assertRegex(repo_facts.contract_version(ROOT), r"^\d+\.\d+\.\d+$")
         self.assertEqual({"dashboard", "ingest", "bot"}, set(repo_facts.required_schema_versions(ROOT)))
-        self.assertEqual(["1", "2", "3"], repo_facts.flyway_versions(ROOT))
+        self.assertEqual(["1", "2", "3", "4"], repo_facts.flyway_versions(ROOT))
         self.assertEqual((10,), repo_facts.version_key("10"))
         self.assertGreater(repo_facts.version_key("10"), repo_facts.version_key("9"))
 
