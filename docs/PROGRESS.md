@@ -1,7 +1,14 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-10-24（第3段階 / Stage 3-F2: T3.6-B ML の学習 Job・export-dataset・DB/GCS 実装）
+最終更新: 2026-10-26（Public 化の準備。Stage 3-F2 の記録は下）
 旧: 2026-10-24（Stage 3-F1: T3.6-A ML の Kotlin 推論基盤）／Stage 3-E（T3.5）／2026-10-23（Stage 3-D: T3.4）
+
+## Public 化の準備（claude/prepare-public-repo、2026-10-26）— Visibility は変更していない
+- **スキャン**: gitleaks（`go install` でビルド）を全履歴に実行: リモート 56 参照（全ブランチ + PR ヘッド 27）、117 コミット（うち差分のあるもの 95 を走査、約 14MB）、**10 件検出・すべてテスト用ダミー**（`agent/tests` のテストベクトル `signingKeyHex`〔`TEST-VECTOR-ONLY` トークンから導出〕、テスト用のトークン文字列、`Ed25519PrivateKey.generate` のフィールド名）。実秘密 0。**trufflehog は取得・ビルドが環境の判定で拒否され未実施**。前回の自前スキャン（747 ファイル）とも一致。
+- **Actions/Artifacts**: run 100/103 件のメタデータ、失敗 run 3 件（push 1・PR 2）の失敗ジョブログ（末尾）と images ジョブのログ末尾、Artifact `images-dry-run`（URL 取得のみ。**中身は未読**）を確認。秘密・実データなし。ログ全文・全 run のログ・期限切れ Artifact・PR 24 以外のコメントは未確認。
+- **変更**: CLAUDE.md・README.md・REQUIREMENTS §0・ARCHITECTURE §1・CI_AND_IMAGES（§9 追加）・DATA_SOURCE_COMPLIANCE §0.1・JVLINK_DESIGN §1.4（バイト位置削除）・DECISIONS D-180・UNRESOLVED（D-16・E-7）・SECURITY.md・NOTICE.md。コード・CI は未変更。
+- **未解決**: JRA-VAN のソース公開許可なし（E-7）。履歴に §1.4 のバイト位置が残る。GitHub 側の設定（Secrets・fork PR 承認・ruleset・secret scanning）は未確認。Public 化の判断はユーザー（D-16）。
+- **次**: ユーザーが CI_AND_IMAGES §9 を確認し、Visibility を変更するか判断。
 
 ## Stage 3-F2（claude/stage3-ml-training）: T3.6-B ML の学習 Job・export-dataset・DB/GCS 実装
 ### 結果（**合成データのみで検証。ML は本番利用可能ではない**。実データでの学習・精度・品質閾値・実 pkl の変換・実 GCS は未検証。Stage 3-G / T3.7 には進んでいない）
