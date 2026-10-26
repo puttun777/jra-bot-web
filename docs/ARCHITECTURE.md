@@ -22,7 +22,7 @@
 | リポジトリ | 責務 | 公開 |
 |---|---|---|
 | puttun777/jra-bot | 参照元（**読み取り専用**） | Public |
-| puttun777/jra-bot-web | アプリ（Kotlin/Spring Boot）、Windows エージェント（Python）、ML 学習 Job（Python）、移行・ゴールデンのツール（Python）、イメージ定義、CI（ビルド・テスト・イメージ・release-manifest） | Private |
+| puttun777/jra-bot-web | アプリ（Kotlin/Spring Boot）、Windows エージェント（Python）、ML 学習 Job（Python）、移行・ゴールデンのツール（Python）、イメージ定義、CI（ビルド・テスト・イメージ・release-manifest） | Private（Public 化は D-180 で準備済み・ユーザー操作待ち。公開しても本番環境は非公開） |
 | puttun777/jra-bot-infra | Terraform、deploy・migration の実行、start/stop/status、監視、ロールバック | Private |
 
 ### 1.1 jra-bot-web のディレクトリ構成（D-057）

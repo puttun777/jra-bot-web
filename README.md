@@ -1,6 +1,7 @@
 # jra-bot-web
 
-JRA Bot（参照元 `puttun777/jra-bot`）を Kotlin / Spring Boot の Web アプリへ段階的にリプレースするリポジトリ（Private）。
+JRA Bot（参照元 `puttun777/jra-bot`）を Kotlin / Spring Boot の Web アプリへ段階的にリプレースするリポジトリ。
+**ソースコードの公開状態と、サービスの公開は別**。サービス（本番 GCP・データベース・Discord 通知・ダッシュボード）は常に本人専用・非公開で、リポジトリが Public になっても変わらない。
 **利用者は本人 1 名・私的・非営利・非公開**（`docs/REQUIREMENTS.md` §0。2026-10-23 に最大 2 人から変更。`tenant_id` の構造と認証認可は維持し、利用者の登録・招待・共有は作らない）。
 設計・進捗・判断は `docs/` が正本。未解決事項の管理表は `docs/UNRESOLVED.md`。最初に `CLAUDE.md` → `docs/PROGRESS.md` → `docs/PLAN.md` を読む。再開手順は `docs/STAGE2_HANDOFF.md` §12。
 
@@ -68,6 +69,11 @@ Python の参照実装と合成成果物: `tools/ml`（`python3 -m tools.ml.run_
 
 ## 判定ロジックの Kotlin 移植（T3.1 単勝 / T3.2 ワイド・三連複）
 `:domain` の `jp.jrabot.domain.decision`（純粋 Kotlin）。EV・Kelly・市場確率・急落フィルタ・単勝の判定（T3.1）に加え、ワイド/三連複の Plackett–Luce 確率（`PlackettLuce`）・推定オッズ（`ComboOddsEstimate`）・実オッズの注入（`ComboOdds`）・流し/BOX・`ticket_allocation`・`StrategyEntry.tickets`（T3.2）。`WinDecisionEvaluator.evaluate(horses, realOdds)` が旧 `evaluate_odds` と同じ順序で判定する。金額は旧実装の「点」（`Double`）。旧実装との比較は検証専用の `:golden-runner` と `tools/golden/kotlin_compare.py`（CI の `build` ジョブ）で、21 ケース/810 呼び出しのうち Kotlin が検証したのは 18 ケース/661 呼び出し（全一致。ML・特徴量ハッシュ・旧関数既定値の 3 ケース/149 呼び出しは未対応で、成功に数えない）。未承認の数値変更（E6/E12/E14/H4/H10 の改善案）は未実装で、`pipeline_version=legacy`・`fixes.*=false` のみ。本番で動作する Bot ではない（`StubTaskHandler` は未置換）。
+
+## 権利・利用条件（Public 公開時）
+- **ライセンスは付与していない（All rights reserved）**。ソースを公開していても、利用・複製・改変・再配布・派生物の作成を許諾しない。GitHub 上の閲覧と、GitHub の利用規約が認める範囲の fork だけが可能（それ以上の権利は与えない）。外部からの Pull Request・Issue は募集しない（`SECURITY.md`）。
+- 旧実装 `puttun777/jra-bot`（MIT, Copyright (c) 2026 puttun777）由来の部分と第三者 OSS の表示は `NOTICE.md`。既存の MIT 等の表示は削除しない。
+- JRA-VAN Data Lab. のデータ・SDK（JV-Link）・仕様書・学習済みモデルは含まない。ソースコードの公開について JRA-VAN からの許可は**得ていない**（確認事項は `docs/UNRESOLVED.md` E-7）。
 
 ## Git に含めないもの
 実データ（JV-Data・SQLite・DB ダンプ）、学習済みモデル（`*.pkl` 等）、秘密情報、JV-Link SDK の資料、ビルド生成物（`.gitignore` と `repo-hygiene` ジョブで防ぐ）。テストデータは合成データだけを使う。

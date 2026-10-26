@@ -1,6 +1,6 @@
 # CI の運用と Docker イメージ（T2.5 後半）
 
-CI の実行範囲の決め方、分岐保護の設定、イメージのビルド・スモーク、release-manifest の生成、Dependabot、無料枠（GitHub Free の Private: 月 2,000 分）の見積り。判断は DECISIONS D-093〜D-100、契約は CONTRACTS §10（0.4.5）。実測値は PROGRESS の Stage 2-H。
+CI の実行範囲の決め方、分岐保護の設定、イメージのビルド・スモーク、release-manifest の生成、Dependabot、無料枠の見積り（Private の GitHub Free は月 2,000 分。Public 化後は標準ランナーが無料・無制限の見込みで、下の見積りは Private の場合。公開後の実測は未確認）。判断は DECISIONS D-093〜D-100、契約は CONTRACTS §10（0.4.5）。実測値は PROGRESS の Stage 2-H。
 
 ## 1. CI の構成（`.github/workflows/ci.yml`）
 | ジョブ | 内容 | いつ実行するか |
@@ -128,3 +128,16 @@ PYTHONPATH=. python3 -m tools.ci.classify                            # EVENT_NAM
 ## 8. T3.6-B の追加（ml-train イメージと release-manifest v2）
 - **ml-train イメージ**（`--target ml-train`。D-176）: `python:3.13.17-slim-bookworm`（digest 固定）、`ml/requirements.txt` を `--no-deps --only-binary` で入れた venv、non-root 10001、ENTRYPOINT は exec 形式の python。スモーク（`image_smoke`）は合成データセットで学習・署名・登録（CI 専用 MySQL）を実行する。**push しない・本番 GCP に接続しない**。
 - **release-manifest v2**（D-177）: `feature_schemas`（calibration / alpha / market の hash）と、その正準 JSON の sha256 である `feature_schema_hash`。スキーマは `docs/schemas/release-manifest(.preview).v2.json`。本番 manifest の生成は第 5 段階のゲートが揃うまで禁止のまま（プレビューのみ）。
+
+## 9. Public 化した場合の運用（D-180。Visibility の変更はユーザーの最終操作）
+**コード上の確認済み**（2026-10-26）: `pull_request_target`・`workflow_run`・self-hosted ランナー・`secrets.*`・`vars.*`・`id-token` は使っていない。全ワークフローは `permissions: contents: read`。`ci.yml` の `pull_request` はフォークからでも Secrets を受け取らない。Artifact は `images-dry-run`（保持 14 日）のみで、manifest のプレビューとスモークの結果。実 JRA-VAN データ・クラウド認証情報は CI に存在しない。クラウドのデプロイは Private の `jra-bot-infra` から行う（web 側の CI に GCP 認証を足さない）。ランナーは標準の `ubuntu-24.04` と `windows-2025` だけ（Public では標準ランナーは無料の見込み。**課金構成は追加しない**。公開後の実測は未確認）。
+**品質ゲートは変更しない**: `ci gate`（必須）、変更内容の分類（`tools/ci/classify.py`）、`repo-hygiene`、Dependabot を維持する。
+
+**ユーザーが手動で設定する推奨項目**（Claude は設定しない。GitHub 側の状態は未確認）:
+1. Settings → Actions → General: **Fork pull request workflows → 「Require approval for all outside collaborators」**（外部の実行は承認制）。**Workflow permissions: Read repository contents**（既定を読み取りのみ）。「Allow GitHub Actions to create and approve pull requests」はオフ。
+2. Settings → Rules → Rulesets（または Branch protection）で `main`: **Require a pull request before merging**、**Require status checks: `ci gate`**、**Block force pushes**、**Restrict deletions**。GitHub Free でも Public リポジトリでは利用できる（公開直後に画面で確認する）。
+3. Settings → Code security: **Secret scanning**・**Push protection**・Dependabot alerts / security updates・（可能なら）Private vulnerability reporting をオン。
+4. Settings → General: Issues・Discussions・Wiki・Projects は不要ならオフ。Secrets and variables が空であること、2FA が有効であることを確認する。
+5. インフラ（Terraform）で将来 Workload Identity Federation を作るときは、`attribute_condition` を `jra-bot-infra` の特定リポジトリ・ブランチだけに限定し、`jra-bot-web` と PR からのトークンを信頼しない。
+
+**継続的なセキュリティスキャンの提案**（費用・頻度を考慮。今回は実装しない）: ①GitHub の Secret scanning と Push protection（Public は無料）を主とする。②gitleaks / trufflehog の全履歴スキャンは、**毎回の CI に入れない**。月次の既存フル検証に合わせた手動実行か、Claude クラウド上でのリリース前スキャンにする。③PR ごとの差分スキャン（`gitleaks --log-opts=base..head`）は数秒で終わるため、希望すれば `changes and repo hygiene` に足せる（今回は追加しない）。
