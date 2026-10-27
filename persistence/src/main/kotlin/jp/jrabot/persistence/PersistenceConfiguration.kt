@@ -1,6 +1,8 @@
 package jp.jrabot.persistence
 
 import jp.jrabot.domain.bot.BotRunRepository
+import jp.jrabot.domain.botrun.RaceEntryReader
+import jp.jrabot.domain.botrun.RaceEvaluationWriter
 import jp.jrabot.domain.calendar.CalendarOverrideRepository
 import jp.jrabot.domain.calendar.RaceDayRepository
 import jp.jrabot.domain.calendar.ScheduleEventRepository
@@ -45,6 +47,8 @@ import jp.jrabot.persistence.dao.MlSourceDaoImpl
 import jp.jrabot.persistence.dao.OddsSnapshotDaoImpl
 import jp.jrabot.persistence.dao.RaceDaoImpl
 import jp.jrabot.persistence.dao.RaceDayDaoImpl
+import jp.jrabot.persistence.dao.RaceEvaluationDaoImpl
+import jp.jrabot.persistence.dao.RaceHorseNameDaoImpl
 import jp.jrabot.persistence.dao.RaceScheduleDaoImpl
 import jp.jrabot.persistence.dao.ScheduleEventDaoImpl
 import jp.jrabot.persistence.dao.SignalDaoImpl
@@ -70,6 +74,8 @@ import jp.jrabot.persistence.repository.MlModelRegistryRepository
 import jp.jrabot.persistence.repository.NonceStoreImpl
 import jp.jrabot.persistence.repository.OddsSnapshotRepositoryImpl
 import jp.jrabot.persistence.repository.RaceDayRepositoryImpl
+import jp.jrabot.persistence.repository.RaceEntryReaderImpl
+import jp.jrabot.persistence.repository.RaceEvaluationRepositoryImpl
 import jp.jrabot.persistence.repository.RaceRepositoryImpl
 import jp.jrabot.persistence.repository.RaceScheduleRepositoryImpl
 import jp.jrabot.persistence.repository.RawRecordStoreImpl
@@ -249,4 +255,15 @@ class PersistenceConfiguration {
         tx: TransactionOperations,
         clock: Clock,
     ): ComboOddsSnapshotRepository = ComboOddsSnapshotRepositoryImpl(ComboOddsSnapshotDaoImpl(config), tx, clock)
+
+    /** 判定の記録（bot-run が書く。冪等な追記）。 */
+    @Bean
+    fun raceEvaluationWriter(
+        config: Config,
+        clock: Clock,
+    ): RaceEvaluationWriter = RaceEvaluationRepositoryImpl(RaceEvaluationDaoImpl(config), clock)
+
+    /** 出走表の馬名（通知の理由文用。読取りだけ）。 */
+    @Bean
+    fun raceEntryReader(config: Config): RaceEntryReader = RaceEntryReaderImpl(RaceHorseNameDaoImpl(config))
 }

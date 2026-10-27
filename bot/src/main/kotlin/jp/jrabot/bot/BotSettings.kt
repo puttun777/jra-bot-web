@@ -22,6 +22,8 @@ class BotSettings(
     val modelStoreUri: String? = null,
     /** `bot-run` だけが使う Discord の設定（`DISCORD_WEBHOOK_URL` ほか。いずれも任意）。他のタスクでは null。 */
     val discord: DiscordSettings? = null,
+    /** `bot-run` だけが必要とする設定（業務ループ・ML・監視ウィンドウ）。他のタスクでは null。環境変数は [BotRunSettingsParser]。 */
+    val botRun: BotRunSettings? = null,
 ) {
     companion object {
         const val DB_USER = "bot" // CONTRACTS §8.2: bot（全 --task）
@@ -48,7 +50,8 @@ class BotSettings(
                     null
                 }
             val discord = if (task == BotTask.BOT_RUN) DiscordSettings.fromEnv(env) else null
-            return BotSettings(appEnv, db, opsEnv, env["RELEASE_ID"], calendar, storeUri, discord)
+            val botRun = if (task == BotTask.BOT_RUN) BotRunSettingsParser.fromEnv(env, appEnv) else null
+            return BotSettings(appEnv, db, opsEnv, env["RELEASE_ID"], calendar, storeUri, discord, botRun)
         }
     }
 }
