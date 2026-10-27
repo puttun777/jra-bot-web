@@ -79,7 +79,7 @@ class RaceCycleProcessor(
     private val tenantId: TenantId,
     private val origin: NotificationOrigin,
     private val odds: OddsSnapshotReader,
-    private val evaluator: RaceEvaluator,
+    private val evaluator: RaceJudge,
     private val evaluations: RaceEvaluationWriter,
     private val signals: SignalRepository,
     private val entries: RaceEntryReader,

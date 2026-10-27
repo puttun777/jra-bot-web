@@ -315,7 +315,10 @@ class BotRunOrchestrator(
             val window = day.window(config.calendar.watch) ?: cachedWindow
             dayFinish(day)?.let { return CycleResult(it, config.lease.heartbeatInterval) }
             val plan = RaceMonitorPlanner.plan(day, window, now)
-            if (plan.allDone) return CycleResult(Done(BotRunState.SUCCEEDED, "ALL_RACES_OFF", RunExit.OK), config.lease.heartbeatInterval)
+            if (plan.allDone) {
+                checkpoint = checkpoint.copy(lastCycleAt = clock.now(), races = mergeStages(plan))
+                return CycleResult(Done(BotRunState.SUCCEEDED, "ALL_RACES_OFF", RunExit.OK), config.lease.heartbeatInterval)
+            }
             if (window == null) return CycleResult(Done(BotRunState.ABORTED, "NO_POST_TIME", RunExit.TEMPFAIL, alert = true), config.lease.heartbeatInterval)
             if (now.isAfter(window.settleDeadlineAt)) {
                 return CycleResult(Done(BotRunState.FAILED, "INCOMPLETE_AT_DEADLINE", RunExit.FAILURE, alert = true), config.lease.heartbeatInterval)

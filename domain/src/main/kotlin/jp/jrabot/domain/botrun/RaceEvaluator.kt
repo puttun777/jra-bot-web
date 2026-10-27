@@ -80,6 +80,17 @@ data class RaceEvaluation(
     val isMlMarketFallback: Boolean get() = probability?.isMarketFallback == true
 }
 
+/** 1 レースの判定の口（[RaceCycleProcessor] が使う。実装は [RaceEvaluator]。テストでは固定の結果を返す偽物に差し替える）。 */
+fun interface RaceJudge {
+    fun evaluate(
+        tenantId: TenantId,
+        raceId: RaceId,
+        win: OddsSnapshot,
+        now: Instant,
+        isNearTiming: Boolean,
+    ): RaceEvaluation
+}
+
 /**
  * 1 レースの判定（オッズの取得 → 特徴量 → 確率 → EV・Kelly・買い目）。**既存の部品を正しい順序で接続するだけ**で、数値は変えない。
  *
@@ -100,8 +111,8 @@ class RaceEvaluator(
     private val comboOdds: ComboOddsSnapshotReader,
     private val features: FeatureSource,
     private val ml: MlRunContext,
-) {
-    fun evaluate(
+) : RaceJudge {
+    override fun evaluate(
         tenantId: TenantId,
         raceId: RaceId,
         win: OddsSnapshot,
