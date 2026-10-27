@@ -1,0 +1,361 @@
+{
+  "case_id": "G8-DEDUP-003",
+  "comparison_rules": {
+    "default": {
+      "float": {
+        "abs_tol": 0.0,
+        "mode": "abs_tol"
+      }
+    },
+    "overrides": [],
+    "strict": {
+      "key_set": true,
+      "list_order": true,
+      "nonfinite": "reject",
+      "types": true
+    }
+  },
+  "data_classification": "synthetic",
+  "description": "_deduplicate_tickets: [BOX] の有無を無視・EV の高い方を残す・同値は先・空白・kumi 欠損",
+  "execution_parameters": {
+    "clock": "not_used (対象関数は現在時刻を読まない。datetime.now を使う経路は対象外)",
+    "cwd": "empty temporary directory",
+    "fixed_time": "2026-01-01T00:00:00+09:00",
+    "libraries": {
+      "numpy": "2.5.3"
+    },
+    "ml_cfg": {
+      "enabled": false
+    },
+    "network": "blocked",
+    "seed": 20260101,
+    "timezone": "Asia/Tokyo"
+  },
+  "expected_output": {
+    "results": [
+      {
+        "call_id": "dd-000",
+        "outcome": {
+          "status": "ok",
+          "value": []
+        }
+      },
+      {
+        "call_id": "dd-001",
+        "outcome": {
+          "status": "ok",
+          "value": [
+            {
+              "ev": 0.1,
+              "kumi": "01-02",
+              "odds": 3.2,
+              "odds_note": "3.2〜5.1",
+              "prob": 0.0345,
+              "prob_used": 0.0345
+            },
+            {
+              "ev": 0.2,
+              "kumi": "01-03",
+              "odds": 3.2,
+              "odds_note": "3.2〜5.1",
+              "prob": 0.0345,
+              "prob_used": 0.0345
+            }
+          ]
+        }
+      },
+      {
+        "call_id": "dd-002",
+        "outcome": {
+          "status": "ok",
+          "value": [
+            {
+              "ev": 0.15,
+              "kumi": "[BOX]01-02",
+              "odds": 3.2,
+              "odds_note": "3.2〜5.1",
+              "prob": 0.0345,
+              "prob_used": 0.0345
+            }
+          ]
+        }
+      },
+      {
+        "call_id": "dd-003",
+        "outcome": {
+          "status": "ok",
+          "value": [
+            {
+              "ev": 0.15,
+              "kumi": "01-02",
+              "odds": 3.2,
+              "odds_note": "3.2〜5.1",
+              "prob": 0.0345,
+              "prob_used": 0.0345
+            }
+          ]
+        }
+      },
+      {
+        "call_id": "dd-004",
+        "outcome": {
+          "status": "ok",
+          "value": [
+            {
+              "ev": 0.2,
+              "kumi": " 01-02-03 ",
+              "odds": 3.2,
+              "odds_note": "3.2〜5.1",
+              "prob": 0.0345,
+              "prob_used": 0.0345
+            }
+          ]
+        }
+      },
+      {
+        "call_id": "dd-005",
+        "outcome": {
+          "status": "ok",
+          "value": [
+            {
+              "ev": 0.3
+            }
+          ]
+        }
+      },
+      {
+        "call_id": "dd-006",
+        "outcome": {
+          "status": "ok",
+          "value": [
+            {
+              "ev": 0.1,
+              "kumi": "01-02"
+            }
+          ]
+        }
+      },
+      {
+        "call_id": "dd-007",
+        "outcome": {
+          "status": "ok",
+          "value": [
+            {
+              "ev": 0.3,
+              "kumi": "02-01",
+              "odds": 3.2,
+              "odds_note": "3.2〜5.1",
+              "prob": 0.0345,
+              "prob_used": 0.0345
+            },
+            {
+              "ev": 0.2,
+              "kumi": "01-02",
+              "odds": 3.2,
+              "odds_note": "3.2〜5.1",
+              "prob": 0.0345,
+              "prob_used": 0.0345
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "fixture_id": "golden/G8-DEDUP-003/v1",
+  "generator": {
+    "tool": "tools/golden",
+    "tool_version": "0.1.0"
+  },
+  "input": {
+    "calls": [
+      {
+        "args": {
+          "tickets": []
+        },
+        "call_id": "dd-000",
+        "function": "dedupe_tickets"
+      },
+      {
+        "args": {
+          "tickets": [
+            {
+              "ev": 0.1,
+              "kumi": "01-02",
+              "odds": 3.2,
+              "odds_note": "3.2〜5.1",
+              "prob": 0.0345,
+              "prob_used": 0.0345
+            },
+            {
+              "ev": 0.2,
+              "kumi": "01-03",
+              "odds": 3.2,
+              "odds_note": "3.2〜5.1",
+              "prob": 0.0345,
+              "prob_used": 0.0345
+            }
+          ]
+        },
+        "call_id": "dd-001",
+        "function": "dedupe_tickets"
+      },
+      {
+        "args": {
+          "tickets": [
+            {
+              "ev": 0.1,
+              "kumi": "01-02",
+              "odds": 3.2,
+              "odds_note": "3.2〜5.1",
+              "prob": 0.0345,
+              "prob_used": 0.0345
+            },
+            {
+              "ev": 0.15,
+              "kumi": "[BOX]01-02",
+              "odds": 3.2,
+              "odds_note": "3.2〜5.1",
+              "prob": 0.0345,
+              "prob_used": 0.0345
+            },
+            {
+              "ev": 0.12,
+              "kumi": "01-02",
+              "odds": 3.2,
+              "odds_note": "3.2〜5.1",
+              "prob": 0.0345,
+              "prob_used": 0.0345
+            }
+          ]
+        },
+        "call_id": "dd-002",
+        "function": "dedupe_tickets"
+      },
+      {
+        "args": {
+          "tickets": [
+            {
+              "ev": 0.15,
+              "kumi": "01-02",
+              "odds": 3.2,
+              "odds_note": "3.2〜5.1",
+              "prob": 0.0345,
+              "prob_used": 0.0345
+            },
+            {
+              "ev": 0.15,
+              "kumi": "[BOX]01-02",
+              "odds": 3.2,
+              "odds_note": "3.2〜5.1",
+              "prob": 0.0345,
+              "prob_used": 0.0345
+            }
+          ]
+        },
+        "call_id": "dd-003",
+        "function": "dedupe_tickets"
+      },
+      {
+        "args": {
+          "tickets": [
+            {
+              "ev": 0.1,
+              "kumi": "[BOX]01-02-03",
+              "odds": 3.2,
+              "odds_note": "3.2〜5.1",
+              "prob": 0.0345,
+              "prob_used": 0.0345
+            },
+            {
+              "ev": 0.2,
+              "kumi": " 01-02-03 ",
+              "odds": 3.2,
+              "odds_note": "3.2〜5.1",
+              "prob": 0.0345,
+              "prob_used": 0.0345
+            },
+            {
+              "ev": 0.2,
+              "kumi": "01-02-03",
+              "odds": 3.2,
+              "odds_note": "3.2〜5.1",
+              "prob": 0.0345,
+              "prob_used": 0.0345
+            }
+          ]
+        },
+        "call_id": "dd-004",
+        "function": "dedupe_tickets"
+      },
+      {
+        "args": {
+          "tickets": [
+            {
+              "ev": 0.1,
+              "kumi": null
+            },
+            {
+              "ev": 0.2,
+              "kumi": ""
+            },
+            {
+              "ev": 0.3
+            }
+          ]
+        },
+        "call_id": "dd-005",
+        "function": "dedupe_tickets"
+      },
+      {
+        "args": {
+          "tickets": [
+            {
+              "kumi": "01-02"
+            },
+            {
+              "ev": 0.1,
+              "kumi": "01-02"
+            }
+          ]
+        },
+        "call_id": "dd-006",
+        "function": "dedupe_tickets"
+      },
+      {
+        "args": {
+          "tickets": [
+            {
+              "ev": 0.3,
+              "kumi": "02-01",
+              "odds": 3.2,
+              "odds_note": "3.2〜5.1",
+              "prob": 0.0345,
+              "prob_used": 0.0345
+            },
+            {
+              "ev": 0.2,
+              "kumi": "01-02",
+              "odds": 3.2,
+              "odds_note": "3.2〜5.1",
+              "prob": 0.0345,
+              "prob_used": 0.0345
+            }
+          ]
+        },
+        "call_id": "dd-007",
+        "function": "dedupe_tickets"
+      }
+    ]
+  },
+  "known_defects": [],
+  "legacy_behavior_note": "expected_output は旧実装が実際に返した値（欠陥候補を含む）。新仕様の期待値ではない。",
+  "scenario_ids": [
+    "G8"
+  ],
+  "schema_version": 1,
+  "source_commit": "f7dbf69fd8940121782870de902e8c449e6ca149",
+  "source_function": [
+    "jraev.notify.discord._deduplicate_tickets"
+  ],
+  "source_repository": "puttun777/jra-bot"
+}

@@ -2,7 +2,7 @@
 from dataclasses import dataclass, field
 from itertools import product
 
-from . import constants as C, scenarios_ml as M
+from . import constants as C, scenarios_ml as M, scenarios_notify as N
 
 ABS = lambda path, tol: {"path": path, "mode": "abs_tol", "abs_tol": tol}  # noqa: E731
 
@@ -674,6 +674,22 @@ CASES += [
          "旧実装の ML 失敗時の挙動（新しいロード契約の仕様テストではない）: ML 無効・モデル無し・feature_names 不一致（旧 H1: 例外を握り潰して市場確率）・feature_names が空・"
          "未知の model_type・legacy でパス未指定。確率は市場確率に落ち、prob_source は旧ラベルのまま",
          ("jraev.ev.decision.evaluate_odds",), M.g7_legacy_calls(), overrides=(_REASON_IGNORE,), known_defects=("E1", "H1", "H10"), ml=True),
+]
+
+# ---- T3.7: Discord 通知（G8）。旧 notify/discord.py のネットワークを使わない部分（分割・429 の待機秒数・重複除外・本文・理由文） -----------------------------
+CASES += [
+    Case("G8-SPLIT-001", ("G8",), "_split_content: 境界（0/1/1899/1900/1901/2000/2001/…）・改行あり/なし・日本語・絵文字・Python の行区切り・limit の変更",
+         ("jraev.notify.discord._split_content",), N.split_calls(), default_abs_tol=0.0),
+    Case("G8-RETRY-002", ("G8",), "_parse_retry_after_seconds: 本文 retry_after → Retry-After → X-RateLimit-Reset-After → 既定 1.0（0 以下・非数・型違いを含む）",
+         ("jraev.notify.discord._parse_retry_after_seconds",), N.retry_calls(), default_abs_tol=0.0),
+    Case("G8-DEDUP-003", ("G8",), "_deduplicate_tickets: [BOX] の有無を無視・EV の高い方を残す・同値は先・空白・kumi 欠損",
+         ("jraev.notify.discord._deduplicate_tickets",), N.dedupe_calls(), default_abs_tol=0.0),
+    Case("G8-SINGLE-004", ("G8",), "send_signal の本文と許可メンション（HTTP 送信を差し替えて取り出す）: 単勝・ワイド・三連複・戦略あり/なし・カバレッジ・メンション・Unicode・丸めの境界",
+         ("jraev.notify.discord.send_signal",), N.single_calls(), default_abs_tol=0.0),
+    Case("G8-GROUPED-005", ("G8",), "send_signals_grouped の本文と許可メンション: 複数シグナルの統合・見送りと購入候補・買い目の重複除外と上位 6 点・Kelly の注記・合計・最推奨・12 件",
+         ("jraev.notify.discord.send_signals_grouped",), N.grouped_calls(), default_abs_tol=0.0, known_defects=("N1",)),
+    Case("G8-REASON-006", ("G8", "G6"), "format_reason_from_features: 合成 SQLite（馬名・近走・間隔・脚質・適性・条件・血統。H3 を含む旧挙動）。db=None・race_id 空は空文字",
+         ("jraev.ml.features.format_reason_from_features",), N.reason_calls(), default_abs_tol=0.0, known_defects=("H3",), ml=True),
 ]
 
 CASES_BY_ID = {c.case_id: c for c in CASES}

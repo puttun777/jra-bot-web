@@ -63,6 +63,12 @@ object GoldenCalls {
             "model_predict",
             "model_predict_batch",
             "build_features_batch",
+            "split_content",
+            "parse_retry_after",
+            "dedupe_tickets",
+            "send_signal_content",
+            "send_signals_grouped_content",
+            "reason_from_features",
         )
 
     /** 1 回の呼び出しを実行し、`{"status":"ok","value":…}` または `{"status":"exception",…}` を返す。 */
@@ -190,6 +196,30 @@ object GoldenCalls {
 
             "build_features_batch" -> {
                 GoldenMl.buildFeaturesBatch(a)
+            }
+
+            "split_content" -> {
+                GoldenNotify.splitContent(a)
+            }
+
+            "parse_retry_after" -> {
+                GoldenNotify.parseRetryAfter(a)
+            }
+
+            "dedupe_tickets" -> {
+                GoldenNotify.dedupeTickets(a)
+            }
+
+            "send_signal_content" -> {
+                GoldenNotify.sendSignalContent(a)
+            }
+
+            "send_signals_grouped_content" -> {
+                GoldenNotify.sendSignalsGroupedContent(a)
+            }
+
+            "reason_from_features" -> {
+                GoldenNotify.reasonFromFeatures(a)
             }
 
             "evaluate_odds_ml" -> {

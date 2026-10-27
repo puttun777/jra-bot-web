@@ -86,7 +86,8 @@ class ScenarioShapeTest(unittest.TestCase):
                     "GD05-COMBO-001", "GD09-EVAL-001", "GD04-WIN-HITRATE-003", "GD03-SNAPSHOT-002", "GD08-SELECT-003", "GD07-SIZING-004",
                     "GD10-DEFAULTS-001"}
         ml = {"G6-FEATURES-001", "G3-ML-NORM-002", "G4-ENSEMBLE-002", "G5-BLEND-002", "G7-LEGACY-FAIL-001"}  # T3.6-A で追加
-        self.assertEqual(existing, set(scenarios.CASES_BY_ID) - set(NEW_CASES) - ml)
+        notify = {"G8-SPLIT-001", "G8-RETRY-002", "G8-DEDUP-003", "G8-SINGLE-004", "G8-GROUPED-005", "G8-REASON-006"}  # T3.7 で追加
+        self.assertEqual(existing, set(scenarios.CASES_BY_ID) - set(NEW_CASES) - ml - notify)
 
 
 if __name__ == "__main__":

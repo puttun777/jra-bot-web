@@ -75,6 +75,33 @@ def sandbox():
             time.tzset()
 
 
+def _import_discord():
+    """旧 `notify/discord.py` は import 時に `requests` を読む。ここでは**ネットワーク送信を一切行わない**（送信関数は呼ばず、本文の組み立てだけを検証する）ので、
+    `requests` の代わりに最小のスタブを差し込んで import する（golden の依存を numpy だけに保つ）。スタブの `post` は呼ばれたら例外にする。"""
+    class _RequestException(Exception):
+        pass
+
+    class _Timeout(_RequestException):
+        pass
+
+    def _post(*_a, **_k):
+        raise RuntimeError("ゴールデン生成中のネットワーク送信は禁止されています")
+
+    stub = types.ModuleType("requests")
+    stub.exceptions = types.SimpleNamespace(Timeout=_Timeout, RequestException=_RequestException)
+    stub.Response = object
+    stub.post = _post
+    saved = sys.modules.get("requests")
+    sys.modules["requests"] = stub
+    try:
+        return importlib.import_module("jraev.notify.discord")
+    finally:
+        if saved is None:
+            del sys.modules["requests"]
+        else:
+            sys.modules["requests"] = saved
+
+
 def load(path):
     """検証済みチェックアウトから、計算に必要なモジュールだけを import する（DB・UI・通知・JV-Link は import しない）。"""
     verify_checkout(path)
@@ -94,6 +121,7 @@ def load(path):
         ns.features = importlib.import_module("jraev.ml.features")
         ns.model = importlib.import_module("jraev.ml.model")
         ns.models = importlib.import_module("jraev.data.models")
+        ns.discord = _import_discord()  # Discord 通知の本文・分割・Retry-After の解釈（T3.7）。送信は呼ばない
         ns.db = importlib.import_module("jraev.storage.db")  # 合成 SQLite（特徴量 G6・ML 経路 G3〜G5）。ネットワーク・実 DB は使わない
     ns.inspect = inspect
     return ns

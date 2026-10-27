@@ -68,3 +68,31 @@ class MlScenarioTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NotifyCasesTest(unittest.TestCase):
+    """T3.7: Discord 通知のケース（G8）は、実 Webhook・実データを含まず、長い文字列を repeat 表現で持ち、Kotlin の対応表と一致している。"""
+
+    IDS = ("G8-SPLIT-001", "G8-RETRY-002", "G8-DEDUP-003", "G8-SINGLE-004", "G8-GROUPED-005", "G8-REASON-006")
+
+    def test_registered_in_kotlin_port_and_catalog(self):
+        from tools.golden.catalog import CATALOG, KOTLIN_PORT
+        in_catalog = {cid for e in CATALOG for cid in e["case_ids"]}
+        for cid in self.IDS:
+            self.assertIn(cid, KOTLIN_PORT["supported"])
+            self.assertIn(cid, in_catalog)
+
+    def test_inputs_use_only_dummy_webhook_and_synthetic_ids(self):
+        import json
+        from tools.golden import scenarios
+        for cid in self.IDS:
+            text = json.dumps(scenarios.CASES_BY_ID[cid].calls, ensure_ascii=False)
+            self.assertNotIn("discord.com", text, cid)
+            self.assertNotIn("webhooks", text, cid)
+            self.assertNotRegex(text, r"[A-Za-z0-9_-]{40,}", cid)
+
+    def test_long_strings_are_expressed_as_repeat(self):
+        from tools.golden import adapter, scenarios_notify as N
+        expanded = adapter._expand_repeat(N._rep(("a", 1900), ("\n", 1)))
+        self.assertEqual(len(expanded), 1901)
+        self.assertEqual(adapter._expand_repeat("そのまま"), "そのまま")

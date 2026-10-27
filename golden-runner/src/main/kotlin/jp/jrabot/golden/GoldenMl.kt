@@ -157,6 +157,8 @@ internal object GoldenMl {
 
         private val races = HashMap<String, RaceConditions>()
         private val entries = HashMap<Pair<String, Int>, String>()
+        private val entryNames = HashMap<Pair<String, Int>, String?>()
+        private val horseNames = HashMap<String, String?>()
         private val horses = HashMap<String, HorseMaster>()
         private val runs = HashMap<String, MutableList<RunRow>>()
 
@@ -178,9 +180,13 @@ internal object GoldenMl {
                         ),
                     )
             }
-            for (r in db.get("race_horses").values()) entries[s(r, "race_id")!! to r.int("umaban")] = s(r, "ketto_num") ?: ""
+            for (r in db.get("race_horses").values()) {
+                entries[s(r, "race_id")!! to r.int("umaban")] = s(r, "ketto_num") ?: ""
+                entryNames[s(r, "race_id")!! to r.int("umaban")] = s(r, "bamei")
+            }
             for (r in db.get("horses").values()) {
                 val ketto = s(r, "ketto_num")!!
+                horseNames[ketto] = s(r, "bamei")
                 horses[ketto] =
                     LegacyRows.horse(
                         LegacyRows.HorseRow(
@@ -198,6 +204,21 @@ internal object GoldenMl {
                 runs.getOrPut(s(r, "ketto_num")!!) { ArrayList() } +=
                     RunRow(s(r, "race_id")!!, s(r, "date"), r.get("finish")?.takeUnless { it.isNull }?.asInt("finish"))
             }
+        }
+
+        /**
+         * 旧 `get_horse_feature_summary` の馬名の決め方: 出走表（race_horses）の馬名。空で、かつ馬の登録番号があり馬マスタに行があるときだけ馬マスタの馬名。
+         * 通知（T3.8）の呼び出し側が同じ決め方で馬名を用意する（`FeatureSource` は馬名を持たない）。
+         */
+        fun legacyBamei(
+            raceId: String,
+            umaban: Int,
+        ): String {
+            val rid = raceId.take(12)
+            var bamei = entryNames[rid to umaban]?.trim { it.isWhitespace() }.orEmpty()
+            val ketto = entries[rid to umaban]?.trim { it.isWhitespace() }.orEmpty()
+            if (bamei.isEmpty() && ketto.isNotEmpty() && horses.containsKey(ketto)) bamei = horseNames[ketto]?.trim { it.isWhitespace() }.orEmpty()
+            return bamei
         }
 
         override fun raceConditions(
