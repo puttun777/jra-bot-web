@@ -1,7 +1,43 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-10-27（Stage 3-G: T3.7 Discord 通知。記録は下）
+最終更新: 2026-10-27（Stage 3-H: T3.8 bot-run オーケストレーション。記録は下）
+旧: 2026-10-27（Stage 3-G: T3.7 Discord 通知）
 旧: 2026-10-26（Public 化の準備）／2026-10-24（Stage 3-F2・3-F1・3-E）
+
+## Stage 3-H（claude/stage3-bot-orchestration）: T3.8 bot-run オーケストレーション
+### 結果（**合成データ・Fake HTTP サーバ・メモリ上の偽物・ローカル MySQL 8.0.46 のみで検証。実 Discord・実 JRA-VAN データ・本番 GCP・Cloud Run には触れていない**。T3.9 には進んでいない）
+- **データ利用方針は維持**: 構成（Windows エージェント → ingest → MySQL → Kotlin の特徴量・推論 → Python の独立した学習）は変更なし。期待値だけを保存する方式にしていない。実データのクラウド投入・実データ由来の通知は COMP-4 の公式回答まで行わない。JRA-VAN の規約確認を『済み』にしていない。未解決事項（P-1〜P-3・T1.16/17/20/21・T3.0・COMP-4・E-7・D-13/14・Stage 5）は変更なし。Visibility・Terraform・GCP・Secrets に触れていない。
+- **実装**（D-190〜D-203、CONTRACTS 0.4.12、UNRESOLVED C-30〜C-33、MIGRATION_MATRIX §12、RACE_CALENDAR_DESIGN §13、ML_DESIGN §14）:
+  - `:domain` `jp.jrabot.domain.botrun`: `BotRunOrchestrator`（開始検証 → リース → 再検証 → 復元 → ML 固定 → ループ → 終了）、`LeaseKeeper`（版の追跡・衝突の再試行・Lost の畳み込み）、`ModeGate`（UNKNOWN の連続 3 回）、`RaceMonitorPlanner`（レースの段階を毎サイクル再導出）、`RaceCycleProcessor`（鮮度 → 判定 → 冪等な記録 → checkpoint 保存 → 通知）、`RaceEvaluator`（既存部品の接続だけ）、`MlRunStarter`、`RunCheckpoint`、`OddsFreshness`、`BotRunConfig`（既定なし）、`Pacer`。テスト用の偽物は `botrun.testing`（D-203）。
+  - `:persistence`: `RaceEvaluationWriter`（`INSERT … WHERE NOT EXISTS`）と `RaceEntryReader`（`race_horses.bamei`）。**マイグレーション・GRANT の変更なし**（スキーマ版は 4 のまま）。SQL テナント検査（`TenantSqlGuard`）を `INSERT … SELECT` に対応させて強化。
+  - `:bot`: `BotRunSettingsParser`（`BOT_RUN_*`。必須・既定なし）、`BotRunTaskHandler`（`--trigger` → 通知の出どころ）、`SignalInstaller`（SIGTERM → `StopFlag`）、`SleepPacer`、`BotRunWiring`。`bot-run` はスタブでなくなった（`reconcile`・`retention` は引き続きスタブ）。
+- **起動から終了までの流れ**: ①引数・設定の検証（不足は exit 2）②運用モード（DB に触れる前。確定した非 NORMAL は 0、UNKNOWN は 75）③スキーマ版 ④有効な開催日の導出と `CalendarCheckPolicy`（曜日・祝日を使わない。開催なし等は 0、予定が不明・古い・未確認・発走時刻なしは 75）⑤`bot_run` リース取得（DB の UNIQUE。他が有効なら 0 `ALREADY_ACTIVE`）⑥STARTING で再検証 ⑦前の run の checkpoint を復元 ⑧古い claim を `SEND_UNKNOWN` に ⑨ML をこの run で固定 ⑩RUNNING → ループ（停止要求・最大稼働・モード・heartbeat → 開催日の再導出 → 監視対象 → 各レース: オッズの鮮度 → 判定 → `race_evaluations`/`signals` を冪等に記録 → 発火済みを checkpoint に保存 → 通知）⑪全レースが OFF または中止で DRAINING → SUCCEEDED（`ALL_RACES_OFF`）。SIGTERM は INTERRUPTED、モード変更は STOPPED_BY_MODE、リース喪失は何も書かず 75。
+- **旧 Python との互換**: 判定の数値（EV・Kelly・賭け額・確率の意味・丸め）は変更なし。**ゴールデン 31 ケース / 988 呼び出しが旧実装と全一致**（最大絶対誤差 1.066e-14。未対応は GD10 の 1 ケース / 6 呼び出しのまま）。旧の通知タイミング（`main/extra_snapshot_minutes`）・ポーリング間隔・5 分前の強化（opt-in）・履歴件数を設定で再現。旧と**違う**点: 古いオッズでは通知しない（是正）、発走時刻不明は通知しない（是正）、通知は『各タイミング 1 回』（新しい仕様・要確認 G-23）、`hit_rate_min_ev_schedule`/`adaptive_relaxation` は未移植（G-24）。MIGRATION_MATRIX §12 に全機能の分類。
+- **リース・二重起動**: メモリのロックは使っていない（最終防壁は `bot_run` の UNIQUE と行ロック）。メモリ上の偽物で orchestrator の振る舞い（二重起動の拒否・期限切れの奪取・checkpoint の引継ぎ・古い実行の更新禁止・リース喪失で停止・強制終了からの復旧）を、**本物の MySQL（最小権限の `bot` ユーザー）で通しの 1 日・再実行の冪等・BACKFILL・有効なリースがあれば開始しない・テナント境界**を確認した（ローカル 8.0.46）。
+### テスト（ローカル: JDK 21・`LC_ALL=C.UTF-8`・MySQL 8.0.46〔apt の `mysql-server-core-8.0`、ポート 3307〕。**JDK 25・MySQL 8.4/9.7・Docker・GitHub Actions の合否ではない**。完了判定の正は GitHub Actions: D-056）
+| 区分 | 結果 |
+|---|---|
+| `:domain` 単体 | **960 件成功**（新規 71: `BotRunLifecycleTest` 17・`BotRunLeaseTest` 13・`BotRunRestartAndModeTest` 19・`BotRunMlTest` 9・`BotRunComponentsTest` 13） |
+| `:bot` 単体 | **130 件成功**（新規 20: `BotRunSettingsParserTest` 6・`BotRunTaskHandlerTest` 10〔実シグナル USR2 を含む〕・`BotRunFakeServerIntegrationTest` 4〔Fake HTTP サーバ。1 日分・429・5xx・BACKFILL〕。`BotSpringWiringTest`・`CalendarSettingsParserTest`・`TestSupport` を更新） |
+| `:persistence` 単体 | 33 件成功（`SqlTemplateTenantGuardTest` を更新） |
+| `:ingest` / `:dashboard` / `:cloud-gcp` / `:golden-runner` | 35 / 30 / 102 / 20 件成功。Kotlin vs 旧 Python は 31 ケース / 988 呼び出し全一致 |
+| `:persistence:integrationTest`（MySQL 8.0.46） | 185 件中 184 成功。新規 9（`BotRunOrchestratorIntegrationTest` 5・`BotRunRepositoriesIntegrationTest` 4）成功。失敗 1 は既知（`WiringIntegrationTest` のサーバ版検査〔8.4 を期待〕。ローカルが 8.0） |
+| `:bot:integrationTest`（MySQL 8.0.46） | 39 件中 33 成功。新規 2（`BotJobIntegrationTest` の bot-run）成功。失敗 6 は `MlTrainInteropIntegrationTest`（`ML_TRAIN_PYTHON` 未設定。環境の問題・既知） |
+| ktlint・`checkModuleDependencies`・repo-hygiene・`tools/ci`（130 件） | 成功 |
+| **未実施** | GitHub Actions 全体（JDK 25・MySQL 8.4/9.7・connectorj26・Docker イメージ・ml-train・Python のジョブ）、実 Discord、Cloud Run Jobs、`:ingest`/`:dashboard` の MySQL 統合（変更の影響が薄いため未実施だが、CI で確認が必要）、`ML_TRAIN_PYTHON` を使う Python 連携 |
+### 変更・判断・未解決
+- 判断: D-190〜D-203（DECISIONS）。契約: CONTRACTS 0.4.12（`BOT_RUN_*` を infra の Job 定義へ: T5.0）。
+- **新規の未解決**（UNRESOLVED）: **G-23 運用値と通知方式のユーザー確認**（最重要）、G-24（`hit_rate_min_ev_schedule`/`adaptive_relaxation` の扱い）、G-25（T3.9 への引き継ぎ）、G-26（`horse_master_history` の追記）、G-27、F-7/F-8（検証ゲート）。解消: C-30〜C-33（G-8、G-17 ①②、G-21 ①〜⑤）。**既存の P-1〜P-3・T1.16/T1.17/T1.20/T1.21・T3.0・COMP-4・E-7・D-13/D-14・Stage 5 は変更なし（完了扱いにしていない）**。
+- 旧実装の観察（変更なし・記録のみ）: `current_snapshot_minutes` が最大のタイミングで決まる癖（`[30,10,5]` では『5 分前の強化』が働かない）を `SnapshotPolicy.legacyCurrent` でそのまま再現（テストで固定）。
+### 次の作業（**自動では進まない。ユーザーのレビューを挟む**）
+1. **ユーザー**: T3.8 のコードと G-23（運用値・通知方式）・G-24 を確認。Actions の無料枠が戻る（または Public 化を完了して知らせる）まで PR は作らない。
+2. 枠が戻ったら PR を作り（`claude/stage3-bot-orchestration` → main）、CI（JDK 25・MySQL 8.4/9.7・images）の結果を記録。失敗したら『検査を緩めず』直す。
+3. **Stage 3-I（T3.9）**: PLAN.md「T3.8 後の道筋」の ①〜⑤（結果・払戻・決済・reconcile・成績集計・バックテスト）。着手はユーザーの承認後。
+4. その後 第4段階（dashboard）→ **T5.0（infra 同期）**→ 第5段階（課金リソースは明示的な承認後）。
+### ブランチ・PR・CI
+`claude/stage3-bot-orchestration`（main の eed3c0e から）。URL: https://github.com/puttun777/jra-bot-web/tree/claude/stage3-bot-orchestration 。**PR は未作成**（Actions 無料枠が残り 150 分未満のため）。`claude/*` への push は CI を起動しない。**CI の結果はまだ無い（未検証）**。
+
+---
 
 ## Stage 3-G（claude/stage3-discord-notification）: T3.7 Discord 通知
 ### 結果（**合成データ・Fake の HTTP サーバのみで検証。実 Discord・実 Webhook・実 JRA-VAN データへは触れていない**。T3.8 には進んでいない）

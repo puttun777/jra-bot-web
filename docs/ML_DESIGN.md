@@ -354,3 +354,12 @@ H6・H7・H9 は学習側/データ側（F2・T1.20）。
 
 ## 13. T3.7: 通知の理由文（G-17 ⑥）
 `format_reason_from_features` は `jp.jrabot.domain.ml.features.ReasonFormatter` に移植。材料 `HorseReasonFacts` は 2 通りで作る: ①`LegacyFeatureBuilder.reasonFacts`（旧互換。H3 を含み、ゴールデン G8-REASON-006 の比較専用）②`PointInTimeFeatureBuilder.reasonFacts`（asOf 以前だけ。`LeakageException` の検査は `build` と同じ。累積値〔適性・脚質〕が asOf より後に更新されていたら出さない＝0% などの架空の値を出さない）。馬名は呼び出し側（出走表）が渡す。旧の適性率が 100% を超え得る癖（D-159）は共有の式のまま表示に出る（G8-REASON-006 の『距離=147%』）。実データの通知は COMP-4 まで送らない。
+
+## 14. T3.8: bot-run への ML の接続（2026-10-27。判断 D-199。合成データのみ）
+- **固定**: bot-run の開始時（リース取得後・RUNNING の前）に 1 回だけ `ModelRunPin.capture` → `ModelSession`（保管先から読み、**署名・sha256・feature_schema_hash・次元をレジストリの記録と照合**）→ `MlInference`（`MlRunStarter`）。run の途中でレジストリの ACTIVE が替わっても固定したモデルを使う。`BOT_RUN_ML_MODEL_TYPE=off` なら読み込まない。パイプラインは **legacy 固定**（v2 は設定項目すら無い）。
+- **判定への配線**: `RaceEvaluator` が point-in-time の特徴量（`PointInTimeFeatureBuilder`。`asOf = 評価時刻`、発走時刻以降は `LeakageException` → `MODEL_PREDICTION_FAILED` のフォールバック。過去走はレース日より前だけ、馬マスタは `horseAsOf`）で `MlInference.probabilities` を呼び、`ProbabilityResult.probs` を `MlProbabilityInput` として `WinDecisionEvaluator` に渡す。確率源のラベルは legacy の旧ラベル（H10）。EV・Kelly・賭け額・買い目・丸めは変更なし（ゴールデン 31 ケース / 988 呼び出し一致を維持）。
+- **記録**: `race_evaluations.model_type_used`（`calibration` など、ML が使えなかったら `market`）、`model_id`（固定した ID。市場確率のみなら NULL）、`fallback_reason`（`FallbackReason` の名前。ML 無効は `ML_DISABLED`）。
+- **フォールバックの検知**: ML を有効にしたのに市場確率だけになったら（H1 のサイレントフォールバックの再発防止）、運用者へ run あたり 1 回エラー通知する（理由つき）。署名不正・成果物なし・ACTIVE なし（CANDIDATE のみ）・レジストリ/保管先の障害・特徴量の元データ欠損をテストで確認。
+- **しないこと（未承認）**: モデルの ACTIVE への昇格、品質閾値の設定、v2 の有効化、実 pkl の変換、実データでの学習。**合成テストの成功は予測精度の証明ではない**（F-5・G-ML-1〜3 は実データで）。
+- **履歴の追記（G-26）**: `horse_master_history` は取込側がいつ版を足すか未実装。履歴が貯まるまで過去分の PIT は不完全。
+

@@ -1,6 +1,6 @@
 # UNRESOLVED（未解決事項の管理表）
 
-作成: 2026-10-23（Stage 3-D / T3.4）。**2026-10-24 Stage 3-E（T3.5）・Stage 3-F1（T3.6-A）・Stage 3-F2（T3.6-B）で更新**。**未解決事項の正本はこの表**。PROGRESS.md の各段階の「未解決」は履歴で、現在の状態はここを見る。
+作成: 2026-10-23（Stage 3-D / T3.4）。**2026-10-24 Stage 3-E（T3.5）・Stage 3-F1（T3.6-A）・Stage 3-F2（T3.6-B）、2026-10-27 Stage 3-H（T3.8）で更新**。**未解決事項の正本はこの表**。PROGRESS.md の各段階の「未解決」は履歴で、現在の状態はここを見る。
 **根拠のない項目を「解決済み」にしない**。A は根拠（出典）を必ず書く。出典が検索抜粋で原文を直接読めていないものは、その旨を書く（本環境のプロキシは jra-van.jp / developer.jra-van.jp を 403 で拒否する）。
 
 | 分類 | 意味 |
@@ -83,6 +83,10 @@
 | C-27 | **T3.7 Discord 通知**（D-181〜D-189） | `DiscordNotifier`（429・Retry-After・接続前の失敗だけ再試行・5xx/タイムアウト/切断/一部送信は UNKNOWN）、`SignalNotificationDispatcher`（claim → 送信 → 記録、同時実行で勝者 1 つ、`recoverStaleClaims`）、URL 検証（SSRF）、メンション制御、`ErrorReporter`。Fake HTTP サーバの単体テストで検証。**実 Discord への送信は未検証（G-22）。exactly-once は保証しない** |
 | C-28 | **G-8 BACKFILL・OpsMode での通知停止** | `NotificationOrigin`（既定値なし。LIVE 以外は通知せず状態も変えない）、毎回モードを読み NORMAL のみ、停止要求。単体テスト。呼出し元の対応は G-21 |
 | C-29 | **G-17 ⑥ `format_reason_from_features`** | 旧互換（H3 を含む。ゴールデン G8-REASON-006 が旧 Python と全一致）と point-in-time（asOf 以前だけ。レース後に更新された馬マスタの累積値は出さない）を分離。合成データのみ。実データの通知は COMP-4 まで送らない |
+| C-30 | **T3.8 bot-run の業務ループ**（D-190〜D-203） | 開始検証（運用モード → 有効な開催日 → `CalendarCheckPolicy`）→ リース → 再検証 → checkpoint 復元 → 古い claim の回収 → ML 固定 → 監視ループ（判定・記録・通知）→ 終了。小さな部品に分割（`jp.jrabot.domain.botrun`）。`:domain` 971 件（うち bot-run 71）・`:bot` 130 件・MySQL 統合（ローカル 8.0.46）で通し。**合成データのみ。実 DB の本番・実 Discord・実 JRA-VAN データでは未検証** |
+| C-31 | **G-21 ①〜⑤（通知の接続）・G-8** | `dispatchRace` を呼ぶ（出どころは `--trigger` から: LIVE / BACKFILL / 判定不能）、`NoticeViews.from` + 馬名 + `reasonFacts` の理由文で `RaceNoticeBatch`、SIGTERM で `StopFlag`、起動時 `recoverStaleClaims`、`ErrorReporter` を呼ぶイベントの決定（D-201）。NOT_SENT も `SEND_UNKNOWN`（API 変更はしていない）。Fake HTTP サーバ（127.0.0.1）で 1 日分・429・5xx・BACKFILL を確認。⑥管理画面の SEND_UNKNOWN 表示は Stage 4 |
+| C-32 | **G-17 ①②（ML の接続）** | `ModelRunPin.capture` → `ModelSession`（署名・sha256・スキーマの照合）を run の開始時に 1 回、`MlInference` → `MlProbabilityInput` → `WinDecisionEvaluator`、`race_evaluations` へ `model_type_used`・`model_id`・`fallback_reason`、ML 有効で市場確率のみのときの run あたり 1 回のアラート、point-in-time の特徴量。署名不正・CANDIDATE のみ・成果物なし・レジストリ障害・元データ欠損のフォールバックを合成モデルで確認。**予測精度の証明ではない**。モデルの昇格・v2・品質閾値は未実施のまま |
+| C-33 | **T3.8 の二重起動・SIGTERM・モード** | 有効なリースの間は 2 つ目が始まらない（DB の UNIQUE が最終防壁）、期限切れの奪取と checkpoint の引継ぎ、奪取された古い実行の更新禁止、リース喪失で何も書かず 75、SIGTERM（`INTERRUPTED`・exit 0/75）、STOPPED（`STOPPED_BY_MODE`）、UNKNOWN の連続 3 回（75）、強制終了からの復旧で重複通知なし |
 | C-26 | **ml-train イメージ（5 つ目）と CI**（D-176・D-178） | Dockerfile の `ml-train` ステージ、イメージのスモーク（合成データで学習・署名・登録）、`ci.yml` の `ml-train` ジョブと `ci gate` への統合。**イメージのビルドとスモークの合否は GitHub Actions（images）で確認。push はしない** |
 
 ## D. ユーザーの運用判断待ち（承認するまで「承認済み」にしない）
@@ -142,6 +146,8 @@
 | F-4 | 実データでの ingest の検証（COMP-4 のゲートが先。合成データだけで進める） |
 | F-5 | **T1.20 / G-ML-1・G-ML-2（ML の実データ検証）**: 実 pkl の所在・次元・`feature_names`、旧 `signals.prob_source` の分布（H1）、旧記録値との一致（legacy パイプライン）。**pkl はクラウドで読まない**。変換ツールの仕様とローカル手順は ML_DESIGN §11.9（**実装・実行は未実施**）。合成モデルのゴールデンは実 pkl が無くても実施済み |
 | F-6 | T3.6-A のローカル検証は JDK 21・MySQL 8.0.46。**JDK 25 と MySQL 8.4/9.7 の合否は GitHub Actions の結果だけが正**（D-163） |
+| F-7 | **T3.8 のローカル検証は JDK 21・MySQL 8.0.46（ポート 3307。`JRABOT_TEST_MYSQL_EXTERNAL`）**。bot-run の MySQL 統合試験（`BotRunOrchestratorIntegrationTest`〔最小権限の `bot` ユーザー〕・`BotRunRepositoriesIntegrationTest`）はローカルで成功。**JDK 25・MySQL 8.4/9.7・Docker イメージ・GitHub Actions は未実施**（無料枠不足のため PR を作らず CI を起動していない）。`MlTrainInteropIntegrationTest`（`ML_TRAIN_PYTHON` が要る）と `WiringIntegrationTest` のサーバ版検査（8.4 を期待）はローカルでは失敗する（既知。環境の問題） |
+| F-8 | **Cloud Run Jobs での SIGTERM**（猶予時間 G-OPS-4、`sun.misc.Signal` のハンドラが実コンテナで効くか、14 時間の Job タイムアウト G-OPS-5）。ローカルでは `USR2` の実シグナルでハンドラの経路を確認しただけ |
 
 ## G. 後続タスク待ち
 | ID | 内容 | 予定 |
@@ -153,7 +159,7 @@
 | G-5 | 実データ形式（JV-Data）のレコードパーサ（E-5 の確認後に `RecordParser` を追加） | T1.17 後 |
 | G-6 | reconcile（`STALE` イベントの生成、YSCH から消えた開催日の扱い、結果欠損の補完）、MONITORING 以降の履歴の種類（V3 でさらに ENUM を足すか）、bot-run の checkpoint・SIGTERM | T3.8 / T3.9 |
 | G-7 | ~~ML（FeatureBuilder・ProbabilityPipeline）~~ → T3.6-A（C-14）。~~ml-train・`export-dataset` の配線・`DatasetStore` への manifest 保管・ml-train イメージ・pkl→JSON 変換の実装~~ → **T3.6-B で実装（C-20〜C-26。合成データのみ）**。残り: 実データでの検証（F-5・G-ML-1〜3）・品質ゲートの閾値（D-13）・Cloud Run Job 化（第 5 段階） | 第 5 段階 / T1.20 |
-| G-8 | ~~Discord 通知（BACKFILL では通知しない）~~ → C-27/C-28。残り: bot-run が `NotificationOrigin` を正しく渡すこと（G-21） | T3.8 |
+| G-8 | ~~Discord 通知（BACKFILL では通知しない）~~ → C-27/C-28/C-31（bot-run が `NotificationOrigin` を `--trigger` から渡す） | 解消（T3.8） |
 | G-9 | **T5.0（必須の前提）**: infra の文書を web CONTRACTS に追従（I-H1〜I-H9 ＋ 今回の追加: V3 の GRANT、環境変数 `AGENT_KEK_KEYS`・`AGENT_KEK_ACTIVE_KID`・`INGEST_*`、ingest の Secret、`app` の `race_schedule_event` INSERT） | 第 5 段階の前 |
 | G-10 | 本番 release-manifest（`feature_schemas` を含む v2 の本番生成は第 5 段階のゲートが揃うまで禁止）、~~ml-train イメージ~~（T3.6-B で追加。レジストリへの push・digest は第 5 段階）、branch protection の required checks（`ci gate`。ml-train ジョブは gate に統合済み） | 第 5 段階 |
 | G-11 | Spring Boot 4.2.0 の GA 後の移行（VERSIONS §7） | GA 後 |
@@ -162,9 +168,14 @@
 | G-14 | **T5.0 への追加（T3.5 分）**: エージェントの配布（Python 同梱 exe・署名）、ビーコン公開鍵の同梱と鍵ローテーション手順、`INGEST_VERIFIED_FETCH_SPECS`・`INGEST_PLAN_ITEMS_JSON`・`INGEST_UPDATE_MANIFEST_PATH`、`/v1/agent/mode` が未認証であること（Cloud Armor・同時実行数で保護: G-12）、トークン期限の運用、更新 manifest の署名鍵（オフライン） | 第 5 段階の前 |
 | G-15 | 取得計画の実際の生成（開催カレンダー + 欠損検知から `plan` を作る）。現在は運用者が与えた項目のうち検証済みのものだけ。YSCH の対象範囲は key の 16 桁（仮の表現。確認後に正式化） | T3.8 |
 | G-16 | 実データ形式（JV-Data）のパーサ（サーバ）と、`SpecRegistry` の確認の記録（T1.17 の 12 項目。確認が 0 件のうちは実取得は始まらない） | T1.17 後 |
-| G-17 | **T3.6-B / T3.8 への引き継ぎ（ML）**: ①bot-run の開始時に `ModelRunPin.capture`、使った `model_id` を `race_evaluations` に保存、`fallback_reason`・アラート（ML 有効で市場確率のみ）②`MlInference` を判定（`WinDecisionEvaluator` の `MlProbabilityInput`）へ配線 ~~③`FeatureSource`・`DatasetSource` の `:persistence` 実装~~ → C-20 ~~④`ModelStore`/`DatasetStore` の GCS 実装と manifest の保管~~ → C-22（実 GCS は未検証: G-19）~~⑤馬マスタの時点履歴~~ → C-21（履歴の追記を取込側がいつ行うかは T3.8 以降）~~⑥`format_reason_from_features`（通知文。T3.7）~~ → C-29⑦`SnapshotsNewestFirst` など判定側の既存課題は変更なし ~~⑧release-manifest の `feature_schema_hash`~~ → C-24 | T3.7 / T3.8 |
+| G-17 | **T3.6-B / T3.8 への引き継ぎ（ML）**: ~~①bot-run の開始時に `ModelRunPin.capture`、使った `model_id` を `race_evaluations` に保存、`fallback_reason`・アラート（ML 有効で市場確率のみ）②`MlInference` を判定（`WinDecisionEvaluator` の `MlProbabilityInput`）へ配線~~ → C-32 ~~③`FeatureSource`・`DatasetSource` の `:persistence` 実装~~ → C-20 ~~④`ModelStore`/`DatasetStore` の GCS 実装と manifest の保管~~ → C-22（実 GCS は未検証: G-19）~~⑤馬マスタの時点履歴~~ → C-21（履歴の追記を取込側がいつ行うかは T3.8 以降）~~⑥`format_reason_from_features`（通知文。T3.7）~~ → C-29⑦`SnapshotsNewestFirst` など判定側の既存課題は変更なし ~~⑧release-manifest の `feature_schema_hash`~~ → C-24 | T3.7 / T3.8 |
 | G-18 | **ML の未承認の改善案は未実装のまま**: v2 の本番有効化（旧新比較・バックテスト G-ML-3・閾値の再検討・承認の後）、H4 の二重ブレンド解消、H10 の Kelly 係数 enum 化（`kellyMultiplierBySourceEnum`）、`ensemble_beta` の自動調整、`class_weight` を使わない学習 | T1.21 / T3.9 |
 | G-20 | **Discord の 2000 文字の数え方**（コードポイントか UTF-16 単位か）が公式資料で確認できなかった（このセッションから discord.com へ接続できず、検索結果は 429 の仕様のみ）。既定は余裕のある UTF-16 単位、1900 の安全幅は維持（D-184）。絵文字を含む本文が実 Discord で切れないかは**実送信で確認**が必要 | 実 Discord の検証（ユーザー承認・COMP-4 の後） |
-| G-21 | **T3.8 への引き継ぎ（通知）**: ①`SignalNotificationDispatcher.dispatchRace` を呼ぶ（`NotificationOrigin` は `--trigger` から。D-186 の案を確定。判定不能は UNDETERMINED）②`NoticeViews.from(DecisionSignal)` と出走表の馬名（`legacyBamei` と同じ決め方）から `RaceNoticeBatch` を作り、`PointInTimeFeatureBuilder.reasonFacts` の理由文を `reason` に入れる ③SIGTERM ハンドラで `StopFlag.request()`、開始時に `recoverStaleClaims`（リース保持中）④`ErrorReporter` を呼ぶイベント（通知失敗・設定エラー・ML の市場確率へのフォールバック・DB 不達など）の決定（D-14 の REJECTED 通知は未承認のまま）⑤**claim 後に確実に送れなかった（NOT_SENT）Signal も SEND_UNKNOWN になる**（状態を戻す API が無い）。『解放して次のサイクルで再試行』が必要なら契約と `SignalWriter` の変更（`CLAIMED → UNSENT` の許可）を提案して承認を得る ⑥管理画面（Stage 4）で SEND_UNKNOWN を表示 | T3.8 / Stage 4 |
+| G-21 | **T3.8 への引き継ぎ（通知）**: ~~①〜⑤は T3.8 で実装 → C-31~~（元の記述: ①`SignalNotificationDispatcher.dispatchRace` を呼ぶ（`NotificationOrigin` は `--trigger` から。D-186 の案を確定。判定不能は UNDETERMINED）②`NoticeViews.from(DecisionSignal)` と出走表の馬名（`legacyBamei` と同じ決め方）から `RaceNoticeBatch` を作り、`PointInTimeFeatureBuilder.reasonFacts` の理由文を `reason` に入れる ③SIGTERM ハンドラで `StopFlag.request()`、開始時に `recoverStaleClaims`（リース保持中）④`ErrorReporter` を呼ぶイベント（通知失敗・設定エラー・ML の市場確率へのフォールバック・DB 不達など）の決定（D-14 の REJECTED 通知は未承認のまま）⑤**claim 後に確実に送れなかった（NOT_SENT）Signal も SEND_UNKNOWN になる**（状態を戻す API が無い）。『解放して次のサイクルで再試行』が必要なら契約と `SignalWriter` の変更（`CLAIMED → UNSENT` の許可）を提案して承認を得る ⑥管理画面（Stage 4）で SEND_UNKNOWN を表示）**残り: ⑥だけ（Stage 4）** | Stage 4 |
 | G-22 | **T3.7 の未検証**: 実 Discord への送信（429 の実応答・Cloudflare の挙動・User-Agent の扱い・`allowed_mentions` の実挙動・実 Webhook の URL 形式）、Cloud Run からの到達性、Secret Manager からの注入（`DISCORD_MENTION_USER_ID` の追加は T5.0）、bot-run と MySQL を含む通知の統合試験（T3.8） | ユーザー承認後 / Stage 5 / T3.8 |
 | G-19 | **T3.6-B の後続**: ①ml-train は `file://`（GCS ボリュームのマウント）のみ。`gs://` の直接読書きは未対応（D-171。Stage 5 で決める）②GCS アダプタの実 GCS・実認証での検証（Stage 5。本番 GCP に接続していない）③Dependabot の pip `/ml`（numpy は除外）④履歴の追記・過去分の PIT は履歴が貯まるまで不完全（C-21）⑤REJECTED の通知（D-14）| 第 5 段階 |
+| G-23 | **bot-run の運用値と通知方式（ユーザー確認が必要）**: ①`BOT_RUN_*` の運用値（リース期限・heartbeat・ポーリング間隔・オッズ鮮度・最大稼働・古い claim・連続失敗・評価タイミング・履歴件数・5 分前の強化）は**すべて未確定で既定値なし**（設計の案: リース 300 秒 / heartbeat 60 秒 / 鮮度 180 秒 / 最大 14 時間。旧の既定: ポーリング 300/60/30 秒、タイミング 5 分前、履歴 3 件）②判定の設定は `legacy_function_defaults`（旧関数の既定値）しか選べない。実 config.yaml の運用値は T1.20 の後にユーザーが承認してから取り込む③**通知方式**: 旧は『各タイミングで評価、レースごとにベスト 1 件のみ通知』だが重複抑止の実装が不明。T3.8 は『各タイミング 1 回だけ発火（再起動をまたいでも重複しない）』にした（D-196）。これでよいか、旧と同じ毎ポーリング通知にしたいか（スパムの恐れ）の確認が要る④旧の `current_snapshot_minutes` の癖（最大のタイミングで決まる）をそのまま移した | ユーザー判断（T1.20 と同時） |
+| G-24 | **旧 `run_daemon` の時間帯依存・状態つき調整は未移植**: `hit_rate_min_ev_schedule`（far/mid/near で EV 閾値を変える）と `adaptive_relaxation`（無通知が続くと閾値を段階的に緩める）。T3.8 は `priority_mode=hit_rate` の閾値を固定（`WinDecisionConfig.hitRateMinEv`）のまま使う。MIGRATION_MATRIX §12 に分類。移植するならユーザーの承認（未承認の改善案ではないが、状態を持つ新しい挙動のため） | ユーザー判断 |
+| G-25 | **T3.9 への引き継ぎ（bot-run の残り）**: ①結果・払戻・決済の反映と `race_schedule.status`（MONITORING → OFF → RESULT_PENDING → SETTLED）・`race_day.status`（RUNNING → SETTLING → COMPLETED / INCOMPLETE）の更新。それまで T3.8 の bot-run は発走後に即終了し、完了済みの日も窓の中では calendar-check が再起動する（無害だが無駄。D-190）②reconcile（`--task=reconcile` は引き続きスタブ。INCOMPLETE の回復、結果欠損の補完）③`INCOMPLETE_AT_DEADLINE`（時刻不明・信頼できないレースが残った run）の回復④`race_evaluations.settled_at/hit/payout_used` の更新（`bot` は UPDATE 権限あり）⑤バックテスト・成績集計 | T3.9 |
+| G-26 | **取込側（ingest/agent）の履歴の追記**: `horse_master_history`（point-in-time の馬マスタ）は取込がいつ版を足すか未実装（C-21 の続き）。履歴が貯まるまで過去分の PIT は不完全で、累積値は空（`MASTER_NEWER_THAN_AS_OF`）になり得る。ML の精度に影響し得る（実データでの検証は F-5） | 取込の後続 / T1.20 |
+| G-27 | **未使用の `ModelRegistryReader` の失敗の扱い**: レジストリや保管先の障害は `MODEL_STORAGE_ERROR`（理由つきの市場確率）として run を止めないが、障害が続いても通知は run あたり 1 回。運用で見逃さないための閾値（何 run 続いたら重大にするか）は Stage 5 の監視（T5.6）で決める | T5.6 |

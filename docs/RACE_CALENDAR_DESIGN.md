@@ -388,3 +388,30 @@ Scheduler は「固定間隔で `app --task=calendar-check` を起動するだ�
 
 ### 12.2 取込の接続
 `BatchIngestor` が 解析→`ObservationApplier`→`RaceDayUpdater`（YSCH の開催日）・`RaceScheduleUpdater`（RA の予定・TC の時刻変更と取消）・`ScheduleEventWriter`（取得失敗の `FETCH_FAILURE`）を同一トランザクションで呼ぶ。`STALE` イベントの生成（reconcile）と、YSCH から消えた開催日の扱い（確認時刻が進まず古くなるだけ）は T3.8（UNRESOLVED G-6）。
+
+## 13. T3.8 の実装（bot-run の業務ループ。2026-10-27。判断は DECISIONS D-190〜D-203、未解決は UNRESOLVED.md）
+### 13.1 ライフサイクルの実装（§6.3 の状態遷移との対応）
+```
+運用モード → 開催日の導出・CalendarCheckPolicy → acquire（UNIQUE が最終防壁）→ STARTING で再検証（NG: ABORTED）
+→ checkpoint の復元 → recoverStaleClaims → ML の固定 → RUNNING
+→ ループ: 停止要求 / 最大稼働 / ModeGate / heartbeat → 開催日の再導出 → RaceMonitorPlanner → レースごとに RaceCycleProcessor → checkpoint → Pacer
+→ DRAINING → SUCCEEDED | STOPPED_BY_MODE | ABORTED | FAILED（INTERRUPTED は RUNNING から直接）
+```
+- **毎サイクル再導出**: 予定の時刻変更・中止・手動補正は次のサイクルで反映される（再起動しない）。段階は DB の `race_schedule` と現在時刻から決め、checkpoint の段階はヒントにすぎない。
+- **レースの段階**（`RaceMonitorPlanner`）: 中止 → CANCELLED、時刻不明 → UNKNOWN_TIME（評価も通知もしない。補完しない）、発走時刻ちょうど以降 → OFF、信頼できない予定（確認が古い場）→ UNTRUSTED、監視開始前 → PENDING、それ以外 → MONITORING。
+- **終了**: 全レースが OFF または中止 → `SUCCEEDED`（`ALL_RACES_OFF`）。結果・払戻・決済は T3.9（D-190）。窓の締切（最後の発走 + `CALENDAR_SETTLE_DEADLINE_MINUTES`）を過ぎても UNKNOWN_TIME/UNTRUSTED が残れば `FAILED`（`INCOMPLETE_AT_DEADLINE`）。終了条件の全体は D-193 と CONTRACTS §9.1。
+- **鮮度**: 単勝の観測が `BOT_RUN_MAX_ODDS_AGE_SECONDS` を超えたら通知しない（ちょうどは新鮮）。未来の観測時刻は信頼しない。オッズが無ければ発火せず次のサイクルで再確認。レースごとに 1 run 1 回の警告（エージェント停止・取込遅延の可能性）。
+- **ワイド・三連複の実オッズ**も同じ上限で鮮度を見る。古い・無い組み合わせは『実オッズ未取得』（推定オッズに黙って置き換わるかは `requireRealOddsForCombo` の設定どおり）。
+
+### 13.2 テストケース（§9）との対応（bot-run 側）
+| ケース | 状態 | テスト |
+|---|---|---|
+| C01 通常の開催（全レース OFF で終了） | 完了 | `BotRunLifecycleTest.通常の開催日…`、MySQL 統合 `BotRunOrchestratorIntegrationTest` |
+| 非開催日・予定不明・古い・中止・延期・DENY_RUN・窓の前後 | 完了 | `BotRunLifecycleTest`（NOT_A_RACE_DAY / SCHEDULE_UNKNOWN / SCHEDULE_STALE / DAY_CANCELLED / DAY_POSTPONED / DENIED_BY_OVERRIDE / BEFORE_WATCH_WINDOW / AFTER_SETTLE_DEADLINE） |
+| 発走時刻の変更・手動の時刻・途中の中止・途中で日全体が中止 | 完了 | `BotRunLifecycleTest`、`BotRunComponentsTest`（Planner） |
+| 発走時刻不明（補完しない） | 完了 | `BotRunLifecycleTest`（INCOMPLETE_AT_DEADLINE、通知なし） |
+| 二重起動・リース期限切れ・奪取・古い実行の更新禁止・強制終了・再起動 | 完了（メモリ + MySQL の UNIQUE は T3.3 の統合試験） | `BotRunLeaseTest`、`BotRunRestartAndModeTest`、`BotRunOrchestratorIntegrationTest`（有効なリースがあれば開始しない） |
+| SIGTERM・STOPPED・UNKNOWN | 完了 | `BotRunRestartAndModeTest`、`BotRunTaskHandlerTest`（実シグナル `USR2`） |
+| 最大稼働・DB 障害（一時的/継続/非一時的） | 完了 | `BotRunLifecycleTest`、`BotRunLeaseTest` |
+| reconcile（INCOMPLETE の回復・結果欠損の補完） | **未実装（T3.9）** | — |
+
