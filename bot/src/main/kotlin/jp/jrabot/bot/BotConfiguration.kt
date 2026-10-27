@@ -13,8 +13,8 @@ import jp.jrabot.domain.calendar.CalendarOverrideRepository
 import jp.jrabot.domain.calendar.RaceDayRepository
 import jp.jrabot.domain.calendar.ScheduleFetchFactReader
 import jp.jrabot.domain.ml.dataset.DatasetSource
-import jp.jrabot.domain.ml.registry.ModelRegistryReader
 import jp.jrabot.domain.ml.features.FeatureSource
+import jp.jrabot.domain.ml.registry.ModelRegistryReader
 import jp.jrabot.domain.notify.ErrorReporter
 import jp.jrabot.domain.notify.MentionPolicy
 import jp.jrabot.domain.notify.Notifier
@@ -158,10 +158,27 @@ class BotConfiguration {
             BotTask.BOT_RUN -> {
                 val settings = checkNotNull(runtime.settings.botRun) { "bot-run の設定が無い（BotSettings が検証しているはず）" }
                 BotRunTaskHandler(
-                    orchestratorFactory = {
+                    runnerFactory = {
                         BotRunWiring.orchestrator(
-                            settings, clock, runtime.modeProvider, runs, days, schedules, overrides, facts,
-                            odds, combos, races, evaluations, entries, signals, registry, features, dispatcher, errors, stop,
+                            settings,
+                            clock,
+                            runtime.modeProvider,
+                            runs,
+                            days,
+                            schedules,
+                            overrides,
+                            facts,
+                            odds,
+                            combos,
+                            races,
+                            evaluations,
+                            entries,
+                            signals,
+                            registry,
+                            features,
+                            dispatcher,
+                            errors,
+                            stop,
                         )
                     },
                     clock = clock,

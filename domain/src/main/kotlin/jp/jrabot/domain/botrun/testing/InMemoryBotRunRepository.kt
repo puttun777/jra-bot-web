@@ -62,7 +62,11 @@ class InMemoryBotRunRepository : BotRunRepository {
     override fun listRecent(
         tenantId: TenantId,
         limit: Int,
-    ): List<BotRun> = rows.values.filter { it.tenantId == tenantId }.sortedByDescending { it.startedAt }.take(limit)
+    ): List<BotRun> =
+        rows.values
+            .filter { it.tenantId == tenantId }
+            .sortedByDescending { it.startedAt }
+            .take(limit)
 
     @Synchronized
     override fun acquire(request: LeaseRequest): AcquireResult {
@@ -124,8 +128,14 @@ class InMemoryBotRunRepository : BotRunRepository {
         maybeFail()
         val row = rows[tenantId to runId] ?: return HeartbeatResult.NotFound
         return when (holder(row, owner, now)) {
-            Holder.Lost -> HeartbeatResult.Lost(row)
-            Holder.Expired -> HeartbeatResult.Expired(row)
+            Holder.Lost -> {
+                HeartbeatResult.Lost(row)
+            }
+
+            Holder.Expired -> {
+                HeartbeatResult.Expired(row)
+            }
+
             Holder.Valid -> {
                 val renewed =
                     row.copy(heartbeatAt = now, leaseExpiresAt = maxOf(row.leaseExpiresAt!!, now.plus(leaseDuration)), version = row.version + 1)

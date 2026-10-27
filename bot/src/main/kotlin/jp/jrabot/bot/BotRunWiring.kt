@@ -70,8 +70,17 @@ internal object BotRunWiring {
             mlStarter = { req -> startMl(settings, req.tenantId, registry, clock) },
             processorFactory = { req, ml ->
                 RaceCycleProcessor(
-                    config, req.tenantId, req.origin, odds, RaceEvaluator(config, odds, combos, features, ml),
-                    evaluations, signals, entries, features, races, dispatcher,
+                    config,
+                    req.tenantId,
+                    req.origin,
+                    odds,
+                    RaceEvaluator(config, odds, combos, features, ml),
+                    evaluations,
+                    signals,
+                    entries,
+                    features,
+                    races,
+                    dispatcher,
                 )
             },
             dispatcher = dispatcher,

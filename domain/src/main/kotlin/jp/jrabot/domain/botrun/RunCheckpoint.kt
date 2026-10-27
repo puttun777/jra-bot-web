@@ -95,13 +95,15 @@ data class RunCheckpoint(
                     val o = v as? JsonObject ?: return null
                     val stage = RaceStage.entries.firstOrNull { it.name == (o["stage"] as? JsonString)?.value } ?: return null
                     val fired =
-                        (o["fired"] as? JsonArray)?.items?.map {
-                            when (it) {
-                                is JsonFloat -> it.value
-                                is JsonInt -> it.value.toDouble()
-                                else -> return null
-                            }
-                        }?.toSet() ?: emptySet()
+                        (o["fired"] as? JsonArray)
+                            ?.items
+                            ?.map {
+                                when (it) {
+                                    is JsonFloat -> it.value
+                                    is JsonInt -> it.value.toDouble()
+                                    else -> return null
+                                }
+                            }?.toSet() ?: emptySet()
                     races[id] = RaceCheckpoint(stage, (o["last_observed_at"] as? JsonString)?.value?.let { Instant.parse(it) }, fired)
                 }
                 RunCheckpoint(cycle, last, races)
@@ -113,4 +115,3 @@ data class RunCheckpoint(
         }
     }
 }
-

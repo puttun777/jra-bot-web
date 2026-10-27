@@ -196,6 +196,9 @@ fun assertDenied(block: () -> Unit) = assertSqlError(MySqlError.TABLE_DENIED, My
 fun TestDb.resetData() {
     for (table in listOf(
         "signals",
+        "race_evaluations",
+        "race_horses",
+        "combo_odds_snapshots",
         "odds_snapshots",
         "bot_run",
         "calendar_override",

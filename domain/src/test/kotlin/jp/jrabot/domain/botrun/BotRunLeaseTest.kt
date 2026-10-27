@@ -5,6 +5,7 @@ import jp.jrabot.domain.bot.BotRunTrigger
 import jp.jrabot.domain.bot.HeartbeatResult
 import jp.jrabot.domain.bot.LeaseRequest
 import jp.jrabot.domain.bot.RunId
+import jp.jrabot.domain.botrun.testing.StubJudge
 import jp.jrabot.domain.calendar.Cal
 import jp.jrabot.domain.signal.NotificationState
 import java.time.Duration
@@ -64,7 +65,16 @@ class BotRunLeaseTest {
         assertEquals(2, k.notifier.signals.size)
         assertTrue(k.signals.all().none { it.raceId == k.raceIds[0] })
         // 次の cycle 番号は前から続く
-        assertTrue(RunCheckpoint.parse(k.runs.all().first { it.state == BotRunState.SUCCEEDED }.checkpoint)!!.cycle > 4)
+        assertTrue(
+            RunCheckpoint
+                .parse(
+                    k.runs
+                        .all()
+                        .first { it.state == BotRunState.SUCCEEDED }
+                        .checkpoint,
+                )!!
+                .cycle > 4,
+        )
     }
 
     @Test
@@ -216,12 +226,27 @@ class BotRunLeaseTest {
         val k = Kit()
         // 前の実行が 07:00 に claim したまま落ちた Signal
         k.clock.instant = k.at(7, 0)
-        val saved = k.signals.insertIfAbsent(
-            jp.jrabot.domain.signal.Signal(
-                k.tenant, null, k.raceIds[0], jp.jrabot.domain.odds.Market.WIN, jp.jrabot.domain.race.HorseNumber.of(2), k.at(6, 59),
-                jp.jrabot.domain.odds.Odds.ofOrNull(8.0)!!, jp.jrabot.domain.value.Probability.of(0.2), 0.6, true, 3.0, "market",
-            ),
-        ).signal
+        val saved =
+            k.signals
+                .insertIfAbsent(
+                    jp.jrabot.domain.signal.Signal(
+                        k.tenant,
+                        null,
+                        k.raceIds[0],
+                        jp.jrabot.domain.odds.Market.WIN,
+                        jp.jrabot.domain.race.HorseNumber
+                            .of(2),
+                        k.at(6, 59),
+                        jp.jrabot.domain.odds.Odds
+                            .ofOrNull(8.0)!!,
+                        jp.jrabot.domain.value.Probability
+                            .of(0.2),
+                        0.6,
+                        true,
+                        3.0,
+                        "market",
+                    ),
+                ).signal
         val savedId = checkNotNull(saved.id)
         assertTrue(k.signals.claim(k.tenant, savedId))
         k.clock.instant = k.at(7, 50)

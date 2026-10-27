@@ -80,11 +80,24 @@ class BotRunComponentsTest {
             RunCheckpoint(
                 7,
                 Cal.jst(Cal.DATE, 9, 50),
-                mapOf(race1 to RaceCheckpoint(RaceStage.MONITORING, Cal.jst(Cal.DATE, 9, 49), setOf(30.0, 5.0)), Cal.race(no = 2).raceId to RaceCheckpoint(RaceStage.OFF)),
+                mapOf(
+                    race1 to RaceCheckpoint(RaceStage.MONITORING, Cal.jst(Cal.DATE, 9, 49), setOf(30.0, 5.0)),
+                    Cal.race(no = 2).raceId to RaceCheckpoint(RaceStage.OFF),
+                ),
             )
         assertEquals(cp, RunCheckpoint.parse(cp.toJson()))
         assertEquals(cp.toJson(), RunCheckpoint.parse(cp.toJson())!!.toJson())
-        for (bad in listOf(null, "", "not json", "[]", "{}", """{"v":2,"cycle":1,"races":{}}""", """{"v":1,"cycle":-1,"races":{}}""", """{"v":1,"cycle":1,"races":{"x":{"stage":"OFF"}}}""", """{"v":1,"cycle":1,"races":{"202610240501":{"stage":"???"}}}""")) {
+        for (bad in listOf(
+            null,
+            "",
+            "not json",
+            "[]",
+            "{}",
+            """{"v":2,"cycle":1,"races":{}}""",
+            """{"v":1,"cycle":-1,"races":{}}""",
+            """{"v":1,"cycle":1,"races":{"x":{"stage":"OFF"}}}""",
+            """{"v":1,"cycle":1,"races":{"202610240501":{"stage":"???"}}}""",
+        )) {
             assertNull(RunCheckpoint.parse(bad), "壊れた checkpoint は使わない: $bad")
         }
         assertTrue(cp.toJson().length < jp.jrabot.domain.bot.BotRun.MAX_CHECKPOINT_LENGTH)
@@ -149,7 +162,12 @@ class BotRunComponentsTest {
     @Test
     fun `5 分前の強化は 急落の閾値を 0,7 倍 正の over_market 上限を 0,8 倍にする 0 以下は変えない`() {
         val base = Kit.defaultConfig()
-        val d = base.decision.copy(dropThreshold = 0.2, winMaxOverMarket = 2.5, combo = base.decision.combo.copy(wideMaxOverMarket = 2.0, sanrenpukuMaxOverMarket = 0.0))
+        val d =
+            base.decision.copy(
+                dropThreshold = 0.2,
+                winMaxOverMarket = 2.5,
+                combo = base.decision.combo.copy(wideMaxOverMarket = 2.0, sanrenpukuMaxOverMarket = 0.0),
+            )
         val e = judge(base.copy(decision = d))
         val near = e.decisionConfig(true)
         assertEquals(0.2 * 0.7, near.dropThreshold, 1e-15)
@@ -162,18 +180,42 @@ class BotRunComponentsTest {
     @Test
     fun `急落の判定は 直近の履歴の件数で決まる 旧 snapshot_history_limit`() {
         val odds = InMemoryOdds()
+
         fun snap(
             minute: Int,
             h2: Double,
-        ) = OddsSnapshot(t, race1, Market.WIN, Cal.jst(Cal.DATE, 9, minute), Kit.ODDS.mapIndexed { i, o -> OddsEntry(HorseNumber.of(i + 1), Odds.ofOrNull(if (i == 1) h2 else o)!!, i + 1) })
+        ) = OddsSnapshot(
+            t,
+            race1,
+            Market.WIN,
+            Cal.jst(Cal.DATE, 9, minute),
+            Kit.ODDS.mapIndexed { i, o ->
+                OddsEntry(
+                    HorseNumber.of(i + 1),
+                    Odds.ofOrNull(
+                        if (i ==
+                            1
+                        ) {
+                            h2
+                        } else {
+                            o
+                        },
+                    )!!,
+                    i + 1,
+                )
+            },
+        )
         listOf(snap(40, 12.0), snap(42, 11.0), snap(44, 10.0), snap(46, 8.0)).forEach(odds::add)
         val now = Cal.jst(Cal.DATE, 9, 46, 30)
         val base = Kit.defaultConfig()
         val cfg = base.decision.copy(dropThreshold = 0.2, evThreshold = -5.0)
+
         fun reasons(limit: Int) =
             judge(base.copy(decision = cfg, snapshotHistoryLimit = limit), odds)
                 .evaluate(t, race1, odds.latest(t, race1, Market.WIN)!!, now, false)
-                .result.rejections.filter { it.umaban == 2 }.map { it.reason }
+                .result.rejections
+                .filter { it.umaban == 2 }
+                .map { it.reason }
         // limit=3: 窓は [11,10,8]（新しい順 [8,10,11]）、最古 11 → (11-8)/11 = 27% > 20% で急落
         assertTrue(DecisionReason.ODDS_DROP in reasons(3))
         // limit=2: 窓は [10,8] → (10-8)/10 = 20% はちょうどで急落ではない

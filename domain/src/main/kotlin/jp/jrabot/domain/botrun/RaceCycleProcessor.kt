@@ -205,7 +205,10 @@ class RaceCycleProcessor(
 
     private fun record(e: RaceEvaluation): RaceEvaluationRecord {
         val d = config.decision
-        val counts = e.result.rejections.groupingBy { it.reason }.eachCount()
+        val counts =
+            e.result.rejections
+                .groupingBy { it.reason }
+                .eachCount()
         val summary =
             DecisionReason.entries
                 .filter { counts.containsKey(it) }
@@ -231,5 +234,5 @@ class RaceCycleProcessor(
 }
 
 /** 通知の結果のうち、運用者が気付くべきもの（送信結果が不明・取りこぼし）。 */
-fun DispatchReport.needsAttention(): Boolean = status == DispatchStatus.UNKNOWN || status == DispatchStatus.NOT_SENT_RECORDED_UNKNOWN || recordFailures.isNotEmpty()
-
+fun DispatchReport.needsAttention(): Boolean =
+    status == DispatchStatus.UNKNOWN || status == DispatchStatus.NOT_SENT_RECORDED_UNKNOWN || recordFailures.isNotEmpty()

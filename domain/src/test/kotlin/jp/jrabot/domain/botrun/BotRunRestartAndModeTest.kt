@@ -5,6 +5,7 @@ import jp.jrabot.domain.bot.BotRunState
 import jp.jrabot.domain.bot.BotRunTrigger
 import jp.jrabot.domain.bot.LeaseRequest
 import jp.jrabot.domain.bot.RunId
+import jp.jrabot.domain.botrun.testing.StubJudge
 import jp.jrabot.domain.calendar.Cal
 import jp.jrabot.domain.notify.DeliveryResult
 import jp.jrabot.domain.notify.NotificationOrigin
@@ -90,18 +91,26 @@ class BotRunRestartAndModeTest {
         assertEquals(3, k.notifier.signals.size) // R1（1 回目）+ R2・R3（2 回目）。R1 の再通知なし
         assertEquals(1, k.signals.all().count { it.raceId == k.raceIds[0] && it.market == jp.jrabot.domain.odds.Market.WIN && it.umaban.value == 2 })
         assertTrue(k.events.any { it.startsWith("CHECKPOINT_RESTORED from=INTERRUPTED") })
-        assertEquals(listOf(BotRunState.SUCCEEDED, BotRunState.INTERRUPTED), k.runs.all().map { it.state }.sortedBy { it.name }.reversed())
+        assertEquals(
+            listOf(BotRunState.SUCCEEDED, BotRunState.INTERRUPTED),
+            k.runs
+                .all()
+                .map { it.state }
+                .sortedBy { it.name }
+                .reversed(),
+        )
     }
 
     @Test
     fun `強制終了 その後リースが切れた run は奪取され 重複通知なしで続きから動く`() {
         val k = Kit()
         // R1 を通知した直後にプロセスが突然死する（例外ではなく Error。状態は RUNNING のまま・リースが残る）
-        val killer = Pacer { d, _ ->
-            k.clock.advance(d)
-            k.feedOdds()
-            if (k.clock.now() >= k.at(9, 52)) throw AssertionError("kill -9 を模擬")
-        }
+        val killer =
+            Pacer { d, _ ->
+                k.clock.advance(d)
+                k.feedOdds()
+                if (k.clock.now() >= k.at(9, 52)) throw AssertionError("kill -9 を模擬")
+            }
         try {
             k.orchestrator(pacerOverride = killer).run(k.request())
         } catch (_: AssertionError) {
@@ -116,7 +125,13 @@ class BotRunRestartAndModeTest {
         val out = k.run(k.request(owner = "owner-C"))
         assertEquals("ALL_RACES_OFF", out.reason)
         assertEquals(3, k.notifier.signals.size)
-        assertEquals(BotRunState.ABORTED, k.runs.all().first { it.leaseOwner == "owner-A" }.state)
+        assertEquals(
+            BotRunState.ABORTED,
+            k.runs
+                .all()
+                .first { it.leaseOwner == "owner-A" }
+                .state,
+        )
         assertNull(k.runs.findActive(k.tenant, Cal.DATE))
     }
 
@@ -140,7 +155,22 @@ class BotRunRestartAndModeTest {
         val k = Kit()
         k.autoOdds = false
         val judge = StubJudge()
-        val processor = RaceCycleProcessor(k.config, k.tenant, NotificationOrigin.LIVE, k.odds, judge, k.evaluations, k.signals, jp.jrabot.domain.botrun.testing.InMemoryEntries(), k.featureSource, jp.jrabot.domain.botrun.testing.InMemoryRaces(), k.dispatcher)
+        val processor =
+            RaceCycleProcessor(
+                k.config,
+                k.tenant,
+                NotificationOrigin.LIVE,
+                k.odds,
+                judge,
+                k.evaluations,
+                k.signals,
+                jp.jrabot.domain.botrun.testing
+                    .InMemoryEntries(),
+                k.featureSource,
+                jp.jrabot.domain.botrun.testing
+                    .InMemoryRaces(),
+                k.dispatcher,
+            )
         val race = k.raceIds[0]
         k.clock.instant = k.at(9, 51)
         k.odds.add(Kit.snapshot(race, k.at(9, 50, 30)))
@@ -157,7 +187,22 @@ class BotRunRestartAndModeTest {
     fun `checkpoint を保存できなければ通知しない 発火済みの記録が先`() {
         val k = Kit()
         k.autoOdds = false
-        val processor = RaceCycleProcessor(k.config, k.tenant, NotificationOrigin.LIVE, k.odds, StubJudge(), k.evaluations, k.signals, jp.jrabot.domain.botrun.testing.InMemoryEntries(), k.featureSource, jp.jrabot.domain.botrun.testing.InMemoryRaces(), k.dispatcher)
+        val processor =
+            RaceCycleProcessor(
+                k.config,
+                k.tenant,
+                NotificationOrigin.LIVE,
+                k.odds,
+                StubJudge(),
+                k.evaluations,
+                k.signals,
+                jp.jrabot.domain.botrun.testing
+                    .InMemoryEntries(),
+                k.featureSource,
+                jp.jrabot.domain.botrun.testing
+                    .InMemoryRaces(),
+                k.dispatcher,
+            )
         k.clock.instant = k.at(9, 51)
         k.odds.add(Kit.snapshot(k.raceIds[0], k.at(9, 50, 30)))
         val step = processor.process(k.raceIds[0], k.at(9, 55), RaceCheckpoint(RaceStage.MONITORING), k.clock.now()) { false }
@@ -194,7 +239,14 @@ class BotRunRestartAndModeTest {
             assertEquals(BotRunState.STOPPED_BY_MODE, out.state)
             assertEquals(1, k.notifier.signals.size)
             assertNull(k.runs.findActive(k.tenant, Cal.DATE))
-            assertNotNull(RunCheckpoint.parse(k.runs.all().single().checkpoint))
+            assertNotNull(
+                RunCheckpoint.parse(
+                    k.runs
+                        .all()
+                        .single()
+                        .checkpoint,
+                ),
+            )
         }
     }
 
@@ -225,12 +277,19 @@ class BotRunRestartAndModeTest {
 
     @Test
     fun `ModeGate は Drain の後に NORMAL へ戻っても再開しない`() {
-        val m = jp.jrabot.domain.calendar.FixedMode(OpsMode.STOPPED)
+        val m =
+            jp.jrabot.domain.calendar
+                .FixedMode(OpsMode.STOPPED)
         val gate = ModeGate(m, 3)
         assertEquals(ModeDecision.Drain("STOPPED_BY_MODE", 0), gate.onCycleStart())
         m.mode = OpsMode.NORMAL
         assertEquals(ModeDecision.Drain("STOPPED_BY_MODE", 0), gate.onCycleStart())
-        val g2 = ModeGate(jp.jrabot.domain.calendar.FixedMode(OpsMode.UNKNOWN), 3)
+        val g2 =
+            ModeGate(
+                jp.jrabot.domain.calendar
+                    .FixedMode(OpsMode.UNKNOWN),
+                3,
+            )
         assertEquals(ModeDecision.Skip(1), g2.onCycleStart())
         assertEquals(ModeDecision.Skip(2), g2.onCycleStart())
         assertEquals(ModeDecision.Drain("MODE_UNKNOWN", 75), g2.onCycleStart())
@@ -292,8 +351,14 @@ class BotRunRestartAndModeTest {
     @Test
     fun `リースの取得は別の日付を区別する`() {
         val k = Kit()
-        val a = k.runs.acquire(LeaseRequest(k.tenant, RunId.of(UUID.randomUUID()), Cal.DATE, BotRunTrigger.SCHEDULER, "a", k.clock.now(), Duration.ofMinutes(5)))
-        val b = k.runs.acquire(LeaseRequest(k.tenant, RunId.of(UUID.randomUUID()), Cal.DATE.plusDays(1), BotRunTrigger.SCHEDULER, "b", k.clock.now(), Duration.ofMinutes(5)))
+        val a =
+            k.runs.acquire(
+                LeaseRequest(k.tenant, RunId.of(UUID.randomUUID()), Cal.DATE, BotRunTrigger.SCHEDULER, "a", k.clock.now(), Duration.ofMinutes(5)),
+            )
+        val b =
+            k.runs.acquire(
+                LeaseRequest(k.tenant, RunId.of(UUID.randomUUID()), Cal.DATE.plusDays(1), BotRunTrigger.SCHEDULER, "b", k.clock.now(), Duration.ofMinutes(5)),
+            )
         assertTrue(a is AcquireResult.Acquired && b is AcquireResult.Acquired)
     }
 }

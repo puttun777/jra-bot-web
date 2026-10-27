@@ -42,8 +42,8 @@ class BotJobIntegrationTest {
     }
 
     @Test
-    fun `NORMAL かつスキーマ版 OK なら、スタブのタスクはローカルでは終了コード 0（calendar-check・export-dataset は実装済みで別のテスト）`() {
-        for (t in BotTask.entries.filter { it != BotTask.CALENDAR_CHECK && it != BotTask.EXPORT_DATASET }) {
+    fun `NORMAL かつスキーマ版 OK なら、スタブのタスクはローカルでは終了コード 0（calendar-check・export-dataset・bot-run は実装済みで別のテスト）`() {
+        for (t in BotTask.entries.filter { it != BotTask.CALENDAR_CHECK && it != BotTask.EXPORT_DATASET && it != BotTask.BOT_RUN }) {
             assertEquals(
                 0,
                 exit(t.cliName, env("NORMAL")),
@@ -58,12 +58,25 @@ class BotJobIntegrationTest {
     }
 
     @Test
+    fun `bot-run は実装済みなので、予定の無い DB では開催日が不明として 75 になり 行も通知も作らない（スタブの成功にならない）`() {
+        assertEquals(75, exit("bot-run", env("NORMAL")))
+        assertEquals(0, db.count("SELECT COUNT(*) FROM bot_run"))
+        assertEquals(0, db.count("SELECT COUNT(*) FROM signals"))
+    }
+
+    @Test
+    fun `bot-run の設定が足りなければ 2 で DB に触れない`() {
+        val missing = env("NORMAL") - "BOT_RUN_LEASE_SECONDS"
+        assertEquals(2, BotLauncher().run(args("bot-run"), missing))
+    }
+
+    @Test
     fun `本番(APP_ENV=prod)ではスタブは成功にならず終了コード 1 TASK_NOT_IMPLEMENTED`() {
         // 本番はローカルファイルのモードを使えないので、モードだけフェイクにして、それ以外（Spring・DB・スキーマ確認）は本物で通す
         val launcher = BotLauncher(modeProviderFactory = { FixedMode(OpsMode.NORMAL) })
         val prodEnv = env("NORMAL") + mapOf("APP_ENV" to "prod", "OPS_MODE_SOURCE" to "gs://synthetic/ops.json")
         for (t in BotTask.entries.filter {
-            it != BotTask.CALENDAR_CHECK && it != BotTask.EXPORT_DATASET
+            it != BotTask.CALENDAR_CHECK && it != BotTask.EXPORT_DATASET && it != BotTask.BOT_RUN
         }) {
             assertEquals(1, launcher.run(args(t.cliName), prodEnv), t.cliName)
         }

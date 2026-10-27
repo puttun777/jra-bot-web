@@ -52,6 +52,11 @@ data class RunOutcome(
     val runId: RunId?,
 )
 
+/** bot-run 1 回の実行の口（実装は [BotRunOrchestrator]。`:bot` のハンドラは、テストでこれを差し替える）。 */
+fun interface BotRunRunner {
+    fun run(request: RunRequest): RunOutcome
+}
+
 /** 構造化ログへの出口（`:bot` が slf4j に出す）。値・秘密・URL を含めない。 */
 fun interface RunEvents {
     fun event(
@@ -100,8 +105,8 @@ class BotRunOrchestrator(
     private val stopRequested: () -> Boolean,
     private val isTransient: (Throwable) -> Boolean = { false },
     private val events: RunEvents = RunEvents.NONE,
-) {
-    fun run(request: RunRequest): RunOutcome =
+) : BotRunRunner {
+    override fun run(request: RunRequest): RunOutcome =
         try {
             runGuarded(request)
         } catch (e: Exception) {
@@ -299,7 +304,12 @@ class BotRunOrchestrator(
                         if (consecutiveFailures >= config.maxConsecutiveCycleFailures) {
                             val transient = isTransient(e)
                             return finish(
-                                Done(BotRunState.FAILED, if (transient) "DB_UNAVAILABLE" else "CYCLE_FAILED", if (transient) RunExit.TEMPFAIL else RunExit.FAILURE, alert = true),
+                                Done(
+                                    BotRunState.FAILED,
+                                    if (transient) "DB_UNAVAILABLE" else "CYCLE_FAILED",
+                                    if (transient) RunExit.TEMPFAIL else RunExit.FAILURE,
+                                    alert = true,
+                                ),
                             )
                         }
                     }
@@ -359,10 +369,22 @@ class BotRunOrchestrator(
                     return
                 }
             when (step) {
-                RaceStep.NotDue -> Unit
-                RaceStep.NoOdds -> events.event("NO_ODDS", raceId.value)
-                is RaceStep.FutureOdds -> events.event("ODDS_FROM_FUTURE", raceId.value)
-                RaceStep.NotCommitted -> events.event("NOT_COMMITTED", raceId.value)
+                RaceStep.NotDue -> {
+                    // 評価のタイミングではない。何もしない
+                }
+
+                RaceStep.NoOdds -> {
+                    events.event("NO_ODDS", raceId.value)
+                }
+
+                is RaceStep.FutureOdds -> {
+                    events.event("ODDS_FROM_FUTURE", raceId.value)
+                }
+
+                RaceStep.NotCommitted -> {
+                    events.event("NOT_COMMITTED", raceId.value)
+                }
+
                 is RaceStep.StaleOdds -> {
                     events.event("STALE_ODDS", "${raceId.value} ageSec=${step.age.seconds}")
                     report("STALE_ODDS:${raceId.value}", "オッズが古いため通知していません（エージェント停止・取込の遅延の可能性）", "race=${raceId.value} age=${step.age.seconds}s")
@@ -378,7 +400,11 @@ class BotRunOrchestrator(
                         report("ML_MARKET_FALLBACK:${ev.fallbackReason}", "ML を有効にしていますが市場確率だけで判定しています", "reason=${ev.fallbackReason}")
                     }
                     if (step.dispatch?.needsAttention() == true) {
-                        report("NOTIFY_UNKNOWN:${raceId.value}", "通知の送信結果が不明、または送信できませんでした（再送しません。管理画面で確認してください）", "race=${raceId.value} status=${step.dispatch.status}")
+                        report(
+                            "NOTIFY_UNKNOWN:${raceId.value}",
+                            "通知の送信結果が不明、または送信できませんでした（再送しません。管理画面で確認してください）",
+                            "race=${raceId.value} status=${step.dispatch.status}",
+                        )
                     }
                 }
             }
@@ -423,7 +449,10 @@ class BotRunOrchestrator(
                 val minutes = Duration.between(now, p).toMillis() / 60_000.0
                 d = minOf(d, config.polling.forMinutesToPost(minutes))
                 val fired = checkpoint.races[id]?.firedMinutes.orEmpty()
-                val nextTiming = config.snapshot.descending.filter { it !in fired && minutes > it }.minOrNull()
+                val nextTiming =
+                    config.snapshot.descending
+                        .filter { it !in fired && minutes > it }
+                        .minOrNull()
                 if (nextTiming != null) d = minOf(d, Duration.ofMillis(((minutes - nextTiming) * 60_000.0).toLong() + 1))
             }
             plan.watchStartsAt?.takeIf { now.isBefore(it) }?.let { d = minOf(d, Duration.between(now, it)) }

@@ -51,9 +51,17 @@ class LeaseKeeper(
                 LeaseStatus.Held
             }
 
-            is HeartbeatResult.Expired -> LeaseStatus.Lost("LEASE_EXPIRED")
-            is HeartbeatResult.Lost -> LeaseStatus.Lost("LEASE_LOST")
-            HeartbeatResult.NotFound -> LeaseStatus.Lost("RUN_NOT_FOUND")
+            is HeartbeatResult.Expired -> {
+                LeaseStatus.Lost("LEASE_EXPIRED")
+            }
+
+            is HeartbeatResult.Lost -> {
+                LeaseStatus.Lost("LEASE_LOST")
+            }
+
+            HeartbeatResult.NotFound -> {
+                LeaseStatus.Lost("RUN_NOT_FOUND")
+            }
         }
     }
 
@@ -65,10 +73,21 @@ class LeaseKeeper(
                     return LeaseStatus.Held
                 }
 
-                is CheckpointResult.Conflict -> run = r.run
-                is CheckpointResult.Expired -> return LeaseStatus.Lost("LEASE_EXPIRED")
-                is CheckpointResult.Lost -> return LeaseStatus.Lost("LEASE_LOST")
-                CheckpointResult.NotFound -> return LeaseStatus.Lost("RUN_NOT_FOUND")
+                is CheckpointResult.Conflict -> {
+                    run = r.run
+                }
+
+                is CheckpointResult.Expired -> {
+                    return LeaseStatus.Lost("LEASE_EXPIRED")
+                }
+
+                is CheckpointResult.Lost -> {
+                    return LeaseStatus.Lost("LEASE_LOST")
+                }
+
+                CheckpointResult.NotFound -> {
+                    return LeaseStatus.Lost("RUN_NOT_FOUND")
+                }
             }
         }
         return LeaseStatus.Lost("CHECKPOINT_CONFLICT")
@@ -87,10 +106,21 @@ class LeaseKeeper(
                     return LeaseStatus.Held
                 }
 
-                is TransitionResult.Conflict -> run = r.run
-                is TransitionResult.Lost -> return LeaseStatus.Lost("LEASE_LOST")
-                is TransitionResult.InvalidTransition -> return LeaseStatus.Lost("INVALID_TRANSITION_${r.from}_TO_${r.to}")
-                TransitionResult.NotFound -> return LeaseStatus.Lost("RUN_NOT_FOUND")
+                is TransitionResult.Conflict -> {
+                    run = r.run
+                }
+
+                is TransitionResult.Lost -> {
+                    return LeaseStatus.Lost("LEASE_LOST")
+                }
+
+                is TransitionResult.InvalidTransition -> {
+                    return LeaseStatus.Lost("INVALID_TRANSITION_${r.from}_TO_${r.to}")
+                }
+
+                TransitionResult.NotFound -> {
+                    return LeaseStatus.Lost("RUN_NOT_FOUND")
+                }
             }
         }
         return LeaseStatus.Lost("TRANSITION_CONFLICT")

@@ -36,10 +36,18 @@ class BotRunLifecycleTest {
         assertNotNull(row.finishedAt)
         // checkpoint は発火済みのタイミングと全レース OFF を持つ
         val cp = RunCheckpoint.parse(row.checkpoint)!!
-        assertEquals(setOf(RaceStage.OFF), cp.races.values.map { it.stage }.toSet())
+        assertEquals(
+            setOf(RaceStage.OFF),
+            cp.races.values
+                .map { it.stage }
+                .toSet(),
+        )
         assertTrue(cp.races.values.all { it.firedMinutes == setOf(5.0) })
         // 単勝の評価では ML 無効（市場確率）。理由が記録される
-        assertTrue(k.evaluations.rows.values.all { it.modelTypeUsed == "market" && it.fallbackReason == "ML_DISABLED" && it.modelId == null })
+        assertTrue(
+            k.evaluations.rows.values
+                .all { it.modelTypeUsed == "market" && it.fallbackReason == "ML_DISABLED" && it.modelId == null },
+        )
     }
 
     @Test
@@ -114,7 +122,10 @@ class BotRunLifecycleTest {
         assertEquals(BotRunState.FAILED, out.state)
         assertEquals(2, k.notifier.signals.size)
         assertTrue(k.signals.all().none { it.raceId == races[2].raceId })
-        assertTrue(k.evaluations.rows.keys.none { it.second == races[2].raceId })
+        assertTrue(
+            k.evaluations.rows.keys
+                .none { it.second == races[2].raceId },
+        )
         assertTrue(k.notifier.errors.any { it.subject.contains("UNRESOLVED_RACES") })
     }
 
@@ -202,9 +213,19 @@ class BotRunLifecycleTest {
         val out = k.run()
         assertEquals("ALL_RACES_OFF", out.reason)
         assertEquals(1, k.evaluations.rows.size)
-        assertEquals(r1, k.evaluations.rows.keys.single().second)
+        assertEquals(
+            r1,
+            k.evaluations.rows.keys
+                .single()
+                .second,
+        )
         assertEquals(1, k.notifier.signals.size)
-        assertEquals(k.at(9, 52), k.notifier.signals.single().at)
+        assertEquals(
+            k.at(9, 52),
+            k.notifier.signals
+                .single()
+                .at,
+        )
     }
 
     @Test

@@ -192,6 +192,7 @@ class RaceEvaluator(
     internal fun decisionConfig(isNearTiming: Boolean): WinDecisionConfig {
         if (!isNearTiming) return config.decision
         val d = config.decision
+
         fun tighten(v: Double): Double = if (v > 0.0) v * NEAR_OVER_MARKET_FACTOR else v
         return d.copy(
             dropThreshold = d.dropThreshold * NEAR_DROP_FACTOR,
@@ -219,7 +220,11 @@ class RaceEvaluator(
         val wideMap = LinkedHashMap<WideKey, WideOddsRange>()
         wide?.rows?.forEach { r ->
             val parts = r.comboKey.split('-').mapNotNull { it.toIntOrNull() }
-            if (parts.size == 2 && parts.all { it > 0 } && parts[0] != parts[1]) wideMap[WideKey.of(parts[0], parts[1])] = WideOddsRange(r.odds.value, (r.oddsHigh ?: r.odds).value)
+            if (parts.size == 2 && parts.all { it > 0 } &&
+                parts[0] != parts[1]
+            ) {
+                wideMap[WideKey.of(parts[0], parts[1])] = WideOddsRange(r.odds.value, (r.oddsHigh ?: r.odds).value)
+            }
         }
         val trioMap = LinkedHashMap<SanrenpukuKey, Double>()
         trio?.rows?.forEach { r ->

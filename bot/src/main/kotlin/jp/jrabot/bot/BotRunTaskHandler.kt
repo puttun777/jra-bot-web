@@ -3,7 +3,7 @@ package jp.jrabot.bot
 import jp.jrabot.bot.discord.StopFlag
 import jp.jrabot.domain.bot.BotRunTrigger
 import jp.jrabot.domain.bot.RunId
-import jp.jrabot.domain.botrun.BotRunOrchestrator
+import jp.jrabot.domain.botrun.BotRunRunner
 import jp.jrabot.domain.botrun.RunRequest
 import jp.jrabot.domain.notify.NotificationOrigin
 import jp.jrabot.domain.time.Clock
@@ -13,7 +13,7 @@ import java.sql.SQLException
 import java.util.UUID
 
 /**
- * `--task=bot-run`（T3.8）。引数を [RunRequest] に直し、SIGTERM の取扱いを設置して [BotRunOrchestrator] を 1 回走らせ、結果を [JobResult] にする。
+ * `--task=bot-run`（T3.8）。引数を [RunRequest] に直し、SIGTERM の取扱いを設置して [BotRunRunner]（本番は `BotRunOrchestrator`）を 1 回走らせ、結果を [JobResult] にする。
  * 業務の順序・終了条件は [BotRunOrchestrator] の KDoc。ここは接続だけ。
  *
  * - `--trigger` → 通知の出どころ: `SCHEDULER` / `MANUAL` = LIVE、`BACKFILL` / `RECONCILE` = BACKFILL（通知しない）、指定なし = UNDETERMINED（判定不能。通知しない）。
@@ -22,7 +22,7 @@ import java.util.UUID
  * - SIGTERM: [SignalInstaller] が [StopFlag] を立てる（新しいサイクルを始めず、処理中のレースが終わったら checkpoint を保存して INTERRUPTED、リース解放、契約の終了コード）。
  */
 class BotRunTaskHandler(
-    private val orchestratorFactory: () -> BotRunOrchestrator,
+    private val runnerFactory: () -> BotRunRunner,
     private val clock: Clock,
     private val stop: StopFlag,
     private val signals: SignalInstaller,
@@ -45,7 +45,7 @@ class BotRunTaskHandler(
         val restore = signals.install { stop.request() }
         val outcome =
             try {
-                orchestratorFactory().run(request)
+                runnerFactory().run(request)
             } finally {
                 restore.run()
             }
@@ -74,7 +74,7 @@ class BotRunTaskHandler(
     }
 }
 
-/** SIGTERM の受信の設置（テストでは偽物で呼び出す）。戻り値は元に戻す処理。 */
+/** シグナルの受信の設置（テストでは偽物で呼び出す）。戻り値は元に戻す処理。 */
 fun interface SignalInstaller {
     fun install(onTerm: Runnable): Runnable
 
@@ -83,17 +83,23 @@ fun interface SignalInstaller {
          * JVM の既定の SIGTERM（即座にシャットダウンして終了コード 143）を、**停止の旗を立てるだけ**の処理に置き換える。これにより、処理中のレースを終えて
          * checkpoint を保存し、リースを解放して、契約の終了コード（0 / 75）で終われる（CONTRACTS §9.2）。設置できない環境では何もしない。
          */
-        val SIGTERM: SignalInstaller =
+        val SIGTERM: SignalInstaller = handling("TERM", strict = false)
+
+        val NONE = SignalInstaller { Runnable { } }
+
+        /** [name]（`TERM` など。`SIG` なし）の受信を [onTerm] に置き換える。[strict] が false なら設置に失敗しても何もしない（本番の SIGTERM）、true なら例外（テスト用）。 */
+        fun handling(
+            name: String,
+            strict: Boolean,
+        ): SignalInstaller =
             SignalInstaller { onTerm ->
                 try {
-                    val previous = sun.misc.Signal.handle(sun.misc.Signal("TERM")) { onTerm.run() }
-                    Runnable { sun.misc.Signal.handle(sun.misc.Signal("TERM"), previous) }
-                } catch (_: Throwable) {
+                    val previous = sun.misc.Signal.handle(sun.misc.Signal(name)) { onTerm.run() }
+                    Runnable { sun.misc.Signal.handle(sun.misc.Signal(name), previous) }
+                } catch (e: Throwable) {
+                    if (strict) throw e
                     Runnable { }
                 }
             }
-
-        val NONE = SignalInstaller { Runnable { } }
     }
 }
-

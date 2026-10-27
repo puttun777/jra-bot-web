@@ -16,8 +16,8 @@ import jp.jrabot.domain.race.Race
 import jp.jrabot.domain.race.RaceId
 import jp.jrabot.domain.race.RaceReader
 import jp.jrabot.domain.race.RaceSchedule
-import jp.jrabot.domain.race.Venue
 import jp.jrabot.domain.race.RaceScheduleReader
+import jp.jrabot.domain.race.Venue
 import jp.jrabot.domain.repository.InsertOutcome
 import jp.jrabot.domain.signal.NotificationState
 import jp.jrabot.domain.signal.RecordedSignal

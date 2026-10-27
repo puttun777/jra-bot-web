@@ -77,8 +77,14 @@ class BotRunMlTest {
             s.putHorse(
                 tenant,
                 HorseMaster(
-                    "20201000$u", LocalDate.of(2022, u, 1), "$u", ChakuTable(listOf(listOf(u.toLong(), 1L, 1L, 2L))), ChakuTable.EMPTY, ChakuTable.EMPTY,
-                    listOf("sire$u", "dam$u"), Instant.parse("2025-12-01T00:00:00Z"),
+                    "20201000$u",
+                    LocalDate.of(2022, u, 1),
+                    "$u",
+                    ChakuTable(listOf(listOf(u.toLong(), 1L, 1L, 2L))),
+                    ChakuTable.EMPTY,
+                    ChakuTable.EMPTY,
+                    listOf("sire$u", "dam$u"),
+                    Instant.parse("2025-12-01T00:00:00Z"),
                 ),
             )
             for (d in 1..3) s.putPastRun(tenant, "20201000$u", PastRun("2025120${d}0611", LocalDate.of(2025, 12, d), d))
@@ -91,7 +97,15 @@ class BotRunMlTest {
         registry: InMemoryModelRegistry,
         store: LocalFileModelStore,
         loader: ModelLoader = ModelLoader(MlFixtures.trust),
-    ) = MlRunStarter.start(type, tenant, registry, store, loader, jp.jrabot.domain.botrun.testing.ManualClock(Instant.parse("2026-10-24T00:00:00Z")))
+    ) = MlRunStarter.start(
+        type,
+        tenant,
+        registry,
+        store,
+        loader,
+        jp.jrabot.domain.botrun.testing
+            .ManualClock(Instant.parse("2026-10-24T00:00:00Z")),
+    )
 
     private fun kit(mlc: MlRunContext) = Kit(mlContext = mlc, judge = null, config = Kit.defaultConfig(mlc.modelType), features = features())
 
@@ -106,7 +120,10 @@ class BotRunMlTest {
         val out = k.run()
         assertEquals("ALL_RACES_OFF", out.reason)
         assertEquals(3, k.evaluations.rows.size)
-        assertTrue(k.evaluations.rows.values.all { it.modelTypeUsed == "calibration" && it.modelId == "cal_test_001" && it.fallbackReason == null })
+        assertTrue(
+            k.evaluations.rows.values
+                .all { it.modelTypeUsed == "calibration" && it.modelId == "cal_test_001" && it.fallbackReason == null },
+        )
         assertEquals(0, k.notifier.errors.size) // フォールバックの警告なし
     }
 
@@ -122,7 +139,10 @@ class BotRunMlTest {
             if (k.clock.now() >= k.at(9, 0)) registry.seed(record("cal_v2_001", ModelStatus.ACTIVE).copy(modelId = ModelId.of("cal_v2_001")))
         }
         k.run()
-        assertTrue(k.evaluations.rows.values.all { it.modelId == "cal_test_001" })
+        assertTrue(
+            k.evaluations.rows.values
+                .all { it.modelId == "cal_test_001" },
+        )
     }
 
     @Test
@@ -133,7 +153,10 @@ class BotRunMlTest {
         val mlc = ctx(ProbabilityModelType.CALIBRATION, registry, store(root, "cal_test_001"))
         val k = kit(mlc)
         k.run()
-        assertTrue(k.evaluations.rows.values.all { it.modelTypeUsed == "market" && it.modelId == null && it.fallbackReason == "MODEL_NOT_ACTIVE" })
+        assertTrue(
+            k.evaluations.rows.values
+                .all { it.modelTypeUsed == "market" && it.modelId == null && it.fallbackReason == "MODEL_NOT_ACTIVE" },
+        )
         assertEquals(1, k.notifier.errors.count { it.subject.contains("ML_MARKET_FALLBACK") }) // run あたり 1 回
         assertNull(registry.active(tenant, ModelKind.CALIBRATION))
         assertEquals(ModelStatus.CANDIDATE, registry.find(tenant, ModelId.of("cal_test_001"))!!.status)
@@ -147,7 +170,10 @@ class BotRunMlTest {
         val mlc = ctx(ProbabilityModelType.CALIBRATION, registry, store(root, "cal_test_001"), ModelLoader(MlFixtures.otherTrust)) // 別の鍵 = 検証 NG
         val k = kit(mlc)
         k.run()
-        assertTrue(k.evaluations.rows.values.all { it.modelTypeUsed == "market" && it.fallbackReason == "MODEL_SIGNATURE_INVALID" })
+        assertTrue(
+            k.evaluations.rows.values
+                .all { it.modelTypeUsed == "market" && it.fallbackReason == "MODEL_SIGNATURE_INVALID" },
+        )
         assertTrue(k.notifier.errors.any { it.subject.contains("ML_MARKET_FALLBACK") })
     }
 
@@ -159,7 +185,10 @@ class BotRunMlTest {
         val mlc = ctx(ProbabilityModelType.CALIBRATION, registry, store(root)) // 何も書かない
         val k = kit(mlc)
         k.run()
-        assertTrue(k.evaluations.rows.values.all { it.modelTypeUsed == "market" && it.fallbackReason == "MODEL_NOT_FOUND" })
+        assertTrue(
+            k.evaluations.rows.values
+                .all { it.modelTypeUsed == "market" && it.fallbackReason == "MODEL_NOT_FOUND" },
+        )
     }
 
     @Test
@@ -176,11 +205,23 @@ class BotRunMlTest {
                     kind: ModelKind,
                 ) = throw IllegalStateException("registry down")
             }
-        val mlc = MlRunStarter.start(ProbabilityModelType.CALIBRATION, tenant, failing, LocalFileModelStore(Path.of("/nonexistent")), ModelLoader(MlFixtures.trust), jp.jrabot.domain.botrun.testing.ManualClock(Instant.EPOCH))
+        val mlc =
+            MlRunStarter.start(
+                ProbabilityModelType.CALIBRATION,
+                tenant,
+                failing,
+                LocalFileModelStore(Path.of("/nonexistent")),
+                ModelLoader(MlFixtures.trust),
+                jp.jrabot.domain.botrun.testing
+                    .ManualClock(Instant.EPOCH),
+            )
         val k = kit(mlc)
         val out = k.run()
         assertEquals("ALL_RACES_OFF", out.reason)
-        assertTrue(k.evaluations.rows.values.all { it.modelTypeUsed == "market" && it.fallbackReason == "MODEL_STORAGE_ERROR" })
+        assertTrue(
+            k.evaluations.rows.values
+                .all { it.modelTypeUsed == "market" && it.fallbackReason == "MODEL_STORAGE_ERROR" },
+        )
     }
 
     @Test
@@ -192,14 +233,20 @@ class BotRunMlTest {
         val k = Kit(mlContext = mlc, judge = null, config = Kit.defaultConfig(mlc.modelType)) // 特徴量の元データ（レース条件）が空
         k.run()
         assertEquals(3, k.evaluations.rows.size)
-        assertTrue(k.evaluations.rows.values.all { it.modelTypeUsed == "market" && it.fallbackReason == "MODEL_PREDICTION_FAILED" })
+        assertTrue(
+            k.evaluations.rows.values
+                .all { it.modelTypeUsed == "market" && it.fallbackReason == "MODEL_PREDICTION_FAILED" },
+        )
     }
 
     @Test
     fun `ML 無効のときは市場確率で ML_DISABLED を記録し 警告しない`() {
         val k = Kit(judge = null)
         k.run()
-        assertTrue(k.evaluations.rows.values.all { it.modelTypeUsed == "market" && it.fallbackReason == "ML_DISABLED" })
+        assertTrue(
+            k.evaluations.rows.values
+                .all { it.modelTypeUsed == "market" && it.fallbackReason == "ML_DISABLED" },
+        )
         assertEquals(0, k.notifier.errors.size)
     }
 
@@ -207,7 +254,13 @@ class BotRunMlTest {
     fun `fixes や v2 のような未承認の設定は構築できない`() {
         val cfg = Kit.defaultConfig().decision
         val e =
-            runCatching { cfg.copy(fixes = jp.jrabot.domain.decision.DecisionFixes(applyMaxFraction = true)) }.exceptionOrNull()
+            runCatching {
+                cfg.copy(
+                    fixes =
+                        jp.jrabot.domain.decision
+                            .DecisionFixes(applyMaxFraction = true),
+                )
+            }.exceptionOrNull()
         assertTrue(e != null, "未承認の数値変更は拒否される")
     }
 }
