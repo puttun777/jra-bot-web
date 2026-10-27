@@ -189,7 +189,7 @@ class RaceEvaluator(
     }
 
     /** 旧の『5 分前の場合はフィルタを強化』（`drop_threshold × 0.7`、正の `*_max_over_market × 0.8`）。[isNearTiming] が true のときだけ。 */
-    private fun decisionConfig(isNearTiming: Boolean): WinDecisionConfig {
+    internal fun decisionConfig(isNearTiming: Boolean): WinDecisionConfig {
         if (!isNearTiming) return config.decision
         val d = config.decision
         fun tighten(v: Double): Double = if (v > 0.0) v * NEAR_OVER_MARKET_FACTOR else v

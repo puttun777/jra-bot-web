@@ -74,7 +74,8 @@ class RecordingNotifier(
 
     override fun send(notification: Notification): DeliveryResult {
         sent += Sent(clock.now(), notification.channel, notification.subject, notification.body)
-        return results.removeFirstOrNull() ?: DeliveryResult.DELIVERED
+        // 結果の列は SIGNAL の通知だけに使う（エラー通知は常に成功）
+        return if (notification.channel == NotificationChannel.SIGNAL) results.removeFirstOrNull() ?: DeliveryResult.DELIVERED else DeliveryResult.DELIVERED
     }
 }
 
