@@ -75,14 +75,8 @@ class PointInTimeFeatureBuilder(
         schema: FeatureSchema,
         request: FeatureRequest,
     ): FeatureVector {
-        val rc =
-            source.raceConditions(request.tenantId, request.raceId)
-                ?: throw LeakageException(LeakageCode.RACE_NOT_FOUND, "レース条件が無い: ${request.raceId}")
-        val postTime = rc.postTime ?: throw LeakageException(LeakageCode.POST_TIME_UNKNOWN, "発走時刻が不明: ${request.raceId}")
-        if (!request.asOf.isBefore(postTime)) {
-            throw LeakageException(LeakageCode.AS_OF_NOT_BEFORE_POST_TIME, "asOf が発走時刻以降: ${request.raceId}")
-        }
-        val raceDate = rc.raceDate ?: throw LeakageException(LeakageCode.RACE_DATE_UNKNOWN, "レース日が不明: ${request.raceId}")
+        val rc = checkedConditions(request)
+        val raceDate = checkNotNull(rc.raceDate) { "checkedConditions がレース日を確認済み" }
 
         val flags = mutableSetOf<FeatureFlag>()
         val summary = summary(request, rc, raceDate, flags)
@@ -102,6 +96,48 @@ class PointInTimeFeatureBuilder(
         val extra = FeatureMath.extra19(summary, rc)
         val ped = PedigreeHash.accumulate(summary.pedigreeNames, PedigreeHash.DEFAULT_DIM)
         return FeatureVector(schema, FeatureMath.assemble(schema, odds, popularity, extra, ped), summary.meta.copy(flags = flags))
+    }
+
+    /** レース条件を読み、未来の情報を使わないことを確認する（発走時刻・レース日が不明、asOf が発走時刻以降なら [LeakageException]）。 */
+    private fun checkedConditions(request: FeatureRequest): RaceConditions {
+        val rc =
+            source.raceConditions(request.tenantId, request.raceId)
+                ?: throw LeakageException(LeakageCode.RACE_NOT_FOUND, "レース条件が無い: ${request.raceId}")
+        val postTime = rc.postTime ?: throw LeakageException(LeakageCode.POST_TIME_UNKNOWN, "発走時刻が不明: ${request.raceId}")
+        if (!request.asOf.isBefore(postTime)) {
+            throw LeakageException(LeakageCode.AS_OF_NOT_BEFORE_POST_TIME, "asOf が発走時刻以降: ${request.raceId}")
+        }
+        if (rc.raceDate == null) throw LeakageException(LeakageCode.RACE_DATE_UNKNOWN, "レース日が不明: ${request.raceId}")
+        return rc
+    }
+
+    /**
+     * 通知の理由文の材料（point-in-time）。[build] と同じ検査（[LeakageException]）と同じ入力の選び方で、**asOf 以前の情報だけ**を使う:
+     * 過去走はレース日より前、馬マスタは [FeatureSource.horseAsOf]。累積値が asOf より後に更新されていたら適性・脚質は出さない（空）。
+     * 血統は不変とみなす。[bamei] は出走表の馬名。
+     */
+    fun reasonFacts(
+        request: FeatureRequest,
+        bamei: String,
+    ): HorseReasonFacts {
+        val rc = checkedConditions(request)
+        val raceDate = checkNotNull(rc.raceDate)
+        val flags = mutableSetOf<FeatureFlag>()
+        val s = summary(request, rc, raceDate, flags)
+        val cumulativeKnown = s.hasHorseMaster && FeatureFlag.MASTER_NEWER_THAN_AS_OF !in flags
+        return HorseReasonFacts(
+            bamei = bamei.trim { it.isWhitespace() },
+            hasPastRuns = s.hasPastRuns,
+            pastN = s.pastN,
+            pastAvgFinish = s.pastAvgFinish,
+            pastWinRate = s.pastWinRate,
+            pastPlaceRate = s.pastPlaceRate,
+            daysSinceLastRun = s.daysSinceLastRun,
+            styleHint = s.styleHint,
+            aptitude = if (cumulativeKnown) Aptitude(s.distancePlaceRate, s.surfacePlaceRate, s.conditionPlaceRate) else null,
+            conditions = rc,
+            pedigreeNames = s.pedigreeNames,
+        )
     }
 
     private fun summary(

@@ -19,6 +19,7 @@ import jp.jrabot.persistence.mapping.enumFromDb
 import jp.jrabot.persistence.mapping.toDbTime
 import jp.jrabot.persistence.mapping.toInstantUtc
 import org.springframework.transaction.support.TransactionOperations
+import java.time.Instant
 
 internal class SignalRepositoryImpl(
     private val dao: SignalDao,
@@ -41,6 +42,15 @@ internal class SignalRepositoryImpl(
     ): List<Signal> {
         require(limit in 1..MAX_UNSENT) { "limit は 1〜$MAX_UNSENT: $limit" }
         return dao.selectUnsent(tenantId.value, limit).map { it.toDomain() }
+    }
+
+    override fun listClaimedBefore(
+        tenantId: TenantId,
+        cutoff: Instant,
+        limit: Int,
+    ): List<Signal> {
+        require(limit in 1..MAX_UNSENT) { "limit は 1〜$MAX_UNSENT: $limit" }
+        return dao.selectClaimedBefore(tenantId.value, cutoff.toDbTime(), limit).map { it.toDomain() }
     }
 
     /**

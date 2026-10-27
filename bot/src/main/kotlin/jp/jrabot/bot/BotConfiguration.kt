@@ -1,5 +1,9 @@
 package jp.jrabot.bot
 
+import jp.jrabot.bot.discord.DiscordNotifier
+import jp.jrabot.bot.discord.DiscordSettings
+import jp.jrabot.bot.discord.JdkWebhookTransport
+import jp.jrabot.bot.discord.StopFlag
 import jp.jrabot.domain.bot.BotRunRepository
 import jp.jrabot.domain.bot.JobLauncher
 import jp.jrabot.domain.calendar.CalendarCheckService
@@ -8,8 +12,13 @@ import jp.jrabot.domain.calendar.RaceDayRepository
 import jp.jrabot.domain.calendar.ScheduleFetchFactReader
 import jp.jrabot.domain.ml.dataset.DatasetSource
 import jp.jrabot.domain.ml.features.FeatureSource
+import jp.jrabot.domain.notify.ErrorReporter
+import jp.jrabot.domain.notify.MentionPolicy
+import jp.jrabot.domain.notify.Notifier
+import jp.jrabot.domain.notify.SignalNotificationDispatcher
 import jp.jrabot.domain.ops.ModeProvider
 import jp.jrabot.domain.race.RaceScheduleRepository
+import jp.jrabot.domain.signal.SignalRepository
 import jp.jrabot.domain.time.Clock
 import jp.jrabot.domain.time.SystemClock
 import jp.jrabot.persistence.PersistenceConfiguration
@@ -60,6 +69,47 @@ class BotConfiguration {
 
     // 取得の事実（ScheduleFetchFactReader）は :persistence の `scheduleFetchFactReader`（DB の ingest_fetch。T3.4）。
     // DB に事実が無い日は null（= 行の無い日は「不明」のまま。開催なしを確認したことにしない）。
+
+    /** 停止要求の旗。シグナルハンドラの設置は bot-run（T3.8）。立っている間は通知の新規送信を始めない。 */
+    @Bean
+    fun stopFlag(): StopFlag = StopFlag()
+
+    /**
+     * Discord 通知（T3.7）。宛先は `DISCORD_WEBHOOK_URL` / `DISCORD_ERROR_WEBHOOK_URL`（`bot-run` のときだけ読む。未設定の宛先へは送らない）。
+     * 実際の送信は bot-run（T3.8）が [SignalNotificationDispatcher] / [ErrorReporter] を呼んだときだけで、**他のタスクは通知を送らない**。
+     */
+    @Bean
+    @ConditionalOnMissingBean(Notifier::class)
+    fun notifier(
+        runtime: BotRuntime,
+        stop: StopFlag,
+    ): Notifier {
+        val d = runtime.settings.discord ?: DiscordSettings.NONE
+        return DiscordNotifier(d.signalUrl, d.errorUrl, d.mention, JdkWebhookTransport(), stopRequested = stop::isRequested)
+    }
+
+    @Bean
+    fun signalNotificationDispatcher(
+        runtime: BotRuntime,
+        signals: SignalRepository,
+        notifier: Notifier,
+        clock: Clock,
+        stop: StopFlag,
+    ): SignalNotificationDispatcher =
+        SignalNotificationDispatcher(
+            signals,
+            notifier,
+            runtime.modeProvider,
+            clock,
+            (runtime.settings.discord?.mention ?: MentionPolicy.NONE),
+            stopRequested = stop::isRequested,
+        )
+
+    @Bean
+    fun errorReporter(
+        notifier: Notifier,
+        clock: Clock,
+    ): ErrorReporter = ErrorReporter(notifier, clock)
 
     /**
      * タスクごとの実装。**calendar-check（T3.3）と export-dataset（T3.6-B）が実装済み**で、他（bot-run・reconcile・retention）は未実装のスタブ

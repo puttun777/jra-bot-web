@@ -3,6 +3,7 @@ package jp.jrabot.domain.signal
 import jp.jrabot.domain.race.RaceId
 import jp.jrabot.domain.repository.InsertOutcome
 import jp.jrabot.domain.tenant.TenantId
+import java.time.Instant
 
 interface SignalReader {
     fun find(
@@ -19,6 +20,16 @@ interface SignalReader {
     /** 通知が [NotificationState.UNSENT] の Signal を古い順に最大 [limit] 件（1〜1000）。 */
     fun listUnsent(
         tenantId: TenantId,
+        limit: Int,
+    ): List<Signal>
+
+    /**
+     * [NotificationState.CLAIMED] のまま `notify_updated_at < [cutoff]`（claim した時刻が古い）の Signal を古い順に最大 [limit] 件（1〜1000）。
+     * claim 後に送信の結果を記録できなかった（プロセスの停止など）ものの回収用。[cutoff] は送信に掛かり得る最長の時間より古くすること。
+     */
+    fun listClaimedBefore(
+        tenantId: TenantId,
+        cutoff: Instant,
         limit: Int,
     ): List<Signal>
 }
