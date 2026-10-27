@@ -61,6 +61,14 @@ internal interface SignalDao {
         limit: Int,
     ): List<SignalEntity>
 
+    /** `CLAIMED` のまま `notify_updated_at < cutoff`（古い claim）。送信結果を記録できなかった Signal の回収用。 */
+    @Select
+    fun selectClaimedBefore(
+        tenantId: Long,
+        cutoff: LocalDateTime,
+        limit: Int,
+    ): List<SignalEntity>
+
     /** `id` は AUTO_INCREMENT なので挿入しない（`entity.id` は無視される）。自然キーの重複は 1062（uq_signals_natural）。 */
     @Insert(sqlFile = true)
     fun insert(entity: SignalEntity): Result<SignalEntity>

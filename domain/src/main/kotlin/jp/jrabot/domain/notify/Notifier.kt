@@ -33,15 +33,18 @@ data class Notification(
 enum class DeliveryResult {
     DELIVERED,
 
-    /** 確実に送っていない（拒否・接続不能など）。再試行してよい。 */
+    /**
+     * 確実に送っていない（宛先の拒否 4xx・接続不能・429 の待機超過など）。**1 通目の送信前**に確定したときだけ。
+     * claim 済みの Signal は状態を戻せないため、呼び出し側は `SEND_UNKNOWN` として記録する（[SignalNotificationDispatcher]）。
+     */
     NOT_SENT,
 
-    /** 送れたか不明（タイムアウトなど）。**自動で再送しない**（`SEND_UNKNOWN` として記録する）。 */
+    /** 送れたか不明（タイムアウト・5xx・切断・**複数に分けた一部だけ送信済み**）。**自動で再送しない**（`SEND_UNKNOWN` として記録する）。 */
     UNKNOWN,
 }
 
 /**
- * 通知の配送口（実装は `:bot` の Discord 版: T3.x）。
+ * 通知の配送口（実装は `:bot` の Discord 版 `DiscordNotifier`: T3.7）。
  *
  * - 責務: [Notification] を 1 回配送する。
  * - エラー: 配送の結果は [DeliveryResult] で返し、例外にしない。
@@ -50,4 +53,10 @@ enum class DeliveryResult {
  */
 interface Notifier {
     fun send(notification: Notification): DeliveryResult
+
+    /**
+     * [channel] の宛先が設定済みで、配送を試みられるか。**呼び出し側は claim の前に確認する**（確実に送れないものを claim すると、
+     * 状態が逆戻りしないため `SEND_UNKNOWN` になってしまう）。既定は true（設定を持たない実装向け）。
+     */
+    fun canDeliver(channel: NotificationChannel): Boolean = true
 }

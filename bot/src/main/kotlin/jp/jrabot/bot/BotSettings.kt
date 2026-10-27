@@ -1,5 +1,6 @@
 package jp.jrabot.bot
 
+import jp.jrabot.bot.discord.DiscordSettings
 import jp.jrabot.cloudgcp.ops.OpsModeProviders
 import jp.jrabot.domain.calendar.CalendarSettings
 import jp.jrabot.domain.ops.AppEnv
@@ -19,6 +20,8 @@ class BotSettings(
     val calendar: CalendarSettings? = null,
     /** `export-dataset` だけが必要とする保管先（`MODEL_STORE_URI`: `gs://<bucket>[/<prefix>]`、`APP_ENV=local` では `file:///絶対パス`）。他のタスクでは null。 */
     val modelStoreUri: String? = null,
+    /** `bot-run` だけが使う Discord の設定（`DISCORD_WEBHOOK_URL` ほか。いずれも任意）。他のタスクでは null。 */
+    val discord: DiscordSettings? = null,
 ) {
     companion object {
         const val DB_USER = "bot" // CONTRACTS §8.2: bot（全 --task）
@@ -44,7 +47,8 @@ class BotSettings(
                 } else {
                     null
                 }
-            return BotSettings(appEnv, db, opsEnv, env["RELEASE_ID"], calendar, storeUri)
+            val discord = if (task == BotTask.BOT_RUN) DiscordSettings.fromEnv(env) else null
+            return BotSettings(appEnv, db, opsEnv, env["RELEASE_ID"], calendar, storeUri, discord)
         }
     }
 }

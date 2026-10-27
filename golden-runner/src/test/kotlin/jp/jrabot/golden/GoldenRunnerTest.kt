@@ -239,6 +239,13 @@ class GoldenRunnerTest {
                 "G4-ENSEMBLE-002",
                 "G5-BLEND-002",
                 "G7-LEGACY-FAIL-001",
+                // T3.7 で対応（Discord 通知: 分割・Retry-After・重複除外・本文・理由文）
+                "G8-SPLIT-001",
+                "G8-RETRY-002",
+                "G8-DEDUP-003",
+                "G8-SINGLE-004",
+                "G8-GROUPED-005",
+                "G8-REASON-006",
             ),
             supported.keys,
         )
@@ -263,9 +270,9 @@ class GoldenRunnerTest {
                 id,
             )
         }
-        // 旧 Python の 26 ケース・880 呼び出し（T3.2 時点の 21 ケース・810 + T3.6-A で追加した ML 経路 5 ケース・70）
-        assertEquals(880, supported.values.sum() + unsupported.values.sum())
-        assertEquals(874, supported.values.sum()) // T3.2 の 661 + G1(73)・G2(70) + 新規 5 ケース 70
+        // 旧 Python の 32 ケース・994 呼び出し（T3.6-A 時点の 26 ケース・880 + T3.7 で追加した Discord 通知 6 ケース・114）
+        assertEquals(994, supported.values.sum() + unsupported.values.sum())
+        assertEquals(988, supported.values.sum()) // T3.6-A の 874 + G8 の 114
         assertEquals(6, unsupported.values.sum()) // GD10-DEFAULTS-001（旧関数の既定値。T1.20）だけ
     }
 

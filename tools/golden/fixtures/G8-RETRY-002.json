@@ -1,0 +1,460 @@
+{
+  "case_id": "G8-RETRY-002",
+  "comparison_rules": {
+    "default": {
+      "float": {
+        "abs_tol": 0.0,
+        "mode": "abs_tol"
+      }
+    },
+    "overrides": [],
+    "strict": {
+      "key_set": true,
+      "list_order": true,
+      "nonfinite": "reject",
+      "types": true
+    }
+  },
+  "data_classification": "synthetic",
+  "description": "_parse_retry_after_seconds: 本文 retry_after → Retry-After → X-RateLimit-Reset-After → 既定 1.0（0 以下・非数・型違いを含む）",
+  "execution_parameters": {
+    "clock": "not_used (対象関数は現在時刻を読まない。datetime.now を使う経路は対象外)",
+    "cwd": "empty temporary directory",
+    "fixed_time": "2026-01-01T00:00:00+09:00",
+    "libraries": {
+      "numpy": "2.5.3"
+    },
+    "ml_cfg": {
+      "enabled": false
+    },
+    "network": "blocked",
+    "seed": 20260101,
+    "timezone": "Asia/Tokyo"
+  },
+  "expected_output": {
+    "results": [
+      {
+        "call_id": "ra-000",
+        "outcome": {
+          "status": "ok",
+          "value": 2.5
+        }
+      },
+      {
+        "call_id": "ra-001",
+        "outcome": {
+          "status": "ok",
+          "value": 3.0
+        }
+      },
+      {
+        "call_id": "ra-002",
+        "outcome": {
+          "status": "ok",
+          "value": 1.25
+        }
+      },
+      {
+        "call_id": "ra-003",
+        "outcome": {
+          "status": "ok",
+          "value": 4.0
+        }
+      },
+      {
+        "call_id": "ra-004",
+        "outcome": {
+          "status": "ok",
+          "value": 5.5
+        }
+      },
+      {
+        "call_id": "ra-005",
+        "outcome": {
+          "status": "ok",
+          "value": 6.0
+        }
+      },
+      {
+        "call_id": "ra-006",
+        "outcome": {
+          "status": "ok",
+          "value": 4.0
+        }
+      },
+      {
+        "call_id": "ra-007",
+        "outcome": {
+          "status": "ok",
+          "value": 0.75
+        }
+      },
+      {
+        "call_id": "ra-008",
+        "outcome": {
+          "status": "ok",
+          "value": 7.0
+        }
+      },
+      {
+        "call_id": "ra-009",
+        "outcome": {
+          "status": "ok",
+          "value": 2.0
+        }
+      },
+      {
+        "call_id": "ra-010",
+        "outcome": {
+          "status": "ok",
+          "value": 1.0
+        }
+      },
+      {
+        "call_id": "ra-011",
+        "outcome": {
+          "status": "ok",
+          "value": 1.0
+        }
+      },
+      {
+        "call_id": "ra-012",
+        "outcome": {
+          "status": "ok",
+          "value": 1.0
+        }
+      },
+      {
+        "call_id": "ra-013",
+        "outcome": {
+          "status": "ok",
+          "value": 1.0
+        }
+      },
+      {
+        "call_id": "ra-014",
+        "outcome": {
+          "status": "ok",
+          "value": 3.0
+        }
+      },
+      {
+        "call_id": "ra-015",
+        "outcome": {
+          "status": "ok",
+          "value": 3.0
+        }
+      },
+      {
+        "call_id": "ra-016",
+        "outcome": {
+          "status": "ok",
+          "value": 1.0
+        }
+      },
+      {
+        "call_id": "ra-017",
+        "outcome": {
+          "status": "ok",
+          "value": 1.0
+        }
+      },
+      {
+        "call_id": "ra-018",
+        "outcome": {
+          "status": "ok",
+          "value": 5.0
+        }
+      },
+      {
+        "call_id": "ra-019",
+        "outcome": {
+          "status": "ok",
+          "value": 1.0
+        }
+      },
+      {
+        "call_id": "ra-020",
+        "outcome": {
+          "status": "ok",
+          "value": 0.001
+        }
+      },
+      {
+        "call_id": "ra-021",
+        "outcome": {
+          "status": "ok",
+          "value": 100.0
+        }
+      },
+      {
+        "call_id": "ra-022",
+        "outcome": {
+          "status": "ok",
+          "value": 120.0
+        }
+      },
+      {
+        "call_id": "ra-023",
+        "outcome": {
+          "status": "ok",
+          "value": 10.0
+        }
+      },
+      {
+        "call_id": "ra-024",
+        "outcome": {
+          "status": "ok",
+          "value": 3.0
+        }
+      }
+    ]
+  },
+  "fixture_id": "golden/G8-RETRY-002/v1",
+  "generator": {
+    "tool": "tools/golden",
+    "tool_version": "0.1.0"
+  },
+  "input": {
+    "calls": [
+      {
+        "args": {
+          "body": "{\"retry_after\": 2.5, \"global\": false}",
+          "headers": {
+            "Retry-After": "9"
+          }
+        },
+        "call_id": "ra-000",
+        "function": "parse_retry_after"
+      },
+      {
+        "args": {
+          "body": "{\"retry_after\": 3}"
+        },
+        "call_id": "ra-001",
+        "function": "parse_retry_after"
+      },
+      {
+        "args": {
+          "body": "{\"retry_after\": \"1.25\"}"
+        },
+        "call_id": "ra-002",
+        "function": "parse_retry_after"
+      },
+      {
+        "args": {
+          "body": "{\"retry_after\": 0}",
+          "headers": {
+            "Retry-After": "4"
+          }
+        },
+        "call_id": "ra-003",
+        "function": "parse_retry_after"
+      },
+      {
+        "args": {
+          "body": "{\"retry_after\": -1}",
+          "headers": {
+            "retry-after": "5.5"
+          }
+        },
+        "call_id": "ra-004",
+        "function": "parse_retry_after"
+      },
+      {
+        "args": {
+          "body": "{\"retry_after\": null}",
+          "headers": {
+            "X-RateLimit-Reset-After": "6"
+          }
+        },
+        "call_id": "ra-005",
+        "function": "parse_retry_after"
+      },
+      {
+        "args": {
+          "body": "{\"message\": \"x\"}",
+          "headers": {
+            "Retry-After": "4",
+            "X-RateLimit-Reset-After": "8"
+          }
+        },
+        "call_id": "ra-006",
+        "function": "parse_retry_after"
+      },
+      {
+        "args": {
+          "body": "not json",
+          "headers": {
+            "x-ratelimit-reset-after": "0.75"
+          }
+        },
+        "call_id": "ra-007",
+        "function": "parse_retry_after"
+      },
+      {
+        "args": {
+          "body": null,
+          "headers": {
+            "Retry-After": " 7 "
+          }
+        },
+        "call_id": "ra-008",
+        "function": "parse_retry_after"
+      },
+      {
+        "args": {
+          "body": null,
+          "headers": {
+            "Retry-After": "abc",
+            "X-RateLimit-Reset-After": "2"
+          }
+        },
+        "call_id": "ra-009",
+        "function": "parse_retry_after"
+      },
+      {
+        "args": {
+          "body": null,
+          "headers": {
+            "Retry-After": "0",
+            "X-RateLimit-Reset-After": "-2"
+          }
+        },
+        "call_id": "ra-010",
+        "function": "parse_retry_after"
+      },
+      {
+        "args": {
+          "body": null,
+          "headers": {
+            "Retry-After": ""
+          }
+        },
+        "call_id": "ra-011",
+        "function": "parse_retry_after"
+      },
+      {
+        "args": {
+          "body": null,
+          "headers": {}
+        },
+        "call_id": "ra-012",
+        "function": "parse_retry_after"
+      },
+      {
+        "args": {
+          "body": null
+        },
+        "call_id": "ra-013",
+        "function": "parse_retry_after"
+      },
+      {
+        "args": {
+          "body": "[]",
+          "headers": {
+            "Retry-After": "3"
+          }
+        },
+        "call_id": "ra-014",
+        "function": "parse_retry_after"
+      },
+      {
+        "args": {
+          "body": "{\"retry_after\": [1]}",
+          "headers": {
+            "Retry-After": "3"
+          }
+        },
+        "call_id": "ra-015",
+        "function": "parse_retry_after"
+      },
+      {
+        "args": {
+          "body": "{\"retry_after\": {\"a\": 1}}"
+        },
+        "call_id": "ra-016",
+        "function": "parse_retry_after"
+      },
+      {
+        "args": {
+          "body": "{\"retry_after\": true}",
+          "headers": {
+            "Retry-After": "5"
+          }
+        },
+        "call_id": "ra-017",
+        "function": "parse_retry_after"
+      },
+      {
+        "args": {
+          "body": "{\"retry_after\": false}",
+          "headers": {
+            "Retry-After": "5"
+          }
+        },
+        "call_id": "ra-018",
+        "function": "parse_retry_after"
+      },
+      {
+        "args": {
+          "body": "{\"retry_after\": \"nan\"}"
+        },
+        "call_id": "ra-019",
+        "function": "parse_retry_after"
+      },
+      {
+        "args": {
+          "body": "{\"retry_after\": 1e-3}"
+        },
+        "call_id": "ra-020",
+        "function": "parse_retry_after"
+      },
+      {
+        "args": {
+          "body": "{\"retry_after\": 1e2}"
+        },
+        "call_id": "ra-021",
+        "function": "parse_retry_after"
+      },
+      {
+        "args": {
+          "body": "{\"retry_after\": 120.0, \"global\": true}"
+        },
+        "call_id": "ra-022",
+        "function": "parse_retry_after"
+      },
+      {
+        "args": {
+          "body": null,
+          "headers": {
+            "Retry-After": "1e1"
+          }
+        },
+        "call_id": "ra-023",
+        "function": "parse_retry_after"
+      },
+      {
+        "args": {
+          "body": null,
+          "headers": {
+            "Retry-After": "+3"
+          }
+        },
+        "call_id": "ra-024",
+        "function": "parse_retry_after"
+      }
+    ]
+  },
+  "known_defects": [],
+  "legacy_behavior_note": "expected_output は旧実装が実際に返した値（欠陥候補を含む）。新仕様の期待値ではない。",
+  "scenario_ids": [
+    "G8"
+  ],
+  "schema_version": 1,
+  "source_commit": "f7dbf69fd8940121782870de902e8c449e6ca149",
+  "source_function": [
+    "jraev.notify.discord._parse_retry_after_seconds"
+  ],
+  "source_repository": "puttun777/jra-bot"
+}

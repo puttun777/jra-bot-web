@@ -50,6 +50,32 @@ class LegacyFeatureBuilder(
             FeatureMeta.EMPTY,
         )
 
+    /**
+     * 旧 `format_reason_from_features` の材料（旧 `get_horse_feature_summary` + `get_race_condition_summary`）。旧互換モード（H3 を含む）なので、
+     * **ゴールデン比較用**。通知の運用には [PointInTimeFeatureBuilder.reasonFacts] を使う。レース条件が無いときの距離は 0（表示しない）。
+     */
+    fun reasonFacts(
+        raceId: String,
+        umaban: Int,
+        bamei: String,
+    ): HorseReasonFacts {
+        val s = summary(raceId, umaban)
+        val rc = conditions(raceId)
+        return HorseReasonFacts(
+            bamei = bamei.trim { it.isWhitespace() },
+            hasPastRuns = s.hasPastRuns,
+            pastN = s.pastN,
+            pastAvgFinish = s.pastAvgFinish,
+            pastWinRate = s.pastWinRate,
+            pastPlaceRate = s.pastPlaceRate,
+            daysSinceLastRun = s.daysSinceLastRun,
+            styleHint = s.styleHint,
+            aptitude = if (s.hasHorseMaster) Aptitude(s.distancePlaceRate, s.surfacePlaceRate, s.conditionPlaceRate) else null,
+            conditions = rc,
+            pedigreeNames = s.pedigreeNames,
+        )
+    }
+
     fun conditions(raceId: String): RaceConditions {
         val rid = raceId.take(12)
         return if (rid.isEmpty()) RaceConditions.EMPTY else source.raceConditions(tenantId, rid) ?: RaceConditions.EMPTY

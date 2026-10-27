@@ -174,8 +174,87 @@ def _evaluate_odds_ml(L, a):
     return {"return_shape": "list", "signals": res, "reject_counts": None}
 
 
+# ---- Discord 通知（T3.7: G8）。旧 notify/discord.py のうち、ネットワークを使わない部分（本文・分割・Retry-After の解釈・重複除外）だけを呼ぶ --------------
+
+def _expand_repeat(content):
+    """長い文字列の入力表現 `{"repeat": [[文字列, 回数], …]}` を展開する（フィクスチャに長いトークン様の文字列を置かないため）。文字列はそのまま。"""
+    if isinstance(content, dict):
+        return "".join(t * c for t, c in content["repeat"])
+    return content
+
+
+class _FakeResponse:
+    """`_parse_retry_after_seconds` が使う requests.Response の最小の代役（`json()` と大文字小文字を区別しない `headers.get`）。"""
+
+    class _Headers(dict):
+        def get(self, key, default=None):
+            for k, v in self.items():
+                if k.lower() == key.lower():
+                    return v
+            return default
+
+    def __init__(self, body, headers):
+        self._body = body
+        self.headers = self._Headers(headers or {})
+
+    def json(self):
+        if self._body is None:
+            raise ValueError("本文なし")
+        return json.loads(self._body)
+
+
+def _capture_send(L, call):
+    """`_send_content_chunked`（HTTP 送信）を、本文と許可メンションを記録するだけの関数に差し替えて `send_signal` / `send_signals_grouped` を呼ぶ。
+    旧関数が例外を投げても、送信される本文（`sent`）と例外の型（`raised`）を両方記録する
+    （旧 `send_signals_grouped` は通常の成功経路の末尾で UnboundLocalError を投げる: N2。本文は既に『送信済み』）。"""
+    sent = []
+
+    def fake(webhook_url, content, timeout, username, allowed_mentions, max_attempts=5):
+        sent.append({"content": content, "username": username, "allowed_mentions": allowed_mentions})
+        return True
+
+    saved = L.discord._send_content_chunked
+    L.discord._send_content_chunked = fake
+    try:
+        try:
+            returned, raised = call(), None
+        except Exception as e:  # noqa: BLE001 - 旧実装の失敗を記録する
+            returned, raised = None, type(e).__name__
+    finally:
+        L.discord._send_content_chunked = saved
+    return {"returned": returned, "raised": raised, "sent": sent}
+
+
+_DUMMY_WEBHOOK = "https://example.invalid/not-a-real-webhook"  # 送信されない（差し替え済み）。実 Webhook ではない
+
+
+def _send_signal_content(L, a):
+    return _capture_send(L, lambda: L.discord.send_signal(_DUMMY_WEBHOOK, a["race"], a["signal"], mention_user_id=a.get("mention_user_id")))
+
+
+def _send_signals_grouped_content(L, a):
+    return _capture_send(L, lambda: L.discord.send_signals_grouped(_DUMMY_WEBHOOK, a["race"], a["signals"], mention_user_id=a.get("mention_user_id")))
+
+
+def _reason_from_features(L, a):
+    """format_reason_from_features を合成 SQLite で。requests[].with_db=false は db=None。"""
+    import tempfile
+    out = []
+    with tempfile.TemporaryDirectory(prefix="golden-db-") as d, _fixed_now(L, a["now"]):
+        db = _make_db(L, a["db"], d)
+        for q in a["requests"]:
+            out.append(L.features.format_reason_from_features(db if q.get("with_db", True) else None, q["race_id"], q["umaban"]))
+    return out
+
+
 # call 名 → (L, args) -> 結果。ここに無い関数は呼べない（意図しない旧コード実行を防ぐ）。
 CALLS = {
+    "split_content": lambda L, a: L.discord._split_content(_expand_repeat(a["content"]), **a.get("kwargs", {})),
+    "parse_retry_after": lambda L, a: L.discord._parse_retry_after_seconds(_FakeResponse(a.get("body"), a.get("headers"))),
+    "dedupe_tickets": lambda L, a: L.discord._deduplicate_tickets(a["tickets"]),
+    "send_signal_content": _send_signal_content,
+    "send_signals_grouped_content": _send_signals_grouped_content,
+    "reason_from_features": _reason_from_features,
     "calc_ev": lambda L, a: L.ev_calc.calc_ev(a["prob"], a["odds"]),
     "calc_expected_return": lambda L, a: L.ev_calc.calc_expected_return(a["prob"], a["odds"]),
     "calc_expected_profit": lambda L, a: L.ev_calc.calc_expected_profit(a["stake"], a["prob"], a["odds"]),

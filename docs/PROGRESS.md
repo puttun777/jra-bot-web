@@ -1,7 +1,37 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-10-26（Public 化の準備。Stage 3-F2 の記録は下）
-旧: 2026-10-24（Stage 3-F1: T3.6-A ML の Kotlin 推論基盤）／Stage 3-E（T3.5）／2026-10-23（Stage 3-D: T3.4）
+最終更新: 2026-10-27（Stage 3-G: T3.7 Discord 通知。記録は下）
+旧: 2026-10-26（Public 化の準備）／2026-10-24（Stage 3-F2・3-F1・3-E）
+
+## Stage 3-G（claude/stage3-discord-notification）: T3.7 Discord 通知
+### 結果（**合成データ・Fake の HTTP サーバのみで検証。実 Discord・実 Webhook・実 JRA-VAN データへは触れていない**。T3.8 には進んでいない）
+- **データ利用方針は維持**: アーキテクチャは変更なし（期待値だけを保存する案へは切り替えていない）。実データのクラウド投入・実データ由来の通知は COMP-4 の公式回答まで行わない（運用ゲート。コードでは強制していない）。JRA-VAN がクラウド保存・通知を許可したことにも、本人認証で規約確認が不要になったことにもしていない。未解決事項（P-1〜P-3・T1.16/17/20/21・T3.0・COMP-4・E-7・D-13/14・Stage 5）は変更なし。
+- **実装**（D-181〜D-189、CONTRACTS 0.4.11 §9.2、MIGRATION_MATRIX §11）:
+  - `:domain` `notify`: `ContentSplitter`（行単位・サロゲート安全・1900）、`RateLimitWait`（retry_after → Retry-After → X-RateLimit-Reset-After → 1.0）、`MentionPolicy`/`DiscordText`、`NoticeViews`/`NoticeFormatter`（旧 `send_signal`/`send_signals_grouped` の本文。単勝・ワイド・三連複・見送り・複数シグナル統合・買い目の重複除外と上位 6 点。判定結果をそのまま表示し EV/Kelly/確率を再計算しない）、`SignalNotificationDispatcher`、`ErrorReporter`/`SecretRedactor`、`ml.features.ReasonFormatter`（G-17 ⑥）と `reasonFacts`（旧互換/point-in-time）。
+  - `:bot` `discord`: `DiscordWebhookUrl`（https の discord.com 系 `/api/webhooks/<id>/<token>` だけ。IP・ポート・クエリ・他ホストは拒否。ループバックのテスト用は `forLocalTest` のみ）、`JdkWebhookTransport`（リダイレクト無効・タイムアウト）、`DiscordNotifier`、`DiscordSettings`（`bot-run` のときだけ読む）、`StopFlag`、Bean 配線（`Notifier`/`SignalNotificationDispatcher`/`ErrorReporter`）。
+  - `:persistence`: `SignalReader.listClaimedBefore`（古い CLAIMED の回収用 SQL）。新モジュールなし。
+- **配送の安全規則**: 429 と接続前の失敗だけ再試行（最大 5 試行・Retry-After を尊重・60 秒超は再試行せず終了）。5xx・要求タイムアウト・切断・想定外の応答・一部のチャンクだけ送信済みは `UNKNOWN`（再送しない）。確実な拒否（4xx）と 1 通目の失敗は `NOT_SENT`。Signal は DELIVERED→`SENT`、それ以外→`SEND_UNKNOWN`（claim 済みは戻せないため NOT_SENT も SEND_UNKNOWN。取りこぼしを選ぶ）。**exactly-once は保証しない**。出どころ（`NotificationOrigin`、既定値なし）が LIVE 以外・運用モードが NORMAL 以外（毎回読む）・停止要求中は何も変えず通知しない。宛先未設定は claim の前に検出。claim 後に記録できなかったものは `recoverStaleClaims`（NORMAL のみ・古い claim のみ）。
+- **旧 Python との差**: 旧は 5xx・タイムアウトも最大 5 回再送し、daemon はグループ全体を再送した（N3/N4）。旧 `mention`（自由文字列）は移植しない（N5）。**旧欠陥を発見**: N1（『ℹ️ 期待利益は…確率』がほぼ常に出る）、N2（`send_signals_grouped` が成功経路の末尾で `UnboundLocalError`＝送信済みなのに例外 → 再起動後の再通知）。いずれも互換モードで再現・運用モードでは是正（数値は不変）。MIGRATION_MATRIX §11。
+- **ゴールデン G8**（旧 `f7dbf69`）: `_split_content`・`_parse_retry_after_seconds`・`_deduplicate_tickets`・`send_signal`・`send_signals_grouped`（本文）・`format_reason_from_features`。ケース 26→**32**、呼び出し 880→**994**。Kotlin が検証したのは **31 ケース / 988 呼び出しで全一致**（未対応は GD10 の 1 ケース / 6 呼び出しのまま。成功に数えない）。既存フィクスチャは未変更（`--add-new`）。HTTP 送信関数の差し替えと `requests` のスタブで、旧実装はネットワークに出ない。
+- **公式仕様**: 429 の `retry_after`（秒の小数）・`Retry-After`・`X-RateLimit-Scope`（user/global/shared）は公式ドキュメントの検索結果で確認。discord.com へは直接接続できず（ネットワーク遮断）、2000 文字の数え方は確認できていない（UNRESOLVED G-20）。
+### テスト（ローカル: JDK 21・`LC_ALL=C.UTF-8`・Gradle 429 は再試行。**JDK 25 の合否ではない**。完了判定の正は GitHub Actions: D-056）
+| 区分 | 結果 |
+|---|---|
+| `:domain` 単体 | **889 件成功**（新規 67: `notify` の `ContentSplitterTest` 11・`RateLimitWaitTest` 5・`MentionPolicyTest` 5・`NoticeFormatterTest` 13・`HorseReasonTest` 7・`SignalNotificationDispatcherTest` 18・`ErrorReporterTest` 8） |
+| `:bot` 単体 | **110 件成功**（新規 35: `DiscordNotifierFakeServerTest` 23〔2xx・400/401/403/404・429+Retry-After・500/502/503/504・タイムアウト・接続切断・接続拒否・分割途中の失敗・停止/SIGTERM・ログ漏洩〕・`DiscordWebhookUrlTest` 4〔SSRF〕・`DiscordSettingsTest` 6・`BotSpringWiringTest` +2） |
+| `:persistence` 単体 / 統合 | 33 件成功 / 統合は**ローカル未実施**（Docker・MySQL なし）。`SignalRepositoryIntegrationTest` に `listClaimedBefore` の 1 件を追加（CI で確認） |
+| `:golden-runner` | 20 件成功。Kotlin vs 旧 Python 31 ケース / 988 呼び出し全一致（最大絶対誤差 1.066e-14） |
+| `tools/golden`（Python） | **93 件成功**（`GOLDEN_LEGACY_PATH` あり・スキップ 0）、`verify`・`generate --check` 成功 |
+| `tools/ci` | 130 件成功。ktlint・`checkModuleDependencies`・repo-hygiene 成功 |
+| **未実施** | 実 Discord への送信、bot-run + MySQL + Fake サーバの通知の統合試験（T3.8）、MySQL 統合テスト（CI）、Docker イメージ（CI） |
+### 未解決・新規（UNRESOLVED.md が正本。解消: C-27〜C-29、G-8、G-17 ⑥）
+G-20（2000 文字の数え方）・G-21（T3.8 への引き継ぎ）・G-22（実 Discord 未検証）。**既存の P-1/P-2/P-3・T1.16/T1.17/T1.20/T1.21・T3.0・COMP-4・E-7・D-13/D-14・Stage 5 は変更なし。**
+### 次の作業（**自動では進まない**）
+T3.8（bot-run 全体ループ。G-21 の ①〜⑥）。第 5 段階前に T5.0（`DISCORD_MENTION_USER_ID` の追加を含む infra 同期）。
+### ブランチ・PR・CI
+`claude/stage3-discord-notification`（main の b534ac7 から）。PR・CI の結果は PR を参照（**マージはユーザーの判断**）。
+
+---
 
 ## Public 化の準備（claude/prepare-public-repo、2026-10-26）— Visibility は変更していない
 - **スキャン**: gitleaks（`go install` でビルド）を全履歴に実行: リモート 56 参照（全ブランチ + PR ヘッド 27）、117 コミット（うち差分のあるもの 95 を走査、約 14MB）、**10 件検出・すべてテスト用ダミー**（`agent/tests` のテストベクトル `signingKeyHex`〔`TEST-VECTOR-ONLY` トークンから導出〕、テスト用のトークン文字列、`Ed25519PrivateKey.generate` のフィールド名）。実秘密 0。**trufflehog は取得・ビルドが環境の判定で拒否され未実施**。前回の自前スキャン（747 ファイル）とも一致。

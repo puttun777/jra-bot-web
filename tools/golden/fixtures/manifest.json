@@ -36,6 +36,36 @@
       "sha256": "ca3601a3db2b7380924e44d249a4d610cf9e0e49bd926fcccc806ed42b1c69fa"
     },
     {
+      "case_id": "G8-DEDUP-003",
+      "path": "G8-DEDUP-003.json",
+      "sha256": "6bd575322f3e02b17c55b7d8410617186687e8bf5263823afe8b34e575ea62df"
+    },
+    {
+      "case_id": "G8-GROUPED-005",
+      "path": "G8-GROUPED-005.json",
+      "sha256": "b9b67a347441fa811cd6be4af899cd625ecb48cf2ac7acf7eb47aa4753d56b7d"
+    },
+    {
+      "case_id": "G8-REASON-006",
+      "path": "G8-REASON-006.json",
+      "sha256": "0ab8e4d8891b5846638771707ceadb70bb73a31158f30208cb9f668b4b600b9a"
+    },
+    {
+      "case_id": "G8-RETRY-002",
+      "path": "G8-RETRY-002.json",
+      "sha256": "28542f31bbc8176c23969c39e67e8681a3fa24e0e47def0677ac1092c6c1fcb4"
+    },
+    {
+      "case_id": "G8-SINGLE-004",
+      "path": "G8-SINGLE-004.json",
+      "sha256": "b0c3a77aa4fc5f008806a35a6fe651e5030750877437f3a0b3fea1e058ea3ef6"
+    },
+    {
+      "case_id": "G8-SPLIT-001",
+      "path": "G8-SPLIT-001.json",
+      "sha256": "2499e00846bf523199df9a660b4dd4bbf4b777998e763fcb2b0bceffe8233601"
+    },
+    {
       "case_id": "GD01-EV-001",
       "path": "GD01-EV-001.json",
       "sha256": "aacf562a920ff73020439e8c5ffb5818e94fec345caa5c097315405e51438389"

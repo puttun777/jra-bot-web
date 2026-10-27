@@ -50,6 +50,11 @@ CATALOG = [
     dict(id="G6", title="特徴量ベクトル", status="implemented", case_ids=["G6-FEATURES-001"],
          remaining="合成 SQLite（旧スキーマ）と固定時刻で build_feature_vector / build_feature_vector_alpha を比較（40/35 次元・血統ハッシュ 16 次元・H3/H8 を含む旧挙動を再現）。"
                    "新方式（point-in-time）は旧実装に対応物が無いので Kotlin 単体テスト（FeatureBuilderTest）で検証。format_reason_from_features（通知文）は T3.7"),
+    dict(id="G8", title="Discord 通知（分割・Retry-After・重複除外・本文・理由文）", status="implemented",
+         case_ids=["G8-SPLIT-001", "G8-RETRY-002", "G8-DEDUP-003", "G8-SINGLE-004", "G8-GROUPED-005", "G8-REASON-006"],
+         remaining="旧 notify/discord.py のうちネットワークを使わない部分（HTTP 送信の関数は差し替え・requests はスタブ）。旧実装の自動リトライ（5 回・5xx も再送）と HTTP の挙動は比較対象外で、"
+                   "新しい配送の安全規則（5xx/タイムアウトを再送しない・NOT_SENT/UNKNOWN の区別）は旧出力ではなく Kotlin の単体テスト（Fake HTTP サーバ）で検証する。"
+                   "旧 mention（自由文字列）は移植しない。旧 send_signal が必須キー欠落で False を返す経路・strategies の無い単勝のみの戦略の分岐は対象外。実 Discord への送信は未検証"),
     dict(id="G7", title="失敗系（次元不一致・NaN・署名等）", status="partial", case_ids=["G7-LEGACY-FAIL-001"],
          remaining="旧実装側の失敗時の挙動（ML 無効・モデル無し・feature_names 不一致=H1・未知の model_type）は G7-LEGACY-FAIL-001 で数値とラベルを比較。"
                    "新しいモデルのロード失敗（署名/ハッシュ/スキーマ/次元/NaN）は旧実装に対応物が無い新設計の仕様なので、旧出力ではなく Kotlin 単体テスト（ModelLoaderTest・MlEndToEndTest）と"
@@ -71,6 +76,7 @@ KOTLIN_PORT = {
         "GD07-COMBO-STAKE-010", "GD06-EVAL-011",                                                                   # T3.2 で追加: 賭け額・配分 / evaluate_odds のワイド・三連複
         "G1-MODEL-001", "G2-HASH-001",                                                                             # T3.6-A: 既存フィクスチャ（線形+Platt+市場ブレンド / ハッシュ特徴）
         "G6-FEATURES-001", "G3-ML-NORM-002", "G4-ENSEMBLE-002", "G5-BLEND-002", "G7-LEGACY-FAIL-001",             # T3.6-A で追加: 特徴量 / ML 経路（正規化・ensemble・ブレンド・失敗時）
+        "G8-SPLIT-001", "G8-RETRY-002", "G8-DEDUP-003", "G8-SINGLE-004", "G8-GROUPED-005", "G8-REASON-006",        # T3.7 で追加: Discord 通知の分割・429 の待機・重複除外・本文・理由文
     ],
     "unsupported": {
         "GD10-DEFAULTS-001": "旧関数のシグネチャ既定値の突合。運用の既定値は T1.20/T3.8 で決める（D-016）",
