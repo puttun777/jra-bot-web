@@ -15,6 +15,7 @@ import jp.jrabot.domain.botrun.RaceEvaluationWriter
 import jp.jrabot.domain.botrun.RunExit
 import jp.jrabot.domain.botrun.RunRequest
 import jp.jrabot.domain.botrun.SnapshotPolicy
+import jp.jrabot.domain.botrun.TightenMode
 import jp.jrabot.domain.botrun.testing.ManualClock
 import jp.jrabot.domain.botrun.testing.StubJudge
 import jp.jrabot.domain.calendar.CalendarSettings
@@ -90,11 +91,12 @@ class BotRunOrchestratorIntegrationTest {
             calendar = CalendarSettings(WatchSettings(Duration.ofMinutes(120), Duration.ofMinutes(10), Duration.ofMinutes(90)), Duration.ofHours(12)),
             polling = PollingIntervals(Duration.ofMinutes(5), Duration.ofMinutes(1), Duration.ofSeconds(30)),
             snapshotHistoryLimit = 3,
-            snapshot = SnapshotPolicy(listOf(5.0), false),
+            snapshot = SnapshotPolicy(listOf(30.0, 5.0), TightenMode.OFF),
             maxOddsAge = Duration.ofSeconds(180),
             maxRuntime = Duration.ofHours(14),
             staleClaimAfter = Duration.ofMinutes(10),
             maxConsecutiveUnknown = 3,
+            modeCheckInterval = Duration.ofSeconds(15),
             maxConsecutiveCycleFailures = 3,
             mlModelType = null,
             decision = WinDecisionConfig.legacyFunctionDefaults(),
@@ -158,12 +160,12 @@ class BotRunOrchestratorIntegrationTest {
         assertEquals(1, db.count("SELECT COUNT(*) FROM bot_run"))
         assertEquals("SUCCEEDED", db.scalar("SELECT state FROM bot_run"))
         assertEquals(null, db.scalar("SELECT active_slot FROM bot_run")) // リース解放
-        assertEquals(1, db.count("SELECT COUNT(*) FROM race_evaluations"))
-        assertEquals("market", db.scalar("SELECT model_type_used FROM race_evaluations"))
-        assertEquals("ML_DISABLED", db.scalar("SELECT fallback_reason FROM race_evaluations"))
-        assertEquals(2, db.count("SELECT COUNT(*) FROM signals"))
-        assertEquals(2, db.count("SELECT COUNT(*) FROM signals WHERE notify_state = 'SENT'"))
-        assertEquals(1, notified.size)
+        assertEquals(2, db.count("SELECT COUNT(*) FROM race_evaluations")) // 30 分前と 5 分前
+        assertEquals(2, db.count("SELECT COUNT(*) FROM race_evaluations WHERE model_type_used = 'market'"))
+        assertEquals(2, db.count("SELECT COUNT(*) FROM race_evaluations WHERE fallback_reason = 'ML_DISABLED'"))
+        assertEquals(4, db.count("SELECT COUNT(*) FROM signals"))
+        assertEquals(4, db.count("SELECT COUNT(*) FROM signals WHERE notify_state = 'SENT'"))
+        assertEquals(2, notified.size)
         assertEquals(1, db.count("SELECT COUNT(*) FROM bot_run WHERE JSON_UNQUOTE(JSON_EXTRACT(checkpoint, '\$.races.\"${raceId.value}\".stage')) = 'OFF'"))
     }
 
@@ -172,9 +174,9 @@ class BotRunOrchestratorIntegrationTest {
         run()
         val again = run(start = Instant.parse("2026-10-24T06:50:00Z"), owner = "owner-2") // 発走後
         assertEquals("ALL_RACES_OFF", again.reason)
-        assertEquals(1, db.count("SELECT COUNT(*) FROM race_evaluations"))
-        assertEquals(2, db.count("SELECT COUNT(*) FROM signals"))
-        assertEquals(1, notified.size)
+        assertEquals(2, db.count("SELECT COUNT(*) FROM race_evaluations"))
+        assertEquals(4, db.count("SELECT COUNT(*) FROM signals"))
+        assertEquals(2, notified.size)
         assertEquals(2, db.count("SELECT COUNT(*) FROM bot_run"))
     }
 
@@ -182,7 +184,7 @@ class BotRunOrchestratorIntegrationTest {
     fun `BACKFILL は評価と Signal を記録するが通知しない`() {
         val out = run(origin = NotificationOrigin.BACKFILL)
         assertEquals("ALL_RACES_OFF", out.reason)
-        assertEquals(2, db.count("SELECT COUNT(*) FROM signals WHERE notify_state = 'UNSENT'"))
+        assertEquals(4, db.count("SELECT COUNT(*) FROM signals WHERE notify_state = 'UNSENT'"))
         assertEquals(0, notified.size)
     }
 

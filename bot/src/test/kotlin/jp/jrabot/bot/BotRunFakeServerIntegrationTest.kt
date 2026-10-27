@@ -18,6 +18,7 @@ import jp.jrabot.domain.botrun.RaceCycleProcessor
 import jp.jrabot.domain.botrun.RunExit
 import jp.jrabot.domain.botrun.RunRequest
 import jp.jrabot.domain.botrun.SnapshotPolicy
+import jp.jrabot.domain.botrun.TightenMode
 import jp.jrabot.domain.botrun.testing.InMemoryBotRunRepository
 import jp.jrabot.domain.botrun.testing.InMemoryEntries
 import jp.jrabot.domain.botrun.testing.InMemoryEvaluations
@@ -102,11 +103,12 @@ class BotRunFakeServerIntegrationTest {
                 calendar = CalendarSettings(WatchSettings(Duration.ofMinutes(120), Duration.ofMinutes(10), Duration.ofMinutes(90)), Duration.ofHours(12)),
                 polling = PollingIntervals(Duration.ofMinutes(5), Duration.ofMinutes(1), Duration.ofSeconds(30)),
                 snapshotHistoryLimit = 3,
-                snapshot = SnapshotPolicy(listOf(5.0), false),
+                snapshot = SnapshotPolicy(listOf(5.0), TightenMode.OFF),
                 maxOddsAge = Duration.ofSeconds(180),
                 maxRuntime = Duration.ofHours(14),
                 staleClaimAfter = Duration.ofMinutes(10),
                 maxConsecutiveUnknown = 3,
+                modeCheckInterval = Duration.ofSeconds(15),
                 maxConsecutiveCycleFailures = 3,
                 mlModelType = null,
                 decision = WinDecisionConfig.legacyFunctionDefaults(),

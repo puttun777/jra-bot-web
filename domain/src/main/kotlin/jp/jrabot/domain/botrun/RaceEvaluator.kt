@@ -6,6 +6,7 @@ import jp.jrabot.domain.decision.DecisionHorse
 import jp.jrabot.domain.decision.FeatureCoverage
 import jp.jrabot.domain.decision.MlProbabilityInput
 import jp.jrabot.domain.decision.OddsPopularitySnapshot
+import jp.jrabot.domain.decision.PriorityMode
 import jp.jrabot.domain.decision.RecentSnapshotsProvider
 import jp.jrabot.domain.decision.SanrenpukuKey
 import jp.jrabot.domain.decision.SnapshotsNewestFirst
@@ -75,6 +76,8 @@ data class RaceEvaluation(
     val fallbackReason: FallbackReason?,
     /** ワイド・三連複の実オッズを使えた（新鮮なものがあった）か。 */
     val comboRealOdds: Boolean,
+    /** 実際に使った EV の閾値（hit_rate なら `hitRateMinEv`。旧 `ev_threshold_for_save`）。null は [BotRunConfig.decision] の `evThreshold`。 */
+    val evThresholdUsed: Double? = null,
 ) {
     /** ML を有効にしたのに市場確率だけになった（アラート対象）。 */
     val isMlMarketFallback: Boolean get() = probability?.isMarketFallback == true
@@ -87,7 +90,7 @@ fun interface RaceJudge {
         raceId: RaceId,
         win: OddsSnapshot,
         now: Instant,
-        isNearTiming: Boolean,
+        minutesToPost: Double,
     ): RaceEvaluation
 }
 
@@ -117,12 +120,12 @@ class RaceEvaluator(
         raceId: RaceId,
         win: OddsSnapshot,
         now: Instant,
-        isNearTiming: Boolean,
+        minutesToPost: Double,
     ): RaceEvaluation {
         require(win.tenantId == tenantId && win.raceId == raceId && win.market == Market.WIN) { "単勝のスナップショットがレースと合わない" }
         val horses = win.entries.sortedBy { it.umaban.value }.map { DecisionHorse(it.umaban.value, it.odds.value, it.popularity ?: 0) }
         val history = odds.history(tenantId, raceId, Market.WIN).filter { !it.observedAt.isAfter(win.observedAt) }
-        val decision = decisionConfig(isNearTiming).copy(raceId = raceId.value)
+        val decision = decisionConfig(minutesToPost).copy(raceId = raceId.value)
 
         val real = realCombo(tenantId, raceId, now)
         val oddsHistory = oddsPoints(history)
@@ -185,13 +188,19 @@ class RaceEvaluator(
             modelId = if (usedMl) ml.pinnedModelId else null,
             fallbackReason = fallback,
             comboRealOdds = real.any,
+            evThresholdUsed = if (decision.priorityMode == PriorityMode.HIT_RATE) decision.hitRateMinEv ?: decision.evThreshold else decision.evThreshold,
         )
     }
 
-    /** 旧の『5 分前の場合はフィルタを強化』（`drop_threshold × 0.7`、正の `*_max_over_market × 0.8`）。[isNearTiming] が true のときだけ。 */
-    internal fun decisionConfig(isNearTiming: Boolean): WinDecisionConfig {
-        if (!isNearTiming) return config.decision
-        val d = config.decision
+    /**
+     * 発走までの残り [minutesToPost] に応じた判定の設定。①旧の『5 分前の強化』（[SnapshotPolicy.isNear]。`drop_threshold × 0.7`、正の `*_max_over_market × 0.8`）
+     * ②**明示した場合だけ**旧 `hit_rate_min_ev_schedule`（`priorityMode=HIT_RATE` のとき `hitRateMinEv` を差し替える）。どちらも無ければ [BotRunConfig.decision] のまま。
+     */
+    internal fun decisionConfig(minutesToPost: Double): WinDecisionConfig {
+        var d = config.decision
+        val schedule = config.hitRateSchedule
+        if (schedule != null && d.priorityMode == PriorityMode.HIT_RATE) d = d.copy(hitRateMinEv = schedule.forMinutesToPost(minutesToPost))
+        if (!config.snapshot.isNear(minutesToPost)) return d
 
         fun tighten(v: Double): Double = if (v > 0.0) v * NEAR_OVER_MARKET_FACTOR else v
         return d.copy(

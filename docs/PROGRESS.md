@@ -1,8 +1,34 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-10-27（Stage 3-H: T3.8 bot-run オーケストレーション。記録は下）
+最終更新: 2026-10-27（Stage 3-H レビュー修正: G-23/G-24 の判断反映・5 分前の強化・モード確認間隔。記録は下）
+旧: 2026-10-27（Stage 3-H: T3.8 bot-run オーケストレーション）
 旧: 2026-10-27（Stage 3-G: T3.7 Discord 通知）
 旧: 2026-10-26（Public 化の準備）／2026-10-24（Stage 3-F2・3-F1・3-E）
+
+## Stage 3-H レビュー修正（同ブランチ・2026-10-27。T3.9 には進んでいない）
+### 反映した判断と修正（D-204〜D-207、CONTRACTS 0.4.13、UNRESOLVED C-34・G-23・G-24）
+- **G-23**: 通知は『評価タイミングごとに最大 1 回』で確定（再起動をまたいだ重複も防止。既存実装を `30,5` で検証）。指定の値は `bot/config/bot-run.sample.env`（**開発・合成データ・CI 用の暫定サンプル。本番の運用値として確定していない**。ファイルと README 相当のコメントに明記し、テストが TestSupport の値と一致を固定）。コードに本番の既定値は無い。判定閾値などの本番設定は T1.20 まで未確定。
+- **G-24**: `hit_rate_min_ev_schedule` を移植（`BOT_RUN_PRIORITY_MODE=hit_rate` と `BOT_RUN_HIT_RATE_MIN_EV_SCHEDULE` を**明示したときだけ**有効。未設定は固定閾値のまま）。旧の式（`>=30` far / `>=5` mid / near。境界は上側）と一致するテスト。`adaptive_relaxation` は**実装・有効化していない**（T3.9 のバックテスト後に再判断）。
+- **5 分前の強化（確認済みの不具合）**: `30,5` では旧互換の判定が最大のタイミング（30）に先に一致し、5 分前でも強化されなかった（実コードのテストで確認）。`TightenMode`（`false`=数値を変えない / `true`=修正後: 残り 5 分以下で強化 / `legacy`=旧の癖を保持）に分けた。修正後は旧実装と**意図的に違う**。
+- **UNKNOWN の停止時間（確認済みの不一致）**: 初版は運用モードの確認がループ 1 周ごと（最大 heartbeat の 60 秒）で、UNKNOWN の 3 回連続は約 120 秒かかっていた（契約は約 45 秒）。ループを『モード・停止要求・heartbeat・最大稼働の確認（15 秒以下）』と『評価サイクル（nextCycleAt）』に分離。UNKNOWN は最初の観測から 30 秒で停止（45 秒以内）、STOPPED は 15 秒以内に検知。heartbeat 60 秒・リース 300 秒は不変（最大の heartbeat の間隔 75 秒以内をテスト）。
+### テスト（ローカル: JDK 21・MySQL 8.0.46。手で進める時計のみで実 sleep なし。**CI は未実施**）
+| 区分 | 結果 |
+|---|---|
+| `:domain` 単体 | **974 件成功**（+14: `BotRunScheduleTest` 10〔30/5 の評価・通知、同タイミングの重複防止・再起動、まとめ発火、hit_rate schedule、強化 3 モード、UNKNOWN 45 秒、STOPPED 15 秒、heartbeat 60 秒/リース 300 秒、BACKFILL〕、`BotRunComponentsTest` を更新） |
+| `:bot` 単体 | **133 件成功**（+3: サンプル設定ファイル、hit_rate 設定、強化の値） |
+| `:persistence` 単体 / `:ingest` / `:dashboard` / `:cloud-gcp` / `:golden-runner` | 33 / 35 / 30 / 102 / 20 件成功。**ゴールデン 31 ケース / 988 呼び出し全一致を維持** |
+| MySQL 統合（ローカル 8.0.46）`BotRun*`（`30,5` の通し・再実行の冪等・BACKFILL・リース・テナント境界・最小権限） | 成功。`persistence` 全体は 185 件中既知の 1 件〔8.4 を期待するサーバ版検査〕を除き成功、`bot` の `MlTrainInteropIntegrationTest` 6 件は `ML_TRAIN_PYTHON` 未設定の既知の失敗 |
+| ktlint・`checkModuleDependencies`・repo-hygiene | 成功 |
+| **未実施** | **GitHub Actions 全体（JDK 25・MySQL 8.4/9.7・Docker イメージ・Python）**、実 Discord、Cloud Run。**T3.8 は CI で未検証。最終検証済みとして扱わない** |
+### PR 作成前に残る問題
+- CI（Actions 無料枠が戻るまで未実行）。PR はユーザーの許可まで作らない。
+- 運用値の確定（T1.20 の実 config.yaml）。ML は市場確率のまま（昇格・v2 なし）。`adaptive_relaxation` の再判断。
+- 依存取得の 429 でローカルの Gradle が稀に失敗する（再実行で通る）。
+- 完了した日の bot-run 再起動（T3.9 で `race_day` を COMPLETED に）。
+### ブランチ
+`claude/stage3-bot-orchestration`（PR なし。ユーザーが CI を許可するまで保持）。
+
+---
 
 ## Stage 3-H（claude/stage3-bot-orchestration）: T3.8 bot-run オーケストレーション
 ### 結果（**合成データ・Fake HTTP サーバ・メモリ上の偽物・ローカル MySQL 8.0.46 のみで検証。実 Discord・実 JRA-VAN データ・本番 GCP・Cloud Run には触れていない**。T3.9 には進んでいない）

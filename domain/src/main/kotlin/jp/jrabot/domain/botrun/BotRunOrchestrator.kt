@@ -276,6 +276,7 @@ class BotRunOrchestrator(
         private fun loop(): RunOutcome {
             val startedAt = keeper.run.startedAt
             var consecutiveFailures = 0
+            var nextCycleAt = clock.now()
             while (true) {
                 if (stopRequested()) return finish(interruptedFinish())
                 val now = clock.now()
@@ -289,14 +290,16 @@ class BotRunOrchestrator(
                     ModeDecision.Proceed -> Unit
                 }
                 (keeper.heartbeatIfDue() as? LeaseStatus.Lost)?.let { return lost(it) }
-                var tick = config.lease.heartbeatInterval
-                if (gate == ModeDecision.Proceed) {
+                // 評価のサイクルは nextCycleAt まで間を空ける。運用モードの確認と heartbeat はそれより細かい間隔（modeCheckInterval 以下）で行う
+                // （UNKNOWN の 3 回連続 ≒ 45 秒以内、STOPPED の検知も同じ。リースの heartbeat の間隔とは独立）
+                if (gate == ModeDecision.Proceed && !now.isBefore(nextCycleAt)) {
+                    var wait = config.lease.heartbeatInterval
                     try {
                         val result = cycle(now)
                         consecutiveFailures = 0
                         result.finish?.let { return finish(it) }
                         leaseLost?.let { return lost(LeaseStatus.Lost(it)) }
-                        tick = result.tick
+                        wait = result.tick
                     } catch (e: Exception) {
                         if (leaseLost != null) return lost(LeaseStatus.Lost(leaseLost!!))
                         consecutiveFailures++
@@ -313,9 +316,12 @@ class BotRunOrchestrator(
                             )
                         }
                     }
+                    nextCycleAt = now.plus(wait)
+                    (saveCheckpoint() as? LeaseStatus.Lost)?.let { return lost(it) }
                 }
-                (saveCheckpoint() as? LeaseStatus.Lost)?.let { return lost(it) }
-                pacer.pause(tick, stopRequested)
+                val untilCycle = Duration.between(clock.now(), nextCycleAt)
+                val pause = if (gate == ModeDecision.Proceed) minOf(config.modeCheckInterval, maxOf(untilCycle, MIN_TICK)) else config.modeCheckInterval
+                pacer.pause(pause, stopRequested)
             }
         }
 

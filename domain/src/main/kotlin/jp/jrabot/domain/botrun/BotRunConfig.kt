@@ -31,9 +31,13 @@ data class BotRunConfig(
     val maxRuntime: Duration,
     val staleClaimAfter: Duration,
     val maxConsecutiveUnknown: Int,
+    /** 運用モードを確認する間隔の上限（CONTRACTS §5.3: キャッシュ ≤ 15 秒。UNKNOWN の 3 回連続 ≒ 45 秒以内）。heartbeat の間隔以下。 */
+    val modeCheckInterval: Duration,
     val maxConsecutiveCycleFailures: Int,
     val mlModelType: ProbabilityModelType?,
     val decision: WinDecisionConfig,
+    /** 旧 `hit_rate_min_ev_schedule`。**明示した場合だけ有効**（null なら `decision.hitRateMinEv` の固定方式。さらに `priorityMode=HIT_RATE` のときだけ使う）。 */
+    val hitRateSchedule: HitRateSchedule? = null,
 ) {
     init {
         require(snapshotHistoryLimit in 2..100) { "snapshotHistoryLimit は 2〜100（急落の判定は 2 件以上で働く）" }
@@ -41,6 +45,7 @@ data class BotRunConfig(
         require(maxRuntime.isPositive && maxRuntime <= MAX_RUNTIME_LIMIT) { "maxRuntime は正で $MAX_RUNTIME_LIMIT 以下: $maxRuntime" }
         require(staleClaimAfter.isPositive) { "staleClaimAfter は正: $staleClaimAfter" }
         require(maxConsecutiveUnknown >= 1) { "maxConsecutiveUnknown は 1 以上" }
+        require(modeCheckInterval.isPositive && modeCheckInterval <= lease.heartbeatInterval) { "modeCheckInterval は正で heartbeat の間隔以下" }
         require(maxConsecutiveCycleFailures >= 1) { "maxConsecutiveCycleFailures は 1 以上" }
     }
 
@@ -71,17 +76,31 @@ data class PollingIntervals(
         }
 }
 
+/** 『5 分前の強化』（旧 `is_5min_snapshot`）の扱い。旧の癖を保つ [LEGACY_QUIRK] と、修正した [CORRECTED] を区別する。 */
+enum class TightenMode {
+    /** 強化しない（判定の設定を一切変えない）。 */
+    OFF,
+
+    /**
+     * 旧互換: `current_snapshot_minutes` は『大きい順に最初に 残り <= タイミング を満たすもの』＝最大のタイミングなので、**最大のタイミングが 5 分以下のときだけ**
+     * 強化が働く（`30,5` では 5 分前でも 30 が先に一致して強化されない。旧実装の癖）。ゴールデンで旧実装との一致を保つための挙動。
+     */
+    LEGACY_QUIRK,
+
+    /** 修正後: 発走までの残りが 5 分以下なら（どのタイミングの発火でも）強化する。`30,5` の 5 分前にも働く。旧実装とは**意図的に違う**。 */
+    CORRECTED,
+}
+
 /**
  * 評価・通知のタイミング。[minutesBeforePost] の各値について、**発走までの残りがその分数以下になった最初のサイクルで 1 回だけ**評価して通知する
- * （旧は『各タイミングで評価し、レースごとにベスト 1 件のみ通知』。再起動をまたいだ重複を防ぐため、発火済みを checkpoint に記録する: 新しい仕様、未承認の運用値）。
+ * （再起動をまたいだ重複も防ぐ。発火済みを checkpoint に記録する: D-196。ユーザー承認済み: 2026-10-27）。
  *
- * [tightenNear] は旧の『5 分前の場合はフィルタを強化』（`drop_threshold × 0.7`、単勝・ワイド・三連複の `*_max_over_market × 0.8`（正の値のみ））を再現するか。
- * 旧の判定 `current_snapshot_minutes <= 5.0` は、**タイミングを大きい順に並べて最初に `残り <= タイミング` を満たすもの**（= 最大のタイミング）で決まる
- * 旧の癖をそのまま移す（最大のタイミングが 5 分以下のときだけ強化。タイミングが [30, 10, 5] なら強化は働かない）。**既定を持たない**（運用値は未確定）。
+ * [tighten] は旧の『5 分前の場合はフィルタを強化』（`drop_threshold × 0.7`、単勝・ワイド・三連複の `*_max_over_market × 0.8`（正の値のみ））。
+ * **既定を持たない**。[TightenMode.OFF] のときは判定の数値を一切変えない。
  */
 data class SnapshotPolicy(
     val minutesBeforePost: List<Double>,
-    val tightenNear: Boolean,
+    val tighten: TightenMode,
 ) {
     init {
         require(minutesBeforePost.isNotEmpty()) { "評価のタイミングが空" }
@@ -95,9 +114,36 @@ data class SnapshotPolicy(
     /** 旧 `current_snapshot_minutes`: 大きい順に最初に `残り <= タイミング` を満たすもの。無ければ null（まだ評価の時間帯でない）。 */
     fun legacyCurrent(minutesToPost: Double): Double? = descending.firstOrNull { minutesToPost <= it }
 
-    fun isNear(minutesToPost: Double): Boolean = tightenNear && (legacyCurrent(minutesToPost)?.let { it <= NEAR_MINUTES } ?: false)
+    fun isNear(minutesToPost: Double): Boolean =
+        when (tighten) {
+            TightenMode.OFF -> false
+            TightenMode.LEGACY_QUIRK -> legacyCurrent(minutesToPost)?.let { it <= NEAR_MINUTES } ?: false
+            TightenMode.CORRECTED -> minutesToPost <= NEAR_MINUTES
+        }
 
     companion object {
         const val NEAR_MINUTES = 5.0
     }
+}
+
+/**
+ * 旧 `hit_rate_min_ev_schedule`（`priority_mode=hit_rate` のときの EV 閾値を発走までの残りで変える）。旧の分岐をそのまま移す:
+ * **残り >= 30 分 = far、>= 5 分 = mid、それ以下 = near**（ポーリング間隔の境界〈30 分超・5 分超〉とは違い、**ちょうど 30/5 分は上側**）。
+ * 3 つとも明示する（旧の `schedule.get("far", 固定の閾値)` のような欠けたキーの補完はしない）。`adaptive_relaxation` は含まない（未実装・未承認: G-24）。
+ */
+data class HitRateSchedule(
+    val far: Double,
+    val mid: Double,
+    val near: Double,
+) {
+    init {
+        require(far.isFinite() && mid.isFinite() && near.isFinite()) { "hit_rate_min_ev_schedule は有限な数" }
+    }
+
+    fun forMinutesToPost(minutesToPost: Double): Double =
+        when {
+            minutesToPost >= 30.0 -> far
+            minutesToPost >= 5.0 -> mid
+            else -> near
+        }
 }

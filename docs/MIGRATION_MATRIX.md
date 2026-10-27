@@ -281,7 +281,7 @@ P0 の順: F26/F04/F05/F06/F07（基礎純関数）→ F16（DB）→ F08/F09（
 | 無限ループ＋`time.sleep(interval)` | K | `BotRunOrchestrator`（開始〜終了の状態機械。最大稼働・窓の締切・停止要求・モードで必ず終わる）。待機は `Pacer` |
 | `get_polling_interval`（30 分超 / 5 分超 / それ以下で far/mid/near） | K | `PollingIntervals.forMinutesToPost`（分岐は同じ。間隔の運用値は環境変数で必須・既定なし: G-23） |
 | `main_snapshot_minutes` / `extra_snapshot_minutes`（通知タイミング） | K（方式は暫定） | `SnapshotPolicy`。旧の『最大のタイミングで決まる』癖はそのまま。重複通知の抑止は新しい仕様『各タイミング 1 回』（D-196。ユーザー確認 G-23） |
-| 5 分前の強化（`drop_threshold × 0.7`、`*_max_over_market × 0.8`） | K（opt-in） | `BOT_RUN_TIGHTEN_NEAR`（D-198）。数式は旧のまま |
+| 5 分前の強化（`drop_threshold × 0.7`、`*_max_over_market × 0.8`） | K（opt-in。修正後と旧互換を区別） | `BOT_RUN_TIGHTEN_NEAR=true`（修正後）/ `legacy`（旧の癖）/ `false`（D-198・D-205）。数式は旧のまま |
 | `snapshot_history_limit`（急落判定の履歴件数） | K | `BotRunConfig.snapshotHistoryLimit`（新しい順・既定なし） |
 | `provider.get_odds`（オッズ取得）・`odds_repo.save_snapshot`・`race_horses` の補完保存 | S | Windows エージェント＋ingest（T3.4/T3.5）が取込み、bot-run は DB のスナップショットを読むだけ（保存しない） |
 | オッズが取れない／古い（旧は鮮度の検査なし） | K（是正 R） | `OddsFreshness`。観測が `max_odds_age` を超えたら通知しない（RACE_CALENDAR_DESIGN §6.3）。旧は古いオッズでも通知し得た |
@@ -295,7 +295,7 @@ P0 の順: F26/F04/F05/F06/F07（基礎純関数）→ F16（DB）→ F08/F09（
 | 結果取得・払戻・`bets`／`race_evaluations` の決済（`result_fetched`・`settle_*`） | P（T3.9） | D-190。メモリの `result_fetched` は使わず、DB の `race_schedule.status` から再導出する設計 |
 | 自動再学習（`auto_retrain`・`retrain_interval_hours`・`_run_training_async`） | S | `ml-train` Job（T3.6-B）。bot-run は学習しない（学習と推論の分離。モデルの昇格はしない） |
 | `_maybe_cover_ingest`（取込の補完） | S | ingest の `plan`/backfill（T3.4/T3.5） |
-| `hit_rate_min_ev_schedule`（far/mid/near で EV 閾値） | N（ユーザー判断 G-24） | 状態・時間帯で閾値が変わる旧の挙動。固定の `hitRateMinEv` のまま。移植するなら承認 |
-| `adaptive_relaxation`（無通知が続くと EV 閾値を段階的に緩和） | N（ユーザー判断 G-24） | 状態を持つ調整で、再起動で巻き戻る旧の欠点もある。未承認の改善案として扱わず、移植の可否を確認する |
+| `hit_rate_min_ev_schedule`（far/mid/near で EV 閾値） | K（明示設定のみ。D-206） | `HitRateSchedule`。旧の式の境界（>=30 / >=5）まで一致。未設定は固定の `hitRateMinEv` |
+| `adaptive_relaxation`（無通知が続くと EV 閾値を段階的に緩和） | N（T3.9 のバックテスト後に再判断。G-24） | 実装・有効化しない。状態を持つ調整で、再起動で巻き戻る旧の欠点もある |
 | `status_log_interval_seconds`・`log_summary`・`log_no_signal_top`・`debug_rejections`（診断ログ） | P | 構造化ログ（`BOT_RUN_EVENT`）で代替。件数の集計ログは運用が必要としてから（Stage 5 の監視） |
 | `KeyboardInterrupt` での停止 | K | SIGTERM → `INTERRUPTED`（D-202） |

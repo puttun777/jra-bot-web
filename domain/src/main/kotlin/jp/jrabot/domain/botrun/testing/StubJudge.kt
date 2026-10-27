@@ -31,7 +31,7 @@ class StubJudge(
         raceId: RaceId,
         win: OddsSnapshot,
         now: Instant,
-        isNearTiming: Boolean,
+        minutesToPost: Double,
     ): RaceEvaluation {
         calls++
         onEvaluate(raceId)

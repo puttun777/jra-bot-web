@@ -1,5 +1,6 @@
 package jp.jrabot.bot
 
+import jp.jrabot.domain.botrun.TightenMode
 import jp.jrabot.domain.ml.pipeline.ProbabilityModelType
 import jp.jrabot.domain.ops.AppEnv
 import java.time.Duration
@@ -27,8 +28,11 @@ class BotRunSettingsParserTest {
         assertEquals(Duration.ofSeconds(60), c.lease.heartbeatInterval)
         assertEquals(Duration.ofSeconds(180), c.maxOddsAge)
         assertEquals(Duration.ofMinutes(840), c.maxRuntime)
-        assertEquals(listOf(5.0), c.snapshot.minutesBeforePost)
-        assertFalse(c.snapshot.tightenNear)
+        assertEquals(listOf(30.0, 5.0), c.snapshot.minutesBeforePost)
+        assertEquals(Duration.ofSeconds(900), c.staleClaimAfter)
+        assertEquals(Duration.ofSeconds(15), c.modeCheckInterval)
+        assertNull(c.hitRateSchedule)
+        assertEquals(TightenMode.OFF, c.snapshot.tighten)
         assertEquals(3, c.snapshotHistoryLimit)
         assertEquals(3, c.maxConsecutiveUnknown)
         assertNull(c.mlModelType)
@@ -72,7 +76,8 @@ class BotRunSettingsParserTest {
     fun `評価のタイミングは複数指定できる`() {
         val c = parse(ok + ("BOT_RUN_SNAPSHOT_MINUTES" to "10, 5,30")).run
         assertEquals(listOf(30.0, 10.0, 5.0), c.snapshot.descending)
-        assertTrue(parse(ok + ("BOT_RUN_TIGHTEN_NEAR" to "true")).run.snapshot.tightenNear)
+        assertEquals(TightenMode.CORRECTED, parse(ok + ("BOT_RUN_TIGHTEN_NEAR" to "true")).run.snapshot.tighten)
+        assertEquals(TightenMode.LEGACY_QUIRK, parse(ok + ("BOT_RUN_TIGHTEN_NEAR" to "legacy")).run.snapshot.tighten)
     }
 
     @Test
@@ -103,5 +108,45 @@ class BotRunSettingsParserTest {
         assertNull(BotSettings.from(minimal, BotTask.CALENDAR_CHECK).botRun)
         assertNull(BotSettings.from(minimal, BotTask.RECONCILE).botRun)
         assertNotNull(BotSettings.from(baseEnv("/dev/null"), BotTask.BOT_RUN).botRun)
+    }
+
+    @Test
+    fun `サンプル設定ファイルは暫定値であることが明記され 読み込めて テスト用の設定と一致する`() {
+        val text = java.io.File("config/bot-run.sample.env").readText()
+        assertTrue(text.contains("本番の運用値ではない") && text.contains("暫定"))
+        val env =
+            text.lines().filter { it.isNotBlank() && !it.startsWith("#") }.associate { it.substringBefore('=') to it.substringAfter('=') }
+        assertEquals(botRunEnv(), env)
+        parse(ok + env)
+    }
+
+    @Test
+    fun `hit_rate_min_ev_schedule は明示したときだけ有効 未設定は固定閾値のまま`() {
+        assertNull(parse().run.hitRateSchedule)
+        assertEquals(jp.jrabot.domain.decision.PriorityMode.EDGE, parse().run.decision.priorityMode)
+        val on =
+            ok +
+                mapOf(
+                    "BOT_RUN_PRIORITY_MODE" to "hit_rate",
+                    "BOT_RUN_HIT_RATE_MIN_EV" to "0.10",
+                    "BOT_RUN_HIT_RATE_MIN_EV_SCHEDULE" to "far=0.12, mid=0.10, near=0.08",
+                )
+        val c = parse(on).run
+        assertEquals(
+            jp.jrabot.domain.botrun
+                .HitRateSchedule(0.12, 0.10, 0.08),
+            c.hitRateSchedule,
+        )
+        assertEquals(0.10, c.decision.hitRateMinEv)
+        // edge のままでは使えない・3 つ揃っていない・数値でない
+        assertFailsWith<IllegalStateException> { parse(ok + ("BOT_RUN_HIT_RATE_MIN_EV_SCHEDULE" to "far=0.1,mid=0.1,near=0.1")) }
+        assertFailsWith<IllegalStateException> { parse(on + ("BOT_RUN_HIT_RATE_MIN_EV_SCHEDULE" to "far=0.1,mid=0.1")) }
+        assertFailsWith<IllegalStateException> { parse(on + ("BOT_RUN_HIT_RATE_MIN_EV_SCHEDULE" to "far=a,mid=0.1,near=0.1")) }
+        assertFailsWith<IllegalStateException> { parse(ok + ("BOT_RUN_PRIORITY_MODE" to "auto")) }
+    }
+
+    @Test
+    fun `5 分前の強化は false true legacy だけ`() {
+        assertFailsWith<IllegalStateException> { parse(ok + ("BOT_RUN_TIGHTEN_NEAR" to "yes")) }
     }
 }

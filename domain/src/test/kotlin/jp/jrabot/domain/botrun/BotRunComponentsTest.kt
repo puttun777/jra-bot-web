@@ -6,6 +6,7 @@ import jp.jrabot.domain.calendar.Cal
 import jp.jrabot.domain.calendar.EffectiveCalendar
 import jp.jrabot.domain.calendar.OverrideAction
 import jp.jrabot.domain.decision.DecisionReason
+import jp.jrabot.domain.decision.PriorityMode
 import jp.jrabot.domain.ml.features.InMemoryFeatureSource
 import jp.jrabot.domain.odds.ComboOddsRow
 import jp.jrabot.domain.odds.ComboOddsSnapshot
@@ -126,19 +127,32 @@ class BotRunComponentsTest {
     }
 
     @Test
-    fun `評価のタイミングの旧の癖 最大のタイミングで決まる 5 分以下のときだけ強化`() {
-        val onlyFive = SnapshotPolicy(listOf(5.0), tightenNear = true)
+    fun `5 分前の強化 旧の癖 LEGACY_QUIRK は最大のタイミングで決まり 30,5 では 5 分前でも強化されない`() {
+        val onlyFive = SnapshotPolicy(listOf(5.0), TightenMode.LEGACY_QUIRK)
         assertNull(onlyFive.legacyCurrent(5.1))
         assertEquals(5.0, onlyFive.legacyCurrent(5.0))
         assertTrue(onlyFive.isNear(4.0))
-        val multi = SnapshotPolicy(listOf(5.0, 30.0, 10.0), tightenNear = true)
+        val multi = SnapshotPolicy(listOf(5.0, 30.0, 10.0), TightenMode.LEGACY_QUIRK)
         assertEquals(listOf(30.0, 10.0, 5.0), multi.descending)
         assertEquals(30.0, multi.legacyCurrent(3.0)) // 旧実装: 大きい順の最初の一致 = 30
-        assertFalse(multi.isNear(3.0)) // よって [30,10,5] では強化は働かない（旧の癖をそのまま移す）
-        assertFalse(SnapshotPolicy(listOf(5.0), tightenNear = false).isNear(4.0))
-        assertFailsWith<IllegalArgumentException> { SnapshotPolicy(emptyList(), false) }
-        assertFailsWith<IllegalArgumentException> { SnapshotPolicy(listOf(5.0, 5.0), false) }
-        assertFailsWith<IllegalArgumentException> { SnapshotPolicy(listOf(0.0), false) }
+        assertFalse(multi.isNear(3.0))
+        val thirtyFive = SnapshotPolicy(listOf(30.0, 5.0), TightenMode.LEGACY_QUIRK)
+        assertFalse(thirtyFive.isNear(5.0), "30,5 の 5 分前: 30 が先に一致するので旧実装では強化されない（確認済みの癖）")
+        assertFalse(thirtyFive.isNear(4.0))
+    }
+
+    @Test
+    fun `5 分前の強化 CORRECTED は 30,5 の 5 分前にも働き OFF は一切働かない 旧の癖とは意図的に違う`() {
+        val p = SnapshotPolicy(listOf(30.0, 5.0), TightenMode.CORRECTED)
+        assertFalse(p.isNear(5.01))
+        assertTrue(p.isNear(5.0))
+        assertTrue(p.isNear(0.5))
+        assertFalse(p.isNear(29.0)) // 30 分前の評価は強化しない
+        assertFalse(SnapshotPolicy(listOf(30.0, 5.0), TightenMode.OFF).isNear(1.0))
+        assertTrue(SnapshotPolicy(listOf(5.0), TightenMode.CORRECTED).isNear(4.0))
+        assertFailsWith<IllegalArgumentException> { SnapshotPolicy(emptyList(), TightenMode.OFF) }
+        assertFailsWith<IllegalArgumentException> { SnapshotPolicy(listOf(5.0, 5.0), TightenMode.OFF) }
+        assertFailsWith<IllegalArgumentException> { SnapshotPolicy(listOf(0.0), TightenMode.OFF) }
     }
 
     @Test
@@ -159,8 +173,10 @@ class BotRunComponentsTest {
         combos: InMemoryComboOdds = InMemoryComboOdds(),
     ) = RaceEvaluator(config, odds, combos, InMemoryFeatureSource(), MlRunContext.DISABLED)
 
-    @Test
-    fun `5 分前の強化は 急落の閾値を 0,7 倍 正の over_market 上限を 0,8 倍にする 0 以下は変えない`() {
+    private fun tightenCfg(
+        mode: TightenMode,
+        timings: List<Double> = listOf(30.0, 5.0),
+    ): RaceEvaluator {
         val base = Kit.defaultConfig()
         val d =
             base.decision.copy(
@@ -168,13 +184,66 @@ class BotRunComponentsTest {
                 winMaxOverMarket = 2.5,
                 combo = base.decision.combo.copy(wideMaxOverMarket = 2.0, sanrenpukuMaxOverMarket = 0.0),
             )
-        val e = judge(base.copy(decision = d))
-        val near = e.decisionConfig(true)
+        return judge(base.copy(decision = d, snapshot = SnapshotPolicy(timings, mode)))
+    }
+
+    @Test
+    fun `強化が効くと 急落の閾値は 0,7 倍 正の over_market 上限は 0,8 倍 0 以下は変えない OFF は設定を一切変えない`() {
+        val e = tightenCfg(TightenMode.CORRECTED)
+        val near = e.decisionConfig(5.0)
         assertEquals(0.2 * 0.7, near.dropThreshold, 1e-15)
         assertEquals(2.5 * 0.8, near.winMaxOverMarket!!, 1e-15)
         assertEquals(2.0 * 0.8, near.combo.wideMaxOverMarket, 1e-15)
         assertEquals(0.0, near.combo.sanrenpukuMaxOverMarket, 0.0)
-        assertEquals(d, e.decisionConfig(false))
+        assertEquals(e.decisionConfig(30.0), tightenCfg(TightenMode.OFF).decisionConfig(30.0)) // 30 分前は強化されない
+        val off = tightenCfg(TightenMode.OFF)
+        assertEquals(off.decisionConfig(30.0), off.decisionConfig(1.0), "OFF なら 5 分前でも従来の数値のまま")
+        // 旧互換モードの 30,5 は 5 分前でも強化されない（癖）。5 だけなら強化される
+        assertEquals(0.2, tightenCfg(TightenMode.LEGACY_QUIRK).decisionConfig(5.0).dropThreshold, 0.0)
+        assertEquals(0.2 * 0.7, tightenCfg(TightenMode.LEGACY_QUIRK, listOf(5.0)).decisionConfig(5.0).dropThreshold, 1e-15)
+    }
+
+    // 旧 `run_daemon` の `hit_rate_min_ev_schedule` の式（原文のまま Python で評価した期待値。run_daemon はスクリプトで import できないため、式の抜粋で照合）:
+    //   base = far if mins >= 30 else (mid if mins >= 5 else near)
+    private val legacyScheduleTable =
+        listOf(120.0 to 0.12, 30.0 to 0.12, 29.999 to 0.10, 10.0 to 0.10, 5.0 to 0.10, 4.999 to 0.07, 0.5 to 0.07, 0.0 to 0.07)
+
+    @Test
+    fun `hit_rate_min_ev_schedule 旧の式と境界まで一致する 30 分ちょうどは far 5 分ちょうどは mid`() {
+        val s = HitRateSchedule(far = 0.12, mid = 0.10, near = 0.07)
+        for ((mins, expected) in legacyScheduleTable) assertEquals(expected, s.forMinutesToPost(mins), 0.0, "mins=$mins")
+    }
+
+    @Test
+    fun `hit_rate_min_ev_schedule は明示したときだけ 未設定は固定の閾値のまま priority が hit_rate のときだけ`() {
+        val base = Kit.defaultConfig()
+        val hit = base.decision.copy(priorityMode = PriorityMode.HIT_RATE, hitRateMinEv = 0.09)
+        val sched = HitRateSchedule(0.12, 0.10, 0.07)
+        // 未設定: 固定の 0.09 のまま
+        val fixed = judge(base.copy(decision = hit))
+        for (m in listOf(60.0, 20.0, 3.0)) assertEquals(0.09, fixed.decisionConfig(m).hitRateMinEv)
+        // 設定あり + hit_rate: 残りで変わる
+        val on = judge(base.copy(decision = hit, hitRateSchedule = sched))
+        assertEquals(0.12, on.decisionConfig(45.0).hitRateMinEv)
+        assertEquals(0.10, on.decisionConfig(10.0).hitRateMinEv)
+        assertEquals(0.07, on.decisionConfig(2.0).hitRateMinEv)
+        // 他の数値は変えない
+        assertEquals(hit.copy(hitRateMinEv = 0.07), on.decisionConfig(2.0))
+        // priority が edge なら、設定があっても何も変えない
+        val edge = judge(base.copy(hitRateSchedule = sched))
+        assertEquals(base.decision, edge.decisionConfig(2.0))
+    }
+
+    @Test
+    fun `hit_rate の閾値は 判定の除外に使われ 記録される閾値も実際に使った値`() {
+        val odds = InMemoryOdds()
+        val win = Kit.snapshot(race1, Cal.jst(Cal.DATE, 9, 50))
+        odds.add(win)
+        val base = Kit.defaultConfig()
+        val hit = base.decision.copy(priorityMode = PriorityMode.HIT_RATE, hitRateMinEv = 0.5, evThreshold = -9.0)
+        val cfg = base.copy(decision = hit, hitRateSchedule = HitRateSchedule(0.3, 0.2, 0.1))
+        val ev = judge(cfg, odds).evaluate(t, race1, win, Cal.jst(Cal.DATE, 9, 50, 10), 4.9)
+        assertEquals(0.1, ev.evThresholdUsed)
     }
 
     @Test
@@ -212,7 +281,7 @@ class BotRunComponentsTest {
 
         fun reasons(limit: Int) =
             judge(base.copy(decision = cfg, snapshotHistoryLimit = limit), odds)
-                .evaluate(t, race1, odds.latest(t, race1, Market.WIN)!!, now, false)
+                .evaluate(t, race1, odds.latest(t, race1, Market.WIN)!!, now, 3.0)
                 .result.rejections
                 .filter { it.umaban == 2 }
                 .map { it.reason }
@@ -230,13 +299,13 @@ class BotRunComponentsTest {
         odds.add(win)
         val now = Cal.jst(Cal.DATE, 9, 50, 30)
         val e = judge(odds = odds, combos = combos)
-        assertFalse(e.evaluate(t, race1, win, now, false).comboRealOdds) // 組み合わせオッズが無い
+        assertFalse(e.evaluate(t, race1, win, now, 3.0).comboRealOdds) // 組み合わせオッズが無い
         combos.add(ComboOddsSnapshot(t, race1, Market.WIDE, Cal.jst(Cal.DATE, 9, 40), listOf(ComboOddsRow("01-02", Odds.ofOrNull(3.0)!!, Odds.ofOrNull(4.0)))))
-        assertFalse(e.evaluate(t, race1, win, now, false).comboRealOdds) // 10 分前 = 古い
+        assertFalse(e.evaluate(t, race1, win, now, 3.0).comboRealOdds) // 10 分前 = 古い
         combos.add(ComboOddsSnapshot(t, race1, Market.WIDE, Cal.jst(Cal.DATE, 9, 49), listOf(ComboOddsRow("01-02", Odds.ofOrNull(3.0)!!, Odds.ofOrNull(4.0)))))
-        assertTrue(e.evaluate(t, race1, win, now, false).comboRealOdds)
+        assertTrue(e.evaluate(t, race1, win, now, 3.0).comboRealOdds)
         combos.add(ComboOddsSnapshot(t, race1, Market.SANRENPUKU, Cal.jst(Cal.DATE, 9, 49), listOf(ComboOddsRow("01-02-03", Odds.ofOrNull(12.0)!!))))
-        assertTrue(e.evaluate(t, race1, win, now, false).comboRealOdds)
+        assertTrue(e.evaluate(t, race1, win, now, 3.0).comboRealOdds)
     }
 
     @Test
@@ -252,7 +321,7 @@ class BotRunComponentsTest {
         val odds = InMemoryOdds()
         val win = Kit.snapshot(race1, Cal.jst(Cal.DATE, 9, 50))
         odds.add(win)
-        val ev = judge(odds = odds).evaluate(t, race1, win, Cal.jst(Cal.DATE, 9, 50, 10), false)
+        val ev = judge(odds = odds).evaluate(t, race1, win, Cal.jst(Cal.DATE, 9, 50, 10), 4.9)
         assertEquals("market", ev.modelTypeUsed)
         assertNull(ev.modelId)
         assertEquals(jp.jrabot.domain.ml.pipeline.FallbackReason.ML_DISABLED, ev.fallbackReason)

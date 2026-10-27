@@ -106,7 +106,7 @@ class RaceCycleProcessor(
             OddsFreshness.MISSING -> return RaceStep.NoOdds
         }
 
-        val evaluation = evaluator.evaluate(tenantId, raceId, win, now, config.snapshot.isNear(minutesToPost))
+        val evaluation = evaluator.evaluate(tenantId, raceId, win, now, minutesToPost)
         evaluations.insertIfAbsent(record(evaluation))
         val recorded = recordSignals(raceId, evaluation)
 
@@ -222,7 +222,7 @@ class RaceCycleProcessor(
             fallbackReason = e.fallbackReason?.name,
             betTypesJson = d.betTypes?.joinToString(",", "[", "]") { "\"${it.label}\"" },
             priorityMode = d.priorityMode.name.lowercase(),
-            evThreshold = d.evThreshold,
+            evThreshold = e.evThresholdUsed ?: d.evThreshold,
             winOddsMax = d.winOddsMax,
             winProbMin = d.winProbMin,
             winRatioMin = d.winRatioMin,

@@ -415,3 +415,5 @@ Scheduler は「固定間隔で `app --task=calendar-check` を起動するだ�
 | 最大稼働・DB 障害（一時的/継続/非一時的） | 完了 | `BotRunLifecycleTest`、`BotRunLeaseTest` |
 | reconcile（INCOMPLETE の回復・結果欠損の補完） | **未実装（T3.9）** | — |
 
+### 13.3 ループの周期（D-207 で修正）
+運用モード・停止要求・heartbeat・最大稼働は `modeCheckInterval`（15 秒以下）ごと、評価サイクルは `nextCycleAt`（ポーリング間隔・評価タイミングの境界）ごと。UNKNOWN の 3 回連続は最初の観測から 30 秒（45 秒以内）で `STOPPED_BY_MODE`（exit 75）。STOPPED は 15 秒以内。
