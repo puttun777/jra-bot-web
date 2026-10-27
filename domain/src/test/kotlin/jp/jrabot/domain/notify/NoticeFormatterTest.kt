@@ -17,19 +17,47 @@ class NoticeFormatterTest {
         val text = NoticeFormatter.formatSingle(race, win())
         assertTrue(text.startsWith("【JRA EV検知】\n**合成 11R** 合成記念\n━━━━━━━━━━━━━━━━\n"))
         for (expected in listOf(
-            "🎯 **賭式：単勝**", "🐴 **馬番：3**", "💰 オッズ：**4.5**", "📊 推定勝率：30.00%", "📈 期待値（EV）：**35.0%**",
-            "📉 市場確率：22.22%", "📊 倍率（p/mkt）：1.35", "💰 期待回収：1.35x", "🔍 確率ソース：ml:alpha",
-            "📋 特徴量カバレッジ：80.00% (master✓) (past_runs✓, n=5)", "⚙️ 動的β：0.456", "💵 推奨投資額：**2.0点**",
+            "🎯 **賭式：単勝**",
+            "🐴 **馬番：3**",
+            "💰 オッズ：**4.5**",
+            "📊 推定勝率：30.00%",
+            "📈 期待値（EV）：**35.0%**",
+            "📉 市場確率：22.22%",
+            "📊 倍率（p/mkt）：1.35",
+            "💰 期待回収：1.35x",
+            "🔍 確率ソース：ml:alpha",
+            "📋 特徴量カバレッジ：80.00% (master✓) (past_runs✓, n=5)",
+            "⚙️ 動的β：0.456",
+            "💵 推奨投資額：**2.0点**",
             "💡 理由：馬名=合成一号",
-        )) assertTrue(text.contains(expected), "含まれる: $expected\n$text")
+        )) {
+            assertTrue(text.contains(expected), "含まれる: $expected\n$text")
+        }
         assertTrue(text.endsWith("━━━━━━━━━━━━━━━━"))
     }
 
     @Test
     fun `欠損値は 0 で埋めず行を出さない`() {
-        val sparse = win().copy(pMkt = null, ratio = null, expectedReturn = null, probSource = null, coverage = null, betAmount = null, bundle = null, reason = null, odds = 0.0, prob = 0.0)
+        val sparse =
+            win().copy(
+                pMkt = null,
+                ratio = null,
+                expectedReturn = null,
+                probSource = null,
+                coverage = null,
+                betAmount = null,
+                bundle = null,
+                reason = null,
+                odds = 0.0,
+                prob = 0.0,
+            )
         val text = NoticeFormatter.formatSingle(race, sparse)
-        assertFalse(text.contains("市場確率") || text.contains("倍率") || text.contains("期待回収") || text.contains("確率ソース") || text.contains("カバレッジ") || text.contains("推奨投資額") || text.contains("投資戦略"))
+        assertFalse(
+            text.contains(
+                "市場確率",
+            ) || text.contains("倍率") || text.contains("期待回収") || text.contains("確率ソース") || text.contains("カバレッジ") || text.contains("推奨投資額") ||
+                text.contains("投資戦略"),
+        )
         assertTrue(text.contains("💡 理由：\n"))
     }
 
@@ -60,12 +88,15 @@ class NoticeFormatterTest {
     fun `単勝 ワイド 三連複を統合し 推奨額は最大 買い目は重複除外で EV 降順`() {
         val wide =
             strategy(
-                "ワイド", 3.0, 1.1,
+                "ワイド",
+                3.0,
+                1.1,
                 tickets = listOf(ticket("01-02", 0.10), ticket("[BOX]01-02", 0.15), ticket("01-03", 0.30, stake = null), ticket("02-03", 0.20, "12.3（推定）")),
             )
         val tri = strategy("三連複", 1.5, 0.9, tickets = listOf(ticket("01-02-03", 0.5, "55.5", 0.01)))
         val s1 = win(umaban = 1, bundle = bundle(strategy("単勝", 2.0, 0.7), wide, tri, best = BestView("ワイド", 0.3, 3.0)), betType = "ワイド")
-        val s2 = win(umaban = 2, bundle = bundle(strategy("単勝", 2.5, 0.6), wide.copy(suggestedBet = 4.0), tri, best = BestView("三連複", 0.5, 1.5)), betType = "三連複")
+        val s2 =
+            win(umaban = 2, bundle = bundle(strategy("単勝", 2.5, 0.6), wide.copy(suggestedBet = 4.0), tri, best = BestView("三連複", 0.5, 1.5)), betType = "三連複")
         val text = NoticeFormatter.formatGrouped(race, listOf(s1, s2))
         assertTrue(text.contains("**検知シグナル: 2件**"))
         assertTrue(text.contains("**単勝:**\n  推奨投資額：**2.5点**"), "推奨額は最大（合算しない）")

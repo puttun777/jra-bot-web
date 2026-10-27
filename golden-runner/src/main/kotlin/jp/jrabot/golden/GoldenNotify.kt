@@ -45,6 +45,7 @@ internal object GoldenNotify {
     fun parseRetryAfter(a: JsonNode): Any {
         val body = a.get("body")?.takeUnless { it.isNull }?.stringValue()
         val headers = a.get("headers")
+
         fun header(name: String): String? = headers?.propertyNames()?.firstOrNull { it.equals(name, ignoreCase = true) }?.let { headers.get(it).stringValue() }
         return RateLimitWait.parseSeconds(body, header("Retry-After"), header("X-RateLimit-Reset-After"))
     }
@@ -52,7 +53,20 @@ internal object GoldenNotify {
     /** 旧 `_deduplicate_tickets`（辞書のまま返す）。`kumi` が無い/空は空文字、`ev` が無いのは 0.0。 */
     fun dedupeTickets(a: JsonNode): Any {
         val nodes = a.get("tickets").values().toList()
-        val views = nodes.mapIndexed { i, t -> TicketView(t.get("kumi")?.takeUnless { it.isNull }?.stringValue().orEmpty(), i.toString(), 0.0, num(t.get("ev")) ?: 0.0, null) }
+        val views =
+            nodes.mapIndexed { i, t ->
+                TicketView(
+                    t
+                        .get("kumi")
+                        ?.takeUnless { it.isNull }
+                        ?.stringValue()
+                        .orEmpty(),
+                    i.toString(),
+                    0.0,
+                    num(t.get("ev")) ?: 0.0,
+                    null,
+                )
+            }
         return NoticeTickets.deduplicated(views).map { nodes[it.oddsText.toInt()] }
     }
 
@@ -87,7 +101,8 @@ internal object GoldenNotify {
 
     // ---- 入力 JSON（旧実装の辞書）→ 表示モデル ----------------------------------------------------------------------
 
-    private fun mention(a: JsonNode): MentionPolicy = a.get("mention_user_id")?.takeUnless { it.isNull }?.let { MentionPolicy.forUser(it.stringValue()) } ?: MentionPolicy.NONE
+    private fun mention(a: JsonNode): MentionPolicy =
+        a.get("mention_user_id")?.takeUnless { it.isNull }?.let { MentionPolicy.forUser(it.stringValue()) } ?: MentionPolicy.NONE
 
     /**
      * 旧 `send_signals_grouped` の欠陥 N2 の再現条件: 関数内の `import logging; logger = …` は EV 検算が不一致のときの分岐にしかなく、`logger` は関数全体で局所変数なので、
@@ -105,7 +120,18 @@ internal object GoldenNotify {
         raised: String?,
     ): Any {
         val allowed = obj("parse" to emptyList<Any>()).also { o -> mention.userId?.let { o.set("users", arr(listOf(it))) } }
-        return obj("returned" to if (raised == null) true else null, "raised" to raised, "sent" to listOf(obj("content" to content, "username" to "JRA EV Bot", "allowed_mentions" to allowed)))
+        return obj(
+            "returned" to
+                if (raised ==
+                    null
+                ) {
+                    true
+                } else {
+                    null
+                },
+            "raised" to raised,
+            "sent" to listOf(obj("content" to content, "username" to "JRA EV Bot", "allowed_mentions" to allowed)),
+        )
     }
 
     private fun race(n: JsonNode): RaceLabel =
@@ -116,7 +142,8 @@ internal object GoldenNotify {
         )
 
     /** JSON の数値（整数・小数どちらも）を Double に。null/欠損は null。 */
-    private fun num(n: JsonNode?): Double? = n?.takeUnless { it.isNull }?.let { if (it.isNumber) it.doubleValue() else throw UnsupportedGoldenCall("数値でない: $it") }
+    private fun num(n: JsonNode?): Double? =
+        n?.takeUnless { it.isNull }?.let { if (it.isNumber) it.doubleValue() else throw UnsupportedGoldenCall("数値でない: $it") }
 
     private fun str(n: JsonNode?): String? = n?.takeUnless { it.isNull }?.stringValue()
 
@@ -135,6 +162,7 @@ internal object GoldenNotify {
             } else {
                 "三連複"
             }
+
         fun req(name: String) = num(s.get(name)) ?: if (single) throw UnsupportedGoldenCall("必須キー $name が無い") else 0.0
         return SignalView(
             betType = betType,
@@ -191,7 +219,12 @@ internal object GoldenNotify {
             prob = num(s.get("prob")) ?: 0.0,
             ev = num(s.get("ev")) ?: 0.0,
             note = str(s.get("note")),
-            tickets = s.get("tickets")?.values()?.map(::ticket).orEmpty(),
+            tickets =
+                s
+                    .get("tickets")
+                    ?.values()
+                    ?.map(::ticket)
+                    .orEmpty(),
             kelly =
                 kellyRaw?.let {
                     KellyView(

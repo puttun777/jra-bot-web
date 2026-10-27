@@ -37,7 +37,7 @@ for t in db-migration bot ingest dashboard; do docker build --target $t --build-
 python3 -m tools.release.image_smoke --git-sha $SHA --report-dir out   # 起動スモーク（Docker と mysql:8.4 が必要。合成データのみ）
 python3 -m tools.release.cli preview --git-sha $SHA --built-at "$(date -u -d @$(git show -s --format=%ct HEAD) +%FT%TZ)" --local-images out/images-local.json --out out/manifest-preview.json
 ```
-**ml-train イメージは未実装**（Stage 3-F2 / T3.6-B）。bot の業務処理はスタブで、イメージが動くことは Bot の機能が完成した証明ではない。手順・設計の詳細は `docs/CI_AND_IMAGES.md`、判断は D-093〜D-096。
+Discord 通知（T3.7）は `:domain` の `notify` と `:bot` の `discord` に実装済みだが、**合成データと Fake サーバでの検証のみ**（実 Discord・実データへは送らない。COMP-4 まで）。bot の業務処理はスタブで、イメージが動くことは Bot の機能が完成した証明ではない。手順・設計の詳細は `docs/CI_AND_IMAGES.md`、判断は D-093〜D-096。
 
 ## release-manifest（ドライランまで）
 `docs/schemas/release-manifest.v1.json`（本番）と `release-manifest-preview.v1.json`（ドライラン）。`tools/release` が生成・検証する（`python3 -m tools.release.cli validate --kind preview|production FILE`）。プレビュー（`manifest-preview.json`）は `deployable:false` で、レジストリ digest が無く、**本番用として拒否される**。本番の `release-manifest.json` はレジストリへの push 後の実 digest・ml-train・検証済みのロールバック範囲が揃うまで生成できない（第5段階）。単体テスト: `python3 -m tools.ci.run_tests --min-tests 100`。

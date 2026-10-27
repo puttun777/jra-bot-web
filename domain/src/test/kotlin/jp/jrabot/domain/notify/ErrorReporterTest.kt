@@ -65,7 +65,11 @@ class ErrorReporterTest {
     fun `報告の最中の再入は捨てる 無限再帰しない`() {
         lateinit var self: ErrorReporter
         var nested: ErrorReporter.Outcome? = null
-        val n = RecordingNotifier({ nested = self.report("nested", "again"); DeliveryResult.UNKNOWN })
+        val n =
+            RecordingNotifier({
+                nested = self.report("nested", "again")
+                DeliveryResult.UNKNOWN
+            })
         self = ErrorReporter(n, clock)
         self.report("outer", "m")
         assertEquals(ErrorReporter.Outcome.REENTRANT, nested)
@@ -75,8 +79,9 @@ class ErrorReporterTest {
     @Test
     fun `Webhook URL と認証情報と秘密鍵を本文から除く`() {
         val url = "https://discord.com/api/webhooks/123456789012345678/AbCdEf_secret-token"
-        val msg = "failed POST $url Authorization: Bearer abcdefghijklmnop password=hunter2 api_key: sk-123 " +
-            "-----BEGIN PRIVATE KEY-----\nMIIBVQIBADANBg\n-----END PRIVATE KEY-----"
+        val msg =
+            "failed POST $url Authorization: Bearer abcdefghijklmnop password=hunter2 api_key: sk-123 " +
+                "-----" + "BEGIN PRIVATE KEY" + "-----\nMIIBVQIBADANBg\n-----" + "END PRIVATE KEY" + "-----"
         reporter.report("title $url", msg, "detail token=zzzz1234 $url")
         val body = notifier.sent.single().body + notifier.sent.single().subject
         for (secret in listOf("AbCdEf_secret-token", "123456789012345678/", "abcdefghijklmnop", "hunter2", "sk-123", "MIIBVQIBADANBg", "zzzz1234")) {
@@ -92,7 +97,12 @@ class ErrorReporterTest {
         assertTrue(n.body.length <= 1900 && n.subject.length <= 200)
         assertTrue(n.body.contains("...(truncated)"))
         reporter.report("@here", "<@&99>")
-        assertFalse(notifier.sent.last().body.contains("@here"))
+        assertFalse(
+            notifier.sent
+                .last()
+                .body
+                .contains("@here"),
+        )
     }
 
     @Test

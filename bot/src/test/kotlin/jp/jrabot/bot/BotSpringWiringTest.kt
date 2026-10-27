@@ -89,6 +89,31 @@ class BotSpringWiringTest {
     }
 
     @Test
+    fun `Discord 通知の Bean が配線され、設定が無ければ宛先なし（送らない）`() {
+        start(runtime()).use { ctx ->
+            val notifier = ctx.getBean(jp.jrabot.domain.notify.Notifier::class.java)
+            assertIs<jp.jrabot.bot.discord.DiscordNotifier>(notifier)
+            assertFalse(notifier.canDeliver(jp.jrabot.domain.notify.NotificationChannel.SIGNAL))
+            assertFalse(notifier.canDeliver(jp.jrabot.domain.notify.NotificationChannel.ERROR))
+            assertNotNull(ctx.getBean(jp.jrabot.domain.notify.SignalNotificationDispatcher::class.java))
+            assertNotNull(ctx.getBean(jp.jrabot.domain.notify.ErrorReporter::class.java))
+            assertFalse(ctx.getBean(jp.jrabot.bot.discord.StopFlag::class.java).isRequested())
+        }
+    }
+
+    @Test
+    fun `Discord の URL が設定されていれば bot-run の Notifier は送信可能になる（送信はしない）`() {
+        val env = baseEnv(ops.toString()) + ("DISCORD_WEBHOOK_URL" to "https://discord.com/api/webhooks/123456789012345678/AbC-dEf_123")
+        val command = (BotArgsParser.parse(args("bot-run")) as ParsedArgs.Valid).command
+        val rt = BotRuntime(command, BotSettings.from(env, command.task), FixedMode(OpsMode.NORMAL))
+        start(rt).use { ctx ->
+            val notifier = ctx.getBean(jp.jrabot.domain.notify.Notifier::class.java)
+            assertTrue(notifier.canDeliver(jp.jrabot.domain.notify.NotificationChannel.SIGNAL))
+            assertFalse(notifier.canDeliver(jp.jrabot.domain.notify.NotificationChannel.ERROR))
+        }
+    }
+
+    @Test
     fun `コンテキストの初期化では DB に接続しない（プールは最初の接続まで起動しない）`() {
         start(runtime()).use { ctx ->
             val ds = ctx.getBean(javax.sql.DataSource::class.java) as HikariDataSource

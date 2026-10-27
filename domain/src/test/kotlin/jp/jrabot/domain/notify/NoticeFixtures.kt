@@ -92,7 +92,21 @@ internal class InMemorySignalRepository : SignalRepository {
     ): SignalId {
         val id = nextId++
         rows[tenant.value to id] =
-            Signal(tenant, SignalId.of(id), RaceId.parse(raceId), market, HorseNumber.of(umaban), Instant.parse("2026-01-04T05:00:00Z"), Odds.of(4.5), Probability.of(0.3), 0.35, false, 2.0, "ml:alpha", state)
+            Signal(
+                tenant,
+                SignalId.of(id),
+                RaceId.parse(raceId),
+                market,
+                HorseNumber.of(umaban),
+                Instant.parse("2026-01-04T05:00:00Z"),
+                Odds.of(4.5),
+                Probability.of(0.3),
+                0.35,
+                false,
+                2.0,
+                "ml:alpha",
+                state,
+            )
         return SignalId.of(id)
     }
 
@@ -118,7 +132,12 @@ internal class InMemorySignalRepository : SignalRepository {
     override fun listUnsent(
         tenantId: TenantId,
         limit: Int,
-    ): List<Signal> = rows.filterKeys { it.first == tenantId.value }.values.filter { it.state == NotificationState.UNSENT }.take(limit)
+    ): List<Signal> =
+        rows
+            .filterKeys { it.first == tenantId.value }
+            .values
+            .filter { it.state == NotificationState.UNSENT }
+            .take(limit)
 
     @Synchronized
     override fun listClaimedBefore(

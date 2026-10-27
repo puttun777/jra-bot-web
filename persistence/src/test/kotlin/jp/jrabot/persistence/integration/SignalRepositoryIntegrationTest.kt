@@ -160,6 +160,22 @@ class SignalRepositoryIntegrationTest {
     }
 
     @Test
+    fun `listClaimedBefore は古い CLAIMED だけを返し、UNSENT・SENT・SEND_UNKNOWN・他テナントを含めない`() {
+        val ids = (1..4).map { checkNotNull(record(it).signal.id) }
+        val other = checkNotNull(record(1, T2).signal.id)
+        for (id in ids.take(3)) assertTrue(h.signals.claim(T1, id))
+        assertTrue(h.signals.claim(T2, other))
+        assertTrue(h.signals.markSent(T1, ids[1]))
+        assertTrue(h.signals.markSendUnknown(T1, ids[2]))
+        val future = Instant.parse("2026-10-23T04:00:00Z") // 時計は 03:00 に claim
+        assertEquals(listOf(ids[0]), h.signals.listClaimedBefore(T1, future, 10).map { it.id })
+        assertEquals(listOf(other), h.signals.listClaimedBefore(T2, future, 10).map { it.id })
+        assertEquals(emptyList(), h.signals.listClaimedBefore(T1, Instant.parse("2026-10-23T02:00:00Z"), 10), "新しい claim は対象外")
+        assertFailsWith<IllegalArgumentException> { h.signals.listClaimedBefore(T1, future, 0) }
+        assertFailsWith<IllegalArgumentException> { h.signals.listClaimedBefore(T1, future, 1001) }
+    }
+
+    @Test
     fun `新規の Signal は UNSENT 以外では保存できない`() {
         assertFailsWith<IllegalArgumentException> { h.signals.insertIfAbsent(Fixtures.signal().copy(state = NotificationState.SENT)) }
     }

@@ -38,9 +38,14 @@ class HorseReasonTest {
         s.putHorse(
             tenant,
             HorseMaster(
-                "2020100001", LocalDate.of(2022, 4, 1), "2",
-                ChakuTable(listOf(listOf(2L, 1L, 1L, 0L, 0L, 1L))), ChakuTable(listOf(listOf(1L, 1L, 0L))), ChakuTable(listOf(listOf(3L, 0L, 1L))),
-                listOf("父サンプル", "母サンプル", "祖父サンプル", "祖母サンプル"), masterUpdatedAt,
+                "2020100001",
+                LocalDate.of(2022, 4, 1),
+                "2",
+                ChakuTable(listOf(listOf(2L, 1L, 1L, 0L, 0L, 1L))),
+                ChakuTable(listOf(listOf(1L, 1L, 0L))),
+                ChakuTable(listOf(listOf(3L, 0L, 1L))),
+                listOf("父サンプル", "母サンプル", "祖父サンプル", "祖母サンプル"),
+                masterUpdatedAt,
             ),
         )
         listOf(
@@ -86,10 +91,16 @@ class HorseReasonTest {
     @Test
     fun `point-in-time はレース後に更新された馬マスタの累積値を使わない`() {
         val updatedAfter = Instant.parse("2026-01-05T00:00:00Z")
-        val pit = ReasonFormatter.format(PointInTimeFeatureBuilder(source(masterUpdatedAt = updatedAfter)).reasonFacts(FeatureRequest(tenant, raceId, 3, asOf), "合成一号"))
+        val pit =
+            ReasonFormatter.format(
+                PointInTimeFeatureBuilder(source(masterUpdatedAt = updatedAfter)).reasonFacts(FeatureRequest(tenant, raceId, 3, asOf), "合成一号"),
+            )
         assertFalse(pit.contains("適性") || pit.contains("脚質傾向"), "累積値は空（0% などの架空の値を出さない）: $pit")
         assertTrue(pit.contains("血統=父サンプル") && pit.contains("近走3走"), "不変の血統と過去走は使える")
-        val legacy = ReasonFormatter.format(LegacyFeatureBuilder(source(masterUpdatedAt = updatedAfter), tenant, LocalDateTime.of(2026, 1, 6, 0, 0)).reasonFacts(raceId, 3, "合成一号"))
+        val legacy =
+            ReasonFormatter.format(
+                LegacyFeatureBuilder(source(masterUpdatedAt = updatedAfter), tenant, LocalDateTime.of(2026, 1, 6, 0, 0)).reasonFacts(raceId, 3, "合成一号"),
+            )
         assertTrue(legacy.contains("適性(3着内率)"), "旧互換は現在の馬マスタを使う（比較用）")
     }
 

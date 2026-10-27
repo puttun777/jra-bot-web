@@ -29,7 +29,17 @@ class MentionPolicyTest {
 
     @Test
     fun `不正な ID は拒否し値をメッセージに出さない`() {
-        for (bad in listOf("abc", "1234", "12345678901234567890123", "＠１２３４５６７８９０１２３４５６７８", "123456789012345678 ", "@everyone", "<@123456789012345678>", "12345678901234567a", "-12345678901234567")) {
+        for (bad in listOf(
+            "abc",
+            "1234",
+            "12345678901234567890123",
+            "＠１２３４５６７８９０１２３４５６７８",
+            "123456789012345678 ",
+            "@everyone",
+            "<@123456789012345678>",
+            "12345678901234567a",
+            "-12345678901234567",
+        )) {
             val e = assertFailsWith<IllegalArgumentException>(bad) { MentionPolicy.forUser(bad) }
             assertFalse(e.message.orEmpty().contains(bad.trim()) && bad.length > 3, "値をメッセージに含めない")
         }

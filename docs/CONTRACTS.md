@@ -1,6 +1,6 @@
 # CONTRACTS（web ⇔ infra 受け渡し契約・正本は本ファイル）
 
-状態: **0.4.10（第3段階 / T3.6-B: ①`export-dataset` の引数（`--dataset-id` `--from` `--to` `--feature-schema` 必須ほか）と `MODEL_STORE_URI`、データセットの manifest 保管（`{dataset_id}.manifest.json`・CSV の後に書く確定の印）②ml-train Job の具体化（引数・環境変数・終了コード・成果物の配置・model_id の決定的な導出・CANDIDATE/REJECTED のみ登録・品質ゲートは設定が無ければ fail closed）③V4（馬マスタの時点履歴 `horse_master_history`）④**`release-manifest` を schema_version 2 に改訂（破壊的）: `feature_schemas`（スキーマ別 hash）を追加し、`feature_schema_hash` を『スキーマ集合の hash』に確定（G-17 ⑧）**⑤ml-train イメージ（5 つ目）。infra への影響は §13 末尾と PROGRESS の I-H 項目）**。0.4.9（第3段階 / T3.6-A: §5.1 のモデル成果物・データセットの契約を具体化（正準 JSON・sha256・Ed25519 署名の対象と書式・検証鍵の書式・理由コード・データセットの列と manifest・レジストリの読取り）。契約の意味は変えない）**。0.4.8（第3段階 / T3.5: §3.2 の mode・plan・update の実装、§3.3.2 登録（register）の保留、§3.4 の重複 ACK への fetch・cursor の追加。P-1/P-2 は引き続き未承認）**。0.4.7（第3段階 / T3.4: V3、エージェント API の実装、環境変数の追加。§3.3 の署名方式と §3.4 の取得セッション・応答の追加は『提案 P-1 / P-2 / P-3』で、ユーザーの承認まで確定仕様ではない。0.4.5 以前の説明は下に残す）** — **0.4.5（第2段階 / T2.5 後半で §1・§10 にイメージの形式と manifest の検証規則を補足。T2.8 の 0.4.4 は §2・§3.2・§4.3・§9.1・§11。0.4.0 の契約の意味は変えていない）**。0.4.0 は第1段階 / T1.10 で確定した設計契約。infra の `docs/CONTRACTS.md` §2 の差異 D1〜D12 をすべて取り込んだ（対応表は §12）。実装・実リソースで確かめる必要がある箇所は「検証ゲート」として ID を書いている（一覧は `STAGE2_HANDOFF.md` §13）。
+状態: **0.4.11（第3段階 / T3.7: Discord 通知。①`DISCORD_MENTION_USER_ID`（任意・本人の個別メンション。ASCII 数字 17〜20 桁。`@everyone`・ロール・他のユーザーは常に不許可）を §2 に追加 ②`DISCORD_WEBHOOK_URL` / `DISCORD_ERROR_WEBHOOK_URL` は **`https://discord.com/api/webhooks/<id>/<token>` 形式だけ**を受け付け、他は exit 2（SSRF 対策。値はログに出さない）③§9.2 に通知の配送規則（DELIVERED / NOT_SENT / UNKNOWN と Signal の状態の対応、5xx・タイムアウト・切断は再送しない、一部のチャンクだけ送れた場合は UNKNOWN）④BACKFILL・非 NORMAL・停止要求では通知しない。契約の意味（claim → 送信 → 記録・二重通知より取りこぼし）は変えていない。infra への影響: T5.0 で `bot` の Secret に任意の `DISCORD_MENTION_USER_ID` を追加するだけ）**。0.4.10（第3段階 / T3.6-B: ①`export-dataset` の引数（`--dataset-id` `--from` `--to` `--feature-schema` 必須ほか）と `MODEL_STORE_URI`、データセットの manifest 保管（`{dataset_id}.manifest.json`・CSV の後に書く確定の印）②ml-train Job の具体化（引数・環境変数・終了コード・成果物の配置・model_id の決定的な導出・CANDIDATE/REJECTED のみ登録・品質ゲートは設定が無ければ fail closed）③V4（馬マスタの時点履歴 `horse_master_history`）④**`release-manifest` を schema_version 2 に改訂（破壊的）: `feature_schemas`（スキーマ別 hash）を追加し、`feature_schema_hash` を『スキーマ集合の hash』に確定（G-17 ⑧）**⑤ml-train イメージ（5 つ目）。infra への影響は §13 末尾と PROGRESS の I-H 項目）**。0.4.9（第3段階 / T3.6-A: §5.1 のモデル成果物・データセットの契約を具体化（正準 JSON・sha256・Ed25519 署名の対象と書式・検証鍵の書式・理由コード・データセットの列と manifest・レジストリの読取り）。契約の意味は変えない）**。0.4.8（第3段階 / T3.5: §3.2 の mode・plan・update の実装、§3.3.2 登録（register）の保留、§3.4 の重複 ACK への fetch・cursor の追加。P-1/P-2 は引き続き未承認）**。0.4.7（第3段階 / T3.4: V3、エージェント API の実装、環境変数の追加。§3.3 の署名方式と §3.4 の取得セッション・応答の追加は『提案 P-1 / P-2 / P-3』で、ユーザーの承認まで確定仕様ではない。0.4.5 以前の説明は下に残す）** — **0.4.5（第2段階 / T2.5 後半で §1・§10 にイメージの形式と manifest の検証規則を補足。T2.8 の 0.4.4 は §2・§3.2・§4.3・§9.1・§11。0.4.0 の契約の意味は変えていない）**。0.4.0 は第1段階 / T1.10 で確定した設計契約。infra の `docs/CONTRACTS.md` §2 の差異 D1〜D12 をすべて取り込んだ（対応表は §12）。実装・実リソースで確かめる必要がある箇所は「検証ゲート」として ID を書いている（一覧は `STAGE2_HANDOFF.md` §13）。
 - 正本はこのファイル。infra 側は版番号を参照し、変更点を同期する。infra の文書を直す必要がある箇所は `PROGRESS.md` の「infra への引継ぎ」に記録する。web のセッションから infra を直接変更しない。
 - 用語: **mode** は現在のフェーズ（`NORMAL | STARTING | STOPPING | STOPPED`）。**desired** は利用者の意図（`NORMAL | STOPPED`）。アプリが読み取りに失敗したときや、内容が不正なときの判定値は **`UNKNOWN`** とする。UNKNOWN はアプリ内部だけの値で、正本には書かない。旧版の `phase` は廃止して `mode` に統一した（実装はまだ無いため互換フィールドは置かない）。
 
@@ -40,7 +40,8 @@ web→Artifact Registry の push 権限と、infra 側の manifest 取得権限�
 | `INGEST_ODDS_BELOW_PAR` / `INGEST_STORE_COMBO_ODDS` | Terraform（**0.4.7**） | ingest | `quarantine`（既定。`0<odds<1` を隔離。**提案 P-3**）／`accept`。ワイド・三連複オッズの保存（`true`／既定 `false`: D-043） |
 | `INGEST_MAX_BODY_BYTES` / `INGEST_MAX_INFLATED_BYTES` | Terraform（任意。**0.4.7**） | ingest | 受信本文（gzip 後）の上限（既定 1 MiB）／展開後の上限（既定 32 MiB） |
 | `INGEST_ACCEPT_NORMALIZED_RECORDS` | **local のみ**（本番で `true` にすると起動失敗。**0.4.7**） | ingest | 合成の正規化 JSON レコードを解析する（テスト用）。実データの JV-Data パーサは未実装（T1.17 の確認後） |
-| `DISCORD_WEBHOOK_URL` / `DISCORD_ERROR_WEBHOOK_URL` | **Secret Manager** | bot（通知）/ 全（エラー） | 通知 |
+| `DISCORD_WEBHOOK_URL` / `DISCORD_ERROR_WEBHOOK_URL` | **Secret Manager** | bot（通知）/ 全（エラー） | 通知。**0.4.11**: 任意（未設定ならその宛先へは送らない）。`bot-run` のときだけ読む。形式は `https://discord.com/api/webhooks/<数字>/<トークン>` のみ（`discordapp.com`・`ptb`・`canary` も可）。他の URL・http・IP・ポート・クエリは exit 2（メッセージは変数名だけ）。**URL はトークンを含む秘密**でログ・本文・PR に出さない |
+| `DISCORD_MENTION_USER_ID` | Terraform または Secret Manager（任意。**0.4.11**） | bot | 本人の Discord ユーザー ID（ASCII 数字 17〜20 桁）。設定時だけ本文先頭に `<@id>` を付け、`allowed_mentions` は `{"parse":[],"users":["<id>"]}`。未設定は `{"parse":[]}`（誰にもメンションしない）。不正な値は exit 2 |
 | `CALENDAR_WATCH_START_MINUTES` / `CALENDAR_PRESTART_MINUTES` / `CALENDAR_SETTLE_DEADLINE_MINUTES` / `CALENDAR_STALE_AFTER_MINUTES` | Terraform（**運用値は未確定: D-016・D-122。既定値を置かない**） | bot（`--task=calendar-check` のみ必須） | 監視ウィンドウ（最初の発走の何分前から監視するか=1〜1440、さらに前の起動余裕=0〜1440、最後の発走の何分後まで起動してよいか=1〜1440）と、開催日の確認の鮮度（何分を超えたら古い=1〜10080）。**1 つでも欠落・不正なら calendar-check は exit 2**（DB にもモード確認にも進まない）。他のタスクでは不要。**0.4.6（T3.3 / D-122）** |
 | `RELEASE_ID` / `REQUIRED_SCHEMA_VERSION` | イメージに焼き込み（ビルド時） | 全 | 版の表示と ready 判定（§4.3）。**0.4.4**: `REQUIRED_SCHEMA_VERSION` は実行 jar の `jrabot-app.properties`（Gradle が生成）に焼き込まれ、**環境変数では上書きしない**（infra が渡す必要は無い）。`RELEASE_ID` は環境変数があれば表示用に使う |
 
@@ -226,7 +227,7 @@ web→Artifact Registry の push 権限と、infra 側の manifest 取得権限�
 - **エージェントが送信してよいのは mode=NORMAL のときだけ**。STARTING、STOPPING、不明のときはすべて「送らない」。
 
 ## 6. 契約バージョン
-`contract_version: 0.4.10`（0.4.9 までは 0.4.0 から意味を変える変更は無かった。0.4.10 は release-manifest の schema_version を 2 に上げる破壊的変更を含む（本番 manifest は未発行なので移行は不要）。§3.3 の署名方式は P-1 の承認で確定する§3.3 の署名方式は P-1 の承認で確定する）。破壊的な変更はメジャー版を上げ、`release-manifest.json` に含める。エージェントプロトコルは `/v1`（`protocol: 1`）。第2段階以降に実装でずれが見つかったら 0.4.x / 0.5.0 として本ファイルで管理する。1.0.0 は第6段階の統合レビューで凍結する。
+`contract_version: 0.4.11`（0.4.11 は環境変数の追加と §9.2 の配送規則の具体化だけで、意味の変更なし。0.4.9 までは 0.4.0 から意味を変える変更は無かった。0.4.10 は release-manifest の schema_version を 2 に上げる破壊的変更を含む（本番 manifest は未発行なので移行は不要）。§3.3 の署名方式は P-1 の承認で確定する§3.3 の署名方式は P-1 の承認で確定する）。破壊的な変更はメジャー版を上げ、`release-manifest.json` に含める。エージェントプロトコルは `/v1`（`protocol: 1`）。第2段階以降に実装でずれが見つかったら 0.4.x / 0.5.0 として本ファイルで管理する。1.0.0 は第6段階の統合レビューで凍結する。
 
 ## 7. Windows エージェントの STOPPED 時動作契約（T1.15）
 
@@ -350,6 +351,13 @@ STOPPED 中の `ingest` 503、ビーコンのみ STOPPED、両方不達（UNKNOW
 - bot-run が SIGTERM を受けたら: ①停止フラグを立て、新しいサイクルを始めない → ②実行中の DB トランザクションだけ完了させる（5 秒以内。それを超えたらロールバック）→ ③`bot_run` に checkpoint（レース別ステージ・最終サイクル時刻）と `state=INTERRUPTED` を保存 → ④リースを解放 → ⑤終了する。mode が NORMAL 以外なら exit 0、NORMAL のままの cancel なら exit 75。
 - 通知は「claim → 送信 → sent を記録」の順で行う（RACE_CALENDAR_DESIGN §6.3）。SIGTERM が送信中に来たら、送信の完了を待たずに claim を残す。再実行時には、claim 済みで sent になっていないものを**再送しない**（`SEND_UNKNOWN` として記録し、管理画面に表示する）。二重通知より取りこぼしを選ぶ。
 - 再実行: bot-run の開始時に `bot_run` を読む。`INTERRUPTED`、またはリースの期限が切れた行があれば、checkpoint と `race_schedule.status` から状態を再導出して続ける。サイクルは `(tenant_id, race_id, cycle_id)` で冪等。結果の反映と決済は `race_id` 単位で冪等。
+- **通知の配送規則（0.4.11 / T3.7 / D-181〜D-186）**: `Notifier.send` の結果と Signal の状態。**exactly-once は保証しない（自動で再送しない at-most-once）**。
+  | 結果 | 意味 | claim 済み Signal の記録 |
+  |---|---|---|
+  | `DELIVERED` | 全チャンクが 2xx | `SENT` |
+  | `UNKNOWN` | 5xx・要求のタイムアウト・切断・想定外の応答・**一部のチャンクだけ送信済み** | `SEND_UNKNOWN`（再送しない） |
+  | `NOT_SENT` | 1 通目が確実に処理されていない（4xx 拒否・接続前の失敗・429 の待機超過/試行上限・停止要求） | claim 済みは戻せないので `SEND_UNKNOWN`（取りこぼし。管理画面で確認）。宛先未設定は claim の**前**に検出して何もしない |
+  429 は『処理されていない』ので、`retry_after`（本文）→ `Retry-After` → `X-RateLimit-Reset-After` → 1 秒で待ち（0.5〜60 秒。60 秒超を求められたら再試行せず終了）、最大 5 試行。接続前の失敗も指数バックオフ（1・2・4・8 秒）で同じ上限。4xx（400/401/403/404 ほか）と 5xx は再試行しない。リダイレクトは辿らない。通知の前に出どころ（LIVE のみ。BACKFILL・判定不能は通知しない）→ 運用モード（NORMAL のみ。毎回読み直す）→ 停止要求を確認する。claim したまま記録できなかった Signal は `recoverStaleClaims`（NORMAL のときだけ、古い claim だけ）で `SEND_UNKNOWN` にする。
 - 他の Job（calendar-check、reconcile、retention、export-dataset、ml-train）は単位処理ごとに冪等にし、SIGTERM を受けたら現在の単位が終わった時点で終了する。retention の削除は 1 回あたり 1,000 行程度のチャンクでコミットする。
 - タイムアウト: bot-run は 14 時間（G-OPS-5 で上限を確認）、その他は 1 時間以内（Job ごとに設定）。
 
@@ -360,7 +368,7 @@ STOPPED 中の `ingest` 503、ビーコンのみ STOPPED、両方不達（UNKNOW
   "release": "2026.11.0",
   "git_sha": "<40桁>",
   "built_at": "2026-11-01T00:00:00Z",
-  "contract_version": "0.4.10",
+  "contract_version": "0.4.11",
   "agent_protocol": 1,
   "images": {
     "dashboard":    "asia-northeast1-docker.pkg.dev/<prj>/jra-bot/dashboard@sha256:<64桁>",

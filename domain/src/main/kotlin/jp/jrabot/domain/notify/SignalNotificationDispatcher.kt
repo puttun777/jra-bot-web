@@ -161,9 +161,16 @@ class SignalNotificationDispatcher(
             val reason =
                 when {
                     row == null || row.tenantId != batch.tenantId -> ItemSkip.NOT_FOUND
+
                     row.state != NotificationState.UNSENT -> ItemSkip.NOT_UNSENT
+
                     row.raceId != batch.raceId -> ItemSkip.RACE_MISMATCH
-                    BetType.fromLabelOrNull(item.view.betType)?.marketCode != row.market.code || row.umaban.value != item.view.umaban -> ItemSkip.CONTENT_MISMATCH
+
+                    BetType
+                        .fromLabelOrNull(
+                            item.view.betType,
+                        )?.marketCode != row.market.code || row.umaban.value != item.view.umaban -> ItemSkip.CONTENT_MISMATCH
+
                     else -> null
                 }
             if (reason == null) out += item else skipped[item.signalId] = reason

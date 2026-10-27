@@ -99,7 +99,7 @@ data class SignalView(
 object NoticeViews {
     fun from(signal: DecisionSignal): SignalView =
         when (signal) {
-            is BetSignal ->
+            is BetSignal -> {
                 SignalView(
                     betType = signal.betType.label,
                     umaban = signal.umaban,
@@ -122,8 +122,9 @@ object NoticeViews {
                     reason = signal.reason,
                     bundle = signal.betStrategy?.let(::bundle),
                 )
+            }
 
-            is SkipSignal ->
+            is SkipSignal -> {
                 SignalView(
                     betType = signal.betType.label,
                     umaban = signal.umaban,
@@ -137,6 +138,7 @@ object NoticeViews {
                     showAdjustedMkt = signal.showAdjustedMkt,
                     bundle = bundle(signal.betStrategy),
                 )
+            }
         }
 
     private fun bundle(b: BetStrategyBundle): BundleView =

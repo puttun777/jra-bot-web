@@ -110,7 +110,16 @@ class DiscordNotifierFakeServerTest {
 
     @Test
     fun `429 は本文の retry_after を優先して待ち 再試行して成功`() {
-        server.script(Reply.Status(429, """{"message":"You are being rate limited.","retry_after":1.5,"global":false}""", mapOf("Retry-After" to "9", "X-RateLimit-Scope" to "user")))
+        server.script(
+            Reply.Status(
+                429,
+                """{"message":"You are being rate limited.","retry_after":1.5,"global":false}""",
+                mapOf(
+                    "Retry-After" to "9",
+                    "X-RateLimit-Scope" to "user",
+                ),
+            ),
+        )
         assertEquals(DeliveryResult.DELIVERED, send())
         assertEquals(2, server.requests.size)
         assertEquals(listOf(Duration.ofMillis(1500)), sleeps.toList())
@@ -119,7 +128,11 @@ class DiscordNotifierFakeServerTest {
 
     @Test
     fun `429 は Retry-After ヘッダ X-RateLimit-Reset-After 既定値の順に使い 0_5 秒未満は 0_5 秒に丸める`() {
-        server.script(Reply.Status(429, "", mapOf("Retry-After" to "3")), Reply.Status(429, "<html>", mapOf("X-RateLimit-Reset-After" to "0.1")), Reply.Status(429, ""))
+        server.script(
+            Reply.Status(429, "", mapOf("Retry-After" to "3")),
+            Reply.Status(429, "<html>", mapOf("X-RateLimit-Reset-After" to "0.1")),
+            Reply.Status(429, ""),
+        )
         assertEquals(DeliveryResult.DELIVERED, send())
         assertEquals(listOf(Duration.ofSeconds(3), Duration.ofMillis(500), Duration.ofSeconds(1)), sleeps.toList())
     }
@@ -217,7 +230,9 @@ class DiscordNotifierFakeServerTest {
         assertEquals(DeliveryResult.NOT_SENT, n.send(signal()))
         assertTrue(server.requests.isEmpty())
         // 1 通目の後に停止
-        val seen = java.util.concurrent.atomic.AtomicInteger()
+        val seen =
+            java.util.concurrent.atomic
+                .AtomicInteger()
         val n2 = notifier(stop = { seen.getAndIncrement() >= 1 })
         assertEquals(DeliveryResult.UNKNOWN, n2.send(signal("a".repeat(1900) + "b".repeat(1900))))
         assertEquals(1, server.requests.size)
@@ -254,11 +269,22 @@ class DiscordNotifierFakeServerTest {
 
     @Test
     fun `ログに URL トークン 本文 ヘッダを出さない`() {
-        server.script(Reply.Status(429, """{"retry_after":1,"message":"RESPONSE-BODY-SECRET"}""", mapOf("Retry-After" to "1")), Reply.Status(500, "RESPONSE-BODY-SECRET"))
+        server.script(
+            Reply.Status(429, """{"retry_after":1,"message":"RESPONSE-BODY-SECRET"}""", mapOf("Retry-After" to "1")),
+            Reply.Status(500, "RESPONSE-BODY-SECRET"),
+        )
         send("SECRET-NOTIFICATION-BODY 馬名")
         val text = log.text()
         assertTrue(text.isNotBlank())
-        for (secret in listOf("fake-token_123", "123456789012345678", "127.0.0.1", "SECRET-NOTIFICATION-BODY", "RESPONSE-BODY-SECRET", "api/webhooks", "http")) {
+        for (secret in listOf(
+            "fake-token_123",
+            "123456789012345678",
+            "127.0.0.1",
+            "SECRET-NOTIFICATION-BODY",
+            "RESPONSE-BODY-SECRET",
+            "api/webhooks",
+            "http",
+        )) {
             assertFalse(text.contains(secret), "ログに出てはいけない: $secret\n$text")
         }
     }

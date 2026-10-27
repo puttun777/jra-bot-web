@@ -101,7 +101,10 @@ class ContentSplitterTest {
 
     @Test
     fun `Python の splitlines と同じ行区切り`() {
-        assertEquals(listOf("a\r\n", "b\r", "c\u000B", "d\u000C", "e\u001C", "f\u001D", "g\u001E", "h\u0085", "i ", "j ", "k"), ContentSplitter.splitLinesKeepEnds("a\r\nb\rc\u000Bd\u000Ce\u001Cf\u001Dg\u001Eh\u0085i j k"))
+        assertEquals(
+            listOf("a\r\n", "b\r", "c\u000B", "d\u000C", "e\u001C", "f\u001D", "g\u001E", "h\u0085", "i ", "j ", "k"),
+            ContentSplitter.splitLinesKeepEnds("a\r\nb\rc\u000Bd\u000Ce\u001Cf\u001Dg\u001Eh\u0085i j k"),
+        )
         assertEquals(listOf("\n", "\n"), ContentSplitter.splitLinesKeepEnds("\n\n"))
         assertEquals(emptyList(), ContentSplitter.splitLinesKeepEnds(""))
     }

@@ -101,12 +101,22 @@ class DiscordNotifier(
                 is PostOutcome.Response -> {
                     val status = outcome.status
                     when {
-                        status in 200..299 -> return ChunkResult.DELIVERED
+                        status in 200..299 -> {
+                            return ChunkResult.DELIVERED
+                        }
 
                         status == 429 -> {
                             val seconds = RateLimitWait.parseSeconds(outcome.body, outcome.retryAfterHeader, outcome.resetAfterHeader)
                             val scope = RateLimitWait.scope(outcome.scopeHeader)
-                            log.warn("Discord 429 retry_after={}s scope={} chunk={}/{} attempt={}/{}", seconds, scope, index, total, attempt, policy.maxAttempts)
+                            log.warn(
+                                "Discord 429 retry_after={}s scope={} chunk={}/{} attempt={}/{}",
+                                seconds,
+                                scope,
+                                index,
+                                total,
+                                attempt,
+                                policy.maxAttempts,
+                            )
                             if (!seconds.isFinite() || seconds > policy.maxRetryAfter.toMillis() / 1000.0) return ChunkResult.NOT_SENT
                             if (attempt == policy.maxAttempts || !wait(retryAfter(seconds))) return ChunkResult.NOT_SENT
                         }
@@ -173,18 +183,42 @@ internal object JsonText {
         while (i < s.length) {
             val c = s[i]
             when {
-                c == '"' -> sb.append("\\\"")
-                c == '\\' -> sb.append("\\\\")
-                c == '\n' -> sb.append("\\n")
-                c == '\r' -> sb.append("\\r")
-                c == '\t' -> sb.append("\\t")
-                c.code < 0x20 || c == ' ' || c == ' ' -> sb.append(String.format("\\u%04x", c.code))
+                c == '"' -> {
+                    sb.append("\\\"")
+                }
+
+                c == '\\' -> {
+                    sb.append("\\\\")
+                }
+
+                c == '\n' -> {
+                    sb.append("\\n")
+                }
+
+                c == '\r' -> {
+                    sb.append("\\r")
+                }
+
+                c == '\t' -> {
+                    sb.append("\\t")
+                }
+
+                c.code < 0x20 || c == ' ' || c == ' ' -> {
+                    sb.append(String.format("\\u%04x", c.code))
+                }
+
                 Character.isHighSurrogate(c) && i + 1 < s.length && Character.isLowSurrogate(s[i + 1]) -> {
                     sb.append(c).append(s[i + 1])
                     i++
                 }
-                Character.isSurrogate(c) -> sb.append("\\ufffd")
-                else -> sb.append(c)
+
+                Character.isSurrogate(c) -> {
+                    sb.append("\\ufffd")
+                }
+
+                else -> {
+                    sb.append(c)
+                }
             }
             i++
         }

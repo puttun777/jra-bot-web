@@ -61,11 +61,13 @@ class FakeWebhookServer : AutoCloseable {
         script.addAll(replies)
     }
 
-    fun url(token: String = "fake-token_123"): DiscordWebhookUrl = DiscordWebhookUrl.forLocalTest("http://127.0.0.1:$port/api/webhooks/123456789012345678/$token")
+    fun url(token: String = "fake-token_123"): DiscordWebhookUrl =
+        DiscordWebhookUrl.forLocalTest("http://127.0.0.1:$port/api/webhooks/123456789012345678/$token")
 
     private fun handle(ex: HttpExchange) {
         val body = ex.requestBody.readAllBytes().toString(Charsets.UTF_8)
-        requests += Recorded(ex.requestMethod, ex.requestURI.rawPath, ex.requestHeaders.getFirst("Content-Type"), ex.requestHeaders.getFirst("User-Agent"), body)
+        requests +=
+            Recorded(ex.requestMethod, ex.requestURI.rawPath, ex.requestHeaders.getFirst("Content-Type"), ex.requestHeaders.getFirst("User-Agent"), body)
         when (val reply = script.poll() ?: Reply.Status(204)) {
             is Reply.Status -> {
                 reply.headers.forEach { (k, v) -> ex.responseHeaders.add(k, v) }
@@ -89,7 +91,9 @@ class FakeWebhookServer : AutoCloseable {
                 ex.close()
             }
 
-            Reply.Drop -> ex.close() // ヘッダを送らずに閉じる
+            Reply.Drop -> {
+                ex.close()
+            } // ヘッダを送らずに閉じる
         }
     }
 
@@ -105,7 +109,9 @@ class DroppingServer(
 ) : AutoCloseable {
     private val socket = ServerSocket(0, 50, InetAddress.getLoopbackAddress())
     val port: Int get() = socket.localPort
-    val accepted = java.util.concurrent.atomic.AtomicInteger()
+    val accepted =
+        java.util.concurrent.atomic
+            .AtomicInteger()
     private val thread =
         Thread {
             try {

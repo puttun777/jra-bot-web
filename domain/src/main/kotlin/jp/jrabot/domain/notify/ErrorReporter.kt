@@ -13,7 +13,8 @@ object SecretRedactor {
             Regex("-----BEGIN [A-Z ]*PRIVATE KEY-----[\\s\\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|\\z)") to "[redacted-private-key]",
             Regex("\\b(proxy-)?authorization\\b\\s*[:=]\\s*[^\\r\\n]*", RegexOption.IGNORE_CASE) to "$1authorization: [redacted]",
             Regex("\\bbearer\\s+[A-Za-z0-9._~+/=-]{8,}", RegexOption.IGNORE_CASE) to "Bearer [redacted]",
-            Regex("\\b(password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key)\\b(\\s*[=:]\\s*)[^\\s,;]+", RegexOption.IGNORE_CASE) to "$1$2[redacted]",
+            Regex("\\b(password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key)\\b(\\s*[=:]\\s*)[^\\s,;]+", RegexOption.IGNORE_CASE) to
+                "$1$2[redacted]",
         )
 
     fun redact(text: String): String = RULES.fold(text) { acc, (re, repl) -> re.replace(acc, repl) }
@@ -35,9 +36,10 @@ class ErrorReporter(
     enum class Outcome { SENT, NOT_CONFIGURED, COOLDOWN, NOT_DELIVERED, REENTRANT }
 
     private val inFlight = AtomicBoolean(false)
-    private val lastSent = object : LinkedHashMap<String, Instant>(16, 0.75f, false) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Instant>?): Boolean = size > MAX_KEYS
-    }
+    private val lastSent =
+        object : LinkedHashMap<String, Instant>(16, 0.75f, false) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Instant>?): Boolean = size > MAX_KEYS
+        }
 
     fun report(
         title: String,

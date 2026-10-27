@@ -178,7 +178,16 @@ class SignalNotificationDispatcherTest {
         assertEquals(listOf(mine.first), r.sent)
         assertEquals(ItemSkip.NOT_FOUND, r.skipped[theirs.first].takeIf { theirs.first != mine.first } ?: ItemSkip.NOT_FOUND)
         assertEquals(NotificationState.UNSENT, repo.stateOf(other, theirs.first))
-        assertTrue(notifier.sent.single().body.contains("馬番1") && !notifier.sent.single().body.contains("馬番2"))
+        assertTrue(
+            notifier.sent
+                .single()
+                .body
+                .contains("馬番1") &&
+                !notifier.sent
+                    .single()
+                    .body
+                    .contains("馬番2"),
+        )
         assertEquals(tenant, notifier.sent.single().tenant)
     }
 
@@ -186,19 +195,22 @@ class SignalNotificationDispatcherTest {
     fun `レースや賭式が保存済みの Signal と食い違う項目は送らない`() {
         val a = add(1)
         val wrongRace = repo.add(tenant, "202601040711", Market.WIN, 2)
-        val r = dispatcher().dispatchRace(
-            RaceNoticeBatch(
-                tenant, RaceId.parse(raceId), race,
-                listOf(
-                    NoticeItem(a.first, win(umaban = 1)),
-                    NoticeItem(wrongRace, win(umaban = 2)),
-                    NoticeItem(repo.add(tenant, raceId, Market.WIN, 5), win(umaban = 6)), // 馬番が違う
-                    NoticeItem(repo.add(tenant, raceId, Market.WIDE, 7), win(umaban = 7)), // 賭式が違う
-                    NoticeItem(a.first, win(umaban = 1)), // 重複
+        val r =
+            dispatcher().dispatchRace(
+                RaceNoticeBatch(
+                    tenant,
+                    RaceId.parse(raceId),
+                    race,
+                    listOf(
+                        NoticeItem(a.first, win(umaban = 1)),
+                        NoticeItem(wrongRace, win(umaban = 2)),
+                        NoticeItem(repo.add(tenant, raceId, Market.WIN, 5), win(umaban = 6)), // 馬番が違う
+                        NoticeItem(repo.add(tenant, raceId, Market.WIDE, 7), win(umaban = 7)), // 賭式が違う
+                        NoticeItem(a.first, win(umaban = 1)), // 重複
+                    ),
                 ),
-            ),
-            NotificationOrigin.LIVE,
-        )
+                NotificationOrigin.LIVE,
+            )
         assertEquals(listOf(a.first), r.sent)
         assertEquals(ItemSkip.RACE_MISMATCH, r.skipped[wrongRace])
         assertEquals(ItemSkip.DUPLICATE, r.skipped[a.first])
@@ -210,10 +222,21 @@ class SignalNotificationDispatcherTest {
         val a = add(1)
         val b = add(2)
         val sends = AtomicInteger()
-        val n = ScriptedNotifier({ sends.incrementAndGet(); Thread.sleep(20); DeliveryResult.DELIVERED })
+        val n =
+            ScriptedNotifier({
+                sends.incrementAndGet()
+                Thread.sleep(20)
+                DeliveryResult.DELIVERED
+            })
         val pool = Executors.newFixedThreadPool(8)
         val go = CountDownLatch(1)
-        val reports = (1..8).map { pool.submit<DispatchReport> { go.await(); dispatcher(n = n).dispatchRace(batch(a, b), NotificationOrigin.LIVE) } }
+        val reports =
+            (1..8).map {
+                pool.submit<DispatchReport> {
+                    go.await()
+                    dispatcher(n = n).dispatchRace(batch(a, b), NotificationOrigin.LIVE)
+                }
+            }
         go.countDown()
         val results = reports.map { it.get() }
         pool.shutdown()
@@ -231,7 +254,12 @@ class SignalNotificationDispatcherTest {
         val r = dispatcher().dispatchRace(batch(a, b), NotificationOrigin.LIVE)
         assertEquals(listOf(a.first), r.sent)
         assertEquals(ItemSkip.NOT_UNSENT, r.skipped[b.first], "検査の時点で UNSENT でない")
-        assertFalse(notifier.sent.single().body.contains("馬番2"))
+        assertFalse(
+            notifier.sent
+                .single()
+                .body
+                .contains("馬番2"),
+        )
         assertEquals(NotificationState.CLAIMED, repo.stateOf(tenant, b.first), "他者の claim に触れない")
     }
 
@@ -240,17 +268,26 @@ class SignalNotificationDispatcherTest {
         val a = add(1)
         val b = add(2)
         // find の後・claim の前に他の Bot が b を claim するのを再現する
-        val racing = object : SignalReaderProxy(repo) {
-            override fun claim(tenantId: TenantId, id: SignalId): Boolean {
-                if (id == b.first) repo.claim(tenantId, id)
-                return super.claim(tenantId, id)
+        val racing =
+            object : SignalReaderProxy(repo) {
+                override fun claim(
+                    tenantId: TenantId,
+                    id: SignalId,
+                ): Boolean {
+                    if (id == b.first) repo.claim(tenantId, id)
+                    return super.claim(tenantId, id)
+                }
             }
-        }
         val d = SignalNotificationDispatcher(racing, notifier, ModeProvider { mode }, clock)
         val r = d.dispatchRace(batch(a, b), NotificationOrigin.LIVE)
         assertEquals(listOf(a.first), r.sent)
         assertEquals(ItemSkip.CLAIM_LOST, r.skipped[b.first])
-        assertFalse(notifier.sent.single().body.contains("馬番2"))
+        assertFalse(
+            notifier.sent
+                .single()
+                .body
+                .contains("馬番2"),
+        )
     }
 
     @Test
@@ -291,7 +328,12 @@ class SignalNotificationDispatcherTest {
     fun `メンション方針は本文の先頭に出る`() {
         val a = add(1)
         dispatcher(mention = MentionPolicy.forUser("123456789012345678")).dispatchRace(batch(a), NotificationOrigin.LIVE)
-        assertTrue(notifier.sent.single().body.startsWith("<@123456789012345678>\n"))
+        assertTrue(
+            notifier.sent
+                .single()
+                .body
+                .startsWith("<@123456789012345678>\n"),
+        )
     }
 }
 

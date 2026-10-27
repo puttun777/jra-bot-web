@@ -3,6 +3,13 @@ package jp.jrabot.domain.notify
 import jp.jrabot.domain.decision.PythonCompat
 
 /**
+ * 本文の作り方。[LEGACY_COMPAT] は旧実装の癖をそのまま再現する（ゴールデン比較用）、[CORRECTED] は運用用。
+ * 差は『ℹ️ 期待利益は投資額計算に使った確率…』の行だけ: 旧実装は集約後の辞書に `prob` が無く 0.0 と比べるため、ほぼ常にこの行を出す（旧欠陥）。
+ * [CORRECTED] は本来の意図（生の確率と投資額計算に使った確率が 0.0001 を超えて違うときだけ）で出す。数値は変わらない。
+ */
+enum class FormatMode { LEGACY_COMPAT, CORRECTED }
+
+/**
  * Discord 通知の本文を作る（旧 `notify/discord.py` の `send_signal` と `send_signals_grouped` の本文部分。配送は含まない）。
  *
  * - 数値の整形は Python の書式（`:.2%` `:.1f` `:+.1f` など）と同じ丸め（[PythonCompat]）。**表示の丸めを計算に使わない**。
@@ -10,13 +17,6 @@ import jp.jrabot.domain.decision.PythonCompat
  * - 欠損値を 0 で埋めない: 無い項目は行ごと出さない。旧実装が『0.00%』などを出していた箇所は、導出できないとき行を出さない（意図した差。PROGRESS）。
  * - 旧実装の『単勝のみの投資戦略（`strategies` なし）』の分岐は移植しない（判定サービスは必ず `strategies` を作る）。
  */
-/**
- * 本文の作り方。[LEGACY_COMPAT] は旧実装の癖をそのまま再現する（ゴールデン比較用）、[CORRECTED] は運用用。
- * 差は『ℹ️ 期待利益は投資額計算に使った確率…』の行だけ: 旧実装は集約後の辞書に `prob` が無く 0.0 と比べるため、ほぼ常にこの行を出す（旧欠陥）。
- * [CORRECTED] は本来の意図（生の確率と投資額計算に使った確率が 0.0001 を超えて違うときだけ）で出す。数値は変わらない。
- */
-enum class FormatMode { LEGACY_COMPAT, CORRECTED }
-
 object NoticeFormatter {
     private const val RULE = "━━━━━━━━━━━━━━━━"
     private const val MAX_TICKETS = 6
@@ -182,7 +182,12 @@ object NoticeFormatter {
                 if (!k.skipReason.isNullOrEmpty()) {
                     sb.append("  ⚠️ 見送り: ${esc(k.skipReason)}\n")
                 } else if (k.clipped) {
-                    sb.append("  📊 Kelly: raw=${PythonCompat.fixed(k.raw, 4)} adjusted=${PythonCompat.fixed(k.adjusted, 4)} (推奨=${f2(k.betBeforeClip)}点 → max_betでクリップ)\n")
+                    sb.append(
+                        "  📊 Kelly: raw=${PythonCompat.fixed(
+                            k.raw,
+                            4,
+                        )} adjusted=${PythonCompat.fixed(k.adjusted, 4)} (推奨=${f2(k.betBeforeClip)}点 → max_betでクリップ)\n",
+                    )
                 } else if (k.betBeforeClip > 0) {
                     sb.append("  📊 Kelly: raw=${PythonCompat.fixed(k.raw, 4)} adjusted=${PythonCompat.fixed(k.adjusted, 4)} (推奨=${f2(k.betBeforeClip)}点)\n")
                 }
@@ -208,7 +213,11 @@ object NoticeFormatter {
     }
 
     private fun ticketLine(t: TicketView): String {
-        val stake = t.stake?.takeIf { it > 0 }?.let { " stake=${f1(it)}点" }.orEmpty()
+        val stake =
+            t.stake
+                ?.takeIf { it > 0 }
+                ?.let { " stake=${f1(it)}点" }
+                .orEmpty()
         return "    - ${esc(t.kumi)} odds=${esc(t.oddsText)} p=${pct2(t.prob)} EV=${pct1(t.ev)}$stake\n"
     }
 

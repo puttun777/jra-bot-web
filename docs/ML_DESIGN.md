@@ -351,3 +351,6 @@ H6・H7・H9 は学習側/データ側（F2・T1.20）。
 - **保管（D-171・D-172）**: ml-train は `file://`（GCS ボリュームのマウント）のみ。GCS アダプタは Kotlin 側（偽クライアントで検証。実 GCS は未接続）。
 - **検証**: pytest 128 件・ruff・mypy strict、`MlTrainInteropIntegrationTest`（Kotlin 出力 → Python 学習 → Kotlin `ModelLoader` 検証）。ローカルは JDK 21・MySQL 8.0.46 であり、JDK 25 / MySQL 8.4・9.7 の合否ではない（CI が正: D-056）。
 
+
+## 13. T3.7: 通知の理由文（G-17 ⑥）
+`format_reason_from_features` は `jp.jrabot.domain.ml.features.ReasonFormatter` に移植。材料 `HorseReasonFacts` は 2 通りで作る: ①`LegacyFeatureBuilder.reasonFacts`（旧互換。H3 を含み、ゴールデン G8-REASON-006 の比較専用）②`PointInTimeFeatureBuilder.reasonFacts`（asOf 以前だけ。`LeakageException` の検査は `build` と同じ。累積値〔適性・脚質〕が asOf より後に更新されていたら出さない＝0% などの架空の値を出さない）。馬名は呼び出し側（出走表）が渡す。旧の適性率が 100% を超え得る癖（D-159）は共有の式のまま表示に出る（G8-REASON-006 の『距離=147%』）。実データの通知は COMP-4 まで送らない。
