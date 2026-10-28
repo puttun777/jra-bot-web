@@ -1,9 +1,50 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-10-27（Stage 3-H レビュー修正: G-23/G-24 の判断反映・5 分前の強化・モード確認間隔。記録は下）
+最終更新: 2026-10-28（包括バグ監査の修正〈同ブランチ。T3.9 には進んでいない・CI 未実施〉。記録は下）
+旧: 2026-10-27（Stage 3-H レビュー修正: G-23/G-24 の判断反映・5 分前の強化・モード確認間隔）
 旧: 2026-10-27（Stage 3-H: T3.8 bot-run オーケストレーション）
 旧: 2026-10-27（Stage 3-G: T3.7 Discord 通知）
 旧: 2026-10-26（Public 化の準備）／2026-10-24（Stage 3-F2・3-F1・3-E）
+
+## 包括バグ監査の修正（claude/stage3-bot-orchestration・2026-10-28。T3.9 には進んでいない。CI は未実施 = T3.8 は CI で未検証）
+詳細な設計と判断: `docs/AUDIT_FIX_DESIGN.md`、D-208〜D-217、UNRESOLVED C-35〜C-40・D-17〜D-19・F-9・G-28〜G-30、CONTRACTS 0.4.14。
+### 修正したもの（DB スキーマ・GRANT は変更していない。**V5 は提案のみで未承認**）
+| ID | 修正 | commit |
+|---|---|---|
+| C1/C2 | 全レース発走後の終了を分類。予定を信頼できず評価を逃したら FAILED `EVALUATION_OPPORTUNITY_LOST`（exit 1）、データ不足は SUCCEEDED `ALL_RACES_OFF_WITH_GAPS` + 警告。評価 0 件・中止・通知対象なしは正常のまま | 9a7df54 |
+| E（暫定） | checkpoint 欠損・破損: 通知試行の記録があるのに発火記録を復元できないレースは通知を止める。初回の空 checkpoint は正常 | 9a7df54 |
+| B（暫定） | 既存 Signal と計算結果が違えば claim も通知もしない（`SIGNAL_MISMATCH`） | 9a7df54 |
+| D | 分離レベルを RR に固定 + デッドロック再試行（RR/RC 指定で同時挿入が 1 行の試験）。親行ロックは bot に races の UPDATE 権限が無いので不採用 | f3220ab |
+| C | エージェントがペーシング待機後・claim 前にモードを再確認 | 9a7df54 |
+| F | Discord のシグナル通知は POST の直前（429 待機後を含む）にモード確認（エラー通知は対象外） | 9a7df54 |
+| G2 | レース待ちの保留レコードを新しいレースの到着後に再適用／バッチ内は依存するレースを先に適用／再送の PENDING 更新 | f3220ab |
+| G3 | asOf より後に更新された races 行の天候・馬場を使わない（フラグ + 学習対象外） | f3220ab |
+| G6/G9/G10 | 更新 zip の展開前検査／Dockerfile のコメント／エラー通知の畳んだ件数 | 9a7df54 |
+| A/G1/G5/G7/G8 | 意味の明記（`signal_sent`）・試験の追加（実オッズ無しの買い目）／問題なし・修正不要（GRANT・サイズ制限）／契約に余白を明記（Job のタイムアウト） | 最新の commit |
+### 再現した問題と条件（監査時点・コード変更前）
+- C1: `stale_after` を短くして実行中に予定が古くなる → 評価 0・通知 0・`SUCCEEDED ALL_RACES_OFF`。E: checkpoint を空にして再起動 + 新しいオッズ → 同じタイミングの通知が 1 → 2 件。B: 同じ自然キーの UNSENT 行（推奨額 3.0）に対し再計算（7.0）が通知された。D: READ COMMITTED で 8 並列 × 40 回中 37 回重複（RR は 0 件でデッドロック 1213）。C: ペーシング待機中に STOPPED → 余分な POST が 1 件。
+### テスト（ローカル: JDK 21・MySQL 8.0.46〔ポート 3307、`JRABOT_TEST_MYSQL_EXTERNAL`〕。手で進める時計・Fake HTTP・合成データのみ）
+| 区分 | 結果 |
+|---|---|
+| `:domain` 単体 | **991 件成功**（+17: `BotRunIntegrityTest` 12〔C1/C2・E・B・G1〕、`FeatureBuilderTest` +3〔G3〕、`DatasetExporterTest` +1、`ErrorReporterTest` +1。既存 3 件は終了理由の変更に合わせて更新） |
+| `:bot` / `:persistence` / `:ingest` / `:dashboard` / `:cloud-gcp` / `:golden-runner` / `:db-migration` 単体 | 136 / 33 / 35 / 30 / 102 / 20 / 57 件成功（+3 Discord〔F〕）。**golden は全一致を維持** |
+| MySQL 統合 | `persistence` 188 件中 1 件失敗（既知: `WiringIntegrationTest` が MySQL 8.4 を期待する版検査。8.0.46 のため）。`ingest` 53 件成功（`AGENT_PYTHON` 指定で実 Python エージェントとの相互運用を含む。G2 の 3 件を追加）。`dashboard` 9・`db-migration` 44 成功。`persistence` +2（D の RR/RC 同時挿入）。`bot` 39 件中 6 件は `ML_TRAIN_PYTHON`（ml の依存を入れた Python）が無く**未実施** |
+| `agent`（pytest） | **212 件成功**・4 件スキップ（Windows 専用）。+8（C の待機後の再確認 1、G6 の更新 zip 7） |
+| `tools/ci`・`tools/release`・repo-hygiene・ktlint・`checkModuleDependencies` | 成功（`tools.ci.run_tests` 130 件、`tools.release` 42 件） |
+| 検証した設計（コードには入れていない） | V5 案の SQL を使い捨てのスクラッチ DB で検証（旧データの重複を許したまま新方式の行だけ UNIQUE／`ON DUPLICATE KEY` の戻り件数／PK による同一タイミングの拒否）。DB は削除済み |
+| **未実施** | **GitHub Actions 全体（JDK 25・MySQL 8.4/9.7・Docker イメージ・Python の CI 構成）**、実 Discord、Cloud Run、実機の Windows。`MlTrainInteropIntegrationTest` 6 件。`IngestReadyIntegrationTest` は他モジュールの統合試験と並列に走らせると接続数の検査が揺れる（単独実行では成功） |
+### 旧 Python 互換への影響
+判定の数値・通知の書式・ゴールデンは変えていない。旧互換の特徴量（`LegacyFeatureBuilder`）も不変（G3 は新方式の `PointInTimeFeatureBuilder` だけ）。`signal_sent` の意味は旧と同じ。旧データ（`legacy_id` あり）の重複は触れていない。
+### DB 変更が必要な問題（承認待ち: UNRESOLVED D-17〜D-19）
+E・B・D の恒久対策（AUDIT_FIX_DESIGN §3）。天候・馬場の履歴（G-28）。
+### 保留
+LOST_DATA の終了状態（D-19）、発火確定後に落ちた場合の再開方針（D-18）、`INGEST_STORE_COMBO_ODDS`（D-8。ON にしていない）。
+### PR・マージ前に残る作業
+CI の実行（Actions の無料枠が戻るまで未実行）／D-17〜D-19 の判断／運用値の確定（T1.20）／`reconcile`・`retention` はスタブのまま／infra の同期は T5.0。
+### ブランチ
+`claude/stage3-bot-orchestration`（PR なし。ユーザーのレビューを待つ）。
+
+---
 
 ## Stage 3-H レビュー修正（同ブランチ・2026-10-27。T3.9 には進んでいない）
 ### 反映した判断と修正（D-204〜D-207、CONTRACTS 0.4.13、UNRESOLVED C-34・G-23・G-24）

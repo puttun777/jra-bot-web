@@ -206,4 +206,15 @@ class BotRunIntegrityTest {
         assertTrue(errorsOf(k).any { it.contains("SIGNAL_MISMATCH") }, "原因を記録: ${errorsOf(k)}")
         assertTrue(k.notifier.signals.none { it.body.contains("7.0") }, "計算し直した値（推奨額 7.0）を通知していない")
     }
+
+    // ---- G1: 実オッズが無いワイド・三連複は推定オッズで買い目にしない ----
+
+    @Test
+    fun `組み合わせの実オッズが無いとき ワイド 三連複を推定オッズで通知しない 見送りとして理由を示す`() {
+        val k = Kit(judge = null) // 実物の判定。組み合わせオッズは保存していない（INGEST_STORE_COMBO_ODDS=false の既定）
+        k.run()
+        assertTrue(k.signals.all().none { it.market != jp.jrabot.domain.odds.Market.WIN }, "ワイド・三連複の Signal を作らない")
+        assertEquals(3, k.evaluations.rows.size, "判定は行われている（全レース・1 タイミング）")
+        assertTrue(k.notifier.signals.all { !it.body.contains("（推定）") || it.body.contains("実オッズ未取得") }, "推定を実オッズとして示さない")
+    }
 }

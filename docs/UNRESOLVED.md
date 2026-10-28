@@ -89,6 +89,12 @@
 | C-33 | **T3.8 の二重起動・SIGTERM・モード** | 有効なリースの間は 2 つ目が始まらない（DB の UNIQUE が最終防壁）、期限切れの奪取と checkpoint の引継ぎ、奪取された古い実行の更新禁止、リース喪失で何も書かず 75、SIGTERM（`INTERRUPTED`・exit 0/75）、STOPPED（`STOPPED_BY_MODE`）、UNKNOWN の連続 3 回（75）、強制終了からの復旧で重複通知なし |
 | C-34 | **T3.8 レビュー修正（2026-10-27）**（D-204〜D-207） | ①5 分前の強化の癖を確認し `TightenMode`（OFF/CORRECTED/LEGACY_QUIRK）に ②`hit_rate_min_ev_schedule` を明示設定のみで移植（旧の式の境界表と一致するテスト）③運用モードの確認間隔を独立（`modeCheckInterval` 15 秒。UNKNOWN 3 回連続は 30 秒で停止・45 秒以内、STOPPED は 15 秒以内。heartbeat 60 秒・リース 300 秒は不変）④`30,5` の統合試験（30 分前・5 分前・重複防止・再起動・BACKFILL・MySQL） |
 | C-26 | **ml-train イメージ（5 つ目）と CI**（D-176・D-178） | Dockerfile の `ml-train` ステージ、イメージのスモーク（合成データで学習・署名・登録）、`ci.yml` の `ml-train` ジョブと `ci gate` への統合。**イメージのビルドとスモークの合否は GitHub Actions（images）で確認。push はしない** |
+| C-35 | **監査 C1/C2（2026-10-28。D-208/D-209）**: 全レース発走後の終了を分類。予定を信頼できず評価を逃したら FAILED `EVALUATION_OPPORTUNITY_LOST`（exit 1）。データ不足の取りこぼしは SUCCEEDED `ALL_RACES_OFF_WITH_GAPS` + 警告。評価 0 件・中止・通知対象なしは正常のまま | 解消。`BotRunIntegrityTest`。LOST_DATA を FAILED にするかは D-19 |
+| C-36 | **監査 E/B の暫定対策（D-210/D-211）**: checkpoint 欠損・破損で通知済みのレースを止める／既存 Signal と計算結果が違えば通知しない（初回の空 checkpoint は正常） | 暫定対策を実装（`BotRunIntegrityTest` 他）。**恒久対策は D-17（承認待ち）** |
+| C-37 | **監査 D（D-212）**: 分離レベルを REPEATABLE READ に固定 + デッドロック再試行。RR/RC 指定の両方で同時挿入が 1 行（試験あり） | 解消（設定で保証）。UNIQUE は D-17 |
+| C-38 | **監査 G2（D-213）**: レース待ちの保留レコードを新しいレースの到着後に再適用／バッチ内は依存するレースを先に適用／再送された保留の更新（DB 変更なし） | 解消。結果・払戻の依存は G-29 |
+| C-39 | **監査 G3（D-214）**: asOf より後に更新された `races` 行の天候・馬場を使わない（フラグ + 学習対象外）。ライブ・旧互換は不変 | 解消。**過去の天候・馬場の復元は不可（G-28）** |
+| C-40 | **監査 C・F・G6・G9・G10・A・G1・G7・G8（D-215/D-216）**: 待機後のモード再確認（エージェント）、Discord の再試行前のモード確認、更新 zip の展開前検査、Dockerfile のコメント、エラー通知の畳んだ件数、`signal_sent` の意味の明記、実オッズ無しの買い目の試験、サイズ制限は修正不要、Job の余白を契約に明記 | 解消（契約 0.4.14）。Job の実際の設定は T5.0（G-9） |
 
 ## D. ユーザーの運用判断待ち（承認するまで「承認済み」にしない）
 | ID | 判断事項 | 選択肢（推奨を先頭） |
@@ -109,6 +115,9 @@
 | D-14 | **モデル署名鍵の運用**: 秘密鍵（`MODEL_SIGNING_KEY`）の置き場所（Secret Manager）・ローテーション・検証用公開鍵（`MODEL_VERIFY_PUBKEY`）の配布。REJECTED の通知と終了コードの扱い（D-170） | 第 5 段階の前に設計して承認 |
 | D-15 | **モデル・データセットの保持期間と掃除**（CANDIDATE/REJECTED が増える。ml-train は削除しない設計） | 保持期間を決めて掃除の手順を設計（第 5 段階） |
 | D-16 | **Public 化の最終判断**（Visibility 変更）: GitHub 側の設定確認・手動設定（CI_AND_IMAGES §9）と E-6（ソース公開への JRA-VAN 回答なし）のリスクを承知するか | ① 回答が得られるまで Private のまま ② リスクを承知して Public 化（推奨設定を適用してから）。Claude は Visibility を変更しない（D-180） |
+| D-17 | **監査 E・B・D の恒久設計 V5（D-217。AUDIT_FIX_DESIGN §3。承認前は DB を変更しない）**: 評価結果の一意性（`race_evaluations` に新方式の行だけの UNIQUE）と通知タイミングの一意性・通知内容のスナップショット（新表 `race_timing_notice`）、bot に SELECT/INSERT。確認事項: ①V5 の承認 ②通知内容の保存形式（構造化 JSON〈推奨〉／本文テキスト） ③`app` への SELECT 付与 | ①〜③を承認（推奨）／別案。承認まではメモリ上の暫定対策（C-36）と設定（C-37）だけ |
+| D-18 | **発火の確定後・送信前に落ちた場合**（CONTRACTS §9.2 の方針）: そのタイミングの通知を取りこぼす（現行）か、保存したスナップショットで再開するか（V5 の後） | 取りこぼす（現行。推奨の初期値）／スナップショットで再開（Signal は 1 件ずつ claim なので二重にならない。契約の変更） |
+| D-19 | **データ不足で評価できなかったレースだけが残る run の終了状態**（LOST_DATA/QUARANTINED）: 現状は SUCCEEDED `ALL_RACES_OFF_WITH_GAPS`（exit 0）+ 警告（D-209） | 警告つき成功（現状）／FAILED（exit 1） |
 
 ### T1.20 の具体的な手順（まだ何も取得していない。取得済みとは扱わない）
 | # | 取得するもの | 手順（利用者のローカルで。実データ・パスワード・利用キーは貼らない） | 報告する集計値 |
@@ -149,6 +158,7 @@
 | F-6 | T3.6-A のローカル検証は JDK 21・MySQL 8.0.46。**JDK 25 と MySQL 8.4/9.7 の合否は GitHub Actions の結果だけが正**（D-163） |
 | F-7 | **T3.8 のローカル検証は JDK 21・MySQL 8.0.46（ポート 3307。`JRABOT_TEST_MYSQL_EXTERNAL`）**。bot-run の MySQL 統合試験（`BotRunOrchestratorIntegrationTest`〔最小権限の `bot` ユーザー〕・`BotRunRepositoriesIntegrationTest`）はローカルで成功。**JDK 25・MySQL 8.4/9.7・Docker イメージ・GitHub Actions は未実施**（無料枠不足のため PR を作らず CI を起動していない）。`MlTrainInteropIntegrationTest`（`ML_TRAIN_PYTHON` が要る）と `WiringIntegrationTest` のサーバ版検査（8.4 を期待）はローカルでは失敗する（既知。環境の問題） |
 | F-8 | **Cloud Run Jobs での SIGTERM**（猶予時間 G-OPS-4、`sun.misc.Signal` のハンドラが実コンテナで効くか、14 時間の Job タイムアウト G-OPS-5）。ローカルでは `USR2` の実シグナルでハンドラの経路を確認しただけ |
+| F-9 | **監査修正（2026-10-28）のローカル検証は JDK 21・MySQL 8.0.46**。`:bot` の MlTrainInteropIntegrationTest 6 件は `ML_TRAIN_PYTHON`（ml/requirements.txt を入れた Python）が無いため**未実施**。**GitHub Actions（JDK 25・MySQL 8.4/9.7・Docker・Python）は未実施。T3.8 は CI で未検証**。V5 案の SQL は MySQL 8.0.46 のスクラッチ DB でだけ確認（8.4/9.7 は未確認） |
 
 ## G. 後続タスク待ち
 | ID | 内容 | 予定 |
@@ -180,3 +190,6 @@
 | G-25 | **T3.9 への引き継ぎ（bot-run の残り）**: ①結果・払戻・決済の反映と `race_schedule.status`（MONITORING → OFF → RESULT_PENDING → SETTLED）・`race_day.status`（RUNNING → SETTLING → COMPLETED / INCOMPLETE）の更新。それまで T3.8 の bot-run は発走後に即終了し、完了済みの日も窓の中では calendar-check が再起動する（無害だが無駄。D-190）②reconcile（`--task=reconcile` は引き続きスタブ。INCOMPLETE の回復、結果欠損の補完）③`INCOMPLETE_AT_DEADLINE`（時刻不明・信頼できないレースが残った run）の回復④`race_evaluations.settled_at/hit/payout_used` の更新（`bot` は UPDATE 権限あり）⑤バックテスト・成績集計 | T3.9 |
 | G-26 | **取込側（ingest/agent）の履歴の追記**: `horse_master_history`（point-in-time の馬マスタ）は取込がいつ版を足すか未実装（C-21 の続き）。履歴が貯まるまで過去分の PIT は不完全で、累積値は空（`MASTER_NEWER_THAN_AS_OF`）になり得る。ML の精度に影響し得る（実データでの検証は F-5） | 取込の後続 / T1.20 |
 | G-27 | **未使用の `ModelRegistryReader` の失敗の扱い**: レジストリや保管先の障害は `MODEL_STORAGE_ERROR`（理由つきの市場確率）として run を止めないが、障害が続いても通知は run あたり 1 回。運用で見逃さないための閾値（何 run 続いたら重大にするか）は Stage 5 の監視（T5.6）で決める | T5.6 |
+| G-28 | **天候・馬場の履歴**（監査 G3。D-214）: 過去のレースの asOf 時点の値を復元できない。観測時刻つきの履歴表と WE 等のパーサが要る（DB 変更の承認が必要）。それまで該当行は学習・バックテストから除外される（件数は manifest の `skipped.conditions_newer_than_as_of`）。T3.9 のバックテストは除外件数を報告すること | T3.6 以降・承認後 |
+| G-29 | **保留レコードの再適用の拡張**（監査 G2。D-213）: 結果・払戻など T3.9 の依存の理由コード、保持期間（30 日案）を過ぎた保留の扱い、実データ形式のパーサ追加後の再解析（G-5） | T3.9・T1.17 後 |
+| G-30 | **V5 の実装**（D-17 の承認後）: Flyway V5・`race_timing_notice` を使う処理・通知内容のスナップショット・GRANT・回帰テスト（AUDIT_FIX_DESIGN §3.8）。承認までは着手しない | D-17 後 |
