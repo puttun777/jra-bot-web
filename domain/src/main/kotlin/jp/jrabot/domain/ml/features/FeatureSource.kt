@@ -51,7 +51,12 @@ interface FeatureSource {
     ): List<PastRun>
 }
 
-/** レース条件。コードは前後の空白を除いた文字列で、無ければ空文字（旧実装と同じ）。[postTime] は発走時刻（point-in-time の検査用。旧互換では使わない）。 */
+/**
+ * レース条件。コードは前後の空白を除いた文字列で、無ければ空文字（旧実装と同じ）。[postTime] は発走時刻（point-in-time の検査用。旧互換では使わない）。
+ * [updatedAt] は `races` 行の最終更新時刻。天候・馬場（[tenkoCd]・[shibaBabaCd]・[dirtBabaCd]）は時間とともに変わる現在値で、変更の履歴を持たない。
+ * 評価時点（asOf）より後に行が更新されていたら、asOf 時点の値は分からない（未来の値かもしれない）ので使わない
+ * （[PointInTimeFeatureBuilder] が空にして [FeatureFlag.RACE_CONDITIONS_NEWER_THAN_AS_OF] を付ける）。null = 不明（旧データ・試験用の供給元）で、検査しない。
+ */
 data class RaceConditions(
     val raceDate: LocalDate?,
     val postTime: Instant?,
@@ -61,6 +66,7 @@ data class RaceConditions(
     val tenkoCd: String,
     val shibaBabaCd: String,
     val dirtBabaCd: String,
+    val updatedAt: Instant? = null,
 ) {
     companion object {
         val EMPTY = RaceConditions(null, null, 0, "", "", "", "", "")

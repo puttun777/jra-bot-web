@@ -6,6 +6,7 @@ import javax.sql.DataSource
 
 /**
  * HikariCP の DataSource を作る（CONTRACTS §8.1・§8.3）。接続の約束事:
+ * - 分離レベル: REPEATABLE READ に固定（MySQL の既定。サーバー側の設定変更で READ COMMITTED にならない）
  * - UTC: セッションの `time_zone` を `+00:00` に固定する（`connectionInitSql`）。JVM の既定タイムゾーンには依存しない
  *   （時刻の型変換は [jp.jrabot.persistence.doma.UtcJdbcMappingVisitor] が `LocalDateTime` をそのまま渡す）。
  * - `useAffectedRows=true`: UPDATE / `ON DUPLICATE KEY UPDATE` が「値が変わらなかった行」を 0 件と数える。upsert の
@@ -51,6 +52,9 @@ object DataSourceFactory {
             connectionTimeout = CONNECTION_TIMEOUT_MS
             maxLifetime = MAX_LIFETIME_MS
             connectionInitSql = "SET time_zone = '+00:00'"
+            // 分離レベルをサーバーの既定に任せず REPEATABLE READ に固定する。UNIQUE の無い表への INSERT…WHERE NOT EXISTS（race_evaluations）の重複防止が、
+            // READ COMMITTED では成り立たない（監査 D）ため
+            transactionIsolation = "TRANSACTION_REPEATABLE_READ"
             for ((key, value) in REQUIRED_PROPERTIES) addDataSourceProperty(key, value)
         }
 

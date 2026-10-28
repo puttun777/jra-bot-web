@@ -92,6 +92,19 @@ class IngestItConfig {
                 if (f.rawInsertFailOn != 0 && n == f.rawInsertFailOn) throw InjectedFailure()
                 return real.insertIfAbsent(row)
             }
+
+            override fun settlePending(
+                tenantId: TenantId,
+                recordHash: String,
+                status: jp.jrabot.domain.ingest.ParseStatus,
+                error: String?,
+            ): Boolean = real.settlePending(tenantId, recordHash, status, error)
+
+            override fun listPending(
+                tenantId: TenantId,
+                reason: String,
+                limit: Int,
+            ): List<jp.jrabot.domain.ingest.PendingRawRecord> = real.listPending(tenantId, reason, limit)
         }
 
     @Bean @Primary

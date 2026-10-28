@@ -261,7 +261,8 @@ class PersistenceConfiguration {
     fun raceEvaluationWriter(
         config: Config,
         clock: Clock,
-    ): RaceEvaluationWriter = RaceEvaluationRepositoryImpl(RaceEvaluationDaoImpl(config), clock)
+        tx: TransactionOperations,
+    ): RaceEvaluationWriter = RaceEvaluationRepositoryImpl(RaceEvaluationDaoImpl(config), clock, tx)
 
     /** 出走表の馬名（通知の理由文用。読取りだけ）。 */
     @Bean

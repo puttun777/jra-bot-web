@@ -75,10 +75,10 @@ class PointInTimeFeatureBuilder(
         schema: FeatureSchema,
         request: FeatureRequest,
     ): FeatureVector {
-        val rc = checkedConditions(request)
+        val flags = mutableSetOf<FeatureFlag>()
+        val rc = conditionsAsOf(checkedConditions(request), request.asOf, flags)
         val raceDate = checkNotNull(rc.raceDate) { "checkedConditions がレース日を確認済み" }
 
-        val flags = mutableSetOf<FeatureFlag>()
         val summary = summary(request, rc, raceDate, flags)
 
         var odds = 0.0
@@ -96,6 +96,18 @@ class PointInTimeFeatureBuilder(
         val extra = FeatureMath.extra19(summary, rc)
         val ped = PedigreeHash.accumulate(summary.pedigreeNames, PedigreeHash.DEFAULT_DIM)
         return FeatureVector(schema, FeatureMath.assemble(schema, odds, popularity, extra, ped), summary.meta.copy(flags = flags))
+    }
+
+    /** `races` 行が asOf より後に更新されていたら、時間で変わる天候・馬場は asOf 時点の値が分からない。推測せず空にしてフラグを付ける（履歴が無い限り復元しない）。 */
+    private fun conditionsAsOf(
+        rc: RaceConditions,
+        asOf: java.time.Instant,
+        flags: MutableSet<FeatureFlag>,
+    ): RaceConditions {
+        val updated = rc.updatedAt ?: return rc
+        if (!updated.isAfter(asOf)) return rc
+        flags += FeatureFlag.RACE_CONDITIONS_NEWER_THAN_AS_OF
+        return rc.copy(tenkoCd = "", shibaBabaCd = "", dirtBabaCd = "")
     }
 
     /** レース条件を読み、未来の情報を使わないことを確認する（発走時刻・レース日が不明、asOf が発走時刻以降なら [LeakageException]）。 */
@@ -120,9 +132,9 @@ class PointInTimeFeatureBuilder(
         request: FeatureRequest,
         bamei: String,
     ): HorseReasonFacts {
-        val rc = checkedConditions(request)
-        val raceDate = checkNotNull(rc.raceDate)
         val flags = mutableSetOf<FeatureFlag>()
+        val rc = conditionsAsOf(checkedConditions(request), request.asOf, flags)
+        val raceDate = checkNotNull(rc.raceDate)
         val s = summary(request, rc, raceDate, flags)
         val cumulativeKnown = s.hasHorseMaster && FeatureFlag.MASTER_NEWER_THAN_AS_OF !in flags
         return HorseReasonFacts(

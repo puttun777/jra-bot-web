@@ -106,4 +106,44 @@ class BotRunRepositoriesIntegrationTest {
         assertEquals(mapOf(1 to "合成一"), entries.horseNames(T1, raceId))
         assertEquals(mapOf(1 to "他テナント"), entries.horseNames(T2, raceId))
     }
+
+    /**
+     * 監査 D: UNIQUE の無い `race_evaluations` へ、同じ (race, snapshot_at) を同時に挿入しても重複しない（分離レベルの固定 + デッドロック再試行）。
+     * REPEATABLE READ（MySQL 既定）と READ COMMITTED の両方で確認する。
+     */
+    private fun concurrentInsertsStayUnique(isolation: String?) {
+        val url = MySqlSupport.jdbcUrl(db.name) + (isolation?.let { "?sessionVariables=transaction_isolation=%27$it%27" } ?: "")
+        RepositoryHarness(db, user = "bot", poolMax = 8, url = url).use { harness ->
+            val w = harness.bean(RaceEvaluationWriter::class.java)
+            val threads = 8
+            val rounds = 25
+            val pool =
+                java.util.concurrent.Executors
+                    .newFixedThreadPool(threads)
+            try {
+                repeat(rounds) { round ->
+                    val barrier = java.util.concurrent.CyclicBarrier(threads)
+                    val at = Fixtures.OBSERVED.plusSeconds(round.toLong())
+                    val outcomes =
+                        (1..threads)
+                            .map {
+                                pool.submit<InsertOutcome> {
+                                    barrier.await()
+                                    w.insertIfAbsent(record(snapshotAt = at))
+                                }
+                            }.map { it.get(30, java.util.concurrent.TimeUnit.SECONDS) }
+                    assertEquals(1, outcomes.count { it == InsertOutcome.INSERTED }, "round=$round isolation=$isolation: 挿入できたのは 1 つだけ")
+                }
+            } finally {
+                pool.shutdownNow()
+            }
+        }
+        assertEquals(25, db.count("SELECT COUNT(*) FROM race_evaluations"), "isolation=$isolation: 重複なし")
+    }
+
+    @Test
+    fun `同時挿入でも重複しない REPEATABLE READ`() = concurrentInsertsStayUnique("REPEATABLE-READ")
+
+    @Test
+    fun `セッションが READ COMMITTED を指定しても REPEATABLE READ に固定され 同時挿入で重複しない`() = concurrentInsertsStayUnique("READ-COMMITTED")
 }

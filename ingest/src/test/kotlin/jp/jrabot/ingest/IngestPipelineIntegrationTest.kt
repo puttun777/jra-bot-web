@@ -257,6 +257,46 @@ class IngestPipelineIntegrationTest {
     }
 
     @Test
+    fun `レース待ちで保留にしたオッズは レースが届いた時点で 取り込んだときの観測時刻のまま再適用される（監査 G2）`() {
+        val at = ItClock.now().minusSeconds(30)
+        val ack = it.parse(it.ingest(it.one, odds(it.now(race, 1 to 2.5, 2 to 10.0), at = at)))
+        assertEquals(1, ack["unsupported"])
+        assertEquals(0, it.count("SELECT COUNT(*) FROM odds_snapshots"))
+        assertEquals("PENDING", it.db.scalar("SELECT parse_status FROM ingest_raw WHERE parse_error = 'RACE_NOT_FOUND'"))
+        // レースの情報が後から届く（別のバッチ）
+        assertEquals(200, it.ingest(it.one, it.envelope(records = listOf(it.nra(race, "2", "20261030")))).status)
+        assertEquals(2, it.count("SELECT COUNT(*) FROM odds_snapshots WHERE market = 'win'"), "保留にしていたオッズが保存された")
+        assertEquals(0, it.count("SELECT COUNT(*) FROM ingest_raw WHERE parse_status = 'PENDING'"), "保留のまま残さない")
+        assertEquals("PARSED", it.db.scalar("SELECT parse_status FROM ingest_raw WHERE dataspec = '0B31'"))
+        // 観測時刻は取り込んだバッチの時刻（再適用した時刻ではない）
+        assertEquals(2, it.count("SELECT COUNT(*) FROM odds_snapshots o JOIN ingest_batch b ON b.dataspec = '0B31' AND b.observed_at = o.observed_at"))
+        // もう一度レースが届いても重複しない（冪等）
+        it.ingest(it.one, it.envelope(records = listOf(it.nra(race, "2", "20261030", name = "改名"))))
+        assertEquals(2, it.count("SELECT COUNT(*) FROM odds_snapshots WHERE market = 'win'"))
+    }
+
+    @Test
+    fun `同じバッチの中でオッズがレースより前に並んでいても 保留にしない 依存するレースを先に適用する（監査 G2）`() {
+        val ack = it.parse(it.ingest(it.one, it.envelope(records = listOf(it.now(race, 1 to 2.5), it.nra(race, "2", "20261030")))))
+        assertEquals(0, ack["unsupported"])
+        assertEquals(1, it.count("SELECT COUNT(*) FROM odds_snapshots WHERE market = 'win'"))
+        assertEquals(0, it.count("SELECT COUNT(*) FROM ingest_raw WHERE parse_status = 'PENDING'"))
+        // 生レコードは元の並び（seq）のまま保存する
+        assertEquals("NOW", it.db.scalar("SELECT record_id FROM ingest_raw ORDER BY seq LIMIT 1"))
+    }
+
+    @Test
+    fun `レース待ちの保留が別のテナントに影響しない（テナント境界）`() {
+        val at = ItClock.now().minusSeconds(30)
+        it.ingest(it.one, odds(it.now(race, 1 to 2.5), at = at))
+        assertEquals(1, it.count("SELECT COUNT(*) FROM ingest_raw WHERE parse_status = 'PENDING'"))
+        // 別テナントの同じレースIDのレース情報が届いても、テナント1の保留は再適用されない
+        it.ingest(it.two, it.envelope(agent = it.two, records = listOf(it.nra(race, "2", "20261030"))))
+        assertEquals(1, it.count("SELECT COUNT(*) FROM ingest_raw WHERE tenant_id = 1 AND parse_status = 'PENDING'"))
+        assertEquals(0, it.count("SELECT COUNT(*) FROM odds_snapshots WHERE tenant_id = 1"))
+    }
+
+    @Test
     fun `古い速報オッズ（保持期間を過ぎた観測）は封筒の段階で拒否する`() {
         it.ingest(it.one, it.envelope(records = listOf(it.nra(race, "2", "20261030"))))
         val r = it.ingest(it.one, odds(it.now(race, 1 to 2.5), at = ItClock.now().minus(java.time.Duration.ofDays(8))))

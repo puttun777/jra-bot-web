@@ -116,6 +116,9 @@ class MlSourceIntegrationTest {
         assertEquals(LocalDate.of(2026, 1, 4), rc.raceDate)
         assertEquals("11", rc.trackTypeCd)
         assertEquals(1600, rc.distanceM)
+        // 監査 G3: races 行の最終更新時刻（UTC の Instant）を返す。天候・馬場を asOf と比べるため
+        db.exec("UPDATE races SET updated_at = '2026-01-04 05:30:00.000000' WHERE tenant_id = 1")
+        assertEquals(java.time.Instant.parse("2026-01-04T05:30:00Z"), features.raceConditions(T1, raceId)!!.updatedAt)
         assertNull(features.raceConditions(T1, "202601049999"))
         db.exec("UPDATE races SET post_time = NULL, post_time_unknown = 1 WHERE tenant_id = 2")
         assertNull(features.raceConditions(T2, raceId)!!.postTime)
@@ -224,6 +227,8 @@ class MlSourceIntegrationTest {
 
     @Test
     fun `DB からのデータセットの書出しで、時点整合・ラベル・スキップの理由が揃う（H3 と H8 の再発防止）`() {
+        // 天候・馬場を含む races 行は as_of より前に最後に更新された（シードの updated_at は現在時刻なので、時点を明示する）
+        db.exec("UPDATE races SET updated_at = '2026-01-03 00:00:00.000000' WHERE tenant_id = 1")
         val e =
             DatasetExporter(features, dataset).export(
                 T1,
@@ -259,5 +264,22 @@ class MlSourceIntegrationTest {
                 .GZIPInputStream(e.csvGz().inputStream())
                 .readAllBytes(),
         )
+    }
+
+    @Test
+    fun `races 行が as_of より後に更新されていたら 天候と馬場を復元できないのでその行を出力しない（G3）`() {
+        // シードの updated_at は現在時刻（as_of より後）= 履歴が無く、asOf 時点の値を確認できない
+        val e =
+            DatasetExporter(features, dataset).export(
+                T1,
+                DatasetId.of("it-conditions"),
+                FeatureSchema.CALIBRATION_40,
+                LocalDate.of(2026, 1, 1),
+                LocalDate.of(2026, 1, 31),
+                Instant.parse("2026-02-01T00:00:00Z"),
+            )
+        assertEquals(JsonInt(0), e.manifest["rows"])
+        val skipped = (e.manifest["quality"] as JsonObject)["skipped"] as JsonObject
+        assertEquals(JsonInt(2), skipped["conditions_newer_than_as_of"]) // 結果のある 2 頭（行ごとに数える）
     }
 }

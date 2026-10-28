@@ -204,7 +204,31 @@ internal interface IngestRawDao {
         tenantId: Long,
         batchId: String,
     ): List<IngestRawEntity>
+
+    /** 保留（PENDING）の行の結果を更新する。**PENDING の行だけ**（件数 1 = 更新、0 = 既に確定している・不在）。 */
+    @Update(sqlFile = true)
+    fun settlePending(entity: IngestRawEntity): Result<IngestRawEntity>
+
+    /** [reason] を理由にした保留の行を、バッチの種別・観測時刻付きで古い順に。 */
+    @Select
+    fun selectPending(
+        tenantId: Long,
+        reason: String,
+        limit: Int,
+    ): List<PendingRawRow>
 }
+
+/** 保留中の生レコード + 取り込んだバッチの種別・観測時刻（再適用用）。 */
+@Entity(immutable = true, naming = NamingType.SNAKE_LOWER_CASE)
+internal data class PendingRawRow(
+    val recordHash: String,
+    val batchId: String,
+    val batchClass: String,
+    val observedAt: LocalDateTime,
+    val dataspec: String,
+    val recordId: String,
+    val payload: ByteArray,
+)
 
 @Entity(immutable = true, naming = NamingType.SNAKE_LOWER_CASE)
 @Table(name = "ingest_fetch")

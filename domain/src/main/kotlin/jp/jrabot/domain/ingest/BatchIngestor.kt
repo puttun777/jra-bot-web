@@ -147,7 +147,10 @@ class BatchIngestor(
             }
 
         return try {
-            IngestOutcome.Accepted(uow.run { process(caller, env, token, now, observedAt) })
+            val done = uow.run { process(caller, env, token, now, observedAt) }
+            // 新しいレースが入ったら、レース待ちで保留にした生レコードを再適用する（コミットの後に別の処理として。失敗しても今回のバッチの ACK には影響させない）
+            if (done.racesCreated) replayPending(tenantId)
+            IngestOutcome.Accepted(done.ack)
         } catch (e: BatchRejectedException) {
             releaseQuietly(tenantId, env.batchId, token, e.rejection.code)
             IngestOutcome.Rejected(e.rejection)
@@ -183,7 +186,7 @@ class BatchIngestor(
         token: Instant,
         now: Instant,
         observedAt: Instant,
-    ): IngestAck {
+    ): Processed {
         val tenantId = caller.tenantId
         val fetchInfo = env.fetch
         val fetch =
@@ -209,10 +212,43 @@ class BatchIngestor(
         var quarantined = 0
         var unsupported = 0
         var maxRaceDate: LocalDate? = null
+        var racesCreated = false
+
+        // 解析は全レコード先に行い、適用は『レースを定義する観測（開催日・レース・発走時刻の変更）→ それに依存する観測（オッズ）』の順にする。
+        // 同じバッチの中でオッズがレースより前に並んでいても、レース待ち（保留）にしない。生レコードの保存は元の並び（seq）のまま。
+        val parsedAll = env.records.map { rec -> parsers.parse(parseCtx, rec) }
+        val statuses = Array(env.records.size) { ParseStatus.PARSED }
+        val errors = arrayOfNulls<String>(env.records.size)
+        val applyOrder =
+            parsedAll
+                .flatMapIndexed { index, parsed -> (parsed as? ParseOutcome.Parsed)?.observations.orEmpty().map { index to it } }
+                .sortedBy { (_, obs) -> if (obs.definesRace()) 0 else 1 }
+        for ((index, obs) in applyOrder) {
+            if (obs is ScheduleDayObservation) maxRaceDate = listOfNotNull(maxRaceDate, obs.date).max()
+            when (val r = applier.apply(tenantId, obs, applyCtx)) {
+                is ApplyOutcome.Quarantined -> {
+                    statuses[index] = ParseStatus.FAILED
+                    errors[index] = r.reason
+                }
+
+                is ApplyOutcome.Deferred -> {
+                    if (statuses[index] == ParseStatus.PARSED) {
+                        statuses[index] = ParseStatus.PENDING
+                        errors[index] = r.reason
+                    }
+                }
+
+                ApplyOutcome.Applied -> {
+                    if (obs is RaceObservation) racesCreated = true
+                }
+
+                else -> {}
+            }
+        }
         env.records.forEachIndexed { index, rec ->
-            var status = ParseStatus.PARSED
-            var error: String? = null
-            when (val parsed = parsers.parse(parseCtx, rec)) {
+            var status = statuses[index]
+            var error = errors[index]
+            when (val parsed = parsedAll[index]) {
                 is ParseOutcome.Unsupported -> {
                     status = ParseStatus.PENDING
                     error = parsed.reason
@@ -226,24 +262,6 @@ class BatchIngestor(
                 }
 
                 is ParseOutcome.Parsed -> {
-                    for (obs in parsed.observations) {
-                        if (obs is ScheduleDayObservation) maxRaceDate = listOfNotNull(maxRaceDate, obs.date).max()
-                        when (val r = applier.apply(tenantId, obs, applyCtx)) {
-                            is ApplyOutcome.Quarantined -> {
-                                status = ParseStatus.FAILED
-                                error = r.reason
-                            }
-
-                            is ApplyOutcome.Deferred -> {
-                                if (status == ParseStatus.PARSED) {
-                                    status = ParseStatus.PENDING
-                                    error = r.reason
-                                }
-                            }
-
-                            else -> {}
-                        }
-                    }
                     if (status == ParseStatus.FAILED) {
                         quarantined++
                     } else if (status == ParseStatus.PENDING) {
@@ -256,7 +274,13 @@ class BatchIngestor(
                 raw.insertIfAbsent(
                     RawRecordRow(tenantId, hash, env.batchId, index, env.dataspec, rec.id, rec.bytes, now, status, error?.take(200)),
                 )
-            if (inserted) accepted++ else duplicates++
+            if (inserted) {
+                accepted++
+            } else {
+                duplicates++
+                // 再送された保留中のレコードが今回は適用できた（依存するデータが揃った）なら、保留のままにしない
+                if (status != ParseStatus.PENDING) raw.settlePending(tenantId, hash, status, error?.take(200))
+            }
         }
 
         if (!batches.complete(tenantId, env.batchId, token, BatchCounts(accepted, duplicates), now)) throw ClaimLostException()
@@ -270,7 +294,71 @@ class BatchIngestor(
             progress = FetchProgress(updated.fetchId, updated.status, updated.nextSeq)
             if (updated.status != FetchStatus.IN_PROGRESS) cursorAck = finishFetch(caller, updated, now)
         }
-        return IngestAck(accepted, duplicates, quarantined, unsupported, now, duplicateBatch = false, fetch = progress, cursor = cursorAck)
+        return Processed(
+            IngestAck(accepted, duplicates, quarantined, unsupported, now, duplicateBatch = false, fetch = progress, cursor = cursorAck),
+            racesCreated,
+        )
+    }
+
+    private class Processed(
+        val ack: IngestAck,
+        /** このバッチで新しいレースの情報が反映された（レース待ちの保留を再適用できる）。 */
+        val racesCreated: Boolean,
+    )
+
+    /** レース・開催日・発走時刻の変更など、他の観測が依存する観測。 */
+    private fun Observation.definesRace(): Boolean = this is ScheduleDayObservation || this is RaceObservation || this is TimeChangeObservation
+
+    /**
+     * レース待ち（[REASON_RACE_NOT_FOUND]）で保留にした生レコードを、取り込んだときのバッチの観測時刻のまま再解析・再適用する（古い順に最大 [REPLAY_LIMIT] 件）。
+     * 1 件ずつ別のトランザクションで、**失敗しても他へ影響させない**（保留のまま次の機会に再試行する）。同じ観測の再適用は冪等（オッズは自然キーで upsert）。
+     */
+    private fun replayPending(tenantId: TenantId) {
+        val pending =
+            try {
+                raw.listPending(tenantId, REASON_RACE_NOT_FOUND, REPLAY_LIMIT)
+            } catch (_: RuntimeException) {
+                return
+            }
+        for (row in pending) {
+            try {
+                uow.run { replayOne(tenantId, row) }
+            } catch (_: RuntimeException) {
+                // 保留のまま残す。次にレースが入ったときに再試行する
+            }
+        }
+    }
+
+    private fun replayOne(
+        tenantId: TenantId,
+        row: PendingRawRecord,
+    ) {
+        val parsed =
+            parsers.parse(
+                ParseContext(row.dataspec, row.batchClass, row.observedAt),
+                IngestRecordIn(row.recordId, row.payload, Hashing.sha256Hex(row.payload)),
+            )
+        if (parsed !is ParseOutcome.Parsed) return
+        val ctx = ApplyContext(row.observedAt, row.batchId, row.dataspec)
+        var failed: String? = null
+        var deferred = false
+        for (obs in parsed.observations) {
+            when (val r = applier.apply(tenantId, obs, ctx)) {
+                is ApplyOutcome.Quarantined -> {
+                    failed = r.reason
+                }
+
+                is ApplyOutcome.Deferred -> {
+                    deferred = true
+                }
+
+                else -> {}
+            }
+        }
+        when {
+            failed != null -> raw.settlePending(tenantId, row.recordHash, ParseStatus.FAILED, failed.take(200))
+            !deferred -> raw.settlePending(tenantId, row.recordHash, ParseStatus.PARSED, null)
+        }
     }
 
     /** サーバのカーソルがこの取得の値以上なら、その値を返す（前進したか既に同値以上かを区別しない。後戻りはしない）。LIVE の成功だけ。 */
@@ -334,5 +422,8 @@ class BatchIngestor(
 
     private companion object {
         val TS14: DateTimeFormatter = DateTimeFormatter.ofPattern("uuuuMMddHHmmss")
+
+        /** 1 回の再適用で扱う保留の件数の上限（ingest のリクエストの時間を伸ばさない）。 */
+        const val REPLAY_LIMIT = 200
     }
 }

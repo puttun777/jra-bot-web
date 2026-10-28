@@ -83,7 +83,16 @@ class InMemoryDatasetSource : DatasetSource {
 }
 
 /** 行を出力しなかった理由（件数を manifest に記録する。黙って捨てない）。 */
-enum class SkipReason { NO_RESULT, RESULT_INCOMPLETE, RACE_NOT_FOUND, RACE_DATE_UNKNOWN, POST_TIME_UNKNOWN, AS_OF_NOT_BEFORE_POST_TIME, NO_ODDS_AT_AS_OF }
+enum class SkipReason {
+    NO_RESULT,
+    RESULT_INCOMPLETE,
+    RACE_NOT_FOUND,
+    RACE_DATE_UNKNOWN,
+    POST_TIME_UNKNOWN,
+    AS_OF_NOT_BEFORE_POST_TIME,
+    NO_ODDS_AT_AS_OF,
+    CONDITIONS_NEWER_THAN_AS_OF,
+}
 
 class ExportedDataset(
     val datasetId: DatasetId,
@@ -189,6 +198,11 @@ class DatasetExporter(
                     skip(SkipReason.AS_OF_NOT_BEFORE_POST_TIME)
                     continue
                 }
+            if (FeatureFlag.RACE_CONDITIONS_NEWER_THAN_AS_OF in v.meta.flags) {
+                // 天候・馬場の asOf 時点の値を復元できない（履歴が無い）。空にして学習すると本番（値あり）とずれるので、推測せず学習対象から外す
+                skip(SkipReason.CONDITIONS_NEWER_THAN_AS_OF)
+                continue
+            }
             if (schema == FeatureSchema.CALIBRATION_40 && FeatureFlag.ODDS_MISSING in v.meta.flags) {
                 skip(SkipReason.NO_ODDS_AT_AS_OF)
                 continue
@@ -277,7 +291,11 @@ class DatasetExporter(
                 .filter { i -> n > 0 && rows.all { it.values[i] == rows[0].values[i] } }
                 .map { JsonString(schema.names[it]) }
         val flagCounts =
-            FeatureFlag.entries.associate { f -> f.name.lowercase() to JsonInt(rows.count { f in it.flags }.toLong()) }
+            // RACE_CONDITIONS_NEWER_THAN_AS_OF の行は出力しない（skipped に数える）ので、flags には出さない（従来の manifest とバイト列を変えない）
+            FeatureFlag.entries.filter { it != FeatureFlag.RACE_CONDITIONS_NEWER_THAN_AS_OF }.associate { f ->
+                f.name.lowercase() to
+                    JsonInt(rows.count { f in it.flags }.toLong())
+            }
         val body =
             JsonObject.of(
                 "dataset_schema_version" to JsonInt(1),
@@ -320,7 +338,13 @@ class DatasetExporter(
                         "has_past_runs_ratio" to JsonFloat(if (n == 0) 0.0 else rows.count { it.hasPast }.toDouble() / n),
                         "constant_features" to JsonArray(constant),
                         "flags" to JsonObject(flagCounts),
-                        "skipped" to JsonObject(SkipReason.entries.associate { it.name.lowercase() to JsonInt((skipped[it] ?: 0).toLong()) }),
+                        // conditions_newer_than_as_of は 1 件以上あるときだけ出す（0 件なら従来の manifest とバイト列が同じ。固定の fixture と Python 側の検証を変えない）
+                        "skipped" to
+                            JsonObject(
+                                SkipReason.entries
+                                    .filter { it != SkipReason.CONDITIONS_NEWER_THAN_AS_OF || (skipped[it] ?: 0) > 0 }
+                                    .associate { it.name.lowercase() to JsonInt((skipped[it] ?: 0).toLong()) },
+                            ),
                     ),
             )
         return body.with("sha256", JsonString(CanonicalJson.sha256Hex(body)))

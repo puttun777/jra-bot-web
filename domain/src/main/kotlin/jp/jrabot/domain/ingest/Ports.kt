@@ -31,7 +31,38 @@ class RawRecordRow(
 interface RawRecordStore {
     /** `(tenant, record_hash)` が無いときだけ保存して true。既にあれば何も変えず false（重複の吸収）。 */
     fun insertIfAbsent(row: RawRecordRow): Boolean
+
+    /**
+     * 保留（[ParseStatus.PENDING]）の行の結果を、再解析・再適用の結果で更新する（PARSED / FAILED）。**PENDING の行だけ**を更新し、確定済みの行は変えない
+     * （更新できたら true）。同じレコードの再送・保留の再適用で、依存するデータが揃ったのに PENDING のまま残るのを防ぐ。
+     */
+    fun settlePending(
+        tenantId: TenantId,
+        recordHash: String,
+        status: ParseStatus,
+        error: String?,
+    ): Boolean
+
+    /**
+     * 依存するデータ待ち（[ParseStatus.PENDING] で [reason] を理由にしたもの）の行を、古い順に最大 [limit] 件。再適用に必要な、バッチの種別・観測時刻を付ける。
+     */
+    fun listPending(
+        tenantId: TenantId,
+        reason: String,
+        limit: Int,
+    ): List<PendingRawRecord>
 }
+
+/** 保留中の生レコード（再解析・再適用用）。[observedAt] は取り込んだバッチの観測時刻（オッズのスナップショットの時刻になる）。 */
+class PendingRawRecord(
+    val recordHash: String,
+    val batchId: String,
+    val batchClass: BatchClass,
+    val observedAt: Instant,
+    val dataspec: String,
+    val recordId: String,
+    val payload: ByteArray,
+)
 
 class BatchClaim(
     val tenantId: TenantId,
