@@ -35,6 +35,8 @@ internal class RaceEvaluationRepositoryImpl(
                 winRatioMin = record.winRatioMin,
                 bestEv = record.bestEv,
                 rejectionSummaryJson = record.rejectionSummaryJson,
+                // 旧 `signal_sent` は『この評価の判定が notify（買い目あり）か skip か』（旧 UI の「通知のみ」フィルタ: decision=notify/skip）で、Discord の配送結果ではない。
+                // 意味は変えない（移行データと同じ）。実際の通知状態の正は `signals.notify_state`（UNSENT/CLAIMED/SENT/SEND_UNKNOWN）。
                 signalSent = record.signalCount > 0,
                 createdAt = clock.now().toDbTime(),
             )

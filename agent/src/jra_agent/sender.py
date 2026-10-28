@@ -135,6 +135,13 @@ class Sender:
         wait = self._pacing_wait()
         if wait > 0:
             self._clock.sleep(wait)
+            # 待っている間に運用モードが変わり得る（STOPPED / UNKNOWN / 認証停止）。送信の直前に必ず再確認する（claim の前なので巻き戻しは不要）
+            halted = self.auth_halted()
+            if halted:
+                return StepResult(Step.HALTED, detail=halted)
+            view = self._modes.evaluate()
+            if not self._modes.may_send():
+                return StepResult(Step.HALTED, detail=f"{view.mode.value}:{view.reason}")
         batch = self._q.claim_next()
         if batch is None:
             return StepResult(Step.IDLE)

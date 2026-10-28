@@ -10,7 +10,7 @@ import kotlin.system.exitProcess
 
 /**
  * :bot の起動点（T2.8）。Cloud Run Jobs の単一イメージで `--task=bot-run|calendar-check|reconcile|retention|export-dataset` を切り替える。
- * **calendar-check（T3.3）以外のタスクの業務処理は未実装のスタブ**（[StubTaskHandler]）。
+ * 実装済みは bot-run（T3.8）・calendar-check（T3.3）・export-dataset。**reconcile・retention は未実装のスタブ**（[StubTaskHandler]。本番では exit 1）。
  *
  * T2.4 で入れていた `DataSourceAutoConfiguration` / `DomaAutoConfiguration` の除外は外した。DataSource は [BotConfiguration] が
  * （遅延で）定義するので、Boot の自動構成は引き下がる。さらに Spring のコンテキストは**モード確認の後**（NORMAL のときだけ）にしか作らない

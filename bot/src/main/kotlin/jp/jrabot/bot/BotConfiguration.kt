@@ -91,7 +91,14 @@ class BotConfiguration {
         stop: StopFlag,
     ): Notifier {
         val d = runtime.settings.discord ?: DiscordSettings.NONE
-        return DiscordNotifier(d.signalUrl, d.errorUrl, d.mention, JdkWebhookTransport(), stopRequested = stop::isRequested)
+        return DiscordNotifier(
+            d.signalUrl,
+            d.errorUrl,
+            d.mention,
+            JdkWebhookTransport(),
+            stopRequested = stop::isRequested,
+            sendAllowed = { runCatching { runtime.modeProvider.current().allowsWork }.getOrDefault(false) },
+        )
     }
 
     @Bean

@@ -38,6 +38,7 @@ import jp.jrabot.domain.ops.OpsMode
 import jp.jrabot.domain.race.HorseNumber
 import jp.jrabot.domain.race.RaceId
 import jp.jrabot.domain.race.RaceSchedule
+import jp.jrabot.domain.signal.NotificationState
 import jp.jrabot.domain.tenant.TenantId
 import java.time.Duration
 import java.time.Instant
@@ -160,6 +161,7 @@ class Kit(
                 )
             },
             dispatcher = dispatcher,
+            notifiedProbe = NotifiedSignalProbe { t, r -> signals.listByRace(t, r).any { it.state != NotificationState.UNSENT } },
             errors = errorReporter,
             pacer = pacerOverride ?: pacer,
             stopRequested = { stop },

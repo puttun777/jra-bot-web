@@ -24,7 +24,7 @@ object SecretRedactor {
  * 運用者向けのエラー通知（`DISCORD_ERROR_WEBHOOK_URL`。旧 `run_daemon._notify_error`）の送り口。**どのイベントから呼ぶかは T3.8 の責務**（ここは基盤だけ）。
  *
  * - **例外を投げない・再帰しない**: 送信に失敗しても、その失敗を再度エラー通知しない。報告の最中に別の報告が来たら捨てる（[Outcome.REENTRANT]）。
- * - 同じ内容は [cooldown] の間は 1 回だけ（旧実装の既定 300 秒）。記憶する件数には上限がある。
+ * - 同じ内容は [cooldown] の間は 1 回だけ（旧実装の既定 300 秒）。記憶する件数には上限がある。**送らなかった件数は数え**（[suppressedTotal]）、次に送るときに本文へ書く。
  * - 本文から秘密（Webhook URL・Authorization・トークン・秘密鍵）を取り除き、`@` を無害化し、長さを切り詰める（旧実装と同じ 180/900/800 文字、全体 1900）。
  * - 宛先が未設定なら何もしない（[Outcome.NOT_CONFIGURED]）。結果は送信できたかの目安で、呼び出し側はこれを理由に本処理を止めない。
  */
@@ -36,10 +36,22 @@ class ErrorReporter(
     enum class Outcome { SENT, NOT_CONFIGURED, COOLDOWN, NOT_DELIVERED, REENTRANT }
 
     private val inFlight = AtomicBoolean(false)
+
+    private class Entry(
+        var at: Instant,
+        /** 前回の送信から、cooldown で送らなかった件数（次に送るときに本文へ書く）。 */
+        var suppressed: Int = 0,
+    )
+
     private val lastSent =
-        object : LinkedHashMap<String, Instant>(16, 0.75f, false) {
-            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Instant>?): Boolean = size > MAX_KEYS
+        object : LinkedHashMap<String, Entry>(16, 0.75f, false) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Entry>?): Boolean = size > MAX_KEYS
         }
+
+    /** cooldown で送らなかった通知の累計（障害の件数の観測用。値は含まない）。 */
+    @Volatile
+    var suppressedTotal: Long = 0
+        private set
 
     fun report(
         title: String,
@@ -54,12 +66,20 @@ class ErrorReporter(
             val d = clean(details, DETAILS_MAX).replace("```", "` ` `")
             val key = "$t|${m.take(120)}"
             val now = clock.now()
+            var collapsed = 0
             synchronized(lastSent) {
                 val last = lastSent[key]
-                if (last != null && Duration.between(last, now) < cooldown) return Outcome.COOLDOWN
-                lastSent[key] = now
+                if (last != null && Duration.between(last.at, now) < cooldown) {
+                    // 同じ内容は送らないが、件数は数える（障害が何件あったかを失わない）
+                    last.suppressed++
+                    suppressedTotal++
+                    return Outcome.COOLDOWN
+                }
+                collapsed = last?.suppressed ?: 0
+                lastSent[key] = Entry(now)
             }
-            val body = "【JRA EV Bot エラー】\n**$t**\n$m\n\n```text\n$d\n```".let { cut(it, BODY_MAX) }
+            val note = if (collapsed > 0) "\n（直前の通知から、同じ内容 $collapsed 件を cooldown のため送っていません）" else ""
+            val body = "【JRA EV Bot エラー】\n**$t**\n$m$note\n\n```text\n$d\n```".let { cut(it, BODY_MAX) }
             val result = notifier.send(Notification(null, NotificationChannel.ERROR, "JRA EV Bot エラー: $t".take(200), body))
             if (result == DeliveryResult.DELIVERED) Outcome.SENT else Outcome.NOT_DELIVERED
         } catch (e: Exception) {

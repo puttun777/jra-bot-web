@@ -12,6 +12,7 @@ import jp.jrabot.domain.bot.RunId
 import jp.jrabot.domain.botrun.BotRunConfig
 import jp.jrabot.domain.botrun.BotRunOrchestrator
 import jp.jrabot.domain.botrun.MlRunContext
+import jp.jrabot.domain.botrun.NotifiedSignalProbe
 import jp.jrabot.domain.botrun.Pacer
 import jp.jrabot.domain.botrun.PollingIntervals
 import jp.jrabot.domain.botrun.RaceCycleProcessor
@@ -170,6 +171,7 @@ class BotRunFakeServerIntegrationTest {
                         )
                     },
                     dispatcher = dispatcher,
+                    notifiedProbe = NotifiedSignalProbe { t, r -> signals.listByRace(t, r).any { it.state != NotificationState.UNSENT } },
                     errors = ErrorReporter(notifier, clock),
                     pacer =
                         Pacer { d, _ ->

@@ -246,3 +246,23 @@ def test_parse_ack_variants() -> None:
         )
     )
     assert a is not None and a.duplicate and a.fetch_status == "SUCCEEDED" and a.cursor_ts == TS
+
+
+def test_mode_turns_stopped_during_pacing_wait_sends_nothing(env: Env) -> None:
+    """監査 C: ペーシングの待機中に運用モードが STOPPED になったら、待機後に再確認して送信しない（STOPPED 後の余分な POST を防ぐ）。"""
+    from jra_agent.beacon import Beacon, BeaconResult, BeaconStatus
+
+    enqueue_realtime(env.queue)
+    env.transport.push(resp(200, ack_body()))
+    env.sender._slow_until = env.clock.monotonic() + 30.0  # 429 の後の減速を模擬
+    orig = env.clock.sleep
+
+    def sleep_then_stop(sec: float) -> None:
+        orig(sec)
+        env.modes.on_beacon(BeaconResult(BeaconStatus.VALID, Beacon("STOPPED", 6, "k", env.clock.now(), None)))
+
+    env.clock.sleep = sleep_then_stop  # type: ignore[method-assign]
+    r = env.sender.send_next()
+    assert r.step is Step.HALTED
+    assert len(env.transport.calls) == 0
+    assert env.queue.stats().by_status.get("SENDING", 0) == 0  # claim していない（バッチは QUEUED のまま）

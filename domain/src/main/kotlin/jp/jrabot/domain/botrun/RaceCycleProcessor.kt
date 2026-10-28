@@ -22,6 +22,7 @@ import jp.jrabot.domain.odds.OddsSnapshotReader
 import jp.jrabot.domain.race.HorseNumber
 import jp.jrabot.domain.race.RaceId
 import jp.jrabot.domain.race.RaceReader
+import jp.jrabot.domain.repository.InsertOutcome
 import jp.jrabot.domain.signal.NotificationState
 import jp.jrabot.domain.signal.Signal
 import jp.jrabot.domain.signal.SignalId
@@ -58,6 +59,8 @@ sealed interface RaceStep {
         val evaluation: RaceEvaluation,
         val firedMinutes: Set<Double>,
         val signalsRecorded: Int,
+        /** DB に既にある Signal（同じ自然キー）と今回の計算結果が違うため、**通知しなかった**件数（DB の内容と違う値を通知しない）。 */
+        val suppressedMismatch: Int,
         val dispatch: DispatchReport?,
         val checkpoint: RaceCheckpoint,
     ) : RaceStep
@@ -121,13 +124,15 @@ class RaceCycleProcessor(
             } else {
                 dispatcher.dispatchRace(RaceNoticeBatch(tenantId, raceId, raceLabel(raceId), items), origin)
             }
-        return RaceStep.Evaluated(evaluation, fired, recorded.size, report, next)
+        return RaceStep.Evaluated(evaluation, fired, recorded.size, recorded.count { it.mismatch }, report, next)
     }
 
     private class Recorded(
         val signal: DecisionSignal,
         val id: SignalId,
         val state: NotificationState,
+        /** 既存の行と今回の計算結果が一致しない（通知しない）。 */
+        val mismatch: Boolean,
     )
 
     private fun recordSignals(
@@ -139,7 +144,9 @@ class RaceCycleProcessor(
             val row = toSignal(raceId, evaluation, s) ?: continue
             val saved = signals.insertIfAbsent(row)
             val id = saved.signal.id ?: continue
-            out += Recorded(s, id, saved.signal.state)
+            // 既存の行（再起動・再評価で見つかったもの）が今回の計算結果と違うなら、DB の内容と違う値を通知しない（最新の計算結果で勝手に通知しない）
+            val mismatch = saved.outcome == InsertOutcome.ALREADY_EXISTS && row.copy(id = saved.signal.id, state = saved.signal.state) != saved.signal
+            out += Recorded(s, id, saved.signal.state, mismatch)
         }
         return out
     }
@@ -184,7 +191,7 @@ class RaceCycleProcessor(
         now: Instant,
     ): List<NoticeItem> {
         // 今回新しく作った（UNSENT）ものだけを通知する。既に claim / 送信済みの行（再評価で見つかった既存の行）は dispatcher も NOT_UNSENT で除く
-        val pending = recorded.filter { it.state == NotificationState.UNSENT }
+        val pending = recorded.filter { it.state == NotificationState.UNSENT && !it.mismatch }
         if (pending.isEmpty()) return emptyList()
         val names = runCatching { entries.horseNames(tenantId, raceId) }.getOrDefault(emptyMap())
         val builder = PointInTimeFeatureBuilder(features)

@@ -5,6 +5,7 @@ import jp.jrabot.domain.bot.BotRunRepository
 import jp.jrabot.domain.botrun.BotRunOrchestrator
 import jp.jrabot.domain.botrun.MlRunContext
 import jp.jrabot.domain.botrun.MlRunStarter
+import jp.jrabot.domain.botrun.NotifiedSignalProbe
 import jp.jrabot.domain.botrun.Pacer
 import jp.jrabot.domain.botrun.RaceCycleProcessor
 import jp.jrabot.domain.botrun.RaceEntryReader
@@ -25,6 +26,7 @@ import jp.jrabot.domain.odds.OddsSnapshotReader
 import jp.jrabot.domain.ops.ModeProvider
 import jp.jrabot.domain.race.RaceReader
 import jp.jrabot.domain.race.RaceScheduleReader
+import jp.jrabot.domain.signal.NotificationState
 import jp.jrabot.domain.signal.SignalRepository
 import jp.jrabot.domain.tenant.TenantId
 import jp.jrabot.domain.time.Clock
@@ -84,6 +86,7 @@ internal object BotRunWiring {
                 )
             },
             dispatcher = dispatcher,
+            notifiedProbe = NotifiedSignalProbe { t, r -> signals.listByRace(t, r).any { it.state != NotificationState.UNSENT } },
             errors = errors,
             pacer = SleepPacer(),
             stopRequested = stop::isRequested,

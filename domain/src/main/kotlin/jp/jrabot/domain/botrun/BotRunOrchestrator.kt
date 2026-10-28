@@ -100,6 +100,7 @@ class BotRunOrchestrator(
     private val mlStarter: (RunRequest) -> MlRunContext,
     private val processorFactory: (RunRequest, MlRunContext) -> RaceCycleProcessor,
     private val dispatcher: SignalNotificationDispatcher,
+    private val notifiedProbe: NotifiedSignalProbe,
     private val errors: ErrorReporter,
     private val pacer: Pacer,
     private val stopRequested: () -> Boolean,
@@ -206,6 +207,9 @@ class BotRunOrchestrator(
         private var cachedWindow: WatchWindow? = null
         private var leaseLost: String? = null
         private val reported = HashSet<String>()
+
+        /** checkpoint を信頼できず、二重通知を避けるため通知を止めたレース（[restore]）。 */
+        private val quarantined = HashSet<RaceId>()
         private lateinit var processor: RaceCycleProcessor
 
         fun execute(): RunOutcome =
@@ -237,16 +241,42 @@ class BotRunOrchestrator(
             return RunOutcome(verdict.exitCode, verdict.reason, BotRunState.ABORTED, keeper.run.runId)
         }
 
-        /** その日の前の run の checkpoint（INTERRUPTED・奪取された run を含む）の最新の読めるもの。壊れていれば捨てる（DB から再導出する）。 */
+        /**
+         * その日の前の run の checkpoint（INTERRUPTED・奪取された run を含む）を復元する。**初回起動の空 checkpoint** と **異常（記録があるのに復元できない）** を区別する:
+         * - 前の run が無い、または checkpoint が null の run だけ: 正常（通知の前に必ず checkpoint を保存するので、null の run は何も通知していない）。
+         * - 最新の checkpoint が壊れている（空でない文字列が読めない）: 古い読めるものを土台にするが、発火済みの記録を信頼できない。
+         * - どちらの場合も、DB に『通知を試みた Signal』があるのに checkpoint にそのレースの発火記録が無い（または最新が壊れている）レースは、
+         *   **どのタイミングを通知したか分からない**ので、このrunでは通知を止める（[quarantined]。取りこぼしを選ぶ: CONTRACTS §9.2）。他のレースは続ける。
+         */
         private fun restore(): RunCheckpoint {
             val previous = runs.listByDate(req.tenantId, req.date).filter { it.runId != keeper.run.runId }
-            for (p in previous) {
-                RunCheckpoint.parse(p.checkpoint)?.let {
-                    events.event("CHECKPOINT_RESTORED", "from=${p.state} cycle=${it.cycle}")
-                    return it
+            val written = previous.filter { !it.checkpoint.isNullOrBlank() }
+            val latestCorrupt = written.firstOrNull()?.let { RunCheckpoint.parse(it.checkpoint) == null } ?: false
+            val usable =
+                written.firstNotNullOfOrNull { p ->
+                    RunCheckpoint.parse(p.checkpoint)?.also { events.event("CHECKPOINT_RESTORED", "from=${p.state} cycle=${it.cycle}") }
+                }
+            val base = usable ?: RunCheckpoint.EMPTY
+            if (latestCorrupt) events.event("CHECKPOINT_CORRUPT", "runs=${written.size}")
+            if (previous.isNotEmpty()) {
+                for (race in deriveDay(req, clock.now()).races) {
+                    val recorded =
+                        base.races[race.raceId]
+                            ?.firedMinutes
+                            .orEmpty()
+                            .isNotEmpty()
+                    if ((latestCorrupt || !recorded) && notifiedProbe.hasNotificationAttempt(req.tenantId, race.raceId)) quarantined += race.raceId
                 }
             }
-            return RunCheckpoint.EMPTY
+            if (quarantined.isNotEmpty()) {
+                events.event("RACES_QUARANTINED", "count=${quarantined.size} corrupt=$latestCorrupt")
+                report(
+                    "CHECKPOINT_UNRELIABLE",
+                    "通知済みの記録があるのに checkpoint から発火済みのタイミングを復元できないレースがあり、二重通知を避けるため通知を止めています",
+                    "races=${quarantined.size} corrupt=$latestCorrupt",
+                )
+            }
+            return base
         }
 
         private fun recoverStaleClaims() {
@@ -332,8 +362,10 @@ class BotRunOrchestrator(
             dayFinish(day)?.let { return CycleResult(it, config.lease.heartbeatInterval) }
             val plan = RaceMonitorPlanner.plan(day, window, now)
             if (plan.allDone) {
+                // 時刻が過ぎただけでは正常終了にしない。予定を信頼できず評価を逃したレースがあれば FAILED、データ不足の取りこぼしは警告付きの SUCCEEDED
+                val assessment = CompletionAssessment.assess(checkpoint.races, plan.stages, config.snapshot.descending, quarantined)
                 checkpoint = checkpoint.copy(lastCycleAt = clock.now(), races = mergeStages(plan))
-                return CycleResult(Done(BotRunState.SUCCEEDED, "ALL_RACES_OFF", RunExit.OK), config.lease.heartbeatInterval)
+                return CycleResult(completion(assessment), config.lease.heartbeatInterval)
             }
             if (window == null) return CycleResult(Done(BotRunState.ABORTED, "NO_POST_TIME", RunExit.TEMPFAIL, alert = true), config.lease.heartbeatInterval)
             if (now.isAfter(window.settleDeadlineAt)) {
@@ -351,6 +383,17 @@ class BotRunOrchestrator(
             return CycleResult(null, tickFor(plan, postAt, clock.now()))
         }
 
+        private fun completion(a: CompletionAssessment): Finish {
+            val lost = a.calendarLost
+            val gaps = a.dataGaps
+            events.event("COMPLETION", "lostCalendar=${lost.size} dataGaps=${gaps.size}")
+            return when {
+                lost.isNotEmpty() -> Done(BotRunState.FAILED, "EVALUATION_OPPORTUNITY_LOST", RunExit.FAILURE, alert = true)
+                gaps.isNotEmpty() -> Done(BotRunState.SUCCEEDED, "ALL_RACES_OFF_WITH_GAPS", RunExit.OK, alert = true)
+                else -> Done(BotRunState.SUCCEEDED, "ALL_RACES_OFF", RunExit.OK)
+            }
+        }
+
         private fun dayFinish(day: EffectiveDay): Finish? =
             when {
                 day.denyRun -> Done(BotRunState.ABORTED, "DENIED_BY_OVERRIDE", RunExit.OK)
@@ -364,6 +407,10 @@ class BotRunOrchestrator(
             raceId: RaceId,
             postAt: Instant,
         ) {
+            if (raceId in quarantined) {
+                events.event("RACE_QUARANTINED", raceId.value)
+                return
+            }
             val prev = checkpoint.races[raceId] ?: RaceCheckpoint(RaceStage.MONITORING)
             val step =
                 try {
@@ -402,6 +449,13 @@ class BotRunOrchestrator(
                         "EVALUATED",
                         "${raceId.value} signals=${step.signalsRecorded} model=${ev.modelTypeUsed} fallback=${ev.fallbackReason} dispatch=${step.dispatch?.status}",
                     )
+                    if (step.suppressedMismatch > 0) {
+                        report(
+                            "SIGNAL_MISMATCH:${raceId.value}",
+                            "保存済みの Signal と今回の計算結果が違うため、通知を抑止しました（DB の内容と違う値は通知しません。原因を確認してください）",
+                            "race=${raceId.value} count=${step.suppressedMismatch}",
+                        )
+                    }
                     if (ev.isMlMarketFallback) {
                         report("ML_MARKET_FALLBACK:${ev.fallbackReason}", "ML を有効にしていますが市場確率だけで判定しています", "reason=${ev.fallbackReason}")
                     }
@@ -514,7 +568,9 @@ class BotRunOrchestrator(
         ) {
             if (!reported.add(key)) return
             try {
-                errors.report("bot-run: ${key.substringBefore(':')}", message, details)
+                // 同じ種類（title）の通知は ErrorReporter の cooldown で畳まれる。畳まれた件数はログに残す（レースごとの異常の数を失わない）
+                val outcome = errors.report("bot-run: ${key.substringBefore(':')}", message, details)
+                if (outcome == ErrorReporter.Outcome.COOLDOWN) events.event("ERROR_REPORT_SUPPRESSED", key)
             } catch (_: Exception) {
                 // ErrorReporter は例外を投げない契約だが、念のため本処理を止めない
             }

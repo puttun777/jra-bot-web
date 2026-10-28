@@ -37,6 +37,12 @@ class InMemoryBotRunRepository : BotRunRepository {
     @Synchronized
     fun all(): List<BotRun> = rows.values.toList()
 
+    /** 試験用: 保存済みの checkpoint を書き換える（欠損・破損の再現）。 */
+    @Synchronized
+    fun rewriteCheckpoints(f: (BotRun) -> String?) {
+        rows.replaceAll { _, r -> r.copy(checkpoint = f(r)) }
+    }
+
     @Synchronized
     override fun find(
         tenantId: TenantId,

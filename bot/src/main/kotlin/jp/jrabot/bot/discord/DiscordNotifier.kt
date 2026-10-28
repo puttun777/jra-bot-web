@@ -54,6 +54,12 @@ class DiscordNotifier(
     private val policy: DiscordRetryPolicy = DiscordRetryPolicy(),
     private val stopRequested: () -> Boolean = { false },
     private val log: Logger = LoggerFactory.getLogger(DiscordNotifier::class.java),
+    /**
+     * シグナル通知を送ってよいか（運用モードが NORMAL か）。**429 の待機・接続前の失敗の再試行など、POST の直前に毎回確認する**（待機中に STOPPED / UNKNOWN に
+     * なっても追加の送信をしない）。false なら新しい POST をしない: 1 通目なら [DeliveryResult.NOT_SENT]、2 チャンク目以降なら一部は届いているので [DeliveryResult.UNKNOWN]。
+     * エラー通知（運用者への警告）には使わない: 停止・UNKNOWN で終わる run の警告こそ届けたい。
+     */
+    private val sendAllowed: () -> Boolean = { true },
 ) : Notifier {
     override fun canDeliver(channel: NotificationChannel): Boolean = urlFor(channel) != null
 
@@ -85,6 +91,10 @@ class DiscordNotifier(
         for (attempt in 1..policy.maxAttempts) {
             if (stopRequested() || Thread.currentThread().isInterrupted) {
                 log.warn("Discord 送信を停止要求で中止 chunk={}/{} attempt={}", index, total, attempt)
+                return ChunkResult.NOT_SENT
+            }
+            if (channel == NotificationChannel.SIGNAL && !sendAllowed()) {
+                log.warn("Discord 送信を運用モードのため中止 chunk={}/{} attempt={}", index, total, attempt)
                 return ChunkResult.NOT_SENT
             }
             when (val outcome = transport.post(url.uri, body)) {

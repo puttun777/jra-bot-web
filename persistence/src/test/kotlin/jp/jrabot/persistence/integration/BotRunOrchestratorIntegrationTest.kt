@@ -7,6 +7,7 @@ import jp.jrabot.domain.bot.RunId
 import jp.jrabot.domain.botrun.BotRunConfig
 import jp.jrabot.domain.botrun.BotRunOrchestrator
 import jp.jrabot.domain.botrun.MlRunContext
+import jp.jrabot.domain.botrun.NotifiedSignalProbe
 import jp.jrabot.domain.botrun.Pacer
 import jp.jrabot.domain.botrun.PollingIntervals
 import jp.jrabot.domain.botrun.RaceCycleProcessor
@@ -33,6 +34,7 @@ import jp.jrabot.domain.notify.SignalNotificationDispatcher
 import jp.jrabot.domain.ops.ModeProvider
 import jp.jrabot.domain.ops.OpsMode
 import jp.jrabot.domain.race.RaceScheduleStatus
+import jp.jrabot.domain.signal.NotificationState
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
@@ -139,6 +141,7 @@ class BotRunOrchestratorIntegrationTest {
                     RaceCycleProcessor(cfg, req.tenantId, req.origin, bot.odds, StubJudge(), evaluations, signals, entries, features, bot.races, dispatcher)
                 },
                 dispatcher = dispatcher,
+                notifiedProbe = NotifiedSignalProbe { t, r -> signals.listByRace(t, r).any { it.state != NotificationState.UNSENT } },
                 errors = ErrorReporter(notifier, clock),
                 pacer =
                     Pacer { d, _ ->

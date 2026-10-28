@@ -46,6 +46,17 @@ fun interface RaceEvaluationWriter {
     fun insertIfAbsent(record: RaceEvaluationRecord): InsertOutcome
 }
 
+/**
+ * そのレースで**通知を試みた記録**（Signal が UNSENT 以外 = CLAIMED / SENT / SEND_UNKNOWN）があるか。checkpoint が欠損・破損していても残る
+ * DB 側の証拠で、『既に通知したタイミングがあるのに checkpoint にその記録が無い』異常を検出するのに使う（E の暫定対策）。すべてテナントを引数に取る。
+ */
+fun interface NotifiedSignalProbe {
+    fun hasNotificationAttempt(
+        tenantId: TenantId,
+        raceId: RaceId,
+    ): Boolean
+}
+
 /** 出走表の馬名（通知の理由文用。`FeatureSource` は馬名を持たない）。すべてテナントを引数に取る。 */
 fun interface RaceEntryReader {
     /** 馬番 → 馬名。出走表が無ければ空。馬名の無い馬は含めない。 */
