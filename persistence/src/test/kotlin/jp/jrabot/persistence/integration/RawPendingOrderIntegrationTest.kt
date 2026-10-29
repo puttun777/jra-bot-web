@@ -54,12 +54,41 @@ class RawPendingOrderIntegrationTest {
     }
 
     @Test
-    fun `新しい順に上限まで返す 古い保留が居座っても新しい保留の再適用が飢えない 他のテナントは混ざらない`() {
+    fun `新しい順にキーセットでページングし 全件を漏れなく返す 理由で絞り 他のテナントは混ざらない`() {
         seed()
         val store = h.bean(RawRecordStore::class.java)
-        assertEquals(listOf(hash(103), hash(102)), store.listPending(T1, "RACE_NOT_FOUND", 2).map { it.recordHash })
-        assertEquals(listOf(hash(200)), store.listPending(T2, "RACE_NOT_FOUND", 10).map { it.recordHash })
-        assertTrue(store.listPending(T1, "OTHER", 10).isEmpty())
+        val reasons = listOf("RACE_NOT_FOUND")
+        val first = store.listPending(T1, reasons, 2)
+        assertEquals(listOf(hash(103), hash(102)), first.map { it.recordHash })
+        // 返した最後の位置より後（古い側）から続きを取る。ページを跨いでも重複・欠落なし
+        val second = store.listPending(T1, reasons, 2, first.last().cursor())
+        assertEquals(listOf(hash(101)), second.map { it.recordHash })
+        assertTrue(store.listPending(T1, reasons, 2, second.last().cursor()).isEmpty())
+        assertEquals(listOf(hash(200)), store.listPending(T2, reasons, 10).map { it.recordHash })
+        assertTrue(store.listPending(T1, listOf("OTHER"), 10).isEmpty())
+        // 複数の理由（IN）。理由が違う行だけを除く
+        db.exec("UPDATE ingest_raw SET parse_error = 'RACE_NOT_FOUND:202611020511' WHERE record_hash = '${hash(102)}'")
+        assertEquals(listOf(hash(103), hash(101)), store.listPending(T1, reasons, 10).map { it.recordHash })
+        assertEquals(listOf(hash(102)), store.listPending(T1, listOf("RACE_NOT_FOUND:202611020511"), 10).map { it.recordHash })
+        assertEquals(3, store.listPending(T1, reasons + "RACE_NOT_FOUND:202611020511", 10).size)
+    }
+
+    @Test
+    fun `同じ受信時刻でもバッチIDとseqで順序が決まり ページ境界で取りこぼさない`() {
+        seed()
+        val store = h.bean(RawRecordStore::class.java)
+        db.exec("UPDATE ingest_raw SET received_at = '2026-11-01 03:00:00.000000' WHERE tenant_id = 1")
+        val all = store.listPending(T1, listOf("RACE_NOT_FOUND"), 10).map { it.recordHash }
+        assertEquals(3, all.size)
+        val paged = mutableListOf<String>()
+        var cursor: jp.jrabot.domain.ingest.PendingCursor? = null
+        while (true) {
+            val page = store.listPending(T1, listOf("RACE_NOT_FOUND"), 1, cursor)
+            if (page.isEmpty()) break
+            paged += page.single().recordHash
+            cursor = page.single().cursor()
+        }
+        assertEquals(all, paged)
     }
 
     @Test

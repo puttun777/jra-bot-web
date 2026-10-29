@@ -44,14 +44,24 @@ interface RawRecordStore {
     ): Boolean
 
     /**
-     * 依存するデータ待ち（[ParseStatus.PENDING] で [reason] を理由にしたもの）の行を、**新しい順**に最大 [limit] 件（古い保留が居座っても、新しい保留の再適用が飢えないように）。再適用に必要な、バッチの種別・観測時刻を付ける。
+     * 依存するデータ待ち（[ParseStatus.PENDING] で、理由が [reasons] のどれか）の行を、**新しい順**に最大 [limit] 件。[after] を渡すと、その位置より後（古い側）から
+     * 返す（キーセットのページング: 再適用に失敗して PENDING のまま残る行があっても、同じ行を返し続けず、全件を漏れなく走査できる）。
+     * 再適用に必要な、バッチの種別・観測時刻を付ける。テナントの行だけ。
      */
     fun listPending(
         tenantId: TenantId,
-        reason: String,
+        reasons: List<String>,
         limit: Int,
+        after: PendingCursor? = null,
     ): List<PendingRawRecord>
 }
+
+/** [RawRecordStore.listPending] のページング位置（`ingest_raw` の `(received_at, batch_id, seq)`。新しい順の並びのキー）。 */
+data class PendingCursor(
+    val receivedAt: Instant,
+    val batchId: String,
+    val seq: Int,
+)
 
 /** 保留中の生レコード（再解析・再適用用）。[observedAt] は取り込んだバッチの観測時刻（オッズのスナップショットの時刻になる）。 */
 class PendingRawRecord(
@@ -62,7 +72,12 @@ class PendingRawRecord(
     val dataspec: String,
     val recordId: String,
     val payload: ByteArray,
-)
+    /** ページング用の位置（この行の `received_at`・`seq`。`batchId` は上にある）。 */
+    val receivedAt: Instant,
+    val seq: Int,
+) {
+    fun cursor() = PendingCursor(receivedAt, batchId, seq)
+}
 
 class BatchClaim(
     val tenantId: TenantId,

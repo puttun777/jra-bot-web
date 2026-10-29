@@ -30,6 +30,7 @@ import jp.jrabot.domain.ingest.IssuedAgentCredential
 import jp.jrabot.domain.ingest.NewBackfill
 import jp.jrabot.domain.ingest.NonceStore
 import jp.jrabot.domain.ingest.ParseStatus
+import jp.jrabot.domain.ingest.PendingCursor
 import jp.jrabot.domain.ingest.PendingRawRecord
 import jp.jrabot.domain.ingest.RawRecordRow
 import jp.jrabot.domain.ingest.RawRecordStore
@@ -313,21 +314,34 @@ internal class RawRecordStoreImpl(
 
     override fun listPending(
         tenantId: TenantId,
-        reason: String,
+        reasons: List<String>,
         limit: Int,
+        after: PendingCursor?,
     ): List<PendingRawRecord> {
         require(limit in 1..1000) { "limit は 1〜1000" }
-        return dao.selectPending(tenantId.value, reason, limit).map {
-            PendingRawRecord(
-                it.recordHash,
-                it.batchId,
-                BatchClass.entries.first { c -> c.code == it.batchClass },
-                it.observedAt.toInstantUtc(),
-                it.dataspec,
-                it.recordId,
-                it.payload,
-            )
-        }
+        require(reasons.isNotEmpty()) { "reasons は 1 つ以上" }
+        return dao
+            .selectPending(
+                tenantId.value,
+                reasons,
+                limit,
+                after != null,
+                after?.receivedAt?.toDbTime() ?: java.time.LocalDateTime.of(2000, 1, 1, 0, 0),
+                after?.batchId.orEmpty(),
+                after?.seq ?: 0,
+            ).map {
+                PendingRawRecord(
+                    it.recordHash,
+                    it.batchId,
+                    BatchClass.entries.first { c -> c.code == it.batchClass },
+                    it.observedAt.toInstantUtc(),
+                    it.dataspec,
+                    it.recordId,
+                    it.payload,
+                    it.receivedAt.toInstantUtc(),
+                    it.seq,
+                )
+            }
     }
 }
 

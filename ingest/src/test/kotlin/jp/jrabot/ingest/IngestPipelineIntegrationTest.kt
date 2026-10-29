@@ -4,6 +4,7 @@ import jp.jrabot.domain.calendar.DayVerdict
 import jp.jrabot.domain.ingest.BackfillRequestResult
 import jp.jrabot.domain.ingest.BackfillStatus
 import jp.jrabot.domain.ingest.BackfillStore
+import jp.jrabot.domain.ingest.BatchIngestor
 import jp.jrabot.domain.ingest.FetchStatus
 import jp.jrabot.domain.tenant.TenantId
 import jp.jrabot.persistence.integration.runConcurrently
@@ -252,7 +253,7 @@ class IngestPipelineIntegrationTest {
         // レース未登録のオッズは保存せず、保留（PENDING）
         val unknown = it.parse(it.ingest(it.one, odds(it.now("202611020511", 1 to 3.0), at = ItClock.now().plusSeconds(3))))
         assertEquals(1, unknown["unsupported"])
-        assertEquals("PENDING", it.db.scalar("SELECT parse_status FROM ingest_raw WHERE parse_error = 'RACE_NOT_FOUND'"))
+        assertEquals("PENDING", it.db.scalar("SELECT parse_status FROM ingest_raw WHERE parse_error LIKE 'RACE_NOT_FOUND%'"))
         assertEquals(0, it.count("SELECT COUNT(*) FROM odds_snapshots WHERE race_id = '202611020511'"))
     }
 
@@ -262,7 +263,7 @@ class IngestPipelineIntegrationTest {
         val ack = it.parse(it.ingest(it.one, odds(it.now(race, 1 to 2.5, 2 to 10.0), at = at)))
         assertEquals(1, ack["unsupported"])
         assertEquals(0, it.count("SELECT COUNT(*) FROM odds_snapshots"))
-        assertEquals("PENDING", it.db.scalar("SELECT parse_status FROM ingest_raw WHERE parse_error = 'RACE_NOT_FOUND'"))
+        assertEquals("PENDING", it.db.scalar("SELECT parse_status FROM ingest_raw WHERE parse_error LIKE 'RACE_NOT_FOUND%'"))
         // レースの情報が後から届く（別のバッチ）
         assertEquals(200, it.ingest(it.one, it.envelope(records = listOf(it.nra(race, "2", "20261030")))).status)
         assertEquals(2, it.count("SELECT COUNT(*) FROM odds_snapshots WHERE market = 'win'"), "保留にしていたオッズが保存された")
@@ -273,6 +274,32 @@ class IngestPipelineIntegrationTest {
         // もう一度レースが届いても重複しない（冪等）
         it.ingest(it.one, it.envelope(records = listOf(it.nra(race, "2", "20261030", name = "改名"))))
         assertEquals(2, it.count("SELECT COUNT(*) FROM odds_snapshots WHERE market = 'win'"))
+    }
+
+    @Test
+    fun `保留がページの大きさを超えても 古い保留まで全件再適用される 待っていない別のレースの保留は触らない 理由には待つレースが入る`() {
+        val base = ItClock.now().minusSeconds(3600)
+        val n = BatchIngestor.REPLAY_PAGE * 2 + 30
+        for (i in 0 until n) it.ingest(it.one, odds(it.now(race, 1 to 2.5), at = base.plusSeconds(i.toLong())))
+        val other = "202611020511"
+        it.ingest(it.one, odds(it.now(other, 1 to 3.0), at = base.plusSeconds(n + 1L)))
+        assertEquals(n + 1, it.count("SELECT COUNT(*) FROM ingest_raw WHERE parse_status = 'PENDING'"))
+        assertEquals(n, it.count("SELECT COUNT(*) FROM ingest_raw WHERE parse_error = 'RACE_NOT_FOUND:$race'"))
+        assertEquals(200, it.ingest(it.one, it.envelope(records = listOf(it.nra(race, "2", "20261030")))).status)
+        assertEquals(n, it.count("SELECT COUNT(*) FROM odds_snapshots WHERE race_id = '$race'"), "古い保留まで漏れなく適用された")
+        assertEquals(1, it.count("SELECT COUNT(*) FROM ingest_raw WHERE parse_status = 'PENDING'"), "別のレース待ちは触らない")
+        assertEquals(1, it.count("SELECT COUNT(*) FROM ingest_raw WHERE parse_error = 'RACE_NOT_FOUND:$other'"))
+        // 観測時刻は取り込んだバッチのまま
+        assertEquals(n, it.count("SELECT COUNT(DISTINCT observed_at) FROM odds_snapshots WHERE race_id = '$race'"))
+    }
+
+    @Test
+    fun `旧形式の保留 理由が RACE_NOT_FOUND のみ も レースが届けば再適用される`() {
+        it.ingest(it.one, odds(it.now(race, 1 to 2.5), at = ItClock.now().minusSeconds(30)))
+        it.db.exec("UPDATE ingest_raw SET parse_error = 'RACE_NOT_FOUND' WHERE parse_status = 'PENDING'")
+        it.ingest(it.one, it.envelope(records = listOf(it.nra(race, "2", "20261030"))))
+        assertEquals(1, it.count("SELECT COUNT(*) FROM odds_snapshots WHERE race_id = '$race'"))
+        assertEquals(0, it.count("SELECT COUNT(*) FROM ingest_raw WHERE parse_status = 'PENDING'"))
     }
 
     @Test

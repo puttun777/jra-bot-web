@@ -6,6 +6,7 @@ import jp.jrabot.domain.calendar.ScheduleEvent
 import jp.jrabot.domain.calendar.ScheduleEventSource
 import jp.jrabot.domain.calendar.ScheduleEventType
 import jp.jrabot.domain.calendar.ScheduleEventWriter
+import jp.jrabot.domain.race.RaceId
 import jp.jrabot.domain.tenant.TenantId
 import jp.jrabot.domain.time.Clock
 import jp.jrabot.domain.time.Zones
@@ -149,7 +150,7 @@ class BatchIngestor(
         return try {
             val done = uow.run { process(caller, env, token, now, observedAt) }
             // 新しいレースが入ったら、レース待ちで保留にした生レコードを再適用する（コミットの後に別の処理として。失敗しても今回のバッチの ACK には影響させない）
-            if (done.racesCreated) replayPending(tenantId)
+            if (done.racesToReplay.isNotEmpty()) replayPending(tenantId, done.racesToReplay)
             IngestOutcome.Accepted(done.ack)
         } catch (e: BatchRejectedException) {
             releaseQuietly(tenantId, env.batchId, token, e.rejection.code)
@@ -212,7 +213,7 @@ class BatchIngestor(
         var quarantined = 0
         var unsupported = 0
         var maxRaceDate: LocalDate? = null
-        var racesCreated = false
+        val racesToReplay = LinkedHashSet<RaceId>()
 
         // 解析は全レコード先に行い、適用は『レースを定義する観測（開催日・レース・発走時刻の変更）→ それに依存する観測（オッズ）』の順にする。
         // 同じバッチの中でオッズがレースより前に並んでいても、レース待ち（保留）にしない。生レコードの保存は元の並び（seq）のまま。
@@ -238,8 +239,10 @@ class BatchIngestor(
                     }
                 }
 
-                ApplyOutcome.Applied -> {
-                    if (obs is RaceObservation) racesCreated = true
+                // レースの観測は、新規（Applied）でも既存（NoChange）でも、そのレースを待つ保留を再適用の対象にする
+                // （前回の再適用が一時的に失敗して保留に残った行が、同じレースの観測が来るたびに再試行される）
+                ApplyOutcome.Applied, ApplyOutcome.NoChange -> {
+                    if (obs is RaceObservation) racesToReplay += obs.raceId
                 }
 
                 else -> {}
@@ -296,36 +299,48 @@ class BatchIngestor(
         }
         return Processed(
             IngestAck(accepted, duplicates, quarantined, unsupported, now, duplicateBatch = false, fetch = progress, cursor = cursorAck),
-            racesCreated,
+            racesToReplay,
         )
     }
 
     private class Processed(
         val ack: IngestAck,
-        /** このバッチで新しいレースの情報が反映された（レース待ちの保留を再適用できる）。 */
-        val racesCreated: Boolean,
+        /** このバッチでレースの情報が反映された（または確認できた）レース。これを待つ保留を再適用できる。 */
+        val racesToReplay: Set<RaceId>,
     )
 
     /** レース・開催日・発走時刻の変更など、他の観測が依存する観測。 */
     private fun Observation.definesRace(): Boolean = this is ScheduleDayObservation || this is RaceObservation || this is TimeChangeObservation
 
     /**
-     * レース待ち（[REASON_RACE_NOT_FOUND]）で保留にした生レコードを、取り込んだときのバッチの観測時刻のまま再解析・再適用する（新しい順に最大 [REPLAY_LIMIT] 件）。
-     * 1 件ずつ別のトランザクションで、**失敗しても他へ影響させない**（保留のまま次の機会に再試行する）。同じ観測の再適用は冪等（オッズは自然キーで upsert）。
+     * 今回レースが入った（確認できた）[races] を待っている保留（理由 `RACE_NOT_FOUND:<race_id>`）と、待つレースが不明な旧形式の保留（`RACE_NOT_FOUND`）を、
+     * 取り込んだときのバッチの観測時刻のまま再解析・再適用する。**新しい順のキーセットのページングで全件を走査する**（1 ページ [REPLAY_PAGE] 件。以前の
+     * 『新しい 500 件だけ』では、古い保留が取り残された）。再適用に失敗して PENDING のまま残る行があっても位置が進むので、同じ行で止まらない。
+     * 1 回の呼出しの走査は [REPLAY_MAX_PAGES] ページまで（暴走防止。残りは次の機会）。1 件ずつ別のトランザクションで、**失敗しても他へ影響させない**。
+     * 同じ観測の再適用は冪等（オッズは自然キーで upsert）。保留の取得・更新は常にこのテナントの行だけ。
      */
-    private fun replayPending(tenantId: TenantId) {
-        val pending =
-            try {
-                raw.listPending(tenantId, REASON_RACE_NOT_FOUND, REPLAY_LIMIT)
-            } catch (_: RuntimeException) {
-                return
+    private fun replayPending(
+        tenantId: TenantId,
+        races: Set<RaceId>,
+    ) {
+        val reasons = races.sortedBy { it.value }.map(::raceNotFoundReason) + REASON_RACE_NOT_FOUND
+        var after: PendingCursor? = null
+        repeat(REPLAY_MAX_PAGES) {
+            val page =
+                try {
+                    raw.listPending(tenantId, reasons, REPLAY_PAGE, after)
+                } catch (_: RuntimeException) {
+                    return
+                }
+            for (row in page) {
+                try {
+                    uow.run { replayOne(tenantId, row) }
+                } catch (_: RuntimeException) {
+                    // 保留のまま残す。同じレースの観測が次に来たときに再試行する
+                }
             }
-        for (row in pending) {
-            try {
-                uow.run { replayOne(tenantId, row) }
-            } catch (_: RuntimeException) {
-                // 保留のまま残す。次にレースが入ったときに再試行する
-            }
+            if (page.size < REPLAY_PAGE) return
+            after = page.last().cursor()
         }
     }
 
@@ -420,10 +435,11 @@ class BatchIngestor(
 
     private fun gapStart(f: FetchRecord): Instant = f.fromtime?.let { LocalDateTime.parse(it, TS14).atZone(Zones.JST).toInstant() } ?: f.startedAt
 
-    private companion object {
-        val TS14: DateTimeFormatter = DateTimeFormatter.ofPattern("uuuuMMddHHmmss")
+    companion object {
+        private val TS14: DateTimeFormatter = DateTimeFormatter.ofPattern("uuuuMMddHHmmss")
 
-        /** 1 回の再適用で扱う保留の件数の上限（ingest のリクエストの時間を伸ばさない）。 */
-        const val REPLAY_LIMIT = 500
+        /** 保留の再適用の 1 ページの件数と、1 回の呼出しで走査するページ数の上限（ingest のリクエストの時間を伸ばさない）。 */
+        const val REPLAY_PAGE = 200
+        const val REPLAY_MAX_PAGES = 50
     }
 }

@@ -102,9 +102,10 @@ class IngestItConfig {
 
             override fun listPending(
                 tenantId: TenantId,
-                reason: String,
+                reasons: List<String>,
                 limit: Int,
-            ): List<jp.jrabot.domain.ingest.PendingRawRecord> = real.listPending(tenantId, reason, limit)
+                after: jp.jrabot.domain.ingest.PendingCursor?,
+            ): List<jp.jrabot.domain.ingest.PendingRawRecord> = real.listPending(tenantId, reasons, limit, after)
         }
 
     @Bean @Primary

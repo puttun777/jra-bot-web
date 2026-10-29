@@ -209,12 +209,16 @@ internal interface IngestRawDao {
     @Update(sqlFile = true)
     fun settlePending(entity: IngestRawEntity): Result<IngestRawEntity>
 
-    /** [reason] を理由にした保留の行を、バッチの種別・観測時刻付きで古い順に。 */
+    /** [reasons] のどれかを理由にした保留の行を、バッチの種別・観測時刻付きで新しい順に（キーセットのページング）。 */
     @Select
     fun selectPending(
         tenantId: Long,
-        reason: String,
+        reasons: List<String>,
         limit: Int,
+        hasAfter: Boolean,
+        afterReceivedAt: LocalDateTime,
+        afterBatchId: String,
+        afterSeq: Int,
     ): List<PendingRawRow>
 }
 
@@ -228,6 +232,8 @@ internal data class PendingRawRow(
     val dataspec: String,
     val recordId: String,
     val payload: ByteArray,
+    val receivedAt: LocalDateTime,
+    val seq: Int,
 )
 
 @Entity(immutable = true, naming = NamingType.SNAKE_LOWER_CASE)

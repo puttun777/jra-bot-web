@@ -86,7 +86,9 @@ class BotConfiguration {
      * 実際の送信は bot-run（T3.8）が [SignalNotificationDispatcher] / [ErrorReporter] を呼んだときだけで、**他のタスクは通知を送らない**。
      */
     @Bean
-    fun leaseProbe(): jp.jrabot.domain.botrun.LeaseProbe = jp.jrabot.domain.botrun.LeaseProbe()
+    fun leaseProbe(): jp.jrabot.domain.botrun.LeaseProbe =
+        jp.jrabot.domain.botrun
+            .LeaseProbe()
 
     @Bean
     @ConditionalOnMissingBean(Notifier::class)

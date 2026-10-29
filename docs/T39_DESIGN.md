@@ -7,11 +7,11 @@
 ## 0. 先に決めておくこと（ユーザー判断が要る点）
 | ID | 論点 | 推奨 |
 |---|---|---|
-| Q1 | V6（決済・集計・バックテスト用の一意性と表）の承認 | §9 の最小案（既存の列を使い、UNIQUE を足す。新表は `backtest_run` / `backtest_item` の 2 つ） |
-| Q2 | 決済の代表評価の選び方 | 旧は『発走前の最新 1 件』。新方式は **各 `race_timing_notice` が指す評価結果を、タイミングごとに決済**し、旧互換の代表（発走前の最新）を別に印付けする。数値は旧の代表と一致させる |
-| Q3 | 紙の賭け（`bets`・`bet_legs`）の作成 | 旧は Signal から紙の賭けを作っていた可能性（MIGRATION_MATRIX §12）。T3.8 は Signal のみ。**T1.20 の旧データ確認後に決める**（それまでは `bets` を作らず、`signals` と `ticket_evaluations` から決済する） |
-| Q4 | 天候・馬場の履歴（G-28） | バックテストでは履歴が無い行を除外し、件数を報告する（既定）。履歴表の追加は別の承認 |
-| Q5 | `trigger_type=RECONCILE` の通知 | 通知しない（既存どおり） |
+| Q1 | V6 | **D-224（2026-10-29）: 設計方針のみ承認。§9 の SQL は追加レビュー後。V6 は実装しない**（NULL を含む UNIQUE の穴・新表の GRANT を §9 で訂正済み。最終 SQL は再承認） |
+| Q2 | 決済の代表評価 | **承認**。各 `race_timing_notice` の評価をタイミングごとに決済し、旧互換の代表（発走前の最新 1 件）を別に印付けする。複数タイミングの集計で賭け金・損益を二重計上しない（§5.5）。実払戻・予測時オッズ・推奨額・紙上損益を別の概念として扱う |
+| Q3 | 紙の賭け（`bets`・`bet_legs`） | **保留**（T1.20 の旧データ確認後）。それまで作らない。実購入と Signal 由来の仮想成績を混ぜない（§5.5） |
+| Q4 | 天候・馬場の履歴（G-28/G-31） | **バックテストは履歴の無い行を除外する方針を維持**し、除外件数と率を報告する（§8）。天候・馬場を使わない別スキーマは将来の選択肢として比較設計（§8.1）。学習と推論で特徴量の扱いを変えない |
+| Q5 | `trigger_type=RECONCILE` の通知 | **承認**: 通常の Discord 買い目通知は送らない |
 
 ## 1. 現状の接続点（作り直さない既存部品）
 | 領域 | 既存クラス・表 | T3.9 での使い方 |
@@ -75,10 +75,15 @@ reconcile（--task=reconcile）: INCOMPLETE の回復・確定成績との照合
 `SettlementCalculator`（純粋関数。`:domain`。golden 対象）、`ResultSettler`（読取り → 計算 → 書込みの調整。1 レース 1 トランザクション）、`SettlementStore`（ports）: `RaceEvaluationDao.markSettled`（`WHERE settled_at IS NULL OR 暫定`）、`TicketEvaluationDao`、`BetDao`/`BetLegDao`（Q3 次第）。
 ### 5.3 一意性・冪等性（V6 の主目的）
 - `race_evaluations`: 決済は `UPDATE … WHERE id = ? AND (settled_at IS NULL OR is_provisional = 1)` で冪等。
-- `ticket_evaluations`: 新方式の行だけ UNIQUE `(tenant_id, race_evaluation_id, bet_type, combo_key, umaban, uq_native)`（V5 と同じ生成列方式。旧データの重複は触れない）。
-- `bets`: 新方式の行だけ UNIQUE `(tenant_id, signal_id, uq_native)`（Q3 で `bets` を作る場合）。
+- `ticket_evaluations`: 新方式の行だけ UNIQUE。**`combo_key`・`umaban` は NULL 可で、MySQL の UNIQUE は NULL を含む組を重複とみなさない**ので、素の `(…, combo_key, umaban)` では二重に入る（スクラッチ DB で確認済み: 単勝 `(10,'単勝',NULL,3)` が 2 行入った）。**NULL を正規化した生成列**（`uq_combo = IF(legacy_id IS NULL, COALESCE(combo_key,''), NULL)`、`uq_umaban = IF(legacy_id IS NULL, COALESCE(umaban,0), NULL)`）を UNIQUE に使う（§9）。旧データ（`legacy_id` あり）は生成列が NULL になり対象外。
+- `bets`: **Q3 保留のため V6 に入れない**（T1.20 後に別途設計。実購入と仮想成績の区別もそこで決める）。
 ### 5.4 テスト（golden + 性質）
 旧 `settle_*` を呼ぶ新しい golden ケース（GD11: 単勝の的中/外れ/同着/未確定、ワイド・三連複の的中/外れ/暫定→確定、no_ticket）、`SettlementCalculator` と旧の全ケース一致、冪等（2 回目は変更なし）、確定による暫定の置換、クラッシュ（決済の途中で落ちて再実行しても二重計上しない）、並行（2 プロセス）、テナント境界、最小権限（bot が `results` を書けない）。
+
+### 5.5 金額の概念の分離と二重計上の防止（D-224 Q2/Q3）
+- 区別する量: ①**実際の払戻金**（`payouts`・`results` 由来。JRA が確定した値）②**判定時の予測オッズ**（`odds_at_bet`/Signal の `odds`。払戻の根拠ではない）③**推奨額**（`stake`。Kelly 等の提案。購入していない）④**紙上損益**（推奨額 × 実払戻から計算した仮想の値）。列・集計・UI でこの 4 つを同じ名前・同じ列にしない。実購入の記録（`bets`）は T1.20 まで作らず、Signal 由来の紙上損益と**混ぜない**（集計は `source = PAPER_SIGNAL` を明示）。
+- 二重計上: 同じレースを複数タイミング（例: 30 分前・5 分前）で評価・決済すると、同じ馬への推奨額・損益が複数行になる。**成績集計の既定は旧互換の代表評価 1 件/レース**（発走前の最新）。タイミング別の集計は『タイミング別の分析』として別の見出し・別の集計キーで出し、**代表集計と合算しない**。1 レースの賭け金・損益の合計を出す集計は、代表評価だけを入力にする（性質試験: タイミングを増やしても代表集計の合計は変わらない）。
+- 払戻の単位・同着・返還・取消（**未確認。推測で確定しない**）: 単勝/ワイド/三連複の払戻が 100 円あたりか円か（V1 の `results.payout` のコメントに疑義あり）、同着時の複数払戻、返還（出走取消・競走除外・降着）、レース中止の扱いは、旧 `get_payout`/`get_winning_combo_keys`/`settle_*` の実装（golden 化）と JV-Data 仕様書（HR レコード。T1.17）で確認するまで、`SettlementCalculator` に値を埋め込まない。確認できない券種・状態は `settle_status` を `unverified` 相当で止め、損益に含めない（UNRESOLVED E-追加）。
 
 ## 6. T3.9-d reconcile（`--task=reconcile`）
 - スタブ（`StubTaskHandler`）を `ReconcileTaskHandler` に置換（`BotConfiguration.botTaskHandler`）。引数: `--date`・`--tenant-id`。`trigger_type=RECONCILE` は通知しない。
@@ -89,7 +94,7 @@ reconcile（--task=reconcile）: INCOMPLETE の回復・確定成績との照合
 
 ## 7. T3.9-e 成績集計
 - 入力: 決済済みの `race_evaluations`（代表）+ `ticket_evaluations`。出力: 日次・券種別・モデル別の回収率・的中率・LogLoss・Brier・校正（`model_metrics` の既存列）。
-- クラス: `PerformanceAggregator`（純粋関数）、`ModelMetricsWriter`（`model_metrics` へ。自然キー `(tenant, market, date_from, date_to, model_id?)`。V6 で新方式の行だけ UNIQUE。**`model_id` 列が無いので、必要なら列追加を V6 に含める（Q1）**）。
+- クラス: `PerformanceAggregator`（純粋関数）、`ModelMetricsWriter`（`model_metrics` へ。自然キー `(tenant, market, model, date_from, date_to)`。`date_from`/`date_to`/`model_id` は NULL 可なので、V6 では NULL を正規化した生成列で UNIQUE にする（§9）。**`model_id` 列が現状は無い**ので V6 で追加する（NULL 可。既存行は NULL のまま））。
 - 数値は旧 `model_metrics` の算出と一致させる（旧の式を golden 化）。サンプル 0 件は NULL（0 で埋めない）。
 - 集計は読取りの計算と書込みを分け、再実行で同じ行を上書きしない（同じキーは変更なし）。テスト: 合成データでの再現性、欠損、同着、暫定の除外/含む（既定は確定のみ）、テナント境界。
 
@@ -97,18 +102,30 @@ reconcile（--task=reconcile）: INCOMPLETE の回復・確定成績との照合
 - 目的: 過去の観測から、各評価タイミングで判定を再計算し、旧 Python の結果と比べる。**通知しない**（`NotificationOrigin.BACKFILL`）。本番の `race_timing_notice` を消費しない（既に実装済み）。
 - 入力: `odds_snapshots`（`observed_at <= asOf`）、`results`、`horse_master_history`（時点整合）、`races`（G-28: `updated_at > asOf` の行は天候・馬場を使わず除外。**除外件数を必ず報告**）。
 - クラス: `BacktestRunner`（`:domain`。`RaceEvaluator` を再利用。`Clock` は注入、asOf はタイミングごとに `post − minutes`）、`BacktestReport`（件数・除外理由・指標）、`--task=backtest`（新しい Job 引数。契約の追加）、`tools/backtest_compare.py`（旧 Python との比較。ユーザーの PC で実データ）。
+- **除外の報告**: 天候・馬場の履歴が無い（`conditions_newer_than_as_of`、`updated_at` が不明）などで除外したレース・行の**件数と除外率**（除外 ÷ 対象）を `BacktestReport` に必ず出す（除外率が高い期間の成績は『偏りあり』と明記。除外を黙って丸めない）。
 - 保存（Q1）: `backtest_run`(id, tenant, 範囲, 設定の hash, モデル ID, 作成時刻)、`backtest_item`(run_id, race_id, timing_centi, 評価結果の要約, 決済)。V6。**実データの結果は『未検証』と明記**（合成データでの再現性のみ）。
 - 禁止: v2・adaptive_relaxation・閾値の変更の有効化（承認が先）。
 - テスト: 決定的（同じ入力で同じ出力）、point-in-time（asOf 後のオッズ・結果を見ない: 結果を asOf より後に挿入しても出力が変わらない）、除外件数の報告、旧 Python との差分（合成のフィクスチャで比較）、BACKFILL が通知しない、テナント境界。
 
-## 9. V6（提案。承認前は Flyway に入れない）
-| 変更 | 内容 | 既存データへの影響 | GRANT |
+### 8.1 天候・馬場を使わない別スキーマの比較設計（将来の選択肢。今は実装しない）
+| 案 | 内容 | 長所 | 短所 |
 |---|---|---|---|
-| `ticket_evaluations` | 生成列 `uq_native` + UNIQUE `(tenant_id, race_evaluation_id, bet_type, combo_key, umaban, uq_native)` | 旧行（`legacy_id` あり）は対象外 | 変更なし（bot は INSERT/UPDATE 済み） |
-| `bets`（Q3 次第） | 生成列 + UNIQUE `(tenant_id, signal_id, uq_native)` | 同上 | 変更なし |
-| `model_metrics` | `model_id` 列（NULL 可）と新方式の行だけ UNIQUE（必要な場合） | 既存行は NULL のまま | 変更なし |
-| 新表 `backtest_run`・`backtest_item` | 追記専用（UPDATE なし）。PK/FK/CHECK は V5 と同流儀 | なし | bot に SELECT/INSERT、app に SELECT |
+| A 現行 | 天候・馬場を特徴量に含める。履歴が無い行は学習・バックテストから除外 | 旧互換の特徴量。点時整合 | 過去データの大半が除外され得る（G-31）。件数不足 |
+| B 別スキーマ | 天候・馬場（`tenko_cd` 等）を特徴量から外した新スキーマ（`CALIBRATION_40` の派生）。モデルも別 ID | 過去データを除外せず使える | 旧モデルと比較できない（再学習が必要）。精度が下がる可能性 |
+| C 履歴蓄積後に A | 観測時刻つきの保存（G-31 設計）が溜まるまで B で運用 | 将来 A に戻せる | 蓄積に時間 |
+- **禁止**: 学習と推論で特徴量の扱いを変えること（例: 学習は天候なし・推論は天候あり）。スキーマ ID・モデル ID・manifest に特徴量一覧を含め、推論側は学習時のスキーマと**一致しないモデルを読み込まない**（既存の fail-closed の検査を B にも適用）。切り替えは新スキーマ + 新モデルのセットで行う。
+- 選択はデータ量（除外率）を見てユーザーが判断する（UNRESOLVED G-31）。
+
+## 9. V6（提案。承認前は Flyway に入れない）
+**D-224: 設計方針のみ承認。下の SQL 案は追加レビューの結果で訂正済み。実装・適用は再承認後。**
+| 変更 | 内容（訂正後） | 既存データへの影響 | GRANT |
+|---|---|---|---|
+| `ticket_evaluations` | **NULL 正規化の生成列** `uq_combo VARCHAR(16) ascii_bin AS (IF(legacy_id IS NULL, COALESCE(combo_key,''), NULL))`、`uq_umaban SMALLINT AS (IF(legacy_id IS NULL, COALESCE(umaban,0), NULL))` + UNIQUE `(tenant_id, race_evaluation_id, bet_type, uq_combo, uq_umaban)`。単勝は combo=''、ワイド/三連複は umaban=0（どちらも実データに現れない値なので衝突しない） | 旧行（`legacy_id` あり）は両列が NULL → 対象外（旧データの重複に触れない） | 既存表。bot は SELECT/INSERT/UPDATE 済みで**変更なし** |
+| `bets`・`bet_legs` | **V6 に入れない**（Q3 保留。T1.20 後） | — | — |
+| `model_metrics` | `model_id VARCHAR(64) NULL` を追加。生成列 `uq_model = IF(legacy_id IS NULL, COALESCE(model_id,''), NULL)`、`uq_from = IF(legacy_id IS NULL, COALESCE(date_from,'0001-01-01'), NULL)`、`uq_to = IF(legacy_id IS NULL, COALESCE(date_to,'9999-12-31'), NULL)` + UNIQUE `(tenant_id, market, uq_model, uq_from, uq_to)` | 既存行は `model_id` NULL・旧行は対象外 | 既存表。bot は SELECT/INSERT/UPDATE 済みで**変更なし** |
+| 新表 `backtest_run`・`backtest_item` | 追記専用（UPDATE なし）。PK/FK/CHECK は V5 と同流儀 | なし | **変更が必要**: `R__grants.sql` に `bot`=SELECT,INSERT・`app`=SELECT（`ingest`/`mltrain`/`migrate` は既存の『全表 REVOKE→個別 GRANT』の流儀どおり明示）を追加する。GRANT は表を作ってから適用されるので、V6 と同じリリースで更新。『GRANT 変更不要』は**既存 3 表だけの話**で、新表を入れる場合は不正確（本節で訂正） |
 | `race_evaluations` | 変更なし（`settled_at`/`hit`/`payout_used`/`is_provisional`/`settle_status` が既にある） | | |
+**検証済み（2026-10-29、ローカル MySQL 8.0.46 のスクラッチ DB）**: ①素の UNIQUE `(…, combo_key, umaban)` は NULL を含む重複を許す（同じ単勝 2 行・同じワイド 2 行が入った）②上の生成列方式は新方式の重複を 1062 で拒否し、旧行（`legacy_id` あり・重複を含む）を既存のまま保ち、別の馬・別テナントは通す③`model_metrics` も `model_id`/`date_from`/`date_to` が NULL の同じ行の二重を拒否する。MySQL 8.4/9.7 と V1〜V5 適用済み DB での実行は、V6 を実装するときにガード試験に含める（今回は未実施）。
 適用前検査・ロールバック（アプリを旧版へ戻す。新表は DROP しない）は V5 と同じ。`requiredSchemaVersion` は 6。release-manifest の `flyway.latest_version` は自動で追従する。
 
 ## 10. 実装順序（各ステップで commit・push。ローカルテストを先に、CI は最後にまとめて）

@@ -46,6 +46,12 @@ class ApplyContext(
 /** 保留（PENDING）の理由: 依存するレースがまだ無い。レースが入ったとき、この理由の生レコードを再適用する（[BatchIngestor]）。 */
 const val REASON_RACE_NOT_FOUND = "RACE_NOT_FOUND"
 
+/**
+ * レース待ちの保留の理由。**待っているレースを含める**（`RACE_NOT_FOUND:<race_id>`）ので、そのレースが入ったときに該当の保留だけを漏れなく探せる。
+ * V5 以前の保留は印の無い [REASON_RACE_NOT_FOUND]（待っているレースが分からない）。
+ */
+fun raceNotFoundReason(raceId: jp.jrabot.domain.race.RaceId): String = "$REASON_RACE_NOT_FOUND:${raceId.value}"
+
 sealed interface ApplyOutcome {
     data object Applied : ApplyOutcome
 
@@ -195,7 +201,7 @@ class ObservationApplier(
         ctx: ApplyContext,
     ): ApplyOutcome {
         if (belowPar(o.entries.map { it.odds.value })) return ApplyOutcome.Quarantined("ODDS_BELOW_PAR")
-        if (races.find(tenantId, o.raceId) == null) return ApplyOutcome.Deferred(REASON_RACE_NOT_FOUND)
+        if (races.find(tenantId, o.raceId) == null) return ApplyOutcome.Deferred(raceNotFoundReason(o.raceId))
         val snapshot =
             try {
                 OddsSnapshot(tenantId, o.raceId, Market.WIN, ctx.observedAt, o.entries)
@@ -248,7 +254,7 @@ class ObservationApplier(
     ): ApplyOutcome {
         if (rows.isEmpty()) return ApplyOutcome.Quarantined("EMPTY_SNAPSHOT")
         if (!policy.storeComboOdds) return ApplyOutcome.Rejected("COMBO_ODDS_STORAGE_DISABLED")
-        if (races.find(tenantId, raceId) == null) return ApplyOutcome.Deferred(REASON_RACE_NOT_FOUND)
+        if (races.find(tenantId, raceId) == null) return ApplyOutcome.Deferred(raceNotFoundReason(raceId))
         return upserted(combos.upsert(ComboOddsSnapshot(tenantId, raceId, market, ctx.observedAt, rows, ctx.dataspec)))
     }
 
