@@ -1,11 +1,43 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-10-29（Flyway V5 の実装〈D-17/D-18/D-19 の承認反映。同ブランチ。T3.9 には進んでいない・CI 未実施〉。記録は下）
+最終更新: 2026-10-29（追加レビュー・ML 連携の実行・T3.9 の詳細設計。同ブランチ。CI 未実施）
+旧: 2026-10-29（Flyway V5 の実装〈D-17/D-18/D-19 の承認反映。同ブランチ。T3.9 には進んでいない・CI 未実施〉。記録は下）
 旧: 2026-10-28（包括バグ監査の修正）
 旧: 2026-10-27（Stage 3-H レビュー修正: G-23/G-24 の判断反映・5 分前の強化・モード確認間隔）
 旧: 2026-10-27（Stage 3-H: T3.8 bot-run オーケストレーション）
 旧: 2026-10-27（Stage 3-G: T3.7 Discord 通知）
 旧: 2026-10-26（Public 化の準備）／2026-10-24（Stage 3-F2・3-F1・3-E）
+
+## 追加レビューと T3.9 の詳細設計（claude/stage3-bot-orchestration・2026-10-29。PR なし。**GitHub Actions は起動していない**。T3.8・V5 は CI で未検証）
+### 追加レビューで見つけて直したもの（D-222。変更前のコードで失敗する試験を作って確認）
+| 問題 | 修正 | 回帰試験 |
+|---|---|---|
+| bot-run が 1 サイクルの先頭でしか heartbeat を更新せず、1 レースの通知が長引く（Discord の 429 の待機は最大数分）とリース（300 秒）が切れて checkpoint を保存できない | レースの合間に `heartbeatIfDue()` | `BotRunIntegrityTest`（同時に発走する 3 レースが各 130 秒かかる。修正を外すと失敗することを確認） |
+| 保留（PENDING）の再適用が古い順で、居座る古い保留が新しい保留の再適用を飢えさせる | 新しい順・上限 500 | `RawPendingOrderIntegrationTest`（順序・`settlePending` の確定済み不変・テナント境界） |
+| COM ワーカーが辞書でない JSON 行（配列など）を返すと予期しない例外 | `BAD_PROTOCOL` として扱う | `test_worker.py` |
+| `MlTrainInteropIntegrationTest` の種データの `races.updated_at` が as-of より後で、D-214 の仕様どおり全行が除外され `DATASET_EMPTY` | 種データの更新時刻を as-of より前に | 5 件が成功 |
+### 運用上の重要な帰結（要判断・UNRESOLVED G-31）
+D-214 により、**遅れて取り込んだ過去レース（バックフィル）は `races.updated_at` が取込時刻になり、天候・馬場の as-of 時点の値を確認できないため学習データから全て除外される**。実データでは学習に使える行が極端に減り得る。
+### 実行したもの（ローカル。JDK 21・MySQL 8.0.46・合成データ）
+| 区分 | 結果 |
+|---|---|
+| `:domain` / `:bot` / `:persistence` / `:ingest` / `:db-migration` / `:dashboard` / `:cloud-gcp` / `:golden-runner`（単体 + MySQL 統合） | 1010 / 174 / 231 / 88 / 107 / 39 / 102 / 20 件。失敗は `persistence` の 1 件のみ（既知: `WiringIntegrationTest` が MySQL 8.4 を期待する版検査。8.0.46 のため） |
+| Kotlin/Python ML 連携（`MlTrainInteropIntegrationTest`） | **5 件成功**（これまで未実施。`ml/requirements.txt` を入れたローカル venv を `ML_TRAIN_PYTHON` に指定。実モデル・実データはリポジトリに入れていない） |
+| `ml` の pytest | 128 件成功 |
+| 旧 Python とのゴールデン比較 | 再生成の一致（32 フィクスチャ/994 呼び出し）、`verify`、`run_tests`（93 件）、Kotlin との比較 **31 ケース/988 呼び出し全一致**（最大絶対誤差 1.07e-14。GD10 の 6 呼び出しは未対応のまま） |
+| agent の pytest / `tools.ci` / `tools.release` / ktlint / `checkModuleDependencies` / repo-hygiene | 213 件（4 件は Windows 専用でスキップ）／130／42／成功／成功／成功 |
+| 判定の不変条件の性質試験（`DecisionInvariantsFuzzTest`） | 9000 件超のランダム入力で、例外・非有限値・負の金額・1 点の上限超過・レース合計の上限超過なし。同率の並びが入力順に依存するのは旧互換（呼び出し側が馬番順に固定） |
+| **未実施** | **GitHub Actions 全体**（JDK 25・MySQL 8.4/9.7・Docker・required check `ci gate`）。JDK 25・MySQL 8.4/9.7 はこの環境に無く、用意しなかった。V5 の 8.4/9.7 での適用。実 Discord・Cloud Run・Windows 実機 |
+### 監査の範囲（読んで確認したもの。問題が無かったものも含む）
+Plackett–Luce/買い目/予算上限（性質試験）、ML ゲート（NaN は FAIL で fail closed）、GCS モデルストア（作成のみ・`.sig` 先 `.json` 後・パスは ID だけから組み立て）、FetchPolicy（非 YSCH は保留があっても SUCCEEDED → G2 の再適用で補う）、Windows の COM ワーカー（pickle なし・シェルなし・Base64 検証・タイムアウトで強制終了・再起動の上限）、dashboard（内部 API だけ。認証フィルタのパス正規化は `RequestPathsTest` で網羅）、CI ゲート（実行が必要なジョブが skipped なら失敗）。**低**: GCS の `readAllBytes` に大きさの上限がない（自前のバケットで、ModelLoader が 4 MiB で拒否するが、ダウンロード後。メタデータで事前に拒否するのが望ましい。HTTP 試験への影響があるので今回は変更せず）。
+### T3.9
+詳細設計: `docs/T39_DESIGN.md`（D-223、UNRESOLVED D-20）。本体は未着手。
+### 次にユーザーが行うこと
+1. D-20（T3.9 の設計 Q1〜Q5）と G-31（G3 の運用上の帰結）の判断。 2. Actions の無料枠が戻ったら、PR の作成と CI の実行を指示（PR・マージは指示があるまで行わない）。 3. T3.9 の着手の指示。
+### ブランチ
+`claude/stage3-bot-orchestration`（PR なし）。
+
+---
 
 ## Flyway V5（claude/stage3-bot-orchestration・2026-10-29。T3.9 には進んでいない。PR なし。**CI は未実施 = T3.8・V5 は CI で未検証**）
 承認（2026-10-29）: D-17（V5 を条件付きで承認）／D-18（取りこぼしを許容。自動再送しない）／D-19（評価機会の喪失は FAILED・exit 1）。設計と差分: `docs/AUDIT_FIX_DESIGN.md` §3・§7、D-218〜D-221、UNRESOLVED C-41・D-17〜D-19・G-30、CONTRACTS 0.4.15。

@@ -119,6 +119,7 @@
 | D-17 | ~~監査 E・B・D の恒久設計 V5~~ → **承認済み（2026-10-29）・実装済み**（D-218/D-219。通知内容の保存形式は構造化 JSON、`app` に `race_timing_notice` の SELECT）。残り: **CI（MySQL 8.4/9.7・JDK 25）での検証**と、本番 DB への V5 適用（**未承認**。T5.0 / 第 5 段階） | 解消（CI 未検証） |
 | D-18 | ~~発火の確定後・送信前に落ちた場合~~ → **取りこぼしを承認（2026-10-29）**。自動再送しない（D-220）。将来のダッシュボードで見られる情報は D-220 | 解消 |
 | D-19 | ~~データ不足で評価できなかったレースの終了状態~~ → **FAILED・exit 1・警告で承認（2026-10-29）**（D-221） | 解消 |
+| D-20 | **T3.9 の設計の確認**（docs/T39_DESIGN.md §0 Q1〜Q5）: ①V6 の承認 ②決済の代表評価（旧は発走前の最新 1 件。新方式はタイミングごとに決済し、旧互換の代表を別に印付け） ③紙の賭け（`bets`）を作るか（T1.20 の旧データ次第） ④バックテストの天候・馬場の扱い ⑤`RECONCILE` は通知しない | ①〜⑤を承認（推奨）／別案 |
 
 ### T1.20 の具体的な手順（まだ何も取得していない。取得済みとは扱わない）
 | # | 取得するもの | 手順（利用者のローカルで。実データ・パスワード・利用キーは貼らない） | 報告する集計値 |
@@ -159,7 +160,7 @@
 | F-6 | T3.6-A のローカル検証は JDK 21・MySQL 8.0.46。**JDK 25 と MySQL 8.4/9.7 の合否は GitHub Actions の結果だけが正**（D-163） |
 | F-7 | **T3.8 のローカル検証は JDK 21・MySQL 8.0.46（ポート 3307。`JRABOT_TEST_MYSQL_EXTERNAL`）**。bot-run の MySQL 統合試験（`BotRunOrchestratorIntegrationTest`〔最小権限の `bot` ユーザー〕・`BotRunRepositoriesIntegrationTest`）はローカルで成功。**JDK 25・MySQL 8.4/9.7・Docker イメージ・GitHub Actions は未実施**（無料枠不足のため PR を作らず CI を起動していない）。`MlTrainInteropIntegrationTest`（`ML_TRAIN_PYTHON` が要る）と `WiringIntegrationTest` のサーバ版検査（8.4 を期待）はローカルでは失敗する（既知。環境の問題） |
 | F-8 | **Cloud Run Jobs での SIGTERM**（猶予時間 G-OPS-4、`sun.misc.Signal` のハンドラが実コンテナで効くか、14 時間の Job タイムアウト G-OPS-5）。ローカルでは `USR2` の実シグナルでハンドラの経路を確認しただけ |
-| F-9 | **監査修正（2026-10-28）のローカル検証は JDK 21・MySQL 8.0.46**。`:bot` の MlTrainInteropIntegrationTest 6 件は `ML_TRAIN_PYTHON`（ml/requirements.txt を入れた Python）が無いため**未実施**。**GitHub Actions（JDK 25・MySQL 8.4/9.7・Docker・Python）は未実施。T3.8 は CI で未検証**。V5 案の SQL は MySQL 8.0.46 のスクラッチ DB でだけ確認（8.4/9.7 は未確認） |
+| F-9 | **監査・V5 のローカル検証は JDK 21・MySQL 8.0.46**。`MlTrainInteropIntegrationTest`（5 件）・`ml` の pytest 128 件・旧 Python との golden（32 ケース/994 呼び出し、Kotlin 対応 31 ケース/988 呼び出しが全一致）は 2026-10-29 に実行して成功（`ML_TRAIN_PYTHON` に `ml/requirements.txt` を入れたローカル venv）。**GitHub Actions（JDK 25・MySQL 8.4/9.7・Docker・required check `ci gate`）は未実施。T3.8・V5 は CI で未検証**。V5 の 8.4/9.7 での適用も未確認 |
 
 ## G. 後続タスク待ち
 | ID | 内容 | 予定 |
@@ -194,3 +195,5 @@
 | G-28 | **天候・馬場の履歴**（監査 G3。D-214）: 過去のレースの asOf 時点の値を復元できない。観測時刻つきの履歴表と WE 等のパーサが要る（DB 変更の承認が必要）。それまで該当行は学習・バックテストから除外される（件数は manifest の `skipped.conditions_newer_than_as_of`）。T3.9 のバックテストは除外件数を報告すること | T3.6 以降・承認後 |
 | G-29 | **保留レコードの再適用の拡張**（監査 G2。D-213）: 結果・払戻など T3.9 の依存の理由コード、保持期間（30 日案）を過ぎた保留の扱い、実データ形式のパーサ追加後の再解析（G-5） | T3.9・T1.17 後 |
 | G-30 | ~~V5 の実装~~ → **実装済み（D-218/D-219。CI 未検証）**。残り: 本番 DB への適用の承認、ダッシュボードで通知履歴を見る画面（T4.x。認証・認可を通った本人だけ） | 本番適用: 第 5 段階 |
+| G-31 | **G3 の運用上の帰結（要判断・D-214）**: `races.updated_at` は取込時刻なので、**遅れて取り込んだ過去レース（バックフィル）は、天候・馬場の as-of 時点の値を確認できず学習データから全て除外される**（`export-dataset` の `skipped.conditions_newer_than_as_of`）。実データでは学習に使える行が極端に減り得る。選択肢: ①除外のまま（現状。安全）②天候・馬場を欠損（0）にして残す（学習と本番でずれる。フラグ付き）③天候・馬場の観測履歴表 + パーサを追加（G-28。DB 変更の承認が必要）。実データで件数を見てから決める | T1.20・T3.6 以降 |
+
