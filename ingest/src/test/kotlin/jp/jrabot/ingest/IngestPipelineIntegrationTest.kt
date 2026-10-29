@@ -283,14 +283,14 @@ class IngestPipelineIntegrationTest {
         for (i in 0 until n) it.ingest(it.one, odds(it.now(race, 1 to 2.5), at = base.plusSeconds(i.toLong())))
         val other = "202611020511"
         it.ingest(it.one, odds(it.now(other, 1 to 3.0), at = base.plusSeconds(n + 1L)))
-        assertEquals(n + 1, it.count("SELECT COUNT(*) FROM ingest_raw WHERE parse_status = 'PENDING'"))
-        assertEquals(n, it.count("SELECT COUNT(*) FROM ingest_raw WHERE parse_error = 'RACE_NOT_FOUND:$race'"))
+        assertEquals(n + 1L, it.count("SELECT COUNT(*) FROM ingest_raw WHERE parse_status = 'PENDING'"))
+        assertEquals(n.toLong(), it.count("SELECT COUNT(*) FROM ingest_raw WHERE parse_error = 'RACE_NOT_FOUND:$race'"))
         assertEquals(200, it.ingest(it.one, it.envelope(records = listOf(it.nra(race, "2", "20261030")))).status)
-        assertEquals(n, it.count("SELECT COUNT(*) FROM odds_snapshots WHERE race_id = '$race'"), "古い保留まで漏れなく適用された")
+        assertEquals(n.toLong(), it.count("SELECT COUNT(*) FROM odds_snapshots WHERE race_id = '$race'"), "古い保留まで漏れなく適用された")
         assertEquals(1, it.count("SELECT COUNT(*) FROM ingest_raw WHERE parse_status = 'PENDING'"), "別のレース待ちは触らない")
         assertEquals(1, it.count("SELECT COUNT(*) FROM ingest_raw WHERE parse_error = 'RACE_NOT_FOUND:$other'"))
         // 観測時刻は取り込んだバッチのまま
-        assertEquals(n, it.count("SELECT COUNT(DISTINCT observed_at) FROM odds_snapshots WHERE race_id = '$race'"))
+        assertEquals(n.toLong(), it.count("SELECT COUNT(DISTINCT observed_at) FROM odds_snapshots WHERE race_id = '$race'"))
     }
 
     @Test

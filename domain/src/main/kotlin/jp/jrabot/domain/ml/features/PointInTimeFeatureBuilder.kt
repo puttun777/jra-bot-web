@@ -98,14 +98,18 @@ class PointInTimeFeatureBuilder(
         return FeatureVector(schema, FeatureMath.assemble(schema, odds, popularity, extra, ped), summary.meta.copy(flags = flags))
     }
 
-    /** `races` 行が asOf より後に更新されていたら、時間で変わる天候・馬場は asOf 時点の値が分からない。推測せず空にしてフラグを付ける（履歴が無い限り復元しない）。 */
+    /**
+     * `races` 行が asOf より後に更新されていたら、時間で変わる天候・馬場は asOf 時点の値が分からない。推測せず空にしてフラグを付ける（履歴が無い限り復元しない）。
+     * **更新時刻が不明（null）でも同じ**（観測時刻が分からない値は、未来の値かもしれない。安全側で使わない。学習・バックテスト・推論で同じ規則: D-226。
+     * DB の `races.updated_at` は NOT NULL なので、実運用で null になるのは更新時刻を持たない供給元だけ）。
+     */
     private fun conditionsAsOf(
         rc: RaceConditions,
         asOf: java.time.Instant,
         flags: MutableSet<FeatureFlag>,
     ): RaceConditions {
-        val updated = rc.updatedAt ?: return rc
-        if (!updated.isAfter(asOf)) return rc
+        val updated = rc.updatedAt
+        if (updated != null && !updated.isAfter(asOf)) return rc
         flags += FeatureFlag.RACE_CONDITIONS_NEWER_THAN_AS_OF
         return rc.copy(tenkoCd = "", shibaBabaCd = "", dirtBabaCd = "")
     }
