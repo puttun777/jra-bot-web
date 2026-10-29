@@ -13,7 +13,7 @@
 | 項目 | 内容 | 試験 |
 |---|---|---|
 | リース継続（D-225） | `LeaseKeeper.holdsNow()` + `LeaseProbe`。新しい評価・claim・送信・Discord の試行ごとに確認。heartbeat スレッドは足さない | `BotRunLeaseTest`（評価が 6 分かかる → 確定・通知なし。ゲートを消すと失敗を確認）|
-| 保留の再適用（D-227） | 理由に待つレースを含め、キーセットのページングで全件走査（200 件/ページ、最大 50 ページ）。旧形式も対象。テナント境界・観測時刻を維持 | `IngestPipelineIntegrationTest`（ページ超過・別レース・旧形式）、`RawPendingOrderIntegrationTest` |
+| 保留の再適用（D-227） | 理由に待つレースを含め、キーセットのページングで全件走査（200 件/ページ。総数の上限なし: 10,000 件の上限は撤回）。旧形式も対象。テナント境界・観測時刻を維持 | `IngestPipelineIntegrationTest`（ページ超過・別レース・旧形式）、`RawPendingOrderIntegrationTest` |
 | G-31（D-226） | `updatedAt` が null の天候・馬場も使わず除外（学習・推論で同じ規則）。履歴表は設計のみ（ML_DESIGN §15） | `FeatureBuilderTest` |
 | T3.9 設計の訂正 | V6: NULL 正規化の生成列（スクラッチ MySQL で重複拒否を確認）、新表の GRANT、`bets` は V6 から外す。Q2 二重計上防止・金額概念の分離、Q4 比較案 | docs |
 | ML 連携 6→5 | 以前の『6 件』は 5 テスト + クラス初期化失敗の疑似エントリ 1。テスト数は減っていない（`@Test` 5） | — |

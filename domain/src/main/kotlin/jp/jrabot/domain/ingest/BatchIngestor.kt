@@ -316,7 +316,9 @@ class BatchIngestor(
      * 今回レースが入った（確認できた）[races] を待っている保留（理由 `RACE_NOT_FOUND:<race_id>`）と、待つレースが不明な旧形式の保留（`RACE_NOT_FOUND`）を、
      * 取り込んだときのバッチの観測時刻のまま再解析・再適用する。**新しい順のキーセットのページングで全件を走査する**（1 ページ [REPLAY_PAGE] 件。以前の
      * 『新しい 500 件だけ』では、古い保留が取り残された）。再適用に失敗して PENDING のまま残る行があっても位置が進むので、同じ行で止まらない。
-     * 1 回の呼出しの走査は [REPLAY_MAX_PAGES] ページまで（暴走防止。残りは次の機会）。1 件ずつ別のトランザクションで、**失敗しても他へ影響させない**。
+     * **件数の上限は置かない**（以前の『1 回 10,000 件まで』は、超えた残件が次に同じレースの観測が来るまで放置され、再処理が保証されなかった）。走査はキーセットで必ず終わり、
+     * 対象は『今回レースが入った（確認できた）レースを待つ保留』と旧形式の保留だけなので、通常は小さい。リクエストの時間より再処理の保証を優先する。
+     * 再適用に失敗した行（一時障害・不正なレコード）は PENDING のまま残り、同じレースの観測が次に来たときに再試行される。
      * 同じ観測の再適用は冪等（オッズは自然キーで upsert）。保留の取得・更新は常にこのテナントの行だけ。
      */
     private fun replayPending(
@@ -325,7 +327,7 @@ class BatchIngestor(
     ) {
         val reasons = races.sortedBy { it.value }.map(::raceNotFoundReason) + REASON_RACE_NOT_FOUND
         var after: PendingCursor? = null
-        repeat(REPLAY_MAX_PAGES) {
+        while (true) {
             val page =
                 try {
                     raw.listPending(tenantId, reasons, REPLAY_PAGE, after)
@@ -438,8 +440,7 @@ class BatchIngestor(
     companion object {
         private val TS14: DateTimeFormatter = DateTimeFormatter.ofPattern("uuuuMMddHHmmss")
 
-        /** 保留の再適用の 1 ページの件数と、1 回の呼出しで走査するページ数の上限（ingest のリクエストの時間を伸ばさない）。 */
+        /** 保留の再適用の 1 ページの件数（走査の総数には上限を置かない）。 */
         const val REPLAY_PAGE = 200
-        const val REPLAY_MAX_PAGES = 50
     }
 }
