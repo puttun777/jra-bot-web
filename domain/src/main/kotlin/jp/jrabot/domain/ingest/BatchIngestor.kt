@@ -310,7 +310,7 @@ class BatchIngestor(
     private fun Observation.definesRace(): Boolean = this is ScheduleDayObservation || this is RaceObservation || this is TimeChangeObservation
 
     /**
-     * レース待ち（[REASON_RACE_NOT_FOUND]）で保留にした生レコードを、取り込んだときのバッチの観測時刻のまま再解析・再適用する（古い順に最大 [REPLAY_LIMIT] 件）。
+     * レース待ち（[REASON_RACE_NOT_FOUND]）で保留にした生レコードを、取り込んだときのバッチの観測時刻のまま再解析・再適用する（新しい順に最大 [REPLAY_LIMIT] 件）。
      * 1 件ずつ別のトランザクションで、**失敗しても他へ影響させない**（保留のまま次の機会に再試行する）。同じ観測の再適用は冪等（オッズは自然キーで upsert）。
      */
     private fun replayPending(tenantId: TenantId) {
@@ -424,6 +424,6 @@ class BatchIngestor(
         val TS14: DateTimeFormatter = DateTimeFormatter.ofPattern("uuuuMMddHHmmss")
 
         /** 1 回の再適用で扱う保留の件数の上限（ingest のリクエストの時間を伸ばさない）。 */
-        const val REPLAY_LIMIT = 200
+        const val REPLAY_LIMIT = 500
     }
 }

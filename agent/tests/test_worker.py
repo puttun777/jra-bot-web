@@ -143,3 +143,15 @@ def test_downloading_is_reported_so_watchdog_sees_progress(tmp_path: Path) -> No
         assert r["status"] == "DOWNLOADING" and r["records"] == []
     finally:
         sup.stop()
+
+
+def test_non_object_json_line_from_worker_is_a_protocol_error_not_an_unexpected_exception() -> None:
+    """監査: ワーカーが JSON でも辞書でない行（配列など）を返しても、WorkerCrashed（BAD_PROTOCOL）として扱い、ワーカーを捨てる。"""
+    code = "import sys\nfor _ in sys.stdin:\n    print('[]', flush=True)\n"
+    c = WorkerConfig(call_timeout_seconds=2.0, startup_timeout_seconds=5.0, max_restarts=5, restart_window_seconds=3600.0, restart_cooldown_seconds=60.0)
+    sup = WorkerSupervisor([sys.executable, "-c", code], c, FakeClock())
+    try:
+        with pytest.raises(WorkerCrashed, match="BAD_PROTOCOL"):
+            sup.call("ping")
+    finally:
+        sup.stop()

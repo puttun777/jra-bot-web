@@ -147,7 +147,7 @@ class MlTrainInteropIntegrationTest {
                 }
                 val race =
                     it.prepareStatement(
-                        "INSERT INTO races (tenant_id, race_id, race_date, venue_code, race_no, post_time, post_time_unknown, distance_m, track_type_cd, course_kubun_cd, tenko_cd, shiba_baba_cd, dirt_baba_cd, created_at, updated_at) VALUES (1, ?, ?, '05', ?, ?, 0, 1600, '11', '00', '1', '2', '3', '$now', '$now')",
+                        "INSERT INTO races (tenant_id, race_id, race_date, venue_code, race_no, post_time, post_time_unknown, distance_m, track_type_cd, course_kubun_cd, tenko_cd, shiba_baba_cd, dirt_baba_cd, created_at, updated_at) VALUES (1, ?, ?, '05', ?, ?, 0, 1600, '11', '00', '1', '2', '3', '$now', '2025-12-31 00:00:00.000000')",
                     )
                 val rh =
                     it.prepareStatement(

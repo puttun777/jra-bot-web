@@ -44,7 +44,7 @@ interface RawRecordStore {
     ): Boolean
 
     /**
-     * 依存するデータ待ち（[ParseStatus.PENDING] で [reason] を理由にしたもの）の行を、古い順に最大 [limit] 件。再適用に必要な、バッチの種別・観測時刻を付ける。
+     * 依存するデータ待ち（[ParseStatus.PENDING] で [reason] を理由にしたもの）の行を、**新しい順**に最大 [limit] 件（古い保留が居座っても、新しい保留の再適用が飢えないように）。再適用に必要な、バッチの種別・観測時刻を付ける。
      */
     fun listPending(
         tenantId: TenantId,

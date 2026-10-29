@@ -5,5 +5,5 @@ WHERE r.tenant_id = /* tenantId */0
   AND b.tenant_id = /* tenantId */0
   AND r.parse_status = 'PENDING'
   AND r.parse_error = /* reason */'x'
-ORDER BY r.received_at, r.batch_id, r.seq
+ORDER BY r.received_at DESC, r.batch_id DESC, r.seq DESC
 LIMIT /* limit */200
