@@ -83,4 +83,15 @@ class DecisionInvariantsFuzzTest {
         check(base, listOf(DecisionHorse(1, 1.0, 1), DecisionHorse(2, 9999.0, 2)))
         check(base, (1..18).map { DecisionHorse(it, 999.9, 0) })
     }
+
+    @Test
+    fun `レース合計の上限を設定すると 買い目の金額の合計は上限を超えない 比例縮小で min_bet を下回ることは旧互換 E6`() {
+        val r = Random(7)
+        val cfg = WinDecisionConfig.legacyFunctionDefaults().copy(maxTotalBetPerRace = 12.0)
+        repeat(2000) {
+            val res = WinDecisionEvaluator(cfg).evaluate(horses(r), noCombo)
+            val total = res.signals.filterIsInstance<BetSignal>().sumOf { it.betAmount }
+            assertTrue(total <= 12.0 + 1e-6, "合計 $total が上限 12.0 を超える")
+        }
+    }
 }

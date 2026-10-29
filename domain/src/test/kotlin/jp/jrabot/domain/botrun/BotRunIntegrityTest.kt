@@ -366,4 +366,23 @@ class BotRunIntegrityTest {
         assertEquals(3, k.evaluations.rows.size, "判定は行われている（全レース・1 タイミング）")
         assertTrue(k.notifier.signals.all { !it.body.contains("（推定）") || it.body.contains("実オッズ未取得") }, "推定を実オッズとして示さない")
     }
+
+    // ---- リース: 1 サイクルの中で通知が長引いても、レースの合間に heartbeat を更新する ----
+
+    @Test
+    fun `同時に発走する複数のレースの通知が長引いても リースを失わない`() {
+        val races = (1..3).map { Cal.race(no = it, post = java.time.LocalTime.of(9, 55)) }
+        val cfg = Kit.defaultConfig().copy(snapshot = SnapshotPolicy(listOf(15.0), TightenMode.OFF))
+        val k = Kit(races = races, config = cfg)
+        // 1 レースの評価・通知に 130 秒かかる（Discord の 429 の待機など）。リースは 300 秒、heartbeat は 60 秒間隔。
+        // サイクルの先頭でしか更新しないと、3 レース目（開始から 390 秒後）の checkpoint の保存でリースが切れている
+        (k.judge as StubJudge).onEvaluate = {
+            k.clock.advance(Duration.ofSeconds(130))
+            k.feedOdds() // 取込側は新しい観測を保存し続ける
+        }
+        val out = k.run()
+        assertEquals("ALL_RACES_OFF", out.reason, "リース喪失で止まらない: ${out.reason}")
+        assertEquals(3, k.notifier.signals.size)
+        assertEquals(3, k.timings.rows.size)
+    }
 }

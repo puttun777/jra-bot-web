@@ -402,6 +402,9 @@ class BotRunOrchestrator(
             val postAt = day.races.associate { it.raceId to it.postAt }
             for (raceId in plan.monitoring) {
                 if (stopRequested() || leaseLost != null) break
+                // 1 レースの通知が長引く（Discord の 429 の待機は最大数分）間に、リースが切れないように heartbeat を更新する（以前はサイクルの先頭だけだった）
+                (keeper.heartbeatIfDue() as? LeaseStatus.Lost)?.let { leaseLost = it.detail }
+                if (leaseLost != null) break
                 processRace(raceId, postAt.getValue(raceId) ?: continue)
             }
             checkpoint = checkpoint.copy(cycle = checkpoint.cycle + 1, lastCycleAt = clock.now(), races = mergeStages(plan))
