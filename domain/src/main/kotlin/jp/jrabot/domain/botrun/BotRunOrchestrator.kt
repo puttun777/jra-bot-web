@@ -101,6 +101,7 @@ class BotRunOrchestrator(
     private val processorFactory: (RunRequest, MlRunContext) -> RaceCycleProcessor,
     private val dispatcher: SignalNotificationDispatcher,
     private val notifiedProbe: NotifiedSignalProbe,
+    private val timings: TimingNoticeStore,
     private val errors: ErrorReporter,
     private val pacer: Pacer,
     private val stopRequested: () -> Boolean,
@@ -121,6 +122,11 @@ class BotRunOrchestrator(
         if (!startMode.allowsWork) return modeOutcome(startMode)
         val first = startGate(req, clock.now(), startMode, deriveDay(req, clock.now()))
         if (first != null) return first
+        // 必要な評価機会を失って終えた日は、もう評価できない（全レースが発走後）。同じ日を再実行して何度も FAILED・警告を繰り返さない（exit 0 で何もしない）
+        if (runs.listByDate(req.tenantId, req.date).any { it.state == BotRunState.FAILED && it.exitReason == REASON_OPPORTUNITY_LOST }) {
+            events.event("LOSS_ALREADY_RECORDED", req.date.toString())
+            return RunOutcome(RunExit.OK, "EVALUATION_LOSS_ALREADY_RECORDED", null, null)
+        }
 
         val acquired =
             runs.acquire(LeaseRequest(req.tenantId, req.runId, req.date, req.trigger, req.owner, clock.now(), config.lease.duration))
@@ -242,11 +248,15 @@ class BotRunOrchestrator(
         }
 
         /**
-         * その日の前の run の checkpoint（INTERRUPTED・奪取された run を含む）を復元する。**初回起動の空 checkpoint** と **異常（記録があるのに復元できない）** を区別する:
-         * - 前の run が無い、または checkpoint が null の run だけ: 正常（通知の前に必ず checkpoint を保存するので、null の run は何も通知していない）。
-         * - 最新の checkpoint が壊れている（空でない文字列が読めない）: 古い読めるものを土台にするが、発火済みの記録を信頼できない。
-         * - どちらの場合も、DB に『通知を試みた Signal』があるのに checkpoint にそのレースの発火記録が無い（または最新が壊れている）レースは、
-         *   **どのタイミングを通知したか分からない**ので、このrunでは通知を止める（[quarantined]。取りこぼしを選ぶ: CONTRACTS §9.2）。他のレースは続ける。
+         * 発火済みのタイミングを復元する。**正は DB の確定記録（`race_timing_notice`）**で、前の run の checkpoint（INTERRUPTED・奪取された run を含む）は進行のヒント。
+         * checkpoint が欠損・破損・古くても、DB に確定したタイミングは必ず発火済みとして扱う（同じタイミングを新しいオッズで再通知しない）。
+         *
+         * **初回起動の空 checkpoint** と **異常（記録があるのに復元できない）** を区別する:
+         * - 前の run が無い、または checkpoint が null の run だけ: 正常（通知の前に必ず確定・checkpoint を保存するので、null の run は何も通知していない）。
+         * - V5 より前の版が送った通知（確定の記録が無い）: DB に『通知を試みた Signal』があり、その観測時刻が確定記録で説明できず、checkpoint にもそのレースの発火記録が
+         *   無い（または最新の checkpoint が壊れている）レースは、どのタイミングを通知したか分からないので**この run では通知を止める**（[quarantined]。他のレースは続ける）。
+         *   必要な評価機会を失ったまま終わるなら FAILED になる（D-19）。
+         * LIVE 以外（BACKFILL など）は確定の記録を読まない（本番の通知タイミングと混ぜない）。
          */
         private fun restore(): RunCheckpoint {
             val previous = runs.listByDate(req.tenantId, req.date).filter { it.runId != keeper.run.runId }
@@ -258,14 +268,29 @@ class BotRunOrchestrator(
                 }
             val base = usable ?: RunCheckpoint.EMPTY
             if (latestCorrupt) events.event("CHECKPOINT_CORRUPT", "runs=${written.size}")
-            if (previous.isNotEmpty()) {
+            val live = req.origin == NotificationOrigin.LIVE
+            val merged = LinkedHashMap(base.races)
+            if (live || previous.isNotEmpty()) {
                 for (race in deriveDay(req, clock.now()).races) {
-                    val recorded =
+                    val slots = if (live) timings.list(req.tenantId, race.raceId) else emptyList()
+                    if (slots.isNotEmpty()) {
+                        val old = merged[race.raceId]
+                        merged[race.raceId] =
+                            RaceCheckpoint(
+                                old?.stage ?: RaceStage.MONITORING,
+                                old?.lastObservedAt,
+                                old?.firedMinutes.orEmpty() + slots.map { TimingKey.minutes(it.timingCenti) },
+                            )
+                    }
+                    if (previous.isEmpty()) continue
+                    val cpRecorded =
                         base.races[race.raceId]
                             ?.firedMinutes
                             .orEmpty()
                             .isNotEmpty()
-                    if ((latestCorrupt || !recorded) && notifiedProbe.hasNotificationAttempt(req.tenantId, race.raceId)) quarantined += race.raceId
+                    if (!latestCorrupt && cpRecorded) continue
+                    val explained = slots.map { it.oddsObservedAt }.toSet()
+                    if ((notifiedProbe.notifiedObservations(req.tenantId, race.raceId) - explained).isNotEmpty()) quarantined += race.raceId
                 }
             }
             if (quarantined.isNotEmpty()) {
@@ -276,7 +301,7 @@ class BotRunOrchestrator(
                     "races=${quarantined.size} corrupt=$latestCorrupt",
                 )
             }
-            return base
+            return base.copy(races = merged)
         }
 
         private fun recoverStaleClaims() {
@@ -383,14 +408,18 @@ class BotRunOrchestrator(
             return CycleResult(null, tickFor(plan, postAt, clock.now()))
         }
 
+        /**
+         * 全レースが発走済みまたは中止になったときの終了。必要な評価のタイミングを逃したレースが 1 つでもあれば **FAILED・exit 1**（D-19）。逃した理由は
+         * 予定を信頼できなかった・オッズが無い/古い・checkpoint の不整合のどれでも同じ。回復できない（発走後に再実行しても評価できない）ので 75 ではなく 1。
+         * 評価した結果の買い目 0 件、見送り、中止、遅い起動で評価対象にならなかったレースは正常終了。
+         */
         private fun completion(a: CompletionAssessment): Finish {
-            val lost = a.calendarLost
-            val gaps = a.dataGaps
-            events.event("COMPLETION", "lostCalendar=${lost.size} dataGaps=${gaps.size}")
-            return when {
-                lost.isNotEmpty() -> Done(BotRunState.FAILED, "EVALUATION_OPPORTUNITY_LOST", RunExit.FAILURE, alert = true)
-                gaps.isNotEmpty() -> Done(BotRunState.SUCCEEDED, "ALL_RACES_OFF_WITH_GAPS", RunExit.OK, alert = true)
-                else -> Done(BotRunState.SUCCEEDED, "ALL_RACES_OFF", RunExit.OK)
+            val lost = a.lost
+            events.event("COMPLETION", "lostCalendar=${a.calendarLost.size} lostData=${a.dataLost.size} quarantined=${a.quarantinedLost.size}")
+            return if (lost.isNotEmpty()) {
+                Done(BotRunState.FAILED, REASON_OPPORTUNITY_LOST, RunExit.FAILURE, alert = true)
+            } else {
+                Done(BotRunState.SUCCEEDED, "ALL_RACES_OFF", RunExit.OK)
             }
         }
 
@@ -441,6 +470,19 @@ class BotRunOrchestrator(
                 is RaceStep.StaleOdds -> {
                     events.event("STALE_ODDS", "${raceId.value} ageSec=${step.age.seconds}")
                     report("STALE_ODDS:${raceId.value}", "オッズが古いため通知していません（エージェント停止・取込の遅延の可能性）", "race=${raceId.value} age=${step.age.seconds}s")
+                }
+
+                is RaceStep.AlreadyFired -> {
+                    events.event("TIMING_ALREADY_FIRED", "${raceId.value} timings=${step.timingCenti.sorted()}")
+                }
+
+                RaceStep.SnapshotInvalid -> {
+                    events.event("NOTICE_SNAPSHOT_INVALID", raceId.value)
+                    report(
+                        "NOTICE_SNAPSHOT_INVALID:${raceId.value}",
+                        "確定した通知内容が壊れている・版が違う・ハッシュが合わないため、通知しませんでした（別の値で補いません。管理画面で確認してください）",
+                        "race=${raceId.value}",
+                    )
                 }
 
                 is RaceStep.Evaluated -> {
@@ -577,7 +619,10 @@ class BotRunOrchestrator(
         }
     }
 
-    private companion object {
-        val MIN_TICK: Duration = Duration.ofSeconds(1)
+    companion object {
+        /** 必要な評価のタイミングを逃して終えた run の理由（`bot_run.exit_reason`）。 */
+        const val REASON_OPPORTUNITY_LOST = "EVALUATION_OPPORTUNITY_LOST"
+
+        private val MIN_TICK: Duration = Duration.ofSeconds(1)
     }
 }

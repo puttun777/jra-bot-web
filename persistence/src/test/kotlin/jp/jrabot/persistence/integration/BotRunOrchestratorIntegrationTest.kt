@@ -7,7 +7,6 @@ import jp.jrabot.domain.bot.RunId
 import jp.jrabot.domain.botrun.BotRunConfig
 import jp.jrabot.domain.botrun.BotRunOrchestrator
 import jp.jrabot.domain.botrun.MlRunContext
-import jp.jrabot.domain.botrun.NotifiedSignalProbe
 import jp.jrabot.domain.botrun.Pacer
 import jp.jrabot.domain.botrun.PollingIntervals
 import jp.jrabot.domain.botrun.RaceCycleProcessor
@@ -15,6 +14,7 @@ import jp.jrabot.domain.botrun.RaceEntryReader
 import jp.jrabot.domain.botrun.RaceEvaluationWriter
 import jp.jrabot.domain.botrun.RunExit
 import jp.jrabot.domain.botrun.RunRequest
+import jp.jrabot.domain.botrun.SignalNotifiedProbe
 import jp.jrabot.domain.botrun.SnapshotPolicy
 import jp.jrabot.domain.botrun.TightenMode
 import jp.jrabot.domain.botrun.testing.ManualClock
@@ -116,6 +116,7 @@ class BotRunOrchestratorIntegrationTest {
         val dispatcher = SignalNotificationDispatcher(signals, notifier, modes, clock, MentionPolicy.NONE)
         val evaluations = bot.bean(RaceEvaluationWriter::class.java)
         val entries = bot.bean(RaceEntryReader::class.java)
+        val timings = bot.bean(jp.jrabot.domain.botrun.TimingNoticeStore::class.java)
         val features = bot.bean(FeatureSource::class.java)
 
         fun feed() {
@@ -138,10 +139,25 @@ class BotRunOrchestratorIntegrationTest {
                 bot.bean(ScheduleFetchFactReader::class.java),
                 mlStarter = { MlRunContext.DISABLED },
                 processorFactory = { req, _ ->
-                    RaceCycleProcessor(cfg, req.tenantId, req.origin, bot.odds, StubJudge(), evaluations, signals, entries, features, bot.races, dispatcher)
+                    RaceCycleProcessor(
+                        cfg,
+                        req.tenantId,
+                        req.origin,
+                        bot.odds,
+                        StubJudge(),
+                        evaluations,
+                        signals,
+                        entries,
+                        features,
+                        bot.races,
+                        dispatcher,
+                        timings,
+                        req.runId.value,
+                    )
                 },
                 dispatcher = dispatcher,
-                notifiedProbe = NotifiedSignalProbe { t, r -> signals.listByRace(t, r).any { it.state != NotificationState.UNSENT } },
+                notifiedProbe = SignalNotifiedProbe(signals),
+                timings = timings,
                 errors = ErrorReporter(notifier, clock),
                 pacer =
                     Pacer { d, _ ->
@@ -170,6 +186,25 @@ class BotRunOrchestratorIntegrationTest {
         assertEquals(4, db.count("SELECT COUNT(*) FROM signals WHERE notify_state = 'SENT'"))
         assertEquals(2, notified.size)
         assertEquals(1, db.count("SELECT COUNT(*) FROM bot_run WHERE JSON_UNQUOTE(JSON_EXTRACT(checkpoint, '\$.races.\"${raceId.value}\".stage')) = 'OFF'"))
+        // V5: 評価タイミングごとに確定した記録（30 分前 = 3000、5 分前 = 500）と、通知内容のスナップショット
+        assertEquals(listOf("500", "3000"), db.query("SELECT timing_centi FROM race_timing_notice ORDER BY timing_centi") { it.getString(1) })
+        assertEquals(
+            2,
+            db.count("SELECT COUNT(*) FROM race_timing_notice WHERE JSON_VALID(notice_json) AND notice_schema = 1 AND CHAR_LENGTH(notice_sha256) = 64"),
+        )
+    }
+
+    @Test
+    fun `checkpoint が失われ 新しいオッズが届いても 同じタイミングは再通知しない V5 の確定記録が正`() {
+        run()
+        assertEquals(2, notified.size)
+        db.exec("UPDATE bot_run SET checkpoint = NULL")
+        val again = run(owner = "owner-2") // 発走前から再実行（新しいオッズが届き続ける）
+        assertEquals("ALL_RACES_OFF", again.reason)
+        assertEquals(2, notified.size, "再通知なし")
+        assertEquals(2, db.count("SELECT COUNT(*) FROM race_evaluations"))
+        assertEquals(4, db.count("SELECT COUNT(*) FROM signals"))
+        assertEquals(2, db.count("SELECT COUNT(*) FROM race_timing_notice"))
     }
 
     @Test
@@ -189,6 +224,7 @@ class BotRunOrchestratorIntegrationTest {
         assertEquals("ALL_RACES_OFF", out.reason)
         assertEquals(4, db.count("SELECT COUNT(*) FROM signals WHERE notify_state = 'UNSENT'"))
         assertEquals(0, notified.size)
+        assertEquals(0, db.count("SELECT COUNT(*) FROM race_timing_notice"), "BACKFILL は本番の通知タイミングを消費しない")
     }
 
     @Test

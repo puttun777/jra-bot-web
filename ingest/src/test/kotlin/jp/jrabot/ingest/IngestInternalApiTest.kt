@@ -56,7 +56,7 @@ class IngestInternalApiTest {
         assertNotNull(context.getBean(RaceRepository::class.java))
         assertTrue(context.getBeansOfType(Class.forName("org.seasar.doma.jdbc.Config")).isNotEmpty(), "Doma の Config が構成されている")
         assertNotNull(context.getBean(SchemaVersionVerifier::class.java))
-        assertEquals("4", context.getBean(SchemaVersionVerifier::class.java).required.toString())
+        assertEquals("5", context.getBean(SchemaVersionVerifier::class.java).required.toString())
         assertEquals(listOf("domain", "persistence", "cloud-gcp"), listOf(DomainModule.NAME, PersistenceModule.NAME, CloudGcpModule.NAME))
     }
 
@@ -89,7 +89,7 @@ class IngestInternalApiTest {
         assertEquals(503, r.status)
         assertTrue(r.body.contains(""""status":"NOT_READY""""), r.body)
         assertTrue(r.body.contains(""""reason":"DB_UNAVAILABLE""""), r.body)
-        assertTrue(r.body.contains(""""requiredSchemaVersion":"4""""), r.body)
+        assertTrue(r.body.contains(""""requiredSchemaVersion":"5""""), r.body)
         for (secret in listOf(
             "synthetic-password-never-logged",
             "127.0.0.1",

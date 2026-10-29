@@ -106,6 +106,9 @@ data class SnapshotPolicy(
         require(minutesBeforePost.isNotEmpty()) { "評価のタイミングが空" }
         require(minutesBeforePost.all { it.isFinite() && it > 0.0 && it <= 1440.0 }) { "評価のタイミングは 0 超 1440 分以下" }
         require(minutesBeforePost.toSet().size == minutesBeforePost.size) { "評価のタイミングが重複している" }
+        // DB の一意性のキー（timing_centi）に換算できること。0.01 分刻み以外は丸めずに拒否し、異なる設定値が同じキーに衝突しない
+        require(minutesBeforePost.all { TimingKey.centiOrNull(it) != null }) { "評価のタイミングは 0.01 分刻み（0.01〜1440 分）: $minutesBeforePost" }
+        require(minutesBeforePost.map { TimingKey.centi(it) }.toSet().size == minutesBeforePost.size) { "評価のタイミングが同じ timing_centi になる" }
     }
 
     /** 大きい順。 */

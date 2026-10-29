@@ -170,17 +170,20 @@ class BotRunRestartAndModeTest {
                 jp.jrabot.domain.botrun.testing
                     .InMemoryRaces(),
                 k.dispatcher,
+                k.timings,
+                "00000000-0000-4000-8000-000000000001",
             )
         val race = k.raceIds[0]
         k.clock.instant = k.at(9, 51)
         k.odds.add(Kit.snapshot(race, k.at(9, 50, 30)))
         val a = processor.process(race, k.at(9, 55), RaceCheckpoint(RaceStage.MONITORING), k.clock.now()) { true }
         val b = processor.process(race, k.at(9, 55), RaceCheckpoint(RaceStage.MONITORING), k.clock.now()) { true } // checkpoint が保存されていなかった再実行
-        assertTrue(a is RaceStep.Evaluated && b is RaceStep.Evaluated)
+        // 2 回目は、DB に確定済みのタイミング（race_timing_notice）なので評価も通知もしない（checkpoint が保存されていなくても）
+        assertTrue(a is RaceStep.Evaluated && b is RaceStep.AlreadyFired)
         assertEquals(1, k.evaluations.rows.size)
         assertEquals(2, k.signals.all().size)
         assertEquals(1, k.notifier.signals.size)
-        assertNull(b.dispatch) // 2 回目は UNSENT が無いので送るものが無い
+        assertEquals(1, k.timings.rows.size)
     }
 
     @Test
@@ -202,6 +205,8 @@ class BotRunRestartAndModeTest {
                 jp.jrabot.domain.botrun.testing
                     .InMemoryRaces(),
                 k.dispatcher,
+                k.timings,
+                "00000000-0000-4000-8000-000000000001",
             )
         k.clock.instant = k.at(9, 51)
         k.odds.add(Kit.snapshot(k.raceIds[0], k.at(9, 50, 30)))

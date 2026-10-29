@@ -36,17 +36,64 @@ internal data class RaceEvaluationEntity(
 @Dao
 internal interface RaceEvaluationDao {
     /**
-     * 自然キー `(tenant_id, race_id, snapshot_at)` が無いときだけ挿入する（`INSERT … SELECT … WHERE NOT EXISTS`）。件数 1 = 挿入、0 = 既存。
-     * 旧テーブルには UNIQUE が無い（移行データに重複があり得る: D-066）ので、同時挿入の防止は bot-run のリース（`bot_run` の UNIQUE）に依存する。
+     * 新方式の行（`legacy_id IS NULL`）は `(tenant_id, race_id, snapshot_at)` が UNIQUE（V5 の生成列 `uq_native`）。`ON DUPLICATE KEY UPDATE tenant_id = tenant_id` で
+     * 既存なら何も変えない（`useAffectedRows=true` で 件数 1 = 挿入、0 = 既存）。旧データ（`legacy_id` あり）の重複には触れない（D-066）。
      */
     @Insert(sqlFile = true)
     fun insertIfAbsent(entity: RaceEvaluationEntity): Result<RaceEvaluationEntity>
+
+    /** 新方式の行の ID（自然キー）。 */
+    @Select
+    fun selectNativeId(
+        tenantId: Long,
+        raceId: String,
+        snapshotAt: LocalDateTime,
+    ): Long?
 
     @Select
     fun selectByRace(
         tenantId: Long,
         raceId: String,
     ): List<RaceEvaluationEntity>
+}
+
+/** `race_timing_notice`（V5。通知タイミングの確定と通知内容のスナップショット。追記専用）。 */
+@Entity(immutable = true, naming = NamingType.SNAKE_LOWER_CASE)
+@Table(name = "race_timing_notice")
+internal data class RaceTimingNoticeEntity(
+    @Id val tenantId: Long,
+    @Id val raceId: String,
+    @Id val timingCenti: Long,
+    val runId: String,
+    val evaluationId: Long,
+    val oddsObservedAt: LocalDateTime,
+    val noticeSchema: Int,
+    val noticeJson: String,
+    val noticeSha256: String,
+    val firedAt: LocalDateTime,
+)
+
+@Dao
+internal interface RaceTimingNoticeDao {
+    /**
+     * 通常の INSERT。同じ PK は重複キー（1062）で拒否される（呼び出し側が確定済みとして扱う）。`ON DUPLICATE KEY UPDATE` は使わない:
+     * それは UPDATE 権限を要求し、追記専用の表に bot へ UPDATE を付けることになるため。
+     */
+    @Insert(sqlFile = true)
+    fun insertIfAbsent(entity: RaceTimingNoticeEntity): Result<RaceTimingNoticeEntity>
+
+    @Select
+    fun selectByRace(
+        tenantId: Long,
+        raceId: String,
+    ): List<RaceTimingNoticeEntity>
+
+    @Select
+    fun selectOne(
+        tenantId: Long,
+        raceId: String,
+        timingCenti: Long,
+    ): RaceTimingNoticeEntity?
 }
 
 /** 出走表の馬名（`race_horses.bamei`）。 */

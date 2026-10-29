@@ -65,7 +65,7 @@ class BotSpringWiringTest {
                 assertNotNull(ctx.getBean(type), type.simpleName)
             }
             assertSame(mode, ctx.getBean(ModeProvider::class.java), "モード確認に使ったものと同じインスタンス")
-            assertEquals("4", ctx.getBean(SchemaVersionVerifier::class.java).required.toString())
+            assertEquals("5", ctx.getBean(SchemaVersionVerifier::class.java).required.toString())
             assertTrue(ctx.getBeansOfType(Class.forName("org.seasar.doma.jdbc.Config")).isNotEmpty())
             assertNotNull(ctx.getBean(BotJobExecutor::class.java))
         }

@@ -12,12 +12,12 @@ import jp.jrabot.domain.bot.RunId
 import jp.jrabot.domain.botrun.BotRunConfig
 import jp.jrabot.domain.botrun.BotRunOrchestrator
 import jp.jrabot.domain.botrun.MlRunContext
-import jp.jrabot.domain.botrun.NotifiedSignalProbe
 import jp.jrabot.domain.botrun.Pacer
 import jp.jrabot.domain.botrun.PollingIntervals
 import jp.jrabot.domain.botrun.RaceCycleProcessor
 import jp.jrabot.domain.botrun.RunExit
 import jp.jrabot.domain.botrun.RunRequest
+import jp.jrabot.domain.botrun.SignalNotifiedProbe
 import jp.jrabot.domain.botrun.SnapshotPolicy
 import jp.jrabot.domain.botrun.TightenMode
 import jp.jrabot.domain.botrun.testing.InMemoryBotRunRepository
@@ -140,6 +140,9 @@ class BotRunFakeServerIntegrationTest {
         ): jp.jrabot.domain.botrun.RunOutcome {
             val url = server.url()
             val notifier = DiscordNotifier(url, url, MentionPolicy.NONE, JdkWebhookTransport(Duration.ofSeconds(2), Duration.ofSeconds(2)), scriptSleeper)
+            val timings =
+                jp.jrabot.domain.botrun.testing
+                    .InMemoryTimingNotices()
             val dispatcher = SignalNotificationDispatcher(signals, notifier, modes, clock, MentionPolicy.NONE)
             val judge = StubJudge()
             val calendarDays =
@@ -168,10 +171,13 @@ class BotRunFakeServerIntegrationTest {
                             InMemoryFeatureSource(),
                             InMemoryRaces(),
                             dispatcher,
+                            timings,
+                            req.runId.value,
                         )
                     },
                     dispatcher = dispatcher,
-                    notifiedProbe = NotifiedSignalProbe { t, r -> signals.listByRace(t, r).any { it.state != NotificationState.UNSENT } },
+                    notifiedProbe = SignalNotifiedProbe(signals),
+                    timings = timings,
                     errors = ErrorReporter(notifier, clock),
                     pacer =
                         Pacer { d, _ ->

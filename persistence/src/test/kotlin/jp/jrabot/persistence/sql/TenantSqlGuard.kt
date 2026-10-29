@@ -34,6 +34,7 @@ internal object TenantSqlGuard {
             "ingest_backfill",
             "ml_model",
             "horse_master_history",
+            "race_timing_notice",
             "race_horses",
             "race_evaluations",
             "horses",

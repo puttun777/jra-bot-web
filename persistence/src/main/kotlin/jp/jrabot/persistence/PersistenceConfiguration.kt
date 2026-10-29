@@ -3,6 +3,7 @@ package jp.jrabot.persistence
 import jp.jrabot.domain.bot.BotRunRepository
 import jp.jrabot.domain.botrun.RaceEntryReader
 import jp.jrabot.domain.botrun.RaceEvaluationWriter
+import jp.jrabot.domain.botrun.TimingNoticeStore
 import jp.jrabot.domain.calendar.CalendarOverrideRepository
 import jp.jrabot.domain.calendar.RaceDayRepository
 import jp.jrabot.domain.calendar.ScheduleEventRepository
@@ -50,6 +51,7 @@ import jp.jrabot.persistence.dao.RaceDayDaoImpl
 import jp.jrabot.persistence.dao.RaceEvaluationDaoImpl
 import jp.jrabot.persistence.dao.RaceHorseNameDaoImpl
 import jp.jrabot.persistence.dao.RaceScheduleDaoImpl
+import jp.jrabot.persistence.dao.RaceTimingNoticeDaoImpl
 import jp.jrabot.persistence.dao.ScheduleEventDaoImpl
 import jp.jrabot.persistence.dao.SignalDaoImpl
 import jp.jrabot.persistence.doma.jrabotMysqlDialect
@@ -82,6 +84,7 @@ import jp.jrabot.persistence.repository.RawRecordStoreImpl
 import jp.jrabot.persistence.repository.ScheduleEventRepositoryImpl
 import jp.jrabot.persistence.repository.SignalRepositoryImpl
 import jp.jrabot.persistence.repository.SpringUnitOfWork
+import jp.jrabot.persistence.repository.TimingNoticeStoreImpl
 import org.seasar.doma.jdbc.Config
 import org.seasar.doma.jdbc.dialect.Dialect
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
@@ -263,6 +266,13 @@ class PersistenceConfiguration {
         clock: Clock,
         tx: TransactionOperations,
     ): RaceEvaluationWriter = RaceEvaluationRepositoryImpl(RaceEvaluationDaoImpl(config), clock, tx)
+
+    /** 通知タイミングの確定・通知内容のスナップショット（V5。bot-run が書く。追記専用）。 */
+    @Bean
+    fun timingNoticeStore(
+        config: Config,
+        tx: TransactionOperations,
+    ): TimingNoticeStore = TimingNoticeStoreImpl(RaceTimingNoticeDaoImpl(config), tx)
 
     /** 出走表の馬名（通知の理由文用。読取りだけ）。 */
     @Bean

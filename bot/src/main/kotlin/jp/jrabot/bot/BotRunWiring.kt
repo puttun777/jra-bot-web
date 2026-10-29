@@ -5,13 +5,14 @@ import jp.jrabot.domain.bot.BotRunRepository
 import jp.jrabot.domain.botrun.BotRunOrchestrator
 import jp.jrabot.domain.botrun.MlRunContext
 import jp.jrabot.domain.botrun.MlRunStarter
-import jp.jrabot.domain.botrun.NotifiedSignalProbe
 import jp.jrabot.domain.botrun.Pacer
 import jp.jrabot.domain.botrun.RaceCycleProcessor
 import jp.jrabot.domain.botrun.RaceEntryReader
 import jp.jrabot.domain.botrun.RaceEvaluationWriter
 import jp.jrabot.domain.botrun.RaceEvaluator
 import jp.jrabot.domain.botrun.RunEvents
+import jp.jrabot.domain.botrun.SignalNotifiedProbe
+import jp.jrabot.domain.botrun.TimingNoticeStore
 import jp.jrabot.domain.calendar.CalendarOverrideReader
 import jp.jrabot.domain.calendar.RaceDayReader
 import jp.jrabot.domain.calendar.ScheduleFetchFactReader
@@ -26,7 +27,6 @@ import jp.jrabot.domain.odds.OddsSnapshotReader
 import jp.jrabot.domain.ops.ModeProvider
 import jp.jrabot.domain.race.RaceReader
 import jp.jrabot.domain.race.RaceScheduleReader
-import jp.jrabot.domain.signal.NotificationState
 import jp.jrabot.domain.signal.SignalRepository
 import jp.jrabot.domain.tenant.TenantId
 import jp.jrabot.domain.time.Clock
@@ -53,6 +53,7 @@ internal object BotRunWiring {
         evaluations: RaceEvaluationWriter,
         entries: RaceEntryReader,
         signals: SignalRepository,
+        timings: TimingNoticeStore,
         registry: ModelRegistryReader,
         features: FeatureSource,
         dispatcher: SignalNotificationDispatcher,
@@ -83,10 +84,13 @@ internal object BotRunWiring {
                     features,
                     races,
                     dispatcher,
+                    timings,
+                    req.runId.value,
                 )
             },
             dispatcher = dispatcher,
-            notifiedProbe = NotifiedSignalProbe { t, r -> signals.listByRace(t, r).any { it.state != NotificationState.UNSENT } },
+            notifiedProbe = SignalNotifiedProbe(signals),
+            timings = timings,
             errors = errors,
             pacer = SleepPacer(),
             stopRequested = stop::isRequested,

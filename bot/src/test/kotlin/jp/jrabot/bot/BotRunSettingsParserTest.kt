@@ -60,7 +60,7 @@ class BotRunSettingsParserTest {
                 "BOT_RUN_SNAPSHOT_HISTORY_LIMIT" to listOf("1", "101"),
                 "BOT_RUN_MAX_CYCLE_FAILURES" to listOf("0", "21"),
                 "BOT_RUN_TIGHTEN_NEAR" to listOf("yes", "TRUE", "1"),
-                "BOT_RUN_SNAPSHOT_MINUTES" to listOf("0", "-5", "5,5", "5,abc", "1441", ""),
+                "BOT_RUN_SNAPSHOT_MINUTES" to listOf("0", "-5", "5,5", "5,abc", "1441", "", "5.005", "5.001", "0.001", "30,5.001"),
                 "BOT_RUN_ML_MODEL_TYPE" to listOf("v2", "auto", "ON"),
                 "BOT_RUN_DECISION_PROFILE" to listOf("production", ""),
             )

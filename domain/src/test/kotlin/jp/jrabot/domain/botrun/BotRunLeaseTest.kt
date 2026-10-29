@@ -215,7 +215,7 @@ class BotRunLeaseTest {
         val k = Kit()
         (k.judge as StubJudge).onEvaluate = { if (it == k.raceIds[0]) throw IllegalStateException("boom") }
         val out = k.run()
-        assertEquals("ALL_RACES_OFF_WITH_GAPS", out.reason)
+        assertEquals("EVALUATION_OPPORTUNITY_LOST", out.reason)
         assertEquals(2, k.notifier.signals.size)
         assertTrue(k.notifier.errors.any { it.subject.contains("RACE_FAILED") })
         assertNotEquals(0, k.runs.all().size)

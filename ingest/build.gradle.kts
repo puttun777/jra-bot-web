@@ -4,7 +4,7 @@ plugins {
 
 // このアプリが必要とする最小のスキーマ版（CONTRACTS §4.3。/internal/ready と Job の開始時に flyway_schema_history と比較する）。
 // V3（ingest_fetch・ingest_backfill・agent の署名鍵列）を使う。3 アプリの値は揃える（release-manifest の検査）ので V4（馬マスタ履歴。bot が読む）に合わせて 4。
-extra["requiredSchemaVersion"] = "4"
+extra["requiredSchemaVersion"] = "5"
 
 dependencies {
     implementation(project(":domain"))

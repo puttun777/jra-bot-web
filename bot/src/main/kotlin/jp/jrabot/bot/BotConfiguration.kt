@@ -8,6 +8,7 @@ import jp.jrabot.domain.bot.BotRunRepository
 import jp.jrabot.domain.bot.JobLauncher
 import jp.jrabot.domain.botrun.RaceEntryReader
 import jp.jrabot.domain.botrun.RaceEvaluationWriter
+import jp.jrabot.domain.botrun.TimingNoticeStore
 import jp.jrabot.domain.calendar.CalendarCheckService
 import jp.jrabot.domain.calendar.CalendarOverrideRepository
 import jp.jrabot.domain.calendar.RaceDayRepository
@@ -146,6 +147,7 @@ class BotConfiguration {
         evaluations: RaceEvaluationWriter,
         entries: RaceEntryReader,
         signals: SignalRepository,
+        timings: TimingNoticeStore,
         registry: ModelRegistryReader,
         dispatcher: SignalNotificationDispatcher,
         errors: ErrorReporter,
@@ -181,6 +183,7 @@ class BotConfiguration {
                             evaluations,
                             entries,
                             signals,
+                            timings,
                             registry,
                             features,
                             dispatcher,

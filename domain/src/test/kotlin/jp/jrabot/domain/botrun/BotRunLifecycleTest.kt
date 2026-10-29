@@ -211,7 +211,7 @@ class BotRunLifecycleTest {
         // R1 だけ 09:52 に初めてオッズが届く（R2・R3 は届かない）
         k.onPause = { if (k.clock.now() == k.at(9, 52)) k.odds.add(Kit.snapshot(r1, k.at(9, 52))) }
         val out = k.run()
-        assertEquals("ALL_RACES_OFF_WITH_GAPS", out.reason)
+        assertEquals("EVALUATION_OPPORTUNITY_LOST", out.reason)
         assertEquals(1, k.evaluations.rows.size)
         assertEquals(
             r1,
@@ -234,7 +234,7 @@ class BotRunLifecycleTest {
         k.autoOdds = false
         k.raceIds.forEach { k.odds.add(Kit.snapshot(it, k.at(9, 40))) } // 発走 5 分前の時点で 10 分前の観測 = 古い
         val out = k.run()
-        assertEquals("ALL_RACES_OFF_WITH_GAPS", out.reason)
+        assertEquals("EVALUATION_OPPORTUNITY_LOST", out.reason)
         assertTrue(k.notifier.signals.isEmpty())
         assertTrue(k.evaluations.rows.isEmpty())
         assertTrue(k.signals.all().isEmpty())

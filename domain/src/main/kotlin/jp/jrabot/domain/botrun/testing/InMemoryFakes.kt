@@ -3,6 +3,9 @@ package jp.jrabot.domain.botrun.testing
 import jp.jrabot.domain.botrun.RaceEntryReader
 import jp.jrabot.domain.botrun.RaceEvaluationRecord
 import jp.jrabot.domain.botrun.RaceEvaluationWriter
+import jp.jrabot.domain.botrun.RecordedEvaluation
+import jp.jrabot.domain.botrun.TimingNotice
+import jp.jrabot.domain.botrun.TimingNoticeStore
 import jp.jrabot.domain.calendar.CalendarOverride
 import jp.jrabot.domain.calendar.CalendarOverrideReader
 import jp.jrabot.domain.calendar.RaceDay
@@ -100,14 +103,47 @@ class InMemoryComboOdds : ComboOddsSnapshotReader {
 
 class InMemoryEvaluations : RaceEvaluationWriter {
     val rows = LinkedHashMap<Triple<TenantId, RaceId, Instant>, RaceEvaluationRecord>()
+    private val ids = HashMap<Triple<TenantId, RaceId, Instant>, Long>()
 
     @Synchronized
-    override fun insertIfAbsent(record: RaceEvaluationRecord): InsertOutcome {
+    override fun record(record: RaceEvaluationRecord): RecordedEvaluation {
         val key = Triple(record.tenantId, record.raceId, record.snapshotAt)
-        if (rows.containsKey(key)) return InsertOutcome.ALREADY_EXISTS
+        ids[key]?.let { return RecordedEvaluation(InsertOutcome.ALREADY_EXISTS, it) }
         rows[key] = record
-        return InsertOutcome.INSERTED
+        val id = ids.size + 1L
+        ids[key] = id
+        return RecordedEvaluation(InsertOutcome.INSERTED, id)
     }
+}
+
+/** 通知タイミングの確定（メモリ上。DB の PK と同じ『同じ (tenant, race, timing) は 1 回だけ』）。 */
+class InMemoryTimingNotices : TimingNoticeStore {
+    val rows = LinkedHashMap<Triple<TenantId, RaceId, Int>, TimingNotice>()
+
+    @Synchronized
+    override fun claim(notices: List<TimingNotice>): Set<Int> {
+        val claimed = linkedSetOf<Int>()
+        for (n in notices) {
+            val key = Triple(n.tenantId, n.raceId, n.timingCenti)
+            if (rows.containsKey(key)) continue
+            rows[key] = n
+            claimed += n.timingCenti
+        }
+        return claimed
+    }
+
+    @Synchronized
+    override fun list(
+        tenantId: TenantId,
+        raceId: RaceId,
+    ): List<TimingNotice> = rows.values.filter { it.tenantId == tenantId && it.raceId == raceId }.sortedBy { it.timingCenti }
+
+    @Synchronized
+    override fun find(
+        tenantId: TenantId,
+        raceId: RaceId,
+        timingCenti: Int,
+    ): TimingNotice? = rows[Triple(tenantId, raceId, timingCenti)]
 }
 
 class InMemoryEntries(

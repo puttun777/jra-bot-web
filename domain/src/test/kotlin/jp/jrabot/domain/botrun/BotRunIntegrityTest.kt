@@ -4,6 +4,8 @@ import jp.jrabot.domain.bot.BotRunState
 import jp.jrabot.domain.botrun.testing.StubJudge
 import jp.jrabot.domain.calendar.Cal
 import jp.jrabot.domain.calendar.CalendarSettings
+import jp.jrabot.domain.notify.NoticeSnapshot
+import jp.jrabot.domain.notify.NotificationOrigin
 import jp.jrabot.domain.race.RaceScheduleStatus
 import jp.jrabot.domain.signal.NotificationState
 import java.time.Duration
@@ -76,17 +78,27 @@ class BotRunIntegrityTest {
     }
 
     @Test
-    fun `オッズが一度も届かなかったレースは 成功扱いのまま警告する`() {
+    fun `オッズが一度も届かなかったレースは 必要な評価機会の喪失で FAILED exit 1 と警告 再試行しない`() {
         val k = Kit()
         k.autoOdds = false
         val out = k.run()
-        assertEquals("ALL_RACES_OFF_WITH_GAPS", out.reason)
-        assertEquals(RunExit.OK, out.exitCode)
-        assertEquals(BotRunState.SUCCEEDED, out.state)
-        assertTrue(errorsOf(k).any { it.contains("ALL_RACES_OFF_WITH_GAPS") }, "警告が出る: ${errorsOf(k)}")
+        assertEquals("EVALUATION_OPPORTUNITY_LOST", out.reason)
+        assertEquals(RunExit.FAILURE, out.exitCode, "回復できない喪失は 1（一時障害の 75 ではない）")
+        assertEquals(BotRunState.FAILED, out.state)
+        assertTrue(errorsOf(k).any { it.contains("EVALUATION_OPPORTUNITY_LOST") }, "警告が出る: ${errorsOf(k)}")
+        assertTrue(k.timings.rows.isEmpty(), "評価できなかったタイミングは確定しない")
+
+        // 同じ日を再実行しても FAILED・警告を繰り返さない（全レースが発走後で、もう評価できない）。何も書かず exit 0
+        val runsBefore = k.runs.all().size
+        val errorsBefore = k.notifier.errors.size
+        val again = k.run(k.request(owner = "owner-B"))
+        assertEquals(RunExit.OK, again.exitCode)
+        assertEquals("EVALUATION_LOSS_ALREADY_RECORDED", again.reason)
+        assertEquals(runsBefore, k.runs.all().size)
+        assertEquals(errorsBefore, k.notifier.errors.size)
     }
 
-    // ---- E ----
+    // ---- E: 通知タイミングは DB が正（checkpoint の欠損・破損・古い状態でも再通知しない） ----
 
     private fun interruptedAfterR1(k: Kit) {
         k.onPause = { if (k.clock.now() >= k.at(9, 52)) k.stop = true }
@@ -96,46 +108,71 @@ class BotRunIntegrityTest {
         k.onPause = {}
     }
 
-    @Test
-    fun `checkpoint が壊れていても 通知済みのレースを新しいオッズで再通知しない`() {
-        val k = Kit()
-        interruptedAfterR1(k)
-        k.runs.rewriteCheckpoints { "{broken" }
-        val out = k.run(k.request(owner = "owner-B"))
-        // R1 は止める（どのタイミングを通知したか分からない）。R2・R3 は通常どおり
-        assertEquals(3, k.notifier.signals.size)
-        assertEquals(
-            1,
-            k.signals
-                .all()
-                .filter { it.raceId == k.raceIds[0] }
-                .map { it.observedAt }
-                .toSet()
-                .size,
-            "R1 に新しい観測の Signal が増えない",
-        )
-        assertEquals("ALL_RACES_OFF_WITH_GAPS", out.reason)
-        assertTrue(k.events.any { it.startsWith("CHECKPOINT_CORRUPT") })
-        assertTrue(errorsOf(k).any { it.contains("CHECKPOINT_UNRELIABLE") })
+    private fun r1Observations(k: Kit) =
+        k.signals
+            .all()
+            .filter { it.raceId == k.raceIds[0] }
+            .map { it.observedAt }
+            .toSet()
+
+    private fun assertNoRenotify(
+        k: Kit,
+        out: RunOutcome,
+    ) {
+        assertEquals("ALL_RACES_OFF", out.reason, "DB の確定記録で復元できるので隔離も喪失もない")
+        assertEquals(3, k.notifier.signals.size, "R1 は再通知されない。R2・R3 は通常どおり")
+        assertEquals(1, r1Observations(k).size, "R1 に新しいオッズの観測の Signal が増えない（同じタイミングを再評価していない）")
+        assertEquals(3, k.timings.rows.size, "各レース 1 つのタイミング")
+        assertTrue(k.events.none { it.startsWith("RACES_QUARANTINED") })
     }
 
     @Test
-    fun `checkpoint が欠損していても 通知済みの記録があるレースは再通知しない`() {
+    fun `checkpoint が壊れていても 新しいオッズで同じタイミングを再通知しない`() {
+        val k = Kit()
+        interruptedAfterR1(k)
+        k.runs.rewriteCheckpoints { "{broken" }
+        assertNoRenotify(k, k.run(k.request(owner = "owner-B")))
+        assertTrue(k.events.any { it.startsWith("CHECKPOINT_CORRUPT") })
+    }
+
+    @Test
+    fun `checkpoint が欠損していても 新しいオッズで同じタイミングを再通知しない`() {
         val k = Kit()
         interruptedAfterR1(k)
         k.runs.rewriteCheckpoints { null }
+        assertNoRenotify(k, k.run(k.request(owner = "owner-B")))
+    }
+
+    @Test
+    fun `checkpoint が古い状態（発火の記録が無い）でも 再通知しない`() {
+        val k = Kit()
+        interruptedAfterR1(k)
+        k.runs.rewriteCheckpoints { RunCheckpoint.EMPTY.toJson() }
+        assertNoRenotify(k, k.run(k.request(owner = "owner-B")))
+    }
+
+    @Test
+    fun `V5 より前の版が送った通知（確定の記録が無い）は checkpoint が無事なら再通知しない`() {
+        val k = Kit()
+        interruptedAfterR1(k)
+        k.timings.rows.clear() // 旧版は確定の記録を残さない
         val out = k.run(k.request(owner = "owner-B"))
+        assertEquals("ALL_RACES_OFF", out.reason)
         assertEquals(3, k.notifier.signals.size)
-        assertEquals(
-            1,
-            k.signals
-                .all()
-                .filter { it.raceId == k.raceIds[0] }
-                .map { it.observedAt }
-                .toSet()
-                .size,
-        )
-        assertEquals("ALL_RACES_OFF_WITH_GAPS", out.reason)
+        assertEquals(1, r1Observations(k).size)
+    }
+
+    @Test
+    fun `V5 より前の版が送った通知で checkpoint も失われたら そのレースは通知を止め 評価機会の喪失で FAILED`() {
+        val k = Kit()
+        interruptedAfterR1(k)
+        k.timings.rows.clear()
+        k.runs.rewriteCheckpoints { null }
+        val out = k.run(k.request(owner = "owner-B"))
+        assertEquals(3, k.notifier.signals.size, "R1 は再通知されない（R2・R3 は通常どおり）")
+        assertEquals(1, r1Observations(k).size)
+        assertEquals("EVALUATION_OPPORTUNITY_LOST", out.reason)
+        assertEquals(BotRunState.FAILED, out.state)
         assertTrue(errorsOf(k).any { it.contains("CHECKPOINT_UNRELIABLE") })
     }
 
@@ -151,7 +188,6 @@ class BotRunIntegrityTest {
     @Test
     fun `前の run が開始前に中断して checkpoint が null でも 通知記録が無ければ止めない`() {
         val k = Kit()
-        // 前の run: 開始してすぐ SIGTERM（何も通知していない）。checkpoint は null にする
         k.stop = true
         k.run()
         k.stop = false
@@ -162,22 +198,135 @@ class BotRunIntegrityTest {
         assertTrue(k.events.none { it.startsWith("RACES_QUARANTINED") })
     }
 
+    // ---- D-18: 確定の後・送信の前に落ちたら自動で再送しない ----
+
     @Test
-    fun `未送信のままの Signal だけなら checkpoint が無くても止めない 通知はまだされていない`() {
+    fun `確定の後 送信の前に中断したタイミングは 再起動しても自動で再送しない 通知内容と状態が残る`() {
         val k = Kit()
-        // 判定の最中に SIGTERM: 記録はあるが通知（claim）はしていない。checkpoint は保存済みなので消して再現
         (k.judge as StubJudge).onEvaluate = { if (it == k.raceIds[0]) k.stop = true }
         assertEquals("SIGTERM", k.run().reason)
-        assertTrue(k.signals.all().all { it.state == NotificationState.UNSENT })
+        val slot =
+            k.timings.rows.values
+                .single()
+        assertEquals(500, slot.timingCenti)
+        assertTrue(k.notifier.signals.isEmpty(), "送っていない")
+        assertTrue(k.signals.all().all { it.state == NotificationState.UNSENT }, "送信前に中断された可能性: Signal は UNSENT のまま")
         k.stop = false
         (k.judge as StubJudge).onEvaluate = {}
         k.runs.rewriteCheckpoints { null }
-        k.run(k.request(owner = "owner-B"))
-        assertTrue(k.events.none { it.startsWith("RACES_QUARANTINED") })
-        assertTrue(k.notifier.signals.isNotEmpty())
+        val out = k.run(k.request(owner = "owner-B"))
+        assertEquals("ALL_RACES_OFF", out.reason)
+        assertTrue(
+            k.signals
+                .all()
+                .filter { it.raceId == k.raceIds[0] }
+                .all { it.state == NotificationState.UNSENT },
+            "R1 は自動で再送しない（取りこぼしを選ぶ）",
+        )
+        assertEquals(2, k.notifier.signals.size, "R2・R3 だけ")
     }
 
-    // ---- B ----
+    // ---- 通知内容のスナップショット ----
+
+    @Test
+    fun `通知は確定した行から作る 保存した内容は Signal の行と一致し ハッシュが検証できる`() {
+        val k = Kit()
+        k.run()
+        val slot =
+            k.timings.rows.values
+                .first { it.raceId == k.raceIds[0] }
+        val snap = NoticeSnapshot.decode(slot.noticeSchema, slot.noticeJson, slot.noticeSha256)
+        val rows =
+            k.signals
+                .all()
+                .filter { it.raceId == k.raceIds[0] }
+                .associateBy { it.id!! }
+        assertTrue(snap.items.isNotEmpty())
+        for (item in snap.items) {
+            val row = rows.getValue(item.signalId)
+            assertEquals(row.odds.value, item.view.odds)
+            assertEquals(row.prob.value, item.view.prob)
+            assertEquals(row.ev, item.view.ev)
+            assertEquals(row.umaban.value, item.view.umaban)
+        }
+        assertEquals(slot.noticeSha256, snap.sha256())
+        assertEquals(slot.oddsObservedAt, rows.values.first().observedAt)
+    }
+
+    @Test
+    fun `確定した通知内容が壊れていたら 送らない 別の値で補わない`() {
+        val k = Kit()
+        // 確定の直前に内容が書き換わる状況（改ざん・破損）を、読み戻しの結果だけを壊して再現する
+        val corrupt =
+            object : TimingNoticeStore by k.timings {
+                override fun find(
+                    tenantId: jp.jrabot.domain.tenant.TenantId,
+                    raceId: jp.jrabot.domain.race.RaceId,
+                    timingCenti: Int,
+                ) = k.timings.find(tenantId, raceId, timingCenti)?.let { it.copy(noticeJson = it.noticeJson.replace("\"odds\":", "\"odds\":1")) }
+            }
+        val processor =
+            RaceCycleProcessor(
+                k.config,
+                k.tenant,
+                NotificationOrigin.LIVE,
+                k.odds,
+                StubJudge(),
+                k.evaluations,
+                k.signals,
+                jp.jrabot.domain.botrun.testing
+                    .InMemoryEntries(),
+                k.featureSource,
+                jp.jrabot.domain.botrun.testing
+                    .InMemoryRaces(),
+                k.dispatcher,
+                corrupt,
+                "00000000-0000-4000-8000-000000000001",
+            )
+        k.autoOdds = false
+        k.clock.instant = k.at(9, 51)
+        k.odds.add(Kit.snapshot(k.raceIds[0], k.at(9, 50, 30)))
+        val step = processor.process(k.raceIds[0], k.at(9, 55), RaceCheckpoint(RaceStage.MONITORING), k.clock.now()) { true }
+        assertTrue(step is RaceStep.SnapshotInvalid)
+        assertTrue(k.notifier.signals.isEmpty())
+    }
+
+    @Test
+    fun `通知対象が 0 件でも 評価済みのタイミングとして確定する`() {
+        val k = Kit(judge = StubJudge { emptyList() })
+        val out = k.run()
+        assertEquals("ALL_RACES_OFF", out.reason)
+        assertEquals(3, k.timings.rows.size)
+        assertTrue(
+            k.timings.rows.values
+                .all { NoticeSnapshot.decode(it.noticeSchema, it.noticeJson, it.noticeSha256).items.isEmpty() },
+        )
+        assertTrue(k.notifier.signals.isEmpty())
+    }
+
+    @Test
+    fun `複数のタイミングが同時に到来したら 1 回の評価で全部確定し 通知は 1 回`() {
+        val cfg = Kit.defaultConfig().copy(snapshot = SnapshotPolicy(listOf(30.0, 5.0), TightenMode.OFF))
+        val k = Kit(start = Cal.jst(Cal.DATE, 9, 52), config = cfg)
+        k.run()
+        val r1 =
+            k.timings.rows.values
+                .filter { it.raceId == k.raceIds[0] }
+        assertEquals(setOf(500, 3000), r1.map { it.timingCenti }.toSet(), "遅い起動で 30 分前と 5 分前が同時に到来")
+        assertEquals(1, r1.map { it.noticeSha256 }.toSet().size, "同じ内容で確定")
+        assertEquals(
+            1,
+            k.signals
+                .all()
+                .filter { it.raceId == k.raceIds[0] }
+                .map { it.observedAt }
+                .toSet()
+                .size,
+            "評価は 1 回",
+        )
+    }
+
+    // ---- B: 既存 Signal と計算結果の不一致 ----
 
     @Test
     fun `保存済みの Signal と計算結果が違うときは通知しない 一致するものだけ通知する`() {
@@ -189,12 +338,12 @@ class BotRunIntegrityTest {
         (k.judge as StubJudge).onEvaluate = { if (it == k.raceIds[0]) k.stop = true }
         assertEquals("SIGTERM", k.run().reason)
         assertTrue(k.signals.all().all { it.state == NotificationState.UNSENT })
-        val before = k.signals.all().associate { it.umaban.value to it.stake }
-        assertEquals(mapOf(2 to 3.0, 4 to 1.0), before)
+        assertEquals(mapOf(2 to 3.0, 4 to 1.0), k.signals.all().associate { it.umaban.value to it.stake })
 
-        // 再起動: checkpoint は無い（通知はまだ。safe）。推奨額が変わった計算結果で、同じ観測の行が既にある
+        // 旧版が残した状態の再現: 確定の記録と checkpoint が無い。推奨額が変わった計算結果で、同じ観測の行が既にある
         k.stop = false
         (k.judge as StubJudge).onEvaluate = {}
+        k.timings.rows.clear()
         k.runs.rewriteCheckpoints { null }
         amount = 7.0
         k.run(k.request(owner = "owner-B"))

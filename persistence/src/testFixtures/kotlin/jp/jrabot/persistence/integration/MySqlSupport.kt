@@ -195,6 +195,7 @@ fun assertDenied(block: () -> Unit) = assertSqlError(MySqlError.TABLE_DENIED, My
 /** テスト間でデータを空にする（FK の子から順に）。テナント 1・2 は残す。 */
 fun TestDb.resetData() {
     for (table in listOf(
+        "race_timing_notice",
         "signals",
         "race_evaluations",
         "race_horses",

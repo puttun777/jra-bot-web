@@ -45,19 +45,19 @@ class SchemaVersionVerifierIntegrationTest {
     @Test
     fun `適用済みの最大版が必要な版以上なら Satisfied（app・ingest・bot のどれでも読める）`() {
         for (user in listOf("app", "ingest", "bot")) {
-            assertEquals(SchemaCheck.Satisfied(SchemaVersion.parse("4")), verifier(user).check(), user)
+            assertEquals(SchemaCheck.Satisfied(SchemaVersion.parse("5")), verifier(user).check(), user)
         }
     }
 
     @Test
     fun `必要な版が適用済みより新しければ Insufficient`() {
-        val r = verifier("bot", required = "5").check()
-        assertEquals(SchemaCheck.Insufficient(SchemaVersion.parse("4"), SchemaVersion.parse("5")), r)
+        val r = verifier("bot", required = "6").check()
+        assertEquals(SchemaCheck.Insufficient(SchemaVersion.parse("5"), SchemaVersion.parse("6")), r)
     }
 
     @Test
     fun `適用済みが必要な版より新しいのは許容する（expand_contract）`() {
-        assertEquals(SchemaCheck.Satisfied(SchemaVersion.parse("4")), verifier("bot", required = "1").check())
+        assertEquals(SchemaCheck.Satisfied(SchemaVersion.parse("5")), verifier("bot", required = "1").check())
         val newer = MySqlSupport.migratedDatabase()
         newer.exec(
             "INSERT INTO flyway_schema_history (installed_rank, version, description, type, script, checksum, " +
@@ -74,10 +74,10 @@ class SchemaVersionVerifierIntegrationTest {
         d.exec(
             "INSERT INTO flyway_schema_history (installed_rank, version, description, type, script, checksum, " +
                 "installed_by, installed_on, execution_time, success) " +
-                "VALUES (99, '5', 'broken', 'SQL', 'V5__broken.sql', 0, 'migrate', NOW(), 1, 0)",
+                "VALUES (99, '6', 'broken', 'SQL', 'V6__broken.sql', 0, 'migrate', NOW(), 1, 0)",
         )
         val ds = track(DataSourceFactory.createLazy(DbSettings(MySqlSupport.jdbcUrl(d.name), "bot", MySqlSupport.PASSWORDS.getValue("bot"), 1), "failedver"))
-        assertEquals(SchemaCheck.Insufficient(SchemaVersion.parse("4"), SchemaVersion.parse("5")), SchemaVersionVerifier(ds, SchemaVersion.parse("5")).check())
+        assertEquals(SchemaCheck.Insufficient(SchemaVersion.parse("5"), SchemaVersion.parse("6")), SchemaVersionVerifier(ds, SchemaVersion.parse("6")).check())
     }
 
     @Test
@@ -140,11 +140,11 @@ class SchemaVersionVerifierIntegrationTest {
         TcpProxy(host, port).start().use { proxy ->
             val url = "jdbc:mysql://${proxy.jdbcHost}:${proxy.port}/${db.name}"
             val v = verifier("bot", url = url)
-            assertEquals(SchemaCheck.Satisfied(SchemaVersion.parse("4")), v.check())
+            assertEquals(SchemaCheck.Satisfied(SchemaVersion.parse("5")), v.check())
             proxy.stop()
             assertEquals(SchemaCheck.Unreachable, v.check())
             proxy.start()
-            assertEquals(SchemaCheck.Satisfied(SchemaVersion.parse("4")), v.check())
+            assertEquals(SchemaCheck.Satisfied(SchemaVersion.parse("5")), v.check())
         }
     }
 

@@ -38,7 +38,6 @@ import jp.jrabot.domain.ops.OpsMode
 import jp.jrabot.domain.race.HorseNumber
 import jp.jrabot.domain.race.RaceId
 import jp.jrabot.domain.race.RaceSchedule
-import jp.jrabot.domain.signal.NotificationState
 import jp.jrabot.domain.tenant.TenantId
 import java.time.Duration
 import java.time.Instant
@@ -97,6 +96,9 @@ class Kit(
     val combos = InMemoryComboOdds()
     val signals = InMemorySignals(clock)
     val evaluations = InMemoryEvaluations()
+    val timings =
+        jp.jrabot.domain.botrun.testing
+            .InMemoryTimingNotices()
     val notifier = RecordingNotifier(clock)
     val events = mutableListOf<String>()
     val config: BotRunConfig = config ?: defaultConfig(mlContext.modelType?.let { it })
@@ -158,10 +160,13 @@ class Kit(
                     featureSource,
                     InMemoryRaces(),
                     dispatcher,
+                    timings,
+                    req.runId.value,
                 )
             },
             dispatcher = dispatcher,
-            notifiedProbe = NotifiedSignalProbe { t, r -> signals.listByRace(t, r).any { it.state != NotificationState.UNSENT } },
+            notifiedProbe = SignalNotifiedProbe(signals),
+            timings = timings,
             errors = errorReporter,
             pacer = pacerOverride ?: pacer,
             stopRequested = { stop },

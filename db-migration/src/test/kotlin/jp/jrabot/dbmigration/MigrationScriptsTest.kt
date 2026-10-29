@@ -19,6 +19,7 @@ class MigrationScriptsTest {
     private val v2 = resource("V2__ops_calendar_ingest_ml.sql")
     private val v3 = resource("V3__ingest_auth_fetch_backfill.sql")
     private val v4 = resource("V4__horse_master_history.sql")
+    private val v5 = resource("V5__audit_idempotency.sql")
     private val grants = resource("R__grants.sql")
 
     /** コメント（`--` 以降）を除く。 */
@@ -79,13 +80,17 @@ class MigrationScriptsTest {
         // V4（T3.6-B）は馬マスタの時点履歴の 1 表だけを足す（`horses` は変更しない）
         assertEquals(setOf("horse_master_history"), tables(v4).keys)
         assertEquals(emptySet(), tables(v4).keys.intersect(tables(v1).keys + tables(v2).keys + tables(v3).keys))
+        // V5（監査 E・B・D）は通知タイミングの 1 表だけを足し、race_evaluations には生成列と UNIQUE を足すだけ（行は変更・削除しない）
+        assertEquals(setOf("race_timing_notice"), tables(v5).keys)
+        assertTrue(code(v5).contains("ADD COLUMN uq_native TINYINT AS (IF(legacy_id IS NULL, 1, NULL)) VIRTUAL"))
+        assertFalse(Regex("""(?i)\\b(DELETE|UPDATE|TRUNCATE|DROP)\\b""").containsMatchIn(code(v5)), "V5 は既存データを変更・削除しない")
     }
 
     @Test
     fun `すべての表は InnoDB と utf8mb4`() {
-        val all = code(v1) + code(v2) + code(v3) + code(v4)
-        assertEquals(36, Regex("CREATE TABLE ").findAll(all).count())
-        assertEquals(36, Regex("""\) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;""").findAll(all).count())
+        val all = code(v1) + code(v2) + code(v3) + code(v4) + code(v5)
+        assertEquals(37, Regex("CREATE TABLE ").findAll(all).count())
+        assertEquals(37, Regex("""\) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;""").findAll(all).count())
     }
 
     @Test
@@ -157,7 +162,7 @@ class MigrationScriptsTest {
     private val grantsCode = code(grants)
     private val statements = grantsCode.split(';').map { it.trim() }.filter { it.isNotEmpty() }
     private val users = listOf("app", "ingest", "bot", "mltrain")
-    private val allTables = tables(v1).keys + tables(v2).keys + tables(v3).keys + tables(v4).keys + "flyway_schema_history"
+    private val allTables = tables(v1).keys + tables(v2).keys + tables(v3).keys + tables(v4).keys + tables(v5).keys + "flyway_schema_history"
 
     @Test
     fun `grants は GRANT と REVOKE だけで、スキーマ名はプレースホルダ`() {
@@ -236,5 +241,19 @@ class MigrationScriptsTest {
             ),
             writes,
         )
+    }
+
+    @Test
+    fun `race_timing_notice は 追記専用 bot は SELECT と INSERT だけ app は SELECT だけ ingest と mltrain は付与なし`() {
+        fun grantsOn(user: String) = grantStatements.filter { it.contains("`race_timing_notice`") && it.endsWith("TO '$user'@'%'") }
+        assertEquals(listOf("GRANT SELECT, INSERT ON `\${flyway:defaultSchema}`.`race_timing_notice` TO 'bot'@'%'"), grantsOn("bot"))
+        assertEquals(listOf("GRANT SELECT ON `\${flyway:defaultSchema}`.`race_timing_notice` TO 'app'@'%'"), grantsOn("app"))
+        assertEquals(emptyList(), grantsOn("ingest") + grantsOn("mltrain"))
+        // ingest / mltrain: 付与は無い（リセットのための一時的な SELECT 付与と REVOKE だけ）
+        for (u in listOf("ingest", "mltrain")) {
+            assertTrue(statements.any { it == "REVOKE ALL PRIVILEGES ON `\${flyway:defaultSchema}`.`race_timing_notice` FROM '$u'@'%'" }, "$u のリセットがある")
+        }
+        // UPDATE・DELETE はどのユーザーにも付けない（確定した通知内容は変えない）
+        assertTrue(grantStatements.none { it.contains("`race_timing_notice`") && Regex("""\b(UPDATE|DELETE)\b""").containsMatchIn(it.substringBefore(" ON ")) })
     }
 }
