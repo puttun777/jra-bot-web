@@ -42,6 +42,17 @@ class LeaseKeeper(
         return if (java.time.Duration.between(lastHeartbeatAt, now) >= lease.heartbeatInterval) heartbeat() else LeaseStatus.Held
     }
 
+    /**
+     * 今この瞬間、リースを持っていると**確信できる**か（新しい評価・確定・送信を始めてよいか）。手元の期限（最後に更新できた `leaseExpiresAt`）を過ぎていれば
+     * DB も拒否する（期限切れは DB が強制）ので、更新を試さず失ったものとして扱う。期限内で heartbeat の間隔を過ぎていれば更新してから答える。
+     * heartbeat のスレッドは足さない（ループ 1 本から呼ぶ。通知の待機中も同じスレッドの [LeaseProbe] 経由）。
+     */
+    fun holdsNow(): LeaseStatus {
+        val expires = run.leaseExpiresAt ?: return LeaseStatus.Lost("LEASE_EXPIRY_UNKNOWN")
+        if (!clock.now().isBefore(expires)) return LeaseStatus.Lost("LEASE_EXPIRED")
+        return heartbeatIfDue()
+    }
+
     fun heartbeat(): LeaseStatus {
         val now = clock.now()
         return when (val r = runs.heartbeat(run.tenantId, run.runId, owner, now, lease.duration)) {
@@ -129,4 +140,23 @@ class LeaseKeeper(
     private companion object {
         const val CONFLICT_RETRIES = 3
     }
+}
+
+/**
+ * 通知の送信の直前に『この run はまだリースを持っているか』を問い合わせる窓口（Discord の 429 の待機や再試行は 1 回の通知で数分かかり得る）。
+ * run の開始で [bind]、終了で [unbind]。**束縛されていない間は false**（run の外では SIGNAL を送らない）。呼び出しは run のループと同じスレッドで行う。
+ */
+class LeaseProbe {
+    @Volatile
+    private var holds: (() -> Boolean)? = null
+
+    fun bind(f: () -> Boolean) {
+        holds = f
+    }
+
+    fun unbind() {
+        holds = null
+    }
+
+    fun holds(): Boolean = holds?.invoke() ?: false
 }

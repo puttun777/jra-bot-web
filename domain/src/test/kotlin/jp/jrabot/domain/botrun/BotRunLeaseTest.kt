@@ -257,4 +257,36 @@ class BotRunLeaseTest {
         // 回収した Signal は通知本文に含まれない（再送しない）: R1 の通知は新しい Signal だけ
         assertTrue(k.notifier.signals.none { it.at < k.at(9, 50) })
     }
+
+    @Test
+    fun `1 レースの処理中にリース期限を過ぎたら 通知タイミングを確定せず 送信もしない`() {
+        val k = Kit()
+        val inner = StubJudge()
+        var slowed = false
+        k.judge =
+            RaceJudge { t, r, w, n, m ->
+                // 評価の途中で 6 分かかった（リースは 5 分。heartbeat は同じスレッドなので、この間は更新できない）
+                if (!slowed) {
+                    slowed = true
+                    k.clock.advance(Duration.ofMinutes(6))
+                }
+                inner.evaluate(t, r, w, n, m)
+            }
+        val out = k.run()
+        assertTrue(slowed)
+        assertEquals(RunExit.TEMPFAIL, out.exitCode)
+        assertTrue(out.reason.startsWith("LEASE_"), out.reason)
+        assertTrue(k.notifier.signals.isEmpty(), "リースを失った run は通知しない")
+        assertTrue(k.timings.list(k.tenant, k.raceIds[0]).isEmpty(), "リースを失った run は通知タイミングを確定しない")
+    }
+
+    @Test
+    fun `LeaseProbe は束縛されていない間は false 束縛すれば答え 解除で false に戻る`() {
+        val p = LeaseProbe()
+        assertEquals(false, p.holds())
+        p.bind { true }
+        assertEquals(true, p.holds())
+        p.unbind()
+        assertEquals(false, p.holds())
+    }
 }

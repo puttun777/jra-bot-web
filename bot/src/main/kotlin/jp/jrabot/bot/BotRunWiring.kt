@@ -59,6 +59,7 @@ internal object BotRunWiring {
         dispatcher: SignalNotificationDispatcher,
         errors: ErrorReporter,
         stop: StopFlag,
+        leaseProbe: jp.jrabot.domain.botrun.LeaseProbe,
     ): BotRunOrchestrator {
         val config = settings.run
         return BotRunOrchestrator(
@@ -96,6 +97,7 @@ internal object BotRunWiring {
             stopRequested = stop::isRequested,
             isTransient = BotRunTaskHandler::isTransient,
             events = RunEvents { name, detail -> log.info("BOT_RUN_EVENT name={} {}", name, detail) },
+            leaseProbe = leaseProbe,
         )
     }
 

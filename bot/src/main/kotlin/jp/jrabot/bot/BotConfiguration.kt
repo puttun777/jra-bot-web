@@ -86,10 +86,14 @@ class BotConfiguration {
      * 実際の送信は bot-run（T3.8）が [SignalNotificationDispatcher] / [ErrorReporter] を呼んだときだけで、**他のタスクは通知を送らない**。
      */
     @Bean
+    fun leaseProbe(): jp.jrabot.domain.botrun.LeaseProbe = jp.jrabot.domain.botrun.LeaseProbe()
+
+    @Bean
     @ConditionalOnMissingBean(Notifier::class)
     fun notifier(
         runtime: BotRuntime,
         stop: StopFlag,
+        leaseProbe: jp.jrabot.domain.botrun.LeaseProbe,
     ): Notifier {
         val d = runtime.settings.discord ?: DiscordSettings.NONE
         return DiscordNotifier(
@@ -98,7 +102,8 @@ class BotConfiguration {
             d.mention,
             JdkWebhookTransport(),
             stopRequested = stop::isRequested,
-            sendAllowed = { runCatching { runtime.modeProvider.current().allowsWork }.getOrDefault(false) },
+            // 送信の試行ごとに、運用モード（STOPPED なら送らない）と run のリース（失っていれば送らない）を確認する
+            sendAllowed = { runCatching { runtime.modeProvider.current().allowsWork }.getOrDefault(false) && leaseProbe.holds() },
         )
     }
 
@@ -152,6 +157,7 @@ class BotConfiguration {
         dispatcher: SignalNotificationDispatcher,
         errors: ErrorReporter,
         stop: StopFlag,
+        leaseProbe: jp.jrabot.domain.botrun.LeaseProbe,
     ): BotTaskHandler =
         when (runtime.command.task) {
             BotTask.CALENDAR_CHECK -> {
@@ -189,6 +195,7 @@ class BotConfiguration {
                             dispatcher,
                             errors,
                             stop,
+                            leaseProbe,
                         )
                     },
                     clock = clock,

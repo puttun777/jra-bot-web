@@ -113,6 +113,7 @@ class RaceCycleProcessor(
         postAt: Instant,
         checkpoint: RaceCheckpoint,
         now: Instant,
+        leaseHeld: () -> Boolean = { true },
         commitFired: (RaceCheckpoint) -> Boolean,
     ): RaceStep {
         val minutesToPost = Duration.between(now, postAt).toMillis() / 60_000.0
@@ -139,6 +140,8 @@ class RaceCycleProcessor(
             OddsFreshness.MISSING -> return RaceStep.NoOdds
         }
 
+        // リースを失った run は新しい評価を始めない（長い処理・通知の待機で期限を過ぎた場合）
+        if (!leaseHeld()) return RaceStep.NotCommitted
         val evaluation = evaluator.evaluate(tenantId, raceId, win, now, minutesToPost)
         val recordedEvaluation = evaluations.record(record(evaluation))
         val recorded = recordSignals(raceId, evaluation)
@@ -147,6 +150,8 @@ class RaceCycleProcessor(
         // 確定（DB）→ checkpoint → 送信 の順。確定の前には送らない
         var claimed: Set<Int> = emptySet()
         var dispatchBatch: RaceNoticeBatch? = null
+        // 確定の前にも確認する（失ったまま確定すると、次の所有者がそのタイミングを通知できなくなる）
+        if (!leaseHeld()) return RaceStep.NotCommitted
         if (useStore) {
             val json = snapshot.canonicalJson()
             val sha = snapshot.sha256()
@@ -165,6 +170,7 @@ class RaceCycleProcessor(
         val next = RaceCheckpoint(RaceStage.MONITORING, win.observedAt, fired)
         if (!commitFired(next)) return RaceStep.NotCommitted
 
+        if (!leaseHeld()) return RaceStep.NotCommitted
         if (useStore) {
             // 確定した行（DB）から通知を作る。ハッシュが合わなければ送らない
             val stored = timings.find(tenantId, raceId, claimed.min()) ?: return RaceStep.SnapshotInvalid

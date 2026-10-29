@@ -107,6 +107,8 @@ class BotRunOrchestrator(
     private val stopRequested: () -> Boolean,
     private val isTransient: (Throwable) -> Boolean = { false },
     private val events: RunEvents = RunEvents.NONE,
+    /** 通知の送信の直前にリースを確認する窓口（Discord 通知の `sendAllowed` と共有する）。 */
+    private val leaseProbe: LeaseProbe = LeaseProbe(),
 ) : BotRunRunner {
     override fun run(request: RunRequest): RunOutcome =
         try {
@@ -218,12 +220,26 @@ class BotRunOrchestrator(
         private val quarantined = HashSet<RaceId>()
         private lateinit var processor: RaceCycleProcessor
 
-        fun execute(): RunOutcome =
-            try {
+        fun execute(): RunOutcome {
+            leaseProbe.bind(::leaseHeld)
+            return try {
                 start() ?: loop()
             } catch (e: Exception) {
                 crashed(e)
+            } finally {
+                leaseProbe.unbind()
             }
+        }
+
+        /**
+         * 新しい評価・通知タイミングの確定・送信を始めてよいか。リースを失っていれば false（以後この run は何も始めない）。期限は手元の値で厳密に見る
+         * （[LeaseKeeper.holdsNow]）。失ったと分かったら [leaseLost] を立て、ループが止まる。
+         */
+        private fun leaseHeld(): Boolean {
+            if (leaseLost != null) return false
+            (keeper.holdsNow() as? LeaseStatus.Lost)?.let { leaseLost = it.detail }
+            return leaseLost == null
+        }
 
         /** STARTING の処理。終えるべきなら結果を返す。続けるなら null。 */
         private fun start(): RunOutcome? {
@@ -446,7 +462,7 @@ class BotRunOrchestrator(
             val prev = checkpoint.races[raceId] ?: RaceCheckpoint(RaceStage.MONITORING)
             val step =
                 try {
-                    processor.process(raceId, postAt, prev, clock.now()) { next -> commit(raceId, next) }
+                    processor.process(raceId, postAt, prev, clock.now(), ::leaseHeld) { next -> commit(raceId, next) }
                 } catch (e: Exception) {
                     if (isTransient(e)) throw e
                     events.event("RACE_FAILED", "${raceId.value} ${e.javaClass.simpleName}")
