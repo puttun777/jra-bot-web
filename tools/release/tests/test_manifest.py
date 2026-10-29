@@ -136,7 +136,8 @@ class ProductionManifestTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             root = make_root(Path(t))
             f = root / "ingest" / "build.gradle.kts"
-            f.write_text(f.read_text().replace('"4"', '"5"'))
+            current = repo_facts.common_required_schema_version(ROOT)
+            f.write_text(f.read_text().replace(f'"{current}"', f'"{int(current) + 1}"'))  # ingest だけ版が違う
             self.assertTrue(any("食い違" in e for e in manifest.validate_production(synthetic_production(), root)))
 
     def test_rollback_range(self):
@@ -378,7 +379,7 @@ class RepoFactsTest(unittest.TestCase):
     def test_facts(self):
         self.assertRegex(repo_facts.contract_version(ROOT), r"^\d+\.\d+\.\d+$")
         self.assertEqual({"dashboard", "ingest", "bot"}, set(repo_facts.required_schema_versions(ROOT)))
-        self.assertEqual(["1", "2", "3", "4"], repo_facts.flyway_versions(ROOT))
+        self.assertEqual(["1", "2", "3", "4", "5"], repo_facts.flyway_versions(ROOT))
         self.assertEqual((10,), repo_facts.version_key("10"))
         self.assertGreater(repo_facts.version_key("10"), repo_facts.version_key("9"))
 

@@ -1,10 +1,36 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-10-28（包括バグ監査の修正〈同ブランチ。T3.9 には進んでいない・CI 未実施〉。記録は下）
+最終更新: 2026-10-29（Flyway V5 の実装〈D-17/D-18/D-19 の承認反映。同ブランチ。T3.9 には進んでいない・CI 未実施〉。記録は下）
+旧: 2026-10-28（包括バグ監査の修正）
 旧: 2026-10-27（Stage 3-H レビュー修正: G-23/G-24 の判断反映・5 分前の強化・モード確認間隔）
 旧: 2026-10-27（Stage 3-H: T3.8 bot-run オーケストレーション）
 旧: 2026-10-27（Stage 3-G: T3.7 Discord 通知）
 旧: 2026-10-26（Public 化の準備）／2026-10-24（Stage 3-F2・3-F1・3-E）
+
+## Flyway V5（claude/stage3-bot-orchestration・2026-10-29。T3.9 には進んでいない。PR なし。**CI は未実施 = T3.8・V5 は CI で未検証**）
+承認（2026-10-29）: D-17（V5 を条件付きで承認）／D-18（取りこぼしを許容。自動再送しない）／D-19（評価機会の喪失は FAILED・exit 1）。設計と差分: `docs/AUDIT_FIX_DESIGN.md` §3・§7、D-218〜D-221、UNRESOLVED C-41・D-17〜D-19・G-30、CONTRACTS 0.4.15。
+### 実装
+- **V5**: `race_evaluations` に生成列 `uq_native` + UNIQUE（新方式の行だけ。旧データの重複は変更・削除しない。ALTER を先に置き、重複があれば何も変えずに失敗）。新表 `race_timing_notice`（PK `(tenant_id, race_id, timing_centi)`、複合 FK、`notice_schema`/`notice_json`/`notice_sha256`、CHECK、追記専用）。GRANT: bot は SELECT/INSERT、app は SELECT。`requiredSchemaVersion` は全アプリ 5。
+- **通知**: 評価結果 → Signal → スナップショット組み立て → **DB に確定（claim）** → checkpoint → 確定した行を読み戻してハッシュ照合 → Discord。確定の前に送らない。0 件でも確定。複数タイミング同時到来は 1 評価・1 通知。checkpoint の欠損・破損・古い状態や新しいオッズでも同じタイミングを再通知しない。
+- **D-19**: 評価機会の喪失（予定不信頼・データ不足・checkpoint 隔離）は FAILED `EVALUATION_OPPORTUNITY_LOST`（exit 1）。同じ日の再実行は `EVALUATION_LOSS_ALREADY_RECORDED`（exit 0）。`ALL_RACES_OFF_WITH_GAPS` は廃止。
+- **`timing_centi`**: `TimingKey`（0.01 分刻み・0.01〜1440 分・丸めず拒否・衝突検出）。
+- 実装中に見つかった問題: `ON DUPLICATE KEY UPDATE` は UPDATE 権限を要求する（追記専用の表に bot の UPDATE を付けない → 通常の INSERT + 主キー重複の扱いに変更）。
+### テスト（ローカル: JDK 21・MySQL 8.0.46〔ポート 3307〕。合成データ・Fake HTTP のみ。モジュールごとの単体 + 統合の合計）
+| モジュール | 結果 |
+|---|---|
+| `:domain` | **1006 件成功**（+15: `BotRunIntegrityTest` を V5 の意味に書き直し〔12→20〕、`NoticeSnapshotTest` 5、`TimingKeyTest` 3） |
+| `:persistence` | 229 件中 1 件失敗（既知: `WiringIntegrationTest` が MySQL 8.4 を期待する版検査〔8.0.46 のため〕）。`TimingNoticeIntegrationTest` 7（RR/RC の同時確定、JSON 往復、最小権限、テナント境界）、`BotRunOrchestratorIntegrationTest` +1（checkpoint 消失 + 新オッズ） |
+| `:db-migration` | **107 件成功**（`V5MigrationIntegrationTest` 5: 旧データの重複を含む DB への適用、新方式の行だけ UNIQUE、重複があれば失敗して何も変えない、PK/CHECK/FK/GRANT、再 migrate） |
+| `:ingest` / `:dashboard` / `:cloud-gcp` / `:golden-runner` | 88 / 39 / 102 / 20 件成功（ingest は `AGENT_PYTHON` 指定で実 Python エージェントとの相互運用を含む）。**golden は全一致を維持** |
+| `:bot` | 175 件中 6 件は `ML_TRAIN_PYTHON`（ml の依存を入れた Python）が無く**未実施**（`MlTrainInteropIntegrationTest`）。それ以外は成功 |
+| `agent`（pytest） / `tools.ci` / `tools.release` / ktlint / `checkModuleDependencies` / repo-hygiene | 212 件成功 / 130 / 42 / 成功 |
+| **未実施** | **GitHub Actions 全体（JDK 25・MySQL 8.4/9.7・Docker イメージ・Python の CI 構成・required check `ci gate`）**。V5 の MySQL 8.4/9.7 での適用。実 Discord、Cloud Run。`MlTrainInteropIntegrationTest` 6 件 |
+### PR 作成前に残る事項
+CI の実行（Actions の無料枠が戻るまで未実行。PR・マージはユーザーの指示まで行わない）／本番 DB への V5 適用は**未承認**／運用値の確定（T1.20）／`reconcile`・`retention` はスタブのまま／infra の同期は T5.0（migrate を先に・GRANT）。
+### ブランチ
+`claude/stage3-bot-orchestration`（PR なし）。
+
+---
 
 ## 包括バグ監査の修正（claude/stage3-bot-orchestration・2026-10-28。T3.9 には進んでいない。CI は未実施 = T3.8 は CI で未検証）
 詳細な設計と判断: `docs/AUDIT_FIX_DESIGN.md`、D-208〜D-217、UNRESOLVED C-35〜C-40・D-17〜D-19・F-9・G-28〜G-30、CONTRACTS 0.4.14。

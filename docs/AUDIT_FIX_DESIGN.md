@@ -1,4 +1,4 @@
-# 包括バグ監査（2026-10-27）の修正と、DB 変更を伴う恒久設計（承認待ち）
+# 包括バグ監査（2026-10-27）の修正と、DB 変更を伴う恒久設計（**V5 は 2026-10-29 に承認・実装済み。CI 未検証。本番 DB への適用は未承認**）
 
 対象: `claude/stage3-bot-orchestration`（T3.8 を安全にマージできる品質にする）。**T3.9 には進んでいない。CI は未実行**（T3.8 を CI 検証済みとして扱わない）。
 判断の記録は DECISIONS D-208〜D-217、未解決は UNRESOLVED（C-35〜C-40、D-17〜D-19、F-9、G-28〜G-30）。
@@ -8,9 +8,9 @@
 | ID | 内容 | 状態 | 備考 |
 |---|---|---|---|
 | C1/C2 | 予定を信頼できず評価を逃したのに SUCCEEDED | **修正済み** | §1 |
-| E | checkpoint 欠損・破損で同じタイミングを新オッズで再通知 | **暫定対策を実装**。恒久設計は §3（承認待ち） | 既存の部品だけ・DB 変更なし |
-| B | 保存済み Signal と通知内容の不一致 | **暫定対策を実装**（不一致なら抑止）。恒久設計は §3 | 通知内容のスナップショットは DB 変更が必要 |
-| D | `race_evaluations` の重複 | **修正済み（運用の設定で保証）**。UNIQUE は §3（承認待ち） | RR 固定 + デッドロック再試行 |
+| E | checkpoint 欠損・破損で同じタイミングを新オッズで再通知 | **V5 で恒久化（§7）**。暫定対策は旧版からの切替に残す | 通知タイミングの DB 上の一意性 |
+| B | 保存済み Signal と通知内容の不一致 | **V5 で恒久化（§7）**: 通知は確定したスナップショットから。不一致の既存 Signal は引き続き抑止 | |
+| D | `race_evaluations` の重複 | **V5 で DB の UNIQUE（§7）**。RR 固定とデッドロック再試行も維持 | 新方式の行だけ |
 | C | エージェントが待機後に再確認せず送信 | **修正済み** | |
 | F | Discord 429 待機後に STOPPED/UNKNOWN を見ない | **修正済み** | |
 | A | `signal_sent` の意味 | **整理済み（意味は変えない）** | §5.1 |
@@ -37,15 +37,15 @@
 | CANCELLED | 中止 | 正常 |
 | NOT_OBSERVED | この run が一度も監視していない（最初に見たときは既に発走後。遅い起動） | 正常（run の異常ではない） |
 | LOST_CALENDAR | 直前の段階が `UNTRUSTED` / `UNKNOWN_TIME` のまま発走を過ぎ、必要なタイミングを逃した | **FAILED `EVALUATION_OPPORTUNITY_LOST`、exit 1、運用者へ警告** |
-| LOST_DATA | 監視はしていたが、オッズ無し・古いなどで一部/全部のタイミングを発火できなかった | SUCCEEDED **`ALL_RACES_OFF_WITH_GAPS`**、exit 0、警告 |
-| QUARANTINED | checkpoint を信頼できず通知を止めた（§2） | SUCCEEDED `ALL_RACES_OFF_WITH_GAPS`、警告 |
+| LOST_DATA | 監視はしていたが、オッズ無し・古いなどで一部/全部のタイミングを発火できなかった | **FAILED `EVALUATION_OPPORTUNITY_LOST`、exit 1、警告**（D-19 承認後。当初は警告つき成功） |
+| LOST_QUARANTINED | checkpoint を信頼できず通知を止め（§2）、必要なタイミングを逃した | **FAILED `EVALUATION_OPPORTUNITY_LOST`、exit 1、警告** |
 
 - 評価 0 件という事実だけでは異常にしない（開催なし・中止・全レースが通知対象なしは従来どおり正常）。
 - 既存の `BotRunState`（STARTING/RUNNING/DRAINING/SUCCEEDED/FAILED/ABORTED/STOPPED_BY_MODE/INTERRUPTED）と終了コード（0/1/75）を変えない。新しい理由名を足しただけ（CONTRACTS 0.4.14）。
 - FAILED を exit 1（75 ではない）にしたのは、発走後に再実行しても評価できない（再試行しても直らない）ため。
 - 試験: `BotRunIntegrityTest`（stale で評価を逃す／一部だけ逃す／評価 0 件は正常／中止は正常／オッズが来ない→警告つき成功）。
 
-**ユーザー判断が残る点**: LOST_DATA を SUCCEEDED（警告）にするか FAILED にするか。現状は『監視はしたがデータが来なかった』を警告つき成功とした。FAILED にしたければ `completion()` の 1 行（D-209）。
+**D-19（2026-10-29 承認）**: LOST_DATA・LOST_QUARANTINED も FAILED・exit 1（D-221。D-209 を置き換え）。`ALL_RACES_OFF_WITH_GAPS` は廃止。
 
 ## 2. E / B: 暫定対策（DB 変更なし。実装済み）
 
@@ -58,7 +58,7 @@
 - 既存の行（同じ自然キー）と今回の計算結果が一致しなければ、**claim も通知もしない**（最新の計算結果で勝手に通知しない）。DB の行は書き換えない。`SIGNAL_MISMATCH` を運用者へ通知。
 - 限界: 一致を比べられるのは `signals` 表の列（オッズ・確率・EV・stake・probSource）だけ。通知にはワイド・三連複の買い目（`BetStrategyBundle`）、理由文、カバレッジなどが含まれ、これらは DB に無い。**完全な一致の保証には通知内容の保存が要る**（§3）。
 
-## 3. 恒久設計（**承認前は Flyway V5 を追加しない・DB を変更しない**）
+## 3. 恒久設計（**2026-10-29 に承認。実装の結果と当初案との差分は §7**）
 
 ### 3.1 問題の整理（評価結果の一意性と通知タイミングの一意性を分ける）
 - `race_evaluations` の自然キー `(tenant_id, race_id, snapshot_at)` は **オッズの観測時刻**。新しいオッズなら `snapshot_at` が変わるので、これを UNIQUE にしても『同じ評価タイミングの二重通知』は防げない。
@@ -187,3 +187,31 @@ V5 は追加のみ（列・索引・表）。戻すときは**前のイメージ
 | Job のタイムアウト | ≥ 最大稼働 + 15 分（契約 0.4.14） | 未記載 |
 | reconcile / retention | **未実装のスタブ（本番では exit 1 `TASK_NOT_IMPLEMENTED`）** | Scheduler で定期実行する設計 → T5.0 では有効にしない |
 | GRANT | V3/V4 の追加、`app` の `race_schedule_event` INSERT（D-9 未承認）、V5（承認後） | 未同期（G-9 の I-H1〜I-H9 に含む） |
+
+## 7. V5 の実装結果（2026-10-29。ローカル MySQL 8.0.46 で検証。CI 未検証）
+### 当初案との差分（理由つき）
+| 項目 | 当初案（§3） | 実装 | 理由 |
+|---|---|---|---|
+| 通知タイミングの確定の SQL | `INSERT … ON DUPLICATE KEY UPDATE tenant_id = tenant_id` | **通常の INSERT。主キーの重複（1062）を確定済みとして扱う** | `ON DUPLICATE KEY UPDATE` は UPDATE 権限を要求する。追記専用の表に bot の UPDATE を付けないため（最小権限の統合試験で判明） |
+| `requiredSchemaVersion` | bot のみ 5 | **bot・ingest・dashboard すべて 5** | release-manifest がアプリ間の一致を検査する。旧版アプリは `>=` の検査なので新しい DB でも動く |
+| 同じ日の再実行 | 未定義 | **`EVALUATION_LOSS_ALREADY_RECORDED`（exit 0）で何もしない** | calendar-check が窓の中で再び起動しても、FAILED・警告を繰り返さない（D-221） |
+| 複数タイミングの同時到来 | 1 トランザクションで該当キーを INSERT | 同じ | |
+| ゾンビ（リース喪失）の確定 | 未検討 | 確定してから checkpoint を保存できないと、そのタイミングは確定済みで通知されない（at-most-once）。**既知の限界**（D-219） | DB への確定を checkpoint の前に置く（スナップショットの確定前に送らない）ため |
+
+### 検証した要件
+1. **同一レース・同一タイミングの重複登録を DB が拒否**: PK。統合試験（`TimingNoticeIntegrationTest`、`V5MigrationIntegrationTest`）。8 並列 × 20 回の同時確定で勝者は 1 つ（RR/RC 指定の両方）。
+2. **checkpoint が欠損・破損・古くても再通知しない**: `BotRunIntegrityTest`（壊れた JSON／null／空の checkpoint）と MySQL の `BotRunOrchestratorIntegrationTest`。
+3. **オッズの観測時刻が変わっても一意**: キーは `(race, timing_centi)`。新しい観測の評価結果が別の行になっても確定は 1 回。
+4. **保存順序**: §3.4 と D-219。
+5. **スナップショット確定前に送らない**: 確定 → checkpoint → 読み戻し（ハッシュ照合）→ 送信。読み戻した内容が壊れていれば送らない（`SnapshotInvalid`）。
+6. **0 件でも確定**: `BotRunIntegrityTest`。
+7. **複数タイミングが同時に到来**: 1 回の評価・全キーを確定・通知 1 回。
+8. **`timing_centi` の換算**: `TimingKey`（0.01 分刻み、0.01〜1440 分、丸めず拒否、衝突検出）と `SnapshotPolicy` の検証、`BOT_RUN_SNAPSHOT_MINUTES` の入力（`5.005` 等は exit 2）。DB の CHECK も同じ範囲。
+9. **Signal の既存状態管理**: 変更なし（UNSENT → CLAIMED → SENT | SEND_UNKNOWN）。
+10. **新旧コードの切替**: V5 より前の版が送った通知（確定の記録が無く、観測時刻が説明できない）は、checkpoint が無事なら再通知せず、checkpoint も失われたらそのレースの通知を止める（FAILED になり得る）。旧版のアプリは新しい DB でも動く。
+### V5 の適用前検査・ロールバック
+- 適用前: `SELECT tenant_id, race_id, snapshot_at, COUNT(*) FROM race_evaluations WHERE legacy_id IS NULL GROUP BY 1,2,3 HAVING COUNT(*) > 1;`。重複があると V5 は ER_DUP_ENTRY で失敗し、列も表も作らず、行を削除しない（試験あり）。自動削除はしない。
+- ロールバックは**アプリを旧版に戻す**。`race_timing_notice` は通知履歴なので、通常のロールバックで DROP しない（どうしても戻す場合は人が判断する）。
+### D-18 と将来のダッシュボード
+確定の後・送信前に落ちたタイミングは自動で再送しない（D-220）。見られる情報: 評価した日時（`fired_at`）、保存した通知内容（`notice_json`）、送信状態（`signals.notify_state`）、配送結果が不明（SEND_UNKNOWN）、送信前に中断された可能性（確定済みで該当 Signal が UNSENT のまま）。`app` は SELECT のみ。閲覧は認証・認可を通った本人だけ（管理画面は未実装）。
+
