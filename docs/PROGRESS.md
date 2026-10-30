@@ -18,7 +18,9 @@
 | 再試行の契機（新） | 完了済みバッチの再送で再開／同時バッチの保留をコミット後にレース有無を確認して再適用。残件は WARN（件数のみ）| `IngestPipelineIntegrationTest` +2。両修正を外す変異で 2 件とも失敗することを確認 |
 | 性能の実測（単発） | MySQL 8.4.13・ingest_raw 100 万行で 1 ページ 約 0.5〜0.8 秒。候補索引で 約 1〜14 ミリ秒 | V6 候補（未適用・要承認）|
 | 公開準備 | README を概要・図・設計判断・検証範囲・AI 利用に再構成（旧は `docs/DEVELOPER_GUIDE.md`）。公開前レビュー `docs/PUBLIC_READINESS.md`。PR 下書き `docs/pr-drafts/` | — |
-**ローカル検証**（JDK 21、Docker 上の **MySQL 8.4.13**、合成データ）: `:ingest:integrationTest` **57 件成功・スキップ 0**（実 Python エージェント含む）。`:domain:test` 全体・`:persistence`/`:db-migration`/`:bot` の統合テスト・ktlint は**実行中だった**ため、この記録の時点では**結果未確認**（確認したら本節に追記）。JDK 25・MySQL 9.7・Actions は未実施（JDK 25 と Docker Hub の 9.7 はこのセッションから取得できなかった）。
+**ローカル検証**（JDK 21、Docker 上の **MySQL 8.4.13**〔Testcontainers〕、合成データ。件数は各モジュールの JUnit XML から集計）: `:domain:test` **1021 件**、`:persistence:integrationTest` **199 件**、`:db-migration:integrationTest` **49 件**、`:bot:integrationTest` **38 件**（`MlTrainInteropIntegrationTest` を含む）、`:ingest:integrationTest` **57 件**（実 Python エージェント含む）。**すべて失敗 0・エラー 0・スキップ 0**。ktlint は自分の変更に整形指摘が出たため `ktlintFormat` で直し、`ktlintCheck`・`checkModuleDependencies` 成功。
+**MySQL 版検査の失敗の原因**: 以前の `:persistence` の 1 件失敗（`WiringIntegrationTest`、8.4 期待の版検査）は、**MySQL 8.4.13 では再現せず（199 件成功）、8.0.46 を使っていた環境差だった**。テストの期待値は変えていない。
+**未実施**: JDK 25・MySQL 9.7（このセッションから取得できなかった）、GitHub Actions 全体、Python（agent/ml/golden）・repo-hygiene の再実行（今回の変更の対象外。前回成功の記録のみ）、実 Discord・Cloud Run・Windows 実機。
 **未解決**: 払戻の単位などの公式確認（`jra-van.jp` がセッションから名前解決できず**未確認**）、COMP-4、V6、E-7、ライセンスの選択。
 **次の手順**: ① Billing で Actions の残り無料枠と上限停止の設定を確認（ユーザー）→ PR 作成（`docs/pr-drafts/stage3-bot-orchestration.md`）→ CI → 条件を満たせば squash merge。② 上の未確認の検証結果を追記。③ V6 索引・T3.9 は承認後。
 **続行を妨げているもの**: 費用条件の未確認（CI 起動を伴う操作のみ）。

@@ -97,8 +97,14 @@ class PendingReplayer(
         var deferred = false
         for (obs in parsed.observations) {
             when (val r = apply(tenantId, obs, ctx)) {
-                is ApplyOutcome.Quarantined -> failed = r.reason
-                is ApplyOutcome.Deferred -> deferred = true
+                is ApplyOutcome.Quarantined -> {
+                    failed = r.reason
+                }
+
+                is ApplyOutcome.Deferred -> {
+                    deferred = true
+                }
+
                 else -> {}
             }
         }

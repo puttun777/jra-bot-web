@@ -77,7 +77,17 @@ class PendingReplayerTest {
                 .sortedWith(compareByDescending<Row> { it.receivedAt }.thenByDescending { it.batchId }.thenByDescending { it.seq })
                 .take(limit)
                 .map {
-                    PendingRawRecord(it.hash, it.batchId, BatchClass.REALTIME, base, "0B31", "NOW", "${it.race.value}|${it.tag}".toByteArray(), it.receivedAt, it.seq)
+                    PendingRawRecord(
+                        it.hash,
+                        it.batchId,
+                        BatchClass.REALTIME,
+                        base,
+                        "0B31",
+                        "NOW",
+                        "${it.race.value}|${it.tag}".toByteArray(),
+                        it.receivedAt,
+                        it.seq,
+                    )
                 }
         }
 
@@ -216,9 +226,20 @@ class PendingReplayerTest {
         val legacy = e.raw.add(t1, raceA, base.plusSeconds(5), batchId = "e1", error = REASON_RACE_NOT_FOUND)
         val report = newReplayer(e).replay(t1, setOf(raceA))
         assertEquals(3, report.scanned, "a1, a2, 旧形式")
-        assertEquals(ParseStatus.PARSED, e.raw.rows.first { it.batchId == "a2" }.status)
+        assertEquals(
+            ParseStatus.PARSED,
+            e.raw.rows
+                .first { it.batchId == "a2" }
+                .status,
+        )
         assertEquals(ParseStatus.PARSED, legacy.status, "待つレースが不明な旧形式の保留も対象")
-        assertEquals(ParseStatus.FAILED, e.raw.rows.first { it.batchId == "a1" }.status, "不正と判断された行は隔離（FAILED）")
+        assertEquals(
+            ParseStatus.FAILED,
+            e.raw.rows
+                .first { it.batchId == "a1" }
+                .status,
+            "不正と判断された行は隔離（FAILED）",
+        )
         for (untouched in listOf(otherRace, otherTenant, otherReason)) assertEquals(ParseStatus.PENDING, untouched.status)
         assertTrue(e.applied.none { it.first == t2 }, "別のテナントには適用しない")
         assertEquals(ReplayReport.NONE, newReplayer(e).replay(t1, emptySet()), "待つレースが無ければ何もしない")

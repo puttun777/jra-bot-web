@@ -141,13 +141,29 @@ class IngestConfiguration {
         clock: Clock,
     ): BatchIngestor =
         BatchIngestor(
-            batches, raw, fetches, cursors, backfills, gaps, events, parsers, applier, races, uow, clock,
+            batches,
+            raw,
+            fetches,
+            cursors,
+            backfills,
+            gaps,
+            events,
+            parsers,
+            applier,
+            races,
+            uow,
+            clock,
             onReplay = { tenantId, report ->
                 // 残件・失敗がある再適用だけ記録する（件数のみ。レコードの中身や秘密は出さない）。残件は次にそのレースの観測が来たときに再試行される
                 if (report.leftover) {
                     LoggerFactory.getLogger(BatchIngestor::class.java).warn(
                         "pending replay left rows: tenant={} scanned={} settled={} stillPending={} rowErrors={} aborted={}",
-                        tenantId.value, report.scanned, report.settled, report.stillPending, report.rowErrors, report.aborted,
+                        tenantId.value,
+                        report.scanned,
+                        report.settled,
+                        report.stillPending,
+                        report.rowErrors,
+                        report.aborted,
                     )
                 }
             },
