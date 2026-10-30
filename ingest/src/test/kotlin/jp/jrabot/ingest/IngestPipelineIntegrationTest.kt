@@ -294,6 +294,40 @@ class IngestPipelineIntegrationTest {
     }
 
     @Test
+    fun `再適用が行ごとに失敗して保留が残っても 完了済みバッチの再送が再適用を再開する（応答前の切断・タイムアウト後の復旧）`() {
+        val at = ItClock.now().minusSeconds(30)
+        it.ingest(it.one, odds(it.now(race, 1 to 2.5), at = at))
+        val raceBatch = it.envelope(records = listOf(it.nra(race, "2", "20261030")))
+        it.faults.settleFails = true
+        assertEquals(200, it.ingest(it.one, raceBatch).status, "再適用の失敗は今回のバッチの ACK に影響しない")
+        assertEquals(1, it.count("SELECT COUNT(*) FROM ingest_raw WHERE parse_status = 'PENDING'"), "失敗した行は保留のまま残る")
+        // 次のレース観測が来ないままでも、同じバッチの再送（ACK が届かなかったエージェントの再送）が再適用を再開する
+        it.faults.settleFails = false
+        val resend = it.parse(it.ingest(it.one, raceBatch))
+        assertEquals(true, resend["duplicate"], "同じバッチの再送は重複 ACK")
+        assertEquals(0, it.count("SELECT COUNT(*) FROM ingest_raw WHERE parse_status = 'PENDING'"))
+        assertEquals(1, it.count("SELECT COUNT(*) FROM odds_snapshots WHERE race_id = '$race'"))
+        // さらに再送しても重複しない
+        it.ingest(it.one, raceBatch)
+        assertEquals(1, it.count("SELECT COUNT(*) FROM odds_snapshots WHERE race_id = '$race'"))
+    }
+
+    @Test
+    fun `同時に処理中の別のバッチがレースを入れた直後に保留にしたオッズも 取り残さない（コミット後にレースの有無を確認する）`() {
+        // オッズのバッチの適用中（レースはまだ無い → 保留）に、別のバッチがレースを入れて再適用まで終える。オッズの保留はまだコミットされていないので、相手の再適用には見えない
+        it.faults.beforeFirstRawInsert = {
+            val t = Thread { assertEquals(200, it.ingest(it.one, it.envelope(records = listOf(it.nra(race, "2", "20261030")))).status) }
+            t.start()
+            t.join(30_000)
+            assertTrue(!t.isAlive, "別のバッチの処理が終わる")
+        }
+        val ack = it.parse(it.ingest(it.one, odds(it.now(race, 1 to 2.5), at = ItClock.now().minusSeconds(30))))
+        assertEquals(1, ack["unsupported"], "このバッチの時点ではレースが無く、保留として数える")
+        assertEquals(0, it.count("SELECT COUNT(*) FROM ingest_raw WHERE parse_status = 'PENDING'"), "コミット後の確認で再適用され、次のレース観測まで取り残されない")
+        assertEquals(1, it.count("SELECT COUNT(*) FROM odds_snapshots WHERE race_id = '$race'"))
+    }
+
+    @Test
     fun `旧形式の保留 理由が RACE_NOT_FOUND のみ も レースが届けば再適用される`() {
         it.ingest(it.one, odds(it.now(race, 1 to 2.5), at = ItClock.now().minusSeconds(30)))
         it.db.exec("UPDATE ingest_raw SET parse_error = 'RACE_NOT_FOUND' WHERE parse_status = 'PENDING'")

@@ -7,6 +7,7 @@ import jp.jrabot.domain.calendar.ScheduleEventSource
 import jp.jrabot.domain.calendar.ScheduleEventType
 import jp.jrabot.domain.calendar.ScheduleEventWriter
 import jp.jrabot.domain.race.RaceId
+import jp.jrabot.domain.race.RaceReader
 import jp.jrabot.domain.tenant.TenantId
 import jp.jrabot.domain.time.Clock
 import jp.jrabot.domain.time.Zones
@@ -88,10 +89,15 @@ class BatchIngestor(
     private val events: ScheduleEventWriter,
     private val parsers: RecordParsers,
     private val applier: ObservationApplier,
+    private val races: RaceReader,
     private val uow: UnitOfWork,
     private val clock: Clock,
     private val policy: IngestPolicy = IngestPolicy(),
+    /** 保留の再適用の結果の通知（記録用。失敗や残件を観測できるようにする。ここで例外を投げても取込には影響しない）。 */
+    private val onReplay: (TenantId, ReplayReport) -> Unit = { _, _ -> },
 ) {
+    private val replayer = PendingReplayer(raw, parsers, applier::apply, uow)
+
     fun ingest(
         caller: IngestCaller,
         env: IngestEnvelope,
@@ -129,6 +135,8 @@ class BatchIngestor(
                     val f = env.fetch?.let { fetches.peek(tenantId, it.fetchId) }
                     val progress = f?.let { FetchProgress(it.fetchId, it.status, it.nextSeq) }
                     val cursor = f?.let { confirmedCursor(tenantId, it) }
+                    // 最初の処理の後の保留の再適用が途中で終わった（応答前の切断・タイムアウトなど）かもしれない。再送されたバッチに含まれるレースで再開する（冪等）
+                    replayPending(tenantId, existingRaces(tenantId, racesIn(env, observedAt)))
                     return IngestOutcome.Accepted(
                         IngestAck(c.accepted, c.duplicates, 0, 0, c.completedAt, duplicateBatch = true, fetch = progress, cursor = cursor),
                     )
@@ -150,7 +158,9 @@ class BatchIngestor(
         return try {
             val done = uow.run { process(caller, env, token, now, observedAt) }
             // 新しいレースが入ったら、レース待ちで保留にした生レコードを再適用する（コミットの後に別の処理として。失敗しても今回のバッチの ACK には影響させない）
-            if (done.racesToReplay.isNotEmpty()) replayPending(tenantId, done.racesToReplay)
+            // 同時に処理中の別のバッチがレースを入れたため、このバッチが『レース無し』と判断して保留にした場合も、コミット後にレースの有無を確認して再適用する
+            // （確認せずに終わると、相手の再適用の走査がこの保留を見る前に終わっていた場合に、次のレースの観測まで取り残される）
+            replayPending(tenantId, done.racesToReplay + existingRaces(tenantId, done.deferredRaces))
             IngestOutcome.Accepted(done.ack)
         } catch (e: BatchRejectedException) {
             releaseQuietly(tenantId, env.batchId, token, e.rejection.code)
@@ -214,6 +224,7 @@ class BatchIngestor(
         var unsupported = 0
         var maxRaceDate: LocalDate? = null
         val racesToReplay = LinkedHashSet<RaceId>()
+        val deferredRaces = LinkedHashSet<RaceId>()
 
         // 解析は全レコード先に行い、適用は『レースを定義する観測（開催日・レース・発走時刻の変更）→ それに依存する観測（オッズ）』の順にする。
         // 同じバッチの中でオッズがレースより前に並んでいても、レース待ち（保留）にしない。生レコードの保存は元の並び（seq）のまま。
@@ -237,6 +248,7 @@ class BatchIngestor(
                         statuses[index] = ParseStatus.PENDING
                         errors[index] = r.reason
                     }
+                    waitedRace(r.reason)?.let { deferredRaces += it }
                 }
 
                 // レースの観測は、新規（Applied）でも既存（NoChange）でも、そのレースを待つ保留を再適用の対象にする
@@ -300,6 +312,7 @@ class BatchIngestor(
         return Processed(
             IngestAck(accepted, duplicates, quarantined, unsupported, now, duplicateBatch = false, fetch = progress, cursor = cursorAck),
             racesToReplay,
+            deferredRaces,
         )
     }
 
@@ -307,76 +320,54 @@ class BatchIngestor(
         val ack: IngestAck,
         /** このバッチでレースの情報が反映された（または確認できた）レース。これを待つ保留を再適用できる。 */
         val racesToReplay: Set<RaceId>,
+        /** このバッチが『レースがまだ無い』として保留にした観測の待つレース（コミット後に、その間に入っていないか確認する）。 */
+        val deferredRaces: Set<RaceId>,
     )
 
     /** レース・開催日・発走時刻の変更など、他の観測が依存する観測。 */
     private fun Observation.definesRace(): Boolean = this is ScheduleDayObservation || this is RaceObservation || this is TimeChangeObservation
 
-    /**
-     * 今回レースが入った（確認できた）[races] を待っている保留（理由 `RACE_NOT_FOUND:<race_id>`）と、待つレースが不明な旧形式の保留（`RACE_NOT_FOUND`）を、
-     * 取り込んだときのバッチの観測時刻のまま再解析・再適用する。**新しい順のキーセットのページングで全件を走査する**（1 ページ [REPLAY_PAGE] 件。以前の
-     * 『新しい 500 件だけ』では、古い保留が取り残された）。再適用に失敗して PENDING のまま残る行があっても位置が進むので、同じ行で止まらない。
-     * **件数の上限は置かない**（以前の『1 回 10,000 件まで』は、超えた残件が次に同じレースの観測が来るまで放置され、再処理が保証されなかった）。走査はキーセットで必ず終わり、
-     * 対象は『今回レースが入った（確認できた）レースを待つ保留』と旧形式の保留だけなので、通常は小さい。リクエストの時間より再処理の保証を優先する。
-     * 再適用に失敗した行（一時障害・不正なレコード）は PENDING のまま残り、同じレースの観測が次に来たときに再試行される。
-     * 同じ観測の再適用は冪等（オッズは自然キーで upsert）。保留の取得・更新は常にこのテナントの行だけ。
-     */
+    /** [PendingReplayer.replay] を呼ぶ。コミット後の別の処理で、失敗しても今回のバッチの ACK には影響させない（結果は [onReplay] で通知）。 */
     private fun replayPending(
         tenantId: TenantId,
-        races: Set<RaceId>,
+        raceIds: Set<RaceId>,
     ) {
-        val reasons = races.sortedBy { it.value }.map(::raceNotFoundReason) + REASON_RACE_NOT_FOUND
-        var after: PendingCursor? = null
-        while (true) {
-            val page =
-                try {
-                    raw.listPending(tenantId, reasons, REPLAY_PAGE, after)
-                } catch (_: RuntimeException) {
-                    return
-                }
-            for (row in page) {
-                try {
-                    uow.run { replayOne(tenantId, row) }
-                } catch (_: RuntimeException) {
-                    // 保留のまま残す。同じレースの観測が次に来たときに再試行する
-                }
-            }
-            if (page.size < REPLAY_PAGE) return
-            after = page.last().cursor()
+        if (raceIds.isEmpty()) return
+        val report = replayer.replay(tenantId, raceIds)
+        try {
+            onReplay(tenantId, report)
+        } catch (_: RuntimeException) {
+            // 通知の失敗で取込を失敗させない
         }
     }
 
-    private fun replayOne(
+    /** 再送された（完了済みの）バッチに含まれるレースの観測のレース。解析だけで適用しない（解析できないレコードは無視）。 */
+    private fun racesIn(
+        env: IngestEnvelope,
+        observedAt: Instant,
+    ): Set<RaceId> {
+        val ctx = ParseContext(env.dataspec, env.batchClass, observedAt)
+        val ids = LinkedHashSet<RaceId>()
+        for (rec in env.records) {
+            val parsed = parsers.parse(ctx, rec) as? ParseOutcome.Parsed ?: continue
+            parsed.observations.filterIsInstance<RaceObservation>().forEach { ids += it.raceId }
+        }
+        return ids
+    }
+
+    /** [ids] のうち DB に既にあるレース。確認に失敗したら空（再適用は次の契機に回す。コミット済みのバッチの結果は変えない）。 */
+    private fun existingRaces(
         tenantId: TenantId,
-        row: PendingRawRecord,
-    ) {
-        val parsed =
-            parsers.parse(
-                ParseContext(row.dataspec, row.batchClass, row.observedAt),
-                IngestRecordIn(row.recordId, row.payload, Hashing.sha256Hex(row.payload)),
-            )
-        if (parsed !is ParseOutcome.Parsed) return
-        val ctx = ApplyContext(row.observedAt, row.batchId, row.dataspec)
-        var failed: String? = null
-        var deferred = false
-        for (obs in parsed.observations) {
-            when (val r = applier.apply(tenantId, obs, ctx)) {
-                is ApplyOutcome.Quarantined -> {
-                    failed = r.reason
-                }
-
-                is ApplyOutcome.Deferred -> {
-                    deferred = true
-                }
-
-                else -> {}
-            }
+        ids: Set<RaceId>,
+    ): Set<RaceId> =
+        try {
+            ids.filterTo(LinkedHashSet()) { races.find(tenantId, it) != null }
+        } catch (_: RuntimeException) {
+            emptySet()
         }
-        when {
-            failed != null -> raw.settlePending(tenantId, row.recordHash, ParseStatus.FAILED, failed.take(200))
-            !deferred -> raw.settlePending(tenantId, row.recordHash, ParseStatus.PARSED, null)
-        }
-    }
+
+    private fun waitedRace(reason: String): RaceId? =
+        if (reason.startsWith("$REASON_RACE_NOT_FOUND:")) RaceId.parseOrNull(reason.removePrefix("$REASON_RACE_NOT_FOUND:")) else null
 
     /** サーバのカーソルがこの取得の値以上なら、その値を返す（前進したか既に同値以上かを区別しない。後戻りはしない）。LIVE の成功だけ。 */
     private fun confirmedCursor(
@@ -440,7 +431,6 @@ class BatchIngestor(
     companion object {
         private val TS14: DateTimeFormatter = DateTimeFormatter.ofPattern("uuuuMMddHHmmss")
 
-        /** 保留の再適用の 1 ページの件数（走査の総数には上限を置かない）。 */
-        const val REPLAY_PAGE = 200
+        const val REPLAY_PAGE = PendingReplayer.REPLAY_PAGE
     }
 }

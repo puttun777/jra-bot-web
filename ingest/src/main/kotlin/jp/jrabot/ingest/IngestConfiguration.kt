@@ -39,6 +39,7 @@ import jp.jrabot.persistence.PersistenceConfiguration
 import jp.jrabot.persistence.jdbc.DataSourceFactory
 import jp.jrabot.persistence.schema.AppBuildInfo
 import jp.jrabot.persistence.schema.SchemaVersionVerifier
+import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Import
@@ -135,9 +136,22 @@ class IngestConfiguration {
         events: ScheduleEventRepository,
         parsers: RecordParsers,
         applier: ObservationApplier,
+        races: RaceRepository,
         uow: UnitOfWork,
         clock: Clock,
-    ): BatchIngestor = BatchIngestor(batches, raw, fetches, cursors, backfills, gaps, events, parsers, applier, uow, clock)
+    ): BatchIngestor =
+        BatchIngestor(
+            batches, raw, fetches, cursors, backfills, gaps, events, parsers, applier, races, uow, clock,
+            onReplay = { tenantId, report ->
+                // 残件・失敗がある再適用だけ記録する（件数のみ。レコードの中身や秘密は出さない）。残件は次にそのレースの観測が来たときに再試行される
+                if (report.leftover) {
+                    LoggerFactory.getLogger(BatchIngestor::class.java).warn(
+                        "pending replay left rows: tenant={} scanned={} settled={} stillPending={} rowErrors={} aborted={}",
+                        tenantId.value, report.scanned, report.settled, report.stillPending, report.rowErrors, report.aborted,
+                    )
+                }
+            },
+        )
 
     @Bean
     fun heartbeatService(
