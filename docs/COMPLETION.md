@@ -14,7 +14,7 @@
 | ID | 完成条件（要件・機能表） | 実装場所 | 接続先（本番経路） | 検証 | 区分 |
 |---|---|---|---|---|---|
 | R1 | 開催日・発走予定に基づく制御（F03）、中止・延期・時刻変更・手動補正 | `domain/calendar`、`bot/CalendarCheckTaskHandler` | calendar-check → `JobLauncher` | 単体 + MySQL 統合 | **A**（起動の実行基盤は R2） |
-| R2 | calendar-check から bot-run を**実際に起動**（Cloud Run Jobs） | `domain/bot/JobLauncher`、`:cloud-gcp`（未実装） | 本番は `UnconfiguredJobLauncher`（常に失敗 = fail closed） | — | **C**（Cloud Run Jobs の run API クライアント） |
+| R2 | calendar-check から bot-run を**実際に起動**（Cloud Run Jobs） | `:cloud-gcp` `CloudRunJobLauncher`、`bot/RunJobsSettings` | 本番の calendar-check は `RUN_JOBS_*` 必須（無ければ exit 2）。無いローカルは未設定の fail closed | 偽サーバで宛先・認証・引数の上書き・失敗の分類を試験。**実 Cloud Run は未検証** | **A（web 側）/ B（実 GCP での確認）**。infra: calendar-check Job に `RUN_JOBS_*` を渡し、`sa-bot` に bot-run Job の `jobsExecutorWithOverrides` を付与（infra PR） |
 | R3 | 取得エージェント（F01/F22/F23）: 署名・キュー・送信・ビーコン・状態機械 | `agent/`（Python） | ingest API | pytest 213 + Linux/Windows CI + Kotlin 相互運用 | **A**（Mock 取得。実機は R4） |
 | R4 | JV-Link 実取得（COM）・実機 PoC（T3.0） | `agent/` の COM ワーカー | Windows 実機 | 未実施 | **B**（Windows 実機で `agent/poc` を実行。手順は `docs/USER_ACTIONS.md`〔作成予定〕） |
 | R5 | JV-Data 実レコードのパーサ（F02: RA/SE/O1〜O6/HR/結果ほか） | `ingest` の `RecordParser`（合成の正規化 JSON のみ） | ingest | 合成のみ | **B**（JV-Link 仕様書 Ver.4.9 の項目位置の確認。T1.17/G-5/G-16。取得できる資料を `JVLINK_DESIGN.md` の 12 項目で特定） |

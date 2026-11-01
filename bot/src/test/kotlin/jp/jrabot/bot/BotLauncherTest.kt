@@ -152,7 +152,41 @@ class BotLauncherTest {
             assertEquals(0, h.executeCalls.get())
         }
         val ok = Harness(OpsMode.NORMAL)
-        assertEquals(0, ok.launcher.run(args(), baseEnv("gs://synthetic/ops.json", "APP_ENV" to "prod", "DB_USER" to "bot")))
+        assertEquals(
+            0,
+            ok.launcher.run(
+                args(),
+                baseEnv(
+                    "gs://synthetic/ops.json",
+                    "APP_ENV" to "prod",
+                    "DB_USER" to "bot",
+                    "RUN_JOBS_PROJECT_ID" to "jra-bot-test1",
+                    "RUN_JOBS_REGION" to "asia-northeast1",
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `本番の calendar-check は Cloud Run Jobs の起動先が無ければ 2 で実行しない ローカルは任意`() {
+        val h = Harness(OpsMode.NORMAL)
+        assertEquals(2, h.launcher.run(args(), baseEnv("gs://synthetic/ops.json", "APP_ENV" to "prod", "DB_USER" to "bot")))
+        assertEquals(0, h.executeCalls.get())
+        assertEquals(0, Harness(OpsMode.NORMAL).launcher.run(args(), baseEnv("/dev/null")))
+        // 本番でも calendar-check 以外は起動先を要求しない
+        assertEquals(0, Harness(OpsMode.NORMAL).launcher.run(args("retention"), baseEnv("gs://synthetic/ops.json", "APP_ENV" to "prod", "DB_USER" to "bot")))
+    }
+
+    @Test
+    fun `起動先の設定は形式を検査し 片方だけの指定を拒否する`() {
+        fun parse(vararg kv: Pair<String, String>) = RunJobsSettings.fromEnv(mapOf(*kv), jp.jrabot.domain.ops.AppEnv.LOCAL)
+        assertEquals(null, parse())
+        val ok = parse("RUN_JOBS_PROJECT_ID" to "jra-bot-test1", "RUN_JOBS_REGION" to "asia-northeast1")!!
+        assertEquals("jra-bot-bot-run", ok.jobNames().getValue(jp.jrabot.domain.bot.LaunchableJob.BOT_RUN))
+        assertEquals("jra-bot-calendar-check", ok.jobNames().getValue(jp.jrabot.domain.bot.LaunchableJob.CALENDAR_CHECK))
+        kotlin.test.assertFailsWith<IllegalStateException> { parse("RUN_JOBS_PROJECT_ID" to "jra-bot-test1") }
+        kotlin.test.assertFailsWith<IllegalStateException> { parse("RUN_JOBS_PROJECT_ID" to "BAD_ID", "RUN_JOBS_REGION" to "asia-northeast1") }
+        kotlin.test.assertFailsWith<IllegalStateException> { parse("RUN_JOBS_PROJECT_ID" to "jra-bot-test1", "RUN_JOBS_REGION" to "x") }
     }
 
     @Test

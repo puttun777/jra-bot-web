@@ -26,6 +26,8 @@ class BotSettings(
     val botRun: BotRunSettings? = null,
     /** `retention` のときだけ非 null（すべて任意。既定はドライラン）。 */
     val retention: RetentionSettings? = null,
+    /** `calendar-check` のとき、Cloud Run Jobs の起動先（本番は必須。ローカルは任意で、無ければ null = 未設定の起動基盤）。 */
+    val runJobs: RunJobsSettings? = null,
 ) {
     companion object {
         const val DB_USER = "bot" // CONTRACTS §8.2: bot（全 --task）
@@ -54,7 +56,8 @@ class BotSettings(
             val discord = if (task == BotTask.BOT_RUN) DiscordSettings.fromEnv(env) else null
             val botRun = if (task == BotTask.BOT_RUN) BotRunSettingsParser.fromEnv(env, appEnv) else null
             val retention = if (task == BotTask.RETENTION) RetentionSettings.fromEnv(env) else null
-            return BotSettings(appEnv, db, opsEnv, env["RELEASE_ID"], calendar, storeUri, discord, botRun, retention)
+            val runJobs = if (task == BotTask.CALENDAR_CHECK) RunJobsSettings.fromEnv(env, appEnv) else null
+            return BotSettings(appEnv, db, opsEnv, env["RELEASE_ID"], calendar, storeUri, discord, botRun, retention, runJobs)
         }
     }
 }
