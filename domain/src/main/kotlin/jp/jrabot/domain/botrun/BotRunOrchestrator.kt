@@ -485,19 +485,20 @@ class BotRunOrchestrator(
             if (plan.allDone) {
                 // 時刻が過ぎただけでは正常終了にしない。予定を信頼できず評価を逃したレースがあれば FAILED、データ不足の取りこぼしは警告付きの SUCCEEDED
                 val assessment = CompletionAssessment.assess(checkpoint.races, plan.stages, config.snapshot.descending, quarantined)
-                checkpoint = checkpoint.copy(lastCycleAt = clock.now(), races = mergeStages(plan))
                 val finish = completion(assessment)
                 // 評価の機会を失っていなければ、結果待ちに入る（有効な構成のとき）。失っていれば従来どおり FAILED（結果は reconcile が後で回復する）
                 if (config.resultWait != null && finish is Done && finish.state == BotRunState.SUCCEEDED) {
-                    // 開催日の更新（途中の状態も順にたどる）が成功してから結果待ちに入る。失敗したら例外 → サイクルの失敗として次の周期で再試行される
+                    // 開催日の更新（途中の状態も順にたどる）が成功してから checkpoint と結果待ちの状態を更新する。失敗したら例外 → checkpoint は変えずに
+                    // サイクルの失敗として次の周期で再試行される（先に checkpoint を書き換えると、再試行の判定が LOST_DATA になる）
                     if (req.origin == NotificationOrigin.LIVE) {
                         advancer.advance(req.tenantId, req.date, RaceDayStatus.SETTLING, "run:${req.runId.value}")
                     }
+                    checkpoint = checkpoint.copy(lastCycleAt = clock.now(), races = mergeStages(plan), settling = true)
                     settlePhase = true
-                    checkpoint = checkpoint.copy(settling = true)
                     events.event("SETTLE_WAIT_STARTED", "races=${plan.stages.size}")
                     return settleCycle(day, window, now)
                 }
+                checkpoint = checkpoint.copy(lastCycleAt = clock.now(), races = mergeStages(plan))
                 return CycleResult(finish, config.lease.heartbeatInterval)
             }
             if (window == null) return CycleResult(Done(BotRunState.ABORTED, "NO_POST_TIME", RunExit.TEMPFAIL, alert = true), config.lease.heartbeatInterval)
@@ -563,7 +564,8 @@ class BotRunOrchestrator(
                         },
                 )
             val active = stages.filterValues { it != RaceStage.CANCELLED }
-            if (active.isNotEmpty() && active.values.all { it == RaceStage.SETTLED }) {
+            // 結果を待つレースが 0 件（全レースが中止・延期・除外）の日は、待つものが無いので完了にする（reconcile と同じ扱い）
+            if (stages.isNotEmpty() && (active.isEmpty() || active.values.all { it == RaceStage.SETTLED })) {
                 if (live) advancer.advance(req.tenantId, req.date, RaceDayStatus.COMPLETED, "run:${req.runId.value}")
                 events.event("ALL_SETTLED", "races=${active.size}")
                 return CycleResult(Done(BotRunState.SUCCEEDED, REASON_ALL_SETTLED, RunExit.OK), rw.poll)

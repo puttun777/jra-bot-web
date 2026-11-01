@@ -254,11 +254,13 @@ def run_shell_step(step: Step, env: dict[str, str], log) -> int:
         # CI の『Comparator smoke test』（比較器が、一致・値のずれ・欠落を正しく区別する）。ok/bad/miss.json を作るので終わったら消す
         log.write("$ verify: Comparator smoke test\n")
         log.flush()
+        leftovers = {n for n in ("ok.json", "bad.json", "miss.json") if (ROOT / n).exists()}  # 元からあるファイルは消さない
         try:
             rc = subprocess.run(["bash", "-eo", "pipefail", "-c", ci_verify_block("Comparator smoke test (self-comparison passes, perturbed and missing results fail)")], cwd=ROOT, env=genv, stdout=log, stderr=subprocess.STDOUT).returncode
         finally:
             for n in ("ok.json", "bad.json", "miss.json"):
-                (ROOT / n).unlink(missing_ok=True)
+                if n not in leftovers:
+                    (ROOT / n).unlink(missing_ok=True)
         return rc
     if step.shell == "ml-tools":
         py = venv("ml-tools", ["tools/ml/requirements.txt"])
@@ -274,8 +276,9 @@ def run_shell_step(step: Step, env: dict[str, str], log) -> int:
         rt = OUT / "rt-ml-tools"
         rt.mkdir(parents=True, exist_ok=True)
         link = rt / "venv"
-        if not link.exists():
-            link.symlink_to(Path(py).parent.parent)
+        if link.is_symlink() or link.exists():
+            link.unlink()
+        link.symlink_to(Path(py).parent.parent)
         log.write("$ verify: synthetic datasets\n")
         log.flush()
         return subprocess.run(["bash", "-eo", "pipefail", "-c", ci_verify_block("Verify the synthetic datasets (contract used by the Stage 3-F2 training job)")], cwd=ROOT, env={**env, "RUNNER_TEMP": str(rt)}, stdout=log, stderr=subprocess.STDOUT).returncode

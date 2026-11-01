@@ -156,7 +156,7 @@ object BotRunSettingsParser {
         val resultAfter = Duration.ofMinutes(long("BOT_RUN_RESULT_AFTER_MINUTES", 1, 720))
         // 最後のレースの確認が締切より後になると、そのレースは確認されないまま必ず INCOMPLETE になる（設定の組合せの誤り）
         check(resultAfter < calendar.watch.settleDeadline) {
-            "BOT_RUN_RESULT_AFTER_MINUTES($resultAfter) は CALENDAR_SETTLE_DEADLINE_MINUTES(${calendar.watch.settleDeadline}) より短くしてください"
+            "BOT_RUN_RESULT_AFTER_MINUTES は CALENDAR_SETTLE_DEADLINE_MINUTES より短くしてください"
         }
         val config =
             BotRunConfig(

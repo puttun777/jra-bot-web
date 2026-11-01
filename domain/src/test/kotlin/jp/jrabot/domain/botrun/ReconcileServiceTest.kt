@@ -28,11 +28,11 @@ class ReconcileServiceTest {
         jp.jrabot.domain.calendar
             .InMemoryOverrides()
 
-    private fun service() =
+    private fun service(extraRaces: List<jp.jrabot.domain.race.RaceSchedule> = emptyList()) =
         ReconcileService(
             clock,
             days,
-            InMemoryScheduleReader(races),
+            InMemoryScheduleReader(races + extraRaces),
             { _, r -> states[r] ?: ResultState.NONE },
             RaceDayAdvancerImpl(days, RaceDayUpdater(days, clock)),
             runs,
@@ -137,7 +137,7 @@ class ReconcileServiceTest {
     }
 
     @Test
-    fun `手動で中止したレースは結果を待たない 全レース中止の日は完了にする`() {
+    fun `手動で中止した 1 レースは結果を待たない`() {
         days.rows = listOf(Cal.day(status = RaceDayStatus.RUNNING))
         states[ids[0]] = ResultState.COMPLETE
         states[ids[1]] = ResultState.COMPLETE
@@ -154,10 +154,29 @@ class ReconcileServiceTest {
     }
 
     @Test
-    fun `場ごと中止された日のレースは結果を待たない`() {
+    fun `全レースを手動で中止した日は 待つものが無いので完了にする`() {
         days.rows = listOf(Cal.day(status = RaceDayStatus.RUNNING))
-        // 同じ場の開催日が CANCELLED になった場合は、レース側に区分 9 が無くても待たない
-        days.rows = days.rows.map { it.copy(status = RaceDayStatus.CANCELLED) }
-        assertTrue(service().reconcile(Cal.T1, Cal.DATE).days.isEmpty()) // CANCELLED は reconcile の対象外
+        ids.forEach { id ->
+            overrides.rows +=
+                Cal.override(
+                    jp.jrabot.domain.calendar.OverrideAction.CANCEL,
+                    jp.jrabot.domain.calendar.OverrideScope.RACE,
+                    raceNo = id.raceNo,
+                    createdAt = clock.now().minusSeconds(3600),
+                )
+        }
+        val r = service().reconcile(Cal.T1, Cal.DATE).days.single()
+        assertEquals(ReconcileOutcome.COMPLETED, r.outcome)
+        assertEquals(RaceDayStatus.COMPLETED, status())
+    }
+
+    @Test
+    fun `2 場の日で 一方の場が中止なら その場のレースは結果が無くても 開催した場がそろえば完了`() {
+        val kyoto = Cal.races(venue = jp.jrabot.domain.race.Venue.KYOTO, count = 2)
+        days.rows = listOf(Cal.day(status = RaceDayStatus.RUNNING), Cal.day(venue = jp.jrabot.domain.race.Venue.KYOTO, status = RaceDayStatus.CANCELLED))
+        ids.forEach { states[it] = ResultState.COMPLETE } // 東京だけ結果あり。京都（中止）は結果なし
+        val r = service(kyoto).reconcile(Cal.T1, Cal.DATE).days.single()
+        assertEquals(ReconcileOutcome.COMPLETED, r.outcome, "中止された場のレースを未決済として数えない")
+        assertEquals(RaceDayStatus.COMPLETED, days.rows.single { it.venue == jp.jrabot.domain.race.Venue.TOKYO }.status)
     }
 }

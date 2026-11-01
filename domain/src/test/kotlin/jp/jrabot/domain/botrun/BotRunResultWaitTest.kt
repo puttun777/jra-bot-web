@@ -150,6 +150,33 @@ class BotRunResultWaitTest {
     }
 
     @Test
+    fun `SETTLING への更新が一度失敗しても 次のサイクルで評価の判定をやり直さず 結果待ちに入って完了する`() {
+        var failures = 1
+        val k =
+            Kit(config = waitConfig()) { real ->
+                // 注: 遅い起動で NOT_OBSERVED のレースがある日の再現は未作成（その起動自体が機会喪失になる）。ここは更新失敗後の再試行が完走することの確認
+                RaceDayAdvancer { t, d, target, key ->
+                    if (target == RaceDayStatus.SETTLING && failures-- > 0) throw IllegalStateException("race_day の更新が競合し続けた")
+                    real.advance(t, d, target, key)
+                }
+            }
+        settleAfter(k, ResultState.COMPLETE, 40)
+        val out = k.run()
+        assertEquals("ALL_SETTLED", out.reason, "1 回目の更新失敗で checkpoint を書き換えず、再試行で EVALUATION_OPPORTUNITY_LOST にならない ")
+        assertEquals(RaceDayStatus.COMPLETED, dayStatus(k))
+        assertTrue(k.events.any { it.startsWith("CYCLE_FAILED") })
+    }
+
+    @Test
+    fun `全レースが中止になった日は 結果を待たずに終わる（日の判定が中止になるため結果待ちには入らない）`() {
+        val k = Kit(config = waitConfig())
+        k.schedules.rows = k.schedules.rows.map { it.copy(status = jp.jrabot.domain.race.RaceScheduleStatus.CANCELLED) }
+        val out = k.run()
+        assertTrue(out.reason in setOf("DAY_CANCELLED", "NOT_A_RACE_DAY"), out.reason)
+        assertTrue(k.availabilityCalls.isEmpty(), "来ない結果を確認しに行かない")
+    }
+
+    @Test
     fun `LIVE 以外の run は開催日の状態を変えない`() {
         val k = Kit(config = waitConfig())
         settleAfter(k, ResultState.COMPLETE, 40)

@@ -115,8 +115,6 @@ class ConsistencyTests(unittest.TestCase):
             self.assertFalse(any("BOT_RUN_A" in e for e in errors), errors)
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 class TestEveryVerifyStepOfCiIsCoveredByPreflight(unittest.TestCase):
@@ -138,3 +136,15 @@ class TestEveryVerifyStepOfCiIsCoveredByPreflight(unittest.TestCase):
         missing = [n for n in names if n not in self.NOT_RUN_LOCALLY and n not in source and n.split(" (")[0] not in source and self.SAME_COMMAND.get(n, "\0") not in source]
         self.assertEqual(missing, [], f"preflight が参照しない CI の検査: {missing}")
 
+    def test_same_named_verify_steps_are_both_referenced(self):
+        """『Verify that the tests actually ran』は agent と ml-train の 2 箇所にある。preflight は両方（nth=0,1）を参照する。"""
+        import re
+
+        source = (ROOT / "tools/ci/preflight.py").read_text(encoding="utf-8")
+        count = len(re.findall(r"- name: Verify that the tests actually ran\n", CI_YML))
+        for nth in range(count):
+            self.assertIn(f'ci_verify_block("Verify that the tests actually ran", {nth})', source)
+
+
+if __name__ == "__main__":
+    unittest.main()

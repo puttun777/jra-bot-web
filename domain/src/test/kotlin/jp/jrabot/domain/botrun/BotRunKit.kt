@@ -85,7 +85,10 @@ class Kit(
     features: FeatureSource = InMemoryFeatureSource(),
     /** 判定の差し替え。null なら実物の [RaceEvaluator]。既定は固定の買い目を返す [StubJudge]（オーケストレーションの検証用。判定の数値は golden・単体試験が担う）。 */
     var judge: RaceJudge? = StubJudge(),
+    /** 開催日の更新を差し替える（失敗の注入用）。引数は実物の [RaceDayAdvancerImpl]。 */
+    advancerWrap: (RaceDayAdvancer) -> RaceDayAdvancer = { it },
 ) {
+    private val advancerWrapper = advancerWrap
     val clock = ManualClock(start)
     val mode = FixedMode(OpsMode.NORMAL)
     val runs = InMemoryBotRunRepository()
@@ -190,7 +193,7 @@ class Kit(
             isTransient = { transient(it) },
             events = RunEvents { n, d -> events += "$n $d" },
             availability = availability,
-            advancer = advancer,
+            advancer = advancerWrapper(advancer),
         )
 
     fun request(
