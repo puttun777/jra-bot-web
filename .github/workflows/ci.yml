@@ -319,7 +319,7 @@ jobs:
         run: |
           python3 .github/scripts/verify_test_results.py "bot integration" bot/build/test-results/integrationTest 42 "BotJobIntegrationTest,CalendarCheckIntegrationTest,MlTrainInteropIntegrationTest,ReconcileIntegrationTest,RetentionIntegrationTest"
           python3 .github/scripts/verify_test_results.py "ingest integration" ingest/build/test-results/integrationTest 50 "IngestReadyIntegrationTest,AgentAuthIntegrationTest,IngestIdempotencyIntegrationTest,IngestPipelineIntegrationTest,AgentInteropIntegrationTest"
-          python3 .github/scripts/verify_test_results.py "dashboard integration" dashboard/build/test-results/integrationTest 9 "DashboardReadyIntegrationTest"
+          python3 .github/scripts/verify_test_results.py "dashboard integration" dashboard/build/test-results/integrationTest 14 "DashboardReadyIntegrationTest,ReadAdminApiMySqlIntegrationTest"
 
   # Windows 取得エージェント（agent/。Python。T3.5）。Gradle に組み込まない独立プロジェクト。Linux の 2 つの Python minor（最小 3.12 と目標 3.13）で
   # lint・型・単体・SQLite WAL・Mock HTTP・Mock COM（子プロセスのワーカー）・署名・ビーコン・再送と復旧を検査する。実 JV-Link・SDK・実トークンは使わない。
