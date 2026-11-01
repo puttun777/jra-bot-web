@@ -1,6 +1,7 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-10-30（保留の再適用のレビュー・公開準備。D-229。CI 未実施）
+最終更新: 2026-11-01（T3.9③・reconcile・preflight・infra PR #4。判定の正本は COMPLETION.md）
+旧: 2026-10-30（保留の再適用のレビュー・公開準備。D-229。CI 未実施）
 旧: 2026-10-29（追加レビュー 2: リース継続・保留の再適用・G-31 の null・T3.9 設計の訂正〈D-224〜D-228〉。同ブランチ。CI 未実施。PR なし）
 旧: 2026-10-29（追加レビュー・ML 連携の実行・T3.9 の詳細設計。同ブランチ。CI 未実施）
 旧: 2026-10-29（Flyway V5 の実装〈D-17/D-18/D-19 の承認反映。同ブランチ。T3.9 には進んでいない・CI 未実施〉。記録は下）
@@ -11,16 +12,18 @@
 旧: 2026-10-26（Public 化の準備）／2026-10-24（Stage 3-F2・3-F1・3-E）
 
 
-## 現在の状態と次の作業（2026-11-01 時点。main = f9c61af）
-**マージ済み**: web PR #30（T3.8 bot-run・V5・保留の再適用）、web PR #31（T3.9 単勝の紙上成績の計算・T4.1 人の認証・認可）、infra PR #3（T5.0 文書同期）。いずれも `ci gate` と実行された全ジョブが最新コミットで成功（スキップは変更範囲外）、独立レビュー（Opus・読取り専用）の高指摘なし・中は修正または UNRESOLVED（G-32/G-34/G-35）に記録。
+## 現在の状態と次の作業（2026-11-01 夜 時点。main = f9c61af + 作業ブランチ）
+**判定の正本は `docs/COMPLETION.md`（R1〜R32 の A/B/C）。この節はその要約と、再開手順。開発全体は『完了』ではない。**
+**マージ済み**: web PR #30・#31、infra PR #3（前日まで）、**infra PR #4（T5.1〜T5.6: Terraform・ops・workflow・Runbook。`ci gate`・terraform・ops-tests 成功。Opus レビュー 3 回の高4・中13 を修正）**。
+**この PR（web・作業ブランチ）の内容**: push 前検証 `tools.ci.preflight`/`consistency`（CI と同じ分類・同じ Verify ブロック）、T3.9③（bot-run の結果待ち・開催日の進行・G-34 警告・M2 検出）、reconcile、`BOT_RUN_RESULT_*`、V6 提案（`docs/V6_PROPOSAL.md`: ENUM 追加 1 件だけ・任意）、COMPLETION.md。独立レビュー（Opus）の高 1・中 5 を D-237 で修正。
 | 区分 | 内容 |
 |---|---|
-| **コード実装完了 + 合成データ検証済み（CI 済み）** | T3.1〜T3.8、V5、結果・払戻の取込（NRS/NHR〔合成レコード〕）、決済の計算 `SettlementCalculator`（旧実装と GD11 全一致）、単勝の紙上成績の計算、`/api` の認証・認可と `GET /api/v1/me` |
-| **未実装（スタブ/未接続）** | bot-run の結果待ち・race_schedule/race_day の状態更新（T3.9③）、reconcile（スタブ）、ワイド/三連複の買い目の決済、バックテスト、成績の読取り API（T4.2）・UI（T4.3）・管理操作（T4.4）・認可マトリクス全体（T4.5）、第5段階の Terraform/ワークフロー（T5.1〜T5.6）、第6段階 |
-| **実機・本番で未確認** | Windows/JV-Link 実機、実 Discord、実 GCP（IAP の JWT `aud`、Cloud Run/SQL）、実データ。JV-Data の実パーサは公式仕様待ち（T1.17）。COMP-4 のゲートは維持 |
-| **本人の判断・操作が必要（包括承認していない）** | V6 の最終 SQL と GRANT（T39_DESIGN §9。決済の保存が不要になったので範囲は縮小 = D-234。必要なら再提示）、V5 の本番適用、GCP 課金リソース・apply、運用値（CALENDAR_*/BOT_RUN_*）の確定、T1.20/T1.21（実 SQLite・設定・モデルの確認）、COMP-4、P-1（`agent-kek`）、G-OPS-7（実 IAP の確認）、Public 化 |
-**次に実行する手順（順）**: ① T3.9③ bot-run の結果待ち（`RaceMonitorPlanner`/`CompletionAssessment` に RESULT_PENDING 以降を追加。checkpoint v2。`ResultStore`/`PayoutStore` の読取りと `PaperSettlement` を使う）+ reconcile の実装 + G-34（非 LIVE の run に塞がれた LIVE の警告）。② ワイド/三連複の買い目の決済（通知スナップショットの買い目から）。③ T4.2 成績・予測・レースの読取り API（DTO、テナント境界、`PerformanceAggregator`）→ T4.3 UI → T4.4 管理操作（CSRF・監査ログ）→ T4.5 認可マトリクス。④ 第5段階 T5.1〜（infra `CONTRACTS.md` §5 を入力に。`terraform plan` まで。apply は承認後）。⑤ バックテスト、統合比較、OPERATIONS.md。
-**注意（この環境）**: Maven Central への取得で 429 が出ることがある（再試行で進む）。`LC_ALL=C.UTF-8` が無いと Kotlin のコンパイルが日本語のテスト名で失敗する。Docker は `dockerd` を手で起動。`ML_TRAIN_PYTHON`/`AGENT_PYTHON` が無いと該当の統合試験は失敗（CI は設定する）。
+| **A（コード + 合成データ検証済み）** | R1・R3・R6〜R9・R13（単勝）・R18・R21・R23・R25・R26、R10/R12 の単体 + reconcile の MySQL 通し試験（`ReconcileIntegrationTest`）、R27〜R29（infra PR #4。実 GCP 未検証） |
+| **C（実装を続ける）** | R2 Cloud Run Jobs の起動クライアント（現在は `UnconfiguredJobLauncher` = fail closed）、R14 ワイド/三連複の紙上決済、R15 読取り API、R16 バックテスト、R17 retention（DELETE 権限は V5 で付与済み。実装する）、R19/R20/R22 UI・管理操作・CSRF・監査ログ、R24 SQLite→MySQL 移行ツール、R30 全体統合試験、R31/R32 文書（TEST_RESULTS・OPERATIONS・USER_ACTIONS） |
+| **B（本人の判断・資料・実機）** | R4 Windows 実機、R5 JV-Data 仕様、旧 SQLite/設定/モデルの確認、V6（任意）、GCP（請求・OAuth・Secret・apply）、実 Discord、COMP-4、Public 化 |
+**次に実行する手順（順）**: ① R17 retention（既定ドライラン）→ R14 ワイド/三連複 → R16 バックテスト → R2 JobLauncher（`:cloud-gcp`）→ ② Stage 4: R15 読取り API → R19/R20/R22 UI・管理（CSRF・監査ログ）→ ③ R24 移行ツール → ④ R30 統合試験・R31/R32 文書・USER_ACTIONS → ⑤ COMPLETION.md の最終照合と最終報告。**各増分で `python3 -m tools.ci.preflight` → 独立レビュー（Opus: 認可・DB 制約・競合・リース）→ 修正 → push 1 回 → PR → CI → マージ**。
+**この環境の注意**: JDK 25 は `/opt/jdk25dl/jdk-25*`（`JAVA_HOME` を設定。preflight は自動検出）。`LC_ALL=C.UTF-8` が必要。Docker Hub の 429（images のベース取得）と、Docker 内の Gradle 配布取得の TLS（PKIX）は環境依存で `images` はローカルでは未実施になる（CI で確認）。Maven Central の 429 は再試行。
+**事前検証（push 前）の結果（head=6e8d9b0 → 69f99a7）**: diff-check・hygiene・classify-self・consistency・kotlin-build・kotlin-golden・db-it-9.7・golden-py・agent・ml-train・ml-tools は成功。db-it-8.4 は ingest の `AgentAuthIntegrationTest`（時刻ずれ 301 秒の境界の flaky）で 1 回失敗 → 310 秒に直して再実行（結果は下）。**`images` は未実施**（上記の環境要因）。**agent-windows は未実施**（Windows ランナー）。
 
 ---
 
