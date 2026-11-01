@@ -2,6 +2,7 @@ package jp.jrabot.domain.botrun
 
 import jp.jrabot.domain.ml.json.CanonicalJson
 import jp.jrabot.domain.ml.json.JsonArray
+import jp.jrabot.domain.ml.json.JsonBool
 import jp.jrabot.domain.ml.json.JsonFloat
 import jp.jrabot.domain.ml.json.JsonFormatException
 import jp.jrabot.domain.ml.json.JsonInt
@@ -70,6 +71,8 @@ data class RunCheckpoint(
      * LIVE 以外（BACKFILL など）の run の『発火済み』は実際には通知していないので、LIVE の run は引き継がない（レビュー M1）。
      */
     val origin: String? = null,
+    /** 全レースが発走した後の『結果待ち』に入っている（再起動した run が、評価の判定をやり直さず結果待ちを続けるため）。 */
+    val settling: Boolean = false,
 ) {
     init {
         require(cycle >= 0) { "cycle は 0 以上" }
@@ -88,6 +91,7 @@ data class RunCheckpoint(
         val fields = linkedMapOf<String, JsonValue>("v" to JsonInt(VERSION.toLong()), "cycle" to JsonInt(cycle), "races" to raceObjects)
         lastCycleAt?.let { fields["last_cycle_at"] = JsonString(it.toString()) }
         origin?.let { fields["origin"] = JsonString(it) }
+        if (settling) fields["settling"] = JsonBool(true)
         return CanonicalJson.encode(JsonObject(fields))
     }
 
@@ -121,7 +125,7 @@ data class RunCheckpoint(
                             }?.toSet() ?: emptySet()
                     races[id] = RaceCheckpoint(stage, (o["last_observed_at"] as? JsonString)?.value?.let { Instant.parse(it) }, fired)
                 }
-                RunCheckpoint(cycle, last, races, (root["origin"] as? JsonString)?.value)
+                RunCheckpoint(cycle, last, races, (root["origin"] as? JsonString)?.value, (root["settling"] as? JsonBool)?.value == true)
             } catch (_: JsonFormatException) {
                 null
             } catch (_: RuntimeException) {

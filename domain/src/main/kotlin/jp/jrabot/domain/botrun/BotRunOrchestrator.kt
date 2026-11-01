@@ -292,6 +292,11 @@ class BotRunOrchestrator(
             val verdict = if (mode.allowsWork) startGate(req, now, mode, deriveDay(req, now)) else modeOutcome(mode)
             if (verdict != null) return finishStarting(verdict)
             checkpoint = restore()
+            // 結果待ちの途中で再起動した run は、評価の判定をやり直さず結果待ちを続ける（やり直すと、観測の無かったレースが LOST_DATA になる）
+            if (req.origin == NotificationOrigin.LIVE && checkpoint.settling) {
+                settlePhase = true
+                events.event("SETTLE_WAIT_RESUMED", "cycle=${checkpoint.cycle}")
+            }
             recoverStaleClaims()
             val ml = startMl()
             processor = processorFactory(req, ml)
@@ -484,12 +489,12 @@ class BotRunOrchestrator(
                 val finish = completion(assessment)
                 // 評価の機会を失っていなければ、結果待ちに入る（有効な構成のとき）。失っていれば従来どおり FAILED（結果は reconcile が後で回復する）
                 if (config.resultWait != null && finish is Done && finish.state == BotRunState.SUCCEEDED) {
-                    settlePhase = true
-                    if (req.origin ==
-                        NotificationOrigin.LIVE
-                    ) {
+                    // 開催日の更新（途中の状態も順にたどる）が成功してから結果待ちに入る。失敗したら例外 → サイクルの失敗として次の周期で再試行される
+                    if (req.origin == NotificationOrigin.LIVE) {
                         advancer.advance(req.tenantId, req.date, RaceDayStatus.SETTLING, "run:${req.runId.value}")
                     }
+                    settlePhase = true
+                    checkpoint = checkpoint.copy(settling = true)
                     events.event("SETTLE_WAIT_STARTED", "races=${plan.stages.size}")
                     return settleCycle(day, window, now)
                 }
@@ -528,9 +533,10 @@ class BotRunOrchestrator(
             val live = req.origin == NotificationOrigin.LIVE
             val stages = LinkedHashMap<RaceId, RaceStage>()
             var nextDue: Instant? = null
+            val raceDays = days.listByDate(req.tenantId, req.date)
             for (race in day.races.sortedBy { it.raceId }) {
                 val postAt = race.postAt
-                if (race.status == jp.jrabot.domain.race.RaceScheduleStatus.CANCELLED || race.status == jp.jrabot.domain.race.RaceScheduleStatus.DELETED) {
+                if (SettleScope.isCancelled(race, raceDays)) {
                     stages[race.raceId] = RaceStage.CANCELLED
                     continue
                 }

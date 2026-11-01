@@ -117,3 +117,24 @@ class ConsistencyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestEveryVerifyStepOfCiIsCoveredByPreflight(unittest.TestCase):
+    """ci.yml の『Verify …』『Comparator smoke test』ステップは、preflight が必ず同じ検査を実行する（CI で落ちるのにローカルが通る偽陰性を防ぐ）。"""
+
+    # ci.yml 側の検査のうち preflight が意図的に実行しないもの（理由つき）
+    # 名前ではなく同じコマンドを直接実行しているもの（ci.yml のコマンド → preflight に現れるべき文字列）
+    SAME_COMMAND = {"Verify committed fixtures (schema, provenance, hashes, synthetic-only)": "tools.golden.verify"}
+    NOT_RUN_LOCALLY = {
+        "Verify that the Windows tests actually ran": "Windows ランナーでのみ実行できる",
+    }
+
+    def test_all_verify_steps_are_referenced(self):
+        import re
+
+        source = (ROOT / "tools/ci/preflight.py").read_text(encoding="utf-8")
+        names = re.findall(r"- name: (Verify[^\n]*|Comparator smoke test[^\n]*)\n", CI_YML)
+        self.assertTrue(names)
+        missing = [n for n in names if n not in self.NOT_RUN_LOCALLY and n not in source and n.split(" (")[0] not in source and self.SAME_COMMAND.get(n, "\0") not in source]
+        self.assertEqual(missing, [], f"preflight が参照しない CI の検査: {missing}")
+

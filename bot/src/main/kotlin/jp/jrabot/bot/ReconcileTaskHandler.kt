@@ -26,7 +26,10 @@ class ReconcileTaskHandler(
                 }
                 throw e
             }
-        for (d in report.days) log.info("RECONCILE_DAY tenant={} date={} outcome={} unsettled={}", report.tenantId.value, d.date, d.outcome, d.unsettled)
+        for (d in report.days) {
+            log.info("RECONCILE_DAY tenant={} date={} outcome={} unsettled={}", report.tenantId.value, d.date, d.outcome, d.unsettled)
+            if (d.staleRunIgnored) log.warn("RECONCILE_STALE_RUN tenant={} date={} bot-run のリースが期限切れのまま残っている（強制終了の疑い）。確認してください", report.tenantId.value, d.date)
+        }
         log.info("RECONCILE_DONE tenant={} days={} completed={}", report.tenantId.value, report.days.size, report.completed)
         return JobResult(JobExit.OK, "RECONCILED")
     }

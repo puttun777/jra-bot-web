@@ -229,6 +229,8 @@ class BotConfiguration {
                             ),
                         runs,
                         settings,
+                        overrides,
+                        facts,
                     ),
                     clock,
                 )

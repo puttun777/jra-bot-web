@@ -24,6 +24,9 @@ class ReconcileServiceTest {
     private val clock = ManualClock(Cal.jst(Cal.DATE, 13, 0)) // 最終発走 10:45 + 締切 90 分 = 12:15 を過ぎている
     private val days = InMemoryRaceDays(listOf(Cal.day(status = RaceDayStatus.INCOMPLETE)))
     private val runs = InMemoryBotRunRepository()
+    private val overrides =
+        jp.jrabot.domain.calendar
+            .InMemoryOverrides()
 
     private fun service() =
         ReconcileService(
@@ -34,6 +37,8 @@ class ReconcileServiceTest {
             RaceDayAdvancerImpl(days, RaceDayUpdater(days, clock)),
             runs,
             Cal.SETTINGS,
+            overrides,
+            { _, _ -> null },
         )
 
     private fun status() = days.rows.single().status
@@ -76,13 +81,10 @@ class ReconcileServiceTest {
                 .outcome,
         )
         assertEquals(RaceDayStatus.COMPLETED, status())
-        assertEquals(
-            ReconcileOutcome.COMPLETED,
-            service()
-                .reconcile(Cal.T1, Cal.DATE)
-                .days.size
-                .let { ReconcileOutcome.COMPLETED },
-        ) // 再実行は対象外（COMPLETED は終端）
+        // 再実行は対象外（COMPLETED は終端）: 対象の日が 0 件で、履歴も増えない
+        val eventsBefore = days.events.size
+        assertTrue(service().reconcile(Cal.T1, Cal.DATE).days.isEmpty())
+        assertEquals(eventsBefore, days.events.size)
     }
 
     @Test
@@ -120,5 +122,42 @@ class ReconcileServiceTest {
         days.rows = listOf(Cal.day(status = RaceDayStatus.CONFIRMED), Cal.day(status = RaceDayStatus.INCOMPLETE, tenant = Cal.T2))
         assertTrue(service().reconcile(Cal.T1, Cal.DATE).days.isEmpty())
         assertEquals(RaceDayStatus.INCOMPLETE, days.rows.single { it.tenantId == Cal.T2 }.status)
+    }
+
+    @Test
+    fun `期限切れのリースが残った bot-run は実行中と見なさず 日を回復し 警告用の印を付ける`() {
+        ids.forEach { states[it] = ResultState.COMPLETE }
+        days.rows = listOf(Cal.day(status = RaceDayStatus.RUNNING))
+        runs.acquire(LeaseRequest(Cal.T1, RunId.of(UUID.randomUUID()), Cal.DATE, BotRunTrigger.SCHEDULER, "host", clock.now(), Duration.ofMinutes(5)))
+        clock.advance(Duration.ofHours(1)) // SIGKILL などで記録できないまま、リースだけが期限切れになった
+        val r = service().reconcile(Cal.T1, Cal.DATE).days.single()
+        assertEquals(ReconcileOutcome.COMPLETED, r.outcome)
+        assertTrue(r.staleRunIgnored)
+        assertEquals(RaceDayStatus.COMPLETED, status())
+    }
+
+    @Test
+    fun `手動で中止したレースは結果を待たない 全レース中止の日は完了にする`() {
+        days.rows = listOf(Cal.day(status = RaceDayStatus.RUNNING))
+        states[ids[0]] = ResultState.COMPLETE
+        states[ids[1]] = ResultState.COMPLETE
+        overrides.rows +=
+            Cal.override(
+                jp.jrabot.domain.calendar.OverrideAction.CANCEL,
+                jp.jrabot.domain.calendar.OverrideScope.RACE,
+                raceNo = ids[2].raceNo,
+                createdAt = clock.now().minusSeconds(3600),
+            )
+        val r = service().reconcile(Cal.T1, Cal.DATE).days.single()
+        assertEquals(ReconcileOutcome.COMPLETED, r.outcome)
+        assertEquals(RaceDayStatus.COMPLETED, status())
+    }
+
+    @Test
+    fun `場ごと中止された日のレースは結果を待たない`() {
+        days.rows = listOf(Cal.day(status = RaceDayStatus.RUNNING))
+        // 同じ場の開催日が CANCELLED になった場合は、レース側に区分 9 が無くても待たない
+        days.rows = days.rows.map { it.copy(status = RaceDayStatus.CANCELLED) }
+        assertTrue(service().reconcile(Cal.T1, Cal.DATE).days.isEmpty()) // CANCELLED は reconcile の対象外
     }
 }

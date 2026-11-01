@@ -80,12 +80,14 @@ def changed_files(base: str) -> list[str]:
     return sorted(names)
 
 
-def ci_verify_block(step_name: str) -> str:
-    """ci.yml の『Verify that …』ステップの run ブロックをそのまま取り出す（実行テスト数の下限・必須クラス・スキップ 0 の検査。二重管理しない）。"""
+def ci_verify_block(step_name: str, nth: int = 0) -> str:
+    """ci.yml の run ブロック（『Verify that …』など）をそのまま取り出す（実行テスト数の下限・必須クラス・スキップ 0 の検査。二重管理しない）。
+    同名のステップが複数のジョブにある場合は [nth]（0 始まり）で選ぶ。"""
     text = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-    m = re.search(r"- name: " + re.escape(step_name) + r"\n(?:\s+if:[^\n]*\n)?\s+run: \|\n((?:(?:\s{10}[^\n]*)?\n)+)", text)
-    if not m:
-        raise SystemExit(f"ci.yml に『{step_name}』が見つからない")
+    found = list(re.finditer(r"- name: " + re.escape(step_name) + r"\n(?:\s+if:[^\n]*\n)?\s+run: \|\n((?:(?:\s{10}[^\n]*)?\n)+)", text))
+    if len(found) <= nth:
+        raise SystemExit(f"ci.yml に『{step_name}』（{nth + 1} 番目）が見つからない")
+    m = found[nth]
     lines = [ln[10:] if ln.strip() else "" for ln in m.group(1).split("\n")]
     return "\n".join(lines)
 
@@ -224,6 +226,13 @@ def run_cmd(cmd: list[str], env: dict[str, str], log) -> int:
     return p.returncode
 
 
+def _junit_dir(name: str) -> Path:
+    """pytest の JUnit XML を置く場所（作業ツリーを汚さない。CI の検査ブロックは cwd の pytest.xml を読む）。"""
+    d = OUT / f"junit-{name}"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def run_shell_step(step: Step, env: dict[str, str], log) -> int:
     if step.shell == "golden":
         legacy = os.environ.get("PREFLIGHT_LEGACY_PATH", str(ROOT.parent / "jra-bot"))
@@ -242,7 +251,15 @@ def run_shell_step(step: Step, env: dict[str, str], log) -> int:
             log.flush()
             if subprocess.run(c, cwd=ROOT, env=genv, stdout=log, stderr=subprocess.STDOUT).returncode:
                 return 1
-        return 0
+        # CI の『Comparator smoke test』（比較器が、一致・値のずれ・欠落を正しく区別する）。ok/bad/miss.json を作るので終わったら消す
+        log.write("$ verify: Comparator smoke test\n")
+        log.flush()
+        try:
+            rc = subprocess.run(["bash", "-eo", "pipefail", "-c", ci_verify_block("Comparator smoke test (self-comparison passes, perturbed and missing results fail)")], cwd=ROOT, env=genv, stdout=log, stderr=subprocess.STDOUT).returncode
+        finally:
+            for n in ("ok.json", "bad.json", "miss.json"):
+                (ROOT / n).unlink(missing_ok=True)
+        return rc
     if step.shell == "ml-tools":
         py = venv("ml-tools", ["tools/ml/requirements.txt"])
         for c in (
@@ -253,27 +270,41 @@ def run_shell_step(step: Step, env: dict[str, str], log) -> int:
             log.flush()
             if subprocess.run(c, cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT).returncode:
                 return 1
-        return 0
+        # CI の『Verify the synthetic datasets』（$RUNNER_TEMP/venv/bin/python を使うので、一時ディレクトリに venv への symlink を置く）
+        rt = OUT / "rt-ml-tools"
+        rt.mkdir(parents=True, exist_ok=True)
+        link = rt / "venv"
+        if not link.exists():
+            link.symlink_to(Path(py).parent.parent)
+        log.write("$ verify: synthetic datasets\n")
+        log.flush()
+        return subprocess.run(["bash", "-eo", "pipefail", "-c", ci_verify_block("Verify the synthetic datasets (contract used by the Stage 3-F2 training job)")], cwd=ROOT, env={**env, "RUNNER_TEMP": str(rt)}, stdout=log, stderr=subprocess.STDOUT).returncode
     if step.shell == "agent":
         py = venv("agent", ["agent/requirements.txt"], extra=["pytest==9.1.1", "pytest-timeout==2.4.0", "ruff==0.17.2", "mypy==2.4.0"])
         env = {**env, "PATH": f"{Path(py).parent}:{env['PATH']}"}
         subprocess.run([py, "-m", "pip", "install", "-q", "--no-input", "--no-deps", "-e", str(ROOT / "agent")], check=True)
-        cmds = [["ruff", "check", "."], ["ruff", "format", "--check", "."], ["mypy"], [py, "-m", "pytest", "-q"]]
+        cmds = [["ruff", "check", "."], ["ruff", "format", "--check", "."], ["mypy"], [py, "-m", "pytest", "-q", f"--junitxml={_junit_dir('agent')}/pytest.xml"]]
         for c in cmds:
             log.write(f"$ (agent) {' '.join(c)}\n")
             log.flush()
             if subprocess.run(c, cwd=ROOT / "agent", env=env, stdout=log, stderr=subprocess.STDOUT).returncode:
                 return 1
-        return 0
+        # CI の『Verify that the tests actually ran』（agent ジョブ = 1 番目。件数・スキップ・失敗）
+        log.write("$ verify: agent tests actually ran\n")
+        log.flush()
+        return subprocess.run(["bash", "-eo", "pipefail", "-c", ci_verify_block("Verify that the tests actually ran", 0)], cwd=_junit_dir("agent"), env=env, stdout=log, stderr=subprocess.STDOUT).returncode
     if step.shell == "ml-train":
         py = venv("ml", ["ml/requirements-dev.txt"] if (ROOT / "ml/requirements-dev.txt").exists() else ["ml/requirements.txt"])
         env = {**env, "PATH": f"{Path(py).parent}:{env['PATH']}"}
-        for c in (["pip", "check"], ["ruff", "check", "."], ["ruff", "format", "--check", "."], ["mypy"], [py, "-m", "pytest", "-q"]):
+        for c in (["pip", "check"], ["ruff", "check", "."], ["ruff", "format", "--check", "."], ["mypy"], [py, "-m", "pytest", "-q", f"--junitxml={_junit_dir('ml')}/pytest.xml"]):
             log.write(f"$ (ml) {' '.join(c)}\n")
             log.flush()
             if subprocess.run(c, cwd=ROOT / "ml", env=env, stdout=log, stderr=subprocess.STDOUT).returncode:
                 return 1
-        return 0
+        # CI の『Verify that the tests actually ran』（ml-train ジョブ = 2 番目）
+        log.write("$ verify: ml-train tests actually ran\n")
+        log.flush()
+        return subprocess.run(["bash", "-eo", "pipefail", "-c", ci_verify_block("Verify that the tests actually ran", 1)], cwd=_junit_dir("ml"), env=env, stdout=log, stderr=subprocess.STDOUT).returncode
     if step.shell == "images":
         sha = sh("git", "rev-parse", "HEAD")
         for t in ("db-migration", "bot", "ingest", "dashboard", "ml-train"):
@@ -341,7 +372,7 @@ def main(argv: list[str] | None = None) -> int:
                     for name in st.verify:
                         log.write(f"$ verify: {name}\n")
                         log.flush()
-                        v = subprocess.run(["bash", "-e", "-c", ci_verify_block(name)], cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT).returncode
+                        v = subprocess.run(["bash", "-eo", "pipefail", "-c", ci_verify_block(name)], cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT).returncode
                         rc = rc or v
         r = Result(st.id, st.title, "ok" if rc == 0 else "fail", time.time() - t0, st.caveat)
         results.append(r)

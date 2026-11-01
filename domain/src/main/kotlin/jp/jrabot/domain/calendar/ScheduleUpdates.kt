@@ -381,6 +381,11 @@ class RaceDayUpdater(
     private val days: RaceDayRepository,
     private val clock: Clock,
 ) {
+    private companion object {
+        /** bot-run・reconcile が進めた状態（取込の再観測で CONFIRMED に戻さない）。 */
+        val PROGRESSED = setOf(RaceDayStatus.RUNNING, RaceDayStatus.SETTLING, RaceDayStatus.COMPLETED, RaceDayStatus.INCOMPLETE)
+    }
+
     fun apply(
         tenantId: TenantId,
         date: LocalDate,
@@ -471,6 +476,12 @@ class RaceDayUpdater(
         dedupGroup: String,
     ): ApplyResult<RaceDay>? {
         require(kai == existing.kai && nichime == existing.nichime) { "開催回・日目は変更できない（別の開催日の行）" }
+        // bot-run が進めた状態（RUNNING 以降）の日に、取込（RA など）が CONFIRMED を再観測しても、遷移は拒否して構わないが
+        // **確認時刻は更新する**（更新しないと予定が古い〈STALE〉と見なされ、実行中の bot-run が途中で通知を止める）
+        if (target == RaceDayStatus.CONFIRMED && existing.status in PROGRESSED) {
+            days.confirm(existing.tenantId, existing.raceDate, existing.venue, observedAt)
+            return ApplyResult.NoChange(NoChangeReason.CONFIRMED_ONLY)
+        }
         val statusChanged = target != existing.status
         val refinesTarget = !statusChanged && target == RaceDayStatus.POSTPONED && existing.replacedByDate == null && replacedByDate != null
         if (!statusChanged && !refinesTarget) {

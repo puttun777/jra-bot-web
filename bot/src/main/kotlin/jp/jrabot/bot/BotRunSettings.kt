@@ -152,10 +152,16 @@ object BotRunSettingsParser {
             pubKey = raw("MODEL_VERIFY_PUBKEY")
         }
 
+        val calendar = CalendarSettingsParser.fromEnv(env)
+        val resultAfter = Duration.ofMinutes(long("BOT_RUN_RESULT_AFTER_MINUTES", 1, 720))
+        // 最後のレースの確認が締切より後になると、そのレースは確認されないまま必ず INCOMPLETE になる（設定の組合せの誤り）
+        check(resultAfter < calendar.watch.settleDeadline) {
+            "BOT_RUN_RESULT_AFTER_MINUTES($resultAfter) は CALENDAR_SETTLE_DEADLINE_MINUTES(${calendar.watch.settleDeadline}) より短くしてください"
+        }
         val config =
             BotRunConfig(
                 lease = LeaseSettings(lease, heartbeat),
-                calendar = CalendarSettingsParser.fromEnv(env),
+                calendar = calendar,
                 polling =
                     PollingIntervals(
                         seconds("BOT_RUN_POLL_FAR_SECONDS", 1, 3600),
@@ -175,7 +181,7 @@ object BotRunSettingsParser {
                 hitRateSchedule = schedule,
                 resultWait =
                     ResultWaitConfig(
-                        Duration.ofMinutes(long("BOT_RUN_RESULT_AFTER_MINUTES", 1, 720)),
+                        resultAfter,
                         seconds("BOT_RUN_RESULT_POLL_SECONDS", 10, 3600),
                     ),
             )

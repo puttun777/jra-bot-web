@@ -39,19 +39,37 @@ class RaceDayAdvancerImpl(
     ): Int {
         var changed = 0
         for (day in days.listByDate(tenantId, date)) {
-            if (day.status == target || !RaceDayTransitions.canTransition(day.status, target)) continue
-            when (updater.advance(tenantId, date, day.venue, target, "$dedupKey:${day.venue.code}:$target")) {
-                is ApplyResult.Applied -> {
-                    changed++
-                }
+            // 途中の状態を飛ばさず順にたどる（CONFIRMED → RUNNING → SETTLING → 目的）。以前の更新が失敗して取り残された日も、次の呼出しで追いつく
+            for (step in path(day.status, target)) {
+                when (updater.advance(tenantId, date, day.venue, step, "$dedupKey:${day.venue.code}:$step")) {
+                    is ApplyResult.Applied -> {
+                        changed++
+                    }
 
-                is ApplyResult.NoChange, is ApplyResult.Rejected -> {}
+                    is ApplyResult.NoChange, is ApplyResult.Rejected -> {}
 
-                ApplyResult.Conflict -> {
-                    throw IllegalStateException("race_day の更新が競合し続けた: ${day.venue.code}")
+                    ApplyResult.Conflict -> {
+                        throw IllegalStateException("race_day の更新が競合し続けた: ${day.venue.code}")
+                    }
                 }
             }
         }
         return changed
+    }
+
+    companion object {
+        /** [from] から [target] までに通る状態（目的を含む）。到達できない・既に同じなら空。 */
+        fun path(
+            from: RaceDayStatus,
+            target: RaceDayStatus,
+        ): List<RaceDayStatus> {
+            if (from == target) return emptyList()
+            if (RaceDayTransitions.canTransition(from, target)) return listOf(target)
+            val chain = listOf(RaceDayStatus.CONFIRMED, RaceDayStatus.RUNNING, RaceDayStatus.SETTLING)
+            val at = chain.indexOf(from)
+            val viaSettling = target == RaceDayStatus.COMPLETED || target == RaceDayStatus.INCOMPLETE
+            if (at < 0 || !(target == RaceDayStatus.SETTLING || viaSettling)) return emptyList()
+            return chain.drop(at + 1) + (if (viaSettling) listOf(target) else emptyList())
+        }
     }
 }

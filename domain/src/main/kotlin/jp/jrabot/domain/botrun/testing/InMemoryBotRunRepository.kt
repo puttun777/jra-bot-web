@@ -37,6 +37,16 @@ class InMemoryBotRunRepository : BotRunRepository {
     @Synchronized
     fun all(): List<BotRun> = rows.values.toList()
 
+    /** 試験用: run の checkpoint を直接書き換える（前の run の記録が欠けた状態を再現する）。 */
+    @Synchronized
+    fun overwriteCheckpoint(
+        runId: RunId,
+        checkpoint: String,
+    ) {
+        val key = rows.keys.first { it.second == runId }
+        rows[key] = rows.getValue(key).copy(checkpoint = checkpoint)
+    }
+
     /** 試験用: 保存済みの checkpoint を書き換える（欠損・破損の再現）。 */
     @Synchronized
     fun rewriteCheckpoints(f: (BotRun) -> String?) {

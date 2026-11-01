@@ -120,6 +120,36 @@ class BotRunResultWaitTest {
     }
 
     @Test
+    fun `結果待ちの途中で再起動した run は 評価の判定をやり直さず FAILED にならない（観測の無かったレースがあっても）`() {
+        val k = Kit(config = waitConfig())
+        k.onPause = { if (!k.clock.now().isBefore(Cal.jst(Cal.DATE, 10, 45).plus(Duration.ofMinutes(31)))) k.stop = true }
+        assertEquals("SIGTERM", k.run().reason)
+        val saved =
+            RunCheckpoint.parse(
+                k.runs
+                    .all()
+                    .last()
+                    .checkpoint,
+            )!!
+        assertTrue(saved.settling, "結果待ちの段階であることを checkpoint に保存する")
+        // 前の run が評価できなかった（観測が無い）レースを再現: 発火記録を消す
+        val wiped = saved.copy(races = saved.races.mapValues { (_, c) -> c.copy(firedMinutes = emptySet(), lastObservedAt = null) })
+        k.runs.overwriteCheckpoint(
+            k.runs
+                .all()
+                .last()
+                .runId,
+            wiped.toJson(),
+        )
+        k.stop = false
+        k.onPause = {}
+        k.raceIds.forEach { k.resultStates[it] = ResultState.COMPLETE }
+        val out = k.run(k.request(owner = "owner-B"))
+        assertEquals("ALL_SETTLED", out.reason, "再起動した run が EVALUATION_OPPORTUNITY_LOST にならない")
+        assertTrue(k.events.any { it.startsWith("SETTLE_WAIT_RESUMED") })
+    }
+
+    @Test
     fun `LIVE 以外の run は開催日の状態を変えない`() {
         val k = Kit(config = waitConfig())
         settleAfter(k, ResultState.COMPLETE, 40)
@@ -178,7 +208,6 @@ class BotRunResultWaitTest {
         )
         val centi = TimingKey.centi(5.0)
         k.timings.claim(listOf(TimingNotice(k.tenant, r1, centi, "previous-run", 1L, observed, 1, "{}", "0".repeat(64), observed)))
-        val sentBefore = k.notifier.signals.size
         k.run()
         assertEquals(1, k.events.count { it.startsWith("COMMITTED_BUT_UNSENT") })
         assertEquals(1, k.notifier.errors.count { "確定した" in it.body || "確定" in it.subject + it.body })
@@ -189,6 +218,5 @@ class BotRunResultWaitTest {
                 .first { it.observedAt == observed }
                 .state == NotificationState.UNSENT,
         )
-        assertTrue(k.notifier.signals.size >= sentBefore)
     }
 }
