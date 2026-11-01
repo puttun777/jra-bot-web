@@ -17,6 +17,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.http.CacheControl
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.transaction.UnexpectedRollbackException
 import org.springframework.transaction.support.TransactionOperations
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -110,6 +111,9 @@ class AdminApi(
                 throw bad() // ドメインの検証（scope と action の組合せ・日付の整合など）。メッセージは出さない
             } catch (e: AuditFailure) {
                 throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "audit_failed", e)
+            } catch (_: UnexpectedRollbackException) {
+                // 同時の同じ作成で DB の一意制約に当たった（repository が重複として扱ったが、参加中のトランザクションは rollback-only になっている）。何も変わっていない
+                throw ResponseStatusException(HttpStatus.CONFLICT, "duplicate")
             }
         return when (created) {
             is CreateOverrideOutcome.Created -> {
@@ -143,6 +147,8 @@ class AdminApi(
                 }
             } catch (e: AuditFailure) {
                 throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "audit_failed", e)
+            } catch (_: UnexpectedRollbackException) {
+                throw ResponseStatusException(HttpStatus.CONFLICT, "already_revoked") // 同時の取消の競合（何も変わっていない）
             }
         return when (result) {
             is OverrideRevokeResult.Revoked -> ok(HttpStatus.OK, dto(result.override))

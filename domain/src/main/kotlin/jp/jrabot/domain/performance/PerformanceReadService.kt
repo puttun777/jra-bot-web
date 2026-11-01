@@ -98,9 +98,9 @@ class PerformanceReadService(
                             unreadable++
                             continue
                         }
-                    // 通知の本文に実際に載せた買い目だけを数える（見送りの item を除き、賭式ごとに重複除去 → EV 降順 → 上位 N 点: NoticeTickets.displayed）
+                    // 通知の本文に実際に載せた買い目だけを数える（見送りの判定も NoticeFormatter と同じ: skipReason が null または空）（見送りの item を除き、賭式ごとに重複除去 → EV 降順 → 上位 N 点: NoticeTickets.displayed）
                     val byMarket = LinkedHashMap<Market, MutableList<jp.jrabot.domain.notify.TicketView>>()
-                    for (item in snapshot.items.filter { it.view.skipReason == null }) {
+                    for (item in snapshot.items.filter { it.view.skipReason.isNullOrEmpty() }) {
                         for (strategy in item.view.bundle
                             ?.strategies
                             .orEmpty()) {

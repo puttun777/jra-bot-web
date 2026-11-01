@@ -154,27 +154,37 @@ class PerformanceReadServiceTest {
             kumi: String,
             ev: Double,
         ) = TicketView(kumi, "3.0〜4.0", 0.2, ev, 100.0)
-        // 7 点（EV 降順で 7 点目 = "01-12" は載らない）+ 同じ組み合わせの重複 + 見送り item
-        val tickets =
-            listOf("05-07", "05-08", "05-09", "05-10", "05-11", "05-12", "01-12").mapIndexed { i, k -> ticket(k, 1.0 - i * 0.1) } + ticket("[BOX]05-07", 0.1)
+        // 通常 item: 7 点（EV 降順で並べると 7 点目 "01-12" は載らない）+ 同じ組み合わせの重複 BOX。入力はわざと EV の順に並べない
+        val normal =
+            listOf("05-07" to 1.0, "01-12" to 0.4, "05-08" to 0.9, "05-09" to 0.8, "05-10" to 0.7, "05-11" to 0.6, "05-12" to 0.5).map { (k, ev) ->
+                ticket(k, ev)
+            } +
+                ticket("[BOX]05-07", 0.1)
+        // 見送り item にだけ載る組み合わせ（EV は最も高い）。これを数えてはいけない
+        val skipped = listOf(ticket("02-03", 9.9))
 
-        fun view(skip: String?) =
-            SignalView(
-                "ワイド",
-                5,
-                3.0,
-                0.2,
-                0.1,
-                skipReason = skip,
-                bundle = BundleView(listOf(StrategyView("ワイド", 100.0, 1.0, 3.0, 0.2, 0.1, null, tickets, null)), null, 100.0, 1.0),
-            )
-        val snap = NoticeSnapshot(RaceLabel("東京", 1, "R1"), listOf(NoticeItem(SignalId.of(1), view(null)), NoticeItem(SignalId.of(2), view("見送り"))))
+        fun view(
+            skip: String?,
+            tickets: List<TicketView>,
+        ) = SignalView(
+            "ワイド",
+            5,
+            3.0,
+            0.2,
+            0.1,
+            skipReason = skip,
+            bundle = BundleView(listOf(StrategyView("ワイド", 100.0, 1.0, 3.0, 0.2, 0.1, null, tickets, null)), null, 100.0, 1.0),
+        )
+        val snap =
+            NoticeSnapshot(RaceLabel("東京", 1, "R1"), listOf(NoticeItem(SignalId.of(1), view(null, normal)), NoticeItem(SignalId.of(2), view("見送り", skipped))))
         timings.claim(listOf(TimingNotice(t1, r1, 500, "run", 1L, at, NoticeSnapshot.SCHEMA, snap.canonicalJson(), snap.sha256(), at)))
         store.res[r1] = (1..12).map { ResultEntry(it, it) }
-        store.pay[r1 to Market.WIDE] = listOf(StoredPayout("01-02", 500.0, false))
+        // 払戻の行: 載った 6 点のうち 05-07 と、載らない 01-12、見送りだけの 02-03
+        store.pay[r1 to Market.WIDE] = listOf(StoredPayout("05-07", 500.0, false), StoredPayout("01-12", 700.0, false), StoredPayout("02-03", 900.0, false))
         val wide = service.report(t1, Cal.DATE, Cal.DATE).combos.single()
-        assertEquals(6, wide.count, "載せた 6 点だけ（重複 BOX・EV 下位・見送りは数えない）")
-        assertEquals(600.0, wide.totalStake)
+        assertEquals(6, wide.count, "載った 6 点だけ（重複 BOX・EV 下位の 01-12・見送りの 02-03 は数えない）")
+        assertEquals(1, wide.hits)
+        assertEquals(500.0, wide.actualPayout, "05-07 の払戻 500 × 100 / 100 だけ（01-12 や 02-03 の払戻を含めない）")
     }
 
     @Test
