@@ -94,7 +94,7 @@ class ReadAdminApiMySqlIntegrationTest {
     }
 
     @Test
-    fun `status は運用モードと開催日を返す`() {
+    fun `status は運用モードを返す（mode は ops ファイル由来で DB を通らない）`() {
         val s = http.get("/api/v1/status", viewer)
         assertEquals(200, s.status)
         assertTrue(s.body.contains("\"mode\":\"NORMAL\""), s.body)
@@ -109,7 +109,7 @@ class ReadAdminApiMySqlIntegrationTest {
         )
 
     @Test
-    fun `管理者の手動補正は DB に入り 監査記録が同じトランザクションで残る 閲覧者は 403 で何も残らない`() {
+    fun `管理者の手動補正と監査記録は DB に残り 閲覧者は 403 で何も増えない`() {
         val created = createCancel()
         assertEquals(201, created.status, created.body)
         assertEquals(1, db.count("SELECT COUNT(*) FROM calendar_override WHERE tenant_id = 1 AND action = 'CANCEL' AND revoked_at IS NULL"))

@@ -31,7 +31,7 @@
 - 監査: 管理操作は変更と**同じトランザクション**で `audit_log` に残る。監査の失敗で変更も取り消される（試験）。`app` は `audit_log` を UPDATE/DELETE できない（MySQL 試験）。
 - 静的 UI: インライン script・外部オリジン・innerHTML・eval を使わない（静的検査）。CSP は自オリジンのみ。
 
-## 5. 独立レビュー（Opus、読取り専用。同時 1 名）
+## 5. 独立レビュー（読取り専用。同時 1 名。Opus が中心。D-247 の再確認と PR #35 の差分は Sonnet）
 | 対象 | 結果 |
 |---|---|
 | T3.8/V5・T4.1・紙上成績 | D-230/D-236（高 0・中 2+3） |
@@ -45,3 +45,5 @@
 - Windows 実機: JV-Link の COM（`agent/poc`）。実データ形式のパーサ（JV-Data の公式仕様待ち）。
 - 実 Discord への送信、ブラウザでの UI の目視。
 - ローカルの `images`（Docker 内の Gradle 取得の TLS）は CI に任せた。
+
+- PR #35（R15 の MySQL 通し試験・文書）: Sonnet レビューで高 0・中 2・低 5。中は『実 MySQL では監査失敗時のロールバックを未検証』『テナント分離は races/signals のみ』で、試験は足さず COMPLETION R15 の記述を実態に合わせて修正（ロールバックは AdminApiTest の単体のみ）。低: 試験名を実態（status は mode のみ）に修正。取消後のイベント・閲覧者の /revoke は未試験。
