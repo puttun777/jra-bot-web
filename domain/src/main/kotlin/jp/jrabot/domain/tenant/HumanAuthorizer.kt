@@ -10,7 +10,7 @@ data class Principal(
 }
 
 /** 拒否の理由（固定語彙。メールアドレス等の値を含めない）。 */
-enum class DenyReason { INVALID_EMAIL, NOT_ALLOWED, NO_ACTIVE_USER, ADMIN_NOT_LISTED }
+enum class DenyReason { INVALID_EMAIL, NOT_A_PERSON, NOT_ALLOWED, NO_ACTIVE_USER, ADMIN_NOT_LISTED }
 
 sealed interface AuthDecision {
     data class Allowed(
@@ -32,12 +32,16 @@ class HumanAuthorizer(
     allowedUsers: Collection<EmailAddress>,
     adminUsers: Collection<EmailAddress>,
     private val users: AppUserRepository,
+    /** 人ではない主体（ops 用サービスアカウント）。設定の誤りで `ALLOWED_USERS` に入っても人としては常に拒否する（多層防御。レビュー A3）。 */
+    nonPersons: Collection<EmailAddress> = emptyList(),
 ) {
+    private val notPersons = nonPersons.toSet()
     private val allowed = allowedUsers.toSet()
     private val admins = adminUsers.toSet()
 
     fun authorize(rawEmail: String): AuthDecision {
         val email = EmailAddress.ofOrNull(rawEmail) ?: return AuthDecision.Denied(DenyReason.INVALID_EMAIL)
+        if (email in notPersons) return AuthDecision.Denied(DenyReason.NOT_A_PERSON)
         if (email !in allowed) return AuthDecision.Denied(DenyReason.NOT_ALLOWED)
         val user = users.findByEmail(email)
         if (user == null || !user.enabled) return AuthDecision.Denied(DenyReason.NO_ACTIVE_USER)

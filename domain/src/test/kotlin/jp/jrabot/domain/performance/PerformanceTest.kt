@@ -52,6 +52,19 @@ class PerformanceTest {
     }
 
     @Test
+    fun `見送り stake 0 は的中率に数えない 着順 0 の取消は外れにしない 速報の払戻は実払戻に使わない`() {
+        assertEquals(PaperOutcome.Unsettled(UnsettledReason.NOT_A_BET), PaperSettlement.settleWin(sig(2, stake = 0.0), res, emptyList()))
+        assertEquals(PaperOutcome.Unsettled(UnsettledReason.NOT_A_BET), PaperSettlement.settleWin(sig(2, odds = 0.0), res, emptyList()))
+        val zero = listOf(ResultEntry(1, 1), ResultEntry(2, 0))
+        assertEquals(PaperOutcome.Unsettled(UnsettledReason.NO_FINISH), PaperSettlement.settleWin(sig(2), zero, emptyList()))
+        assertEquals(PaperOutcome.Unsettled(UnsettledReason.NO_RESULT), PaperSettlement.settleWin(sig(2), listOf(ResultEntry(2, 0)), emptyList()))
+        val prov = listOf(StoredPayout("02", 999.0, true))
+        val hit = PaperSettlement.settleWin(sig(2), res, prov) as PaperOutcome.Settled
+        assertNull(hit.actualPayout, "速報だけなら実払戻は不明")
+        assertTrue(hit.hit)
+    }
+
+    @Test
     fun `同着の 1 着は両方的中`() {
         val tie = listOf(ResultEntry(4, 1), ResultEntry(5, 1))
         assertTrue((PaperSettlement.settleWin(sig(4), tie, emptyList()) as PaperOutcome.Settled).hit)

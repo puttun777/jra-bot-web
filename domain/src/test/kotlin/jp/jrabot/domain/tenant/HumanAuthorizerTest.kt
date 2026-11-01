@@ -68,6 +68,14 @@ class HumanAuthorizerTest {
     }
 
     @Test
+    fun `ops のサービスアカウントは 許可リストに入っていても人としては拒否`() {
+        val ops = EmailAddress.of("ops@proj.iam.gserviceaccount.com")
+        val a = HumanAuthorizer(listOf(me, ops), emptyList(), Repo(listOf(user(me), user(ops))), listOf(ops))
+        assertEquals(AuthDecision.Denied(DenyReason.NOT_A_PERSON), a.authorize("ops@proj.iam.gserviceaccount.com"))
+        assertTrue(a.authorize("me@example.com") is AuthDecision.Allowed)
+    }
+
+    @Test
     fun `不正なメールは拒否`() {
         val a = auth(listOf(me), emptyList(), user(me))
         for (bad in listOf("", "   ", "no-at", "a@b@c", "a b@c.com")) assertEquals(AuthDecision.Denied(DenyReason.INVALID_EMAIL), a.authorize(bad))

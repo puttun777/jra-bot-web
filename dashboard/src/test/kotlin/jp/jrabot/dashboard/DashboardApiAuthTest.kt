@@ -67,6 +67,14 @@ class DashboardApiAuthTest {
     }
 
     @Test
+    fun `読取り以外のメソッドは管理者だけ 閲覧者は既定で 403`() {
+        assertEquals(403, http.send("POST", "/api/v1/me", TestAuth.human("viewer@example.com")).status)
+        assertEquals(403, http.send("DELETE", "/api/v1/anything", TestAuth.human("viewer@example.com")).status)
+        // 管理者は認可を通る（書込みのルートが無いので 404/405。通ったことの確認）
+        assertTrue(http.send("POST", "/api/v1/me", TestAuth.human("me@example.com")).status in setOf(404, 405, 409))
+    }
+
+    @Test
     fun `403 と 401 の本文に理由や値を出さない`() {
         val r = me("stranger@example.com")
         assertEquals("""{"error":"forbidden"}""", r.body)

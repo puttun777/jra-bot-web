@@ -22,7 +22,8 @@ data class WinSignal(
     val stake: Double,
 )
 
-enum class UnsettledReason { NO_RESULT, HORSE_NOT_IN_RESULT, NO_FINISH }
+/** NOT_A_BET: 推奨額が 0 以下（見送りの Signal）またはオッズが 0 以下。損益の対象ではないので数えない（レビュー P1）。 */
+enum class UnsettledReason { NO_RESULT, HORSE_NOT_IN_RESULT, NO_FINISH, NOT_A_BET }
 
 sealed interface PaperOutcome {
     data class Unsettled(
@@ -47,28 +48,32 @@ sealed interface PaperOutcome {
 object PaperSettlement {
     /**
      * 単勝の紙上決済（旧 `settle_open_win_bets_for_race` と同じ規則 + 未確定の区別）。1 着（同着は全員）が的中。
-     * [payouts] は単勝の確定/速報の払戻（組み合わせキーは 0 埋めの馬番 `07`）。速報（provisional）でも [actualPayout] には使うが、呼び出し側が区別できるよう
-     * 確定のみを渡してもよい。
+     * [payouts] は単勝の払戻（組み合わせキーは 0 埋めの馬番 `07`）。**確定（provisional = false）の行だけ**を実払戻に使う。
+     * 推奨額 0 以下（見送り）・オッズ 0 以下は [UnsettledReason.NOT_A_BET]（損益の対象外）。この関数は**単勝専用**（ワイド・三連複は賭式・組み合わせキーを持つ別の入力で扱う）。
      */
     fun settleWin(
         signal: WinSignal,
         results: List<ResultEntry>,
         payouts: List<StoredPayout>,
     ): PaperOutcome {
-        if (results.isEmpty() || results.none { it.finish != null }) return PaperOutcome.Unsettled(UnsettledReason.NO_RESULT)
+        if (!(signal.stake > 0.0) || !(signal.odds > 0.0)) return PaperOutcome.Unsettled(UnsettledReason.NOT_A_BET)
+        // 着順 0 以下は取消・中止などで順位が付かない（外れにしない）。null と同じく『着順なし』
+        if (results.isEmpty() || results.none { (it.finish ?: 0) > 0 }) return PaperOutcome.Unsettled(UnsettledReason.NO_RESULT)
         val mine = results.firstOrNull { it.umaban == signal.umaban } ?: return PaperOutcome.Unsettled(UnsettledReason.HORSE_NOT_IN_RESULT)
-        val finish = mine.finish ?: return PaperOutcome.Unsettled(UnsettledReason.NO_FINISH)
-        val hit = finish == 1 && signal.stake > 0.0 && signal.odds > 0.0
+        val finish = mine.finish?.takeIf { it > 0 } ?: return PaperOutcome.Unsettled(UnsettledReason.NO_FINISH)
+        val hit = finish == 1
         val paper = if (hit) signal.stake * signal.odds else 0.0
-        val per100 = payouts.firstOrNull { it.comboKey == "%02d".format(signal.umaban) }?.payout
+        // 実払戻は**確定した払戻だけ**を使う（速報は後で変わる。速報だけなら実払戻は null = 不明）
+        val confirmed = payouts.filter { !it.provisional }
+        val per100 = confirmed.firstOrNull { it.comboKey == "%02d".format(signal.umaban) }?.payout
         val actual =
-            if (finish == 1) {
+            if (hit) {
                 per100?.let { signal.stake * it / 100.0 }
-            } else if (payouts.isNotEmpty()) {
+            } else if (confirmed.isNotEmpty()) {
                 0.0
             } else {
                 null
             }
-        return PaperOutcome.Settled(finish == 1, signal.stake, paper, actual)
+        return PaperOutcome.Settled(hit, signal.stake, paper, actual)
     }
 }

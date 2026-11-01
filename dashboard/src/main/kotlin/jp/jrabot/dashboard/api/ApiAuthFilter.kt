@@ -33,11 +33,18 @@ class ApiAuthFilter(
         if (verified !is CallerVerification.Verified) return reject(response, HttpServletResponse.SC_UNAUTHORIZED, "unauthorized")
         when (val decision = authorizer.authorize(verified.email)) {
             is AuthDecision.Allowed -> {
+                // 既定: 読取り以外（GET/HEAD/OPTIONS 以外）は管理者だけ。書込みを足すときにコントローラがロールの確認を忘れても閲覧者は通さない（レビュー A1）
+                if (request.method !in READ_METHODS && !decision.principal.isAdmin) {
+                    log.info("api auth denied: reason=ROLE_NOT_ADMIN method={}", request.method)
+                    return reject(response, HttpServletResponse.SC_FORBIDDEN, "forbidden")
+                }
                 request.setAttribute(PRINCIPAL_ATTRIBUTE, decision.principal)
                 filterChain.doFilter(request, response)
             }
 
             is AuthDecision.Denied -> {
+                // 本人がログインできないときの原因調査用。理由の固定語彙だけ（メール等の値は出さない。レビュー A4）
+                log.info("api auth denied: reason={}", decision.reason)
                 reject(response, HttpServletResponse.SC_FORBIDDEN, "forbidden")
             }
         }
@@ -56,6 +63,8 @@ class ApiAuthFilter(
 
     companion object {
         const val API_PREFIX = "/api"
+        private val READ_METHODS = setOf("GET", "HEAD", "OPTIONS")
+        private val log: org.slf4j.Logger = org.slf4j.LoggerFactory.getLogger(ApiAuthFilter::class.java)
         const val PRINCIPAL_ATTRIBUTE = "jrabot.principal"
 
         fun principalOf(request: HttpServletRequest): Principal = request.getAttribute(PRINCIPAL_ATTRIBUTE) as? Principal ?: error("認証フィルタを通っていないリクエスト")
