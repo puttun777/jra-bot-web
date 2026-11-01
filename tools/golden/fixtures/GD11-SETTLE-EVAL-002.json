@@ -1,0 +1,3571 @@
+{
+  "case_id": "GD11-SETTLE-EVAL-002",
+  "comparison_rules": {
+    "default": {
+      "float": {
+        "abs_tol": 1e-12,
+        "mode": "abs_tol"
+      }
+    },
+    "overrides": [],
+    "strict": {
+      "key_set": true,
+      "list_order": true,
+      "nonfinite": "reject",
+      "types": true
+    }
+  },
+  "data_classification": "synthetic",
+  "description": "settle_evaluations_for_race: 代表評価の選択（発走前の最新 1 件・同値・境界・日付不正・post_time 無し）・的中/外れ/no_ticket・確定払戻 /100・combo_odds の暫定・payout 0・冪等・force・ticket_evaluations の優先・best_candidate の各形式",
+  "execution_parameters": {
+    "clock": "not_used (対象関数は現在時刻を読まない。datetime.now を使う経路は対象外)",
+    "cwd": "empty temporary directory",
+    "fixed_time": "2026-01-01T00:00:00+09:00",
+    "libraries": {
+      "numpy": "2.5.3"
+    },
+    "ml_cfg": {
+      "enabled": false
+    },
+    "network": "blocked",
+    "seed": 20260101,
+    "timezone": "Asia/Tokyo"
+  },
+  "expected_output": {
+    "results": [
+      {
+        "call_id": "ev-wide-hit",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": 1,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": 3.5,
+                "settle_status": "settled",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-sanren-hit",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": 1,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": 12.8,
+                "settle_status": "settled",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-wide-miss",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": 0,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": 0.0,
+                "settle_status": "settled",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-prov-odds",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": 1,
+                "id": 1,
+                "is_provisional": 1,
+                "payout_used": 4.8,
+                "settle_status": "settled",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-pay-zero",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": 1,
+                "id": 1,
+                "is_provisional": 1,
+                "payout_used": 3.3,
+                "settle_status": "settled",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-no-payout",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": 1,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": null,
+                "settle_status": "settled",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-prov-row",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": 1,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": 2.0,
+                "settle_status": "settled",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-short",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": null,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": null,
+                "settle_status": "no_ticket",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-short3-sanren",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": null,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": null,
+                "settle_status": "no_ticket",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-noresult",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": null,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": null,
+                "settle_status": "no_ticket",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-nocand",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": null,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": null,
+                "settle_status": "no_ticket",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-badjson",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": null,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": null,
+                "settle_status": "no_ticket",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-win",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": null,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": null,
+                "settle_status": "no_ticket",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-array",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": null,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": null,
+                "settle_status": "no_ticket",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-nokey",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": null,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": null,
+                "settle_status": "no_ticket",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-unknown-type",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": null,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": null,
+                "settle_status": "no_ticket",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-english-wide",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": 1,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": 1.5,
+                "settle_status": "settled",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-english-sanren",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": 1,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": 9.0,
+                "settle_status": "settled",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-cand-kumi",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": 1,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": 1.5,
+                "settle_status": "settled",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-cand-combo",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": 1,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": 1.5,
+                "settle_status": "settled",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-cand-tickets",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": 1,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": 1.5,
+                "settle_status": "settled",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-cand-tickets-combo",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": 1,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": 1.5,
+                "settle_status": "settled",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-ticket-priority",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": 1,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": 4.1,
+                "settle_status": "settled",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-ticket-empty-key",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": 1,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": 4.1,
+                "settle_status": "settled",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-rep-latest",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": null,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": null,
+                "settle_status": null,
+                "settled": false
+              },
+              {
+                "hit": 0,
+                "id": 2,
+                "is_provisional": 0,
+                "payout_used": 0.0,
+                "settle_status": "settled",
+                "settled": true
+              },
+              {
+                "hit": null,
+                "id": 3,
+                "is_provisional": 0,
+                "payout_used": null,
+                "settle_status": null,
+                "settled": false
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-rep-tie",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": null,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": null,
+                "settle_status": null,
+                "settled": false
+              },
+              {
+                "hit": 0,
+                "id": 2,
+                "is_provisional": 0,
+                "payout_used": 0.0,
+                "settle_status": "settled",
+                "settled": true
+              },
+              {
+                "hit": null,
+                "id": 3,
+                "is_provisional": 0,
+                "payout_used": null,
+                "settle_status": null,
+                "settled": false
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-rep-allafter",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": null,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": null,
+                "settle_status": null,
+                "settled": false
+              },
+              {
+                "hit": 0,
+                "id": 2,
+                "is_provisional": 0,
+                "payout_used": 0.0,
+                "settle_status": "settled",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-rep-boundary",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": 1,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": 3.0,
+                "settle_status": "settled",
+                "settled": true
+              },
+              {
+                "hit": null,
+                "id": 2,
+                "is_provisional": 0,
+                "payout_used": null,
+                "settle_status": null,
+                "settled": false
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-rep-dateonly",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": null,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": null,
+                "settle_status": null,
+                "settled": false
+              },
+              {
+                "hit": 0,
+                "id": 2,
+                "is_provisional": 0,
+                "payout_used": 0.0,
+                "settle_status": "settled",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-rep-nosnap",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": null,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": null,
+                "settle_status": null,
+                "settled": false
+              },
+              {
+                "hit": 1,
+                "id": 2,
+                "is_provisional": 0,
+                "payout_used": 3.0,
+                "settle_status": "settled",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-rep-baddate",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": null,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": null,
+                "settle_status": null,
+                "settled": false
+              },
+              {
+                "hit": 1,
+                "id": 2,
+                "is_provisional": 0,
+                "payout_used": 3.0,
+                "settle_status": "settled",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-rep-nopost",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": null,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": null,
+                "settle_status": null,
+                "settled": false
+              },
+              {
+                "hit": 1,
+                "id": 2,
+                "is_provisional": 0,
+                "payout_used": 3.0,
+                "settle_status": "settled",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-rep-postsec",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": 1,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": 3.0,
+                "settle_status": "settled",
+                "settled": true
+              },
+              {
+                "hit": null,
+                "id": 2,
+                "is_provisional": 0,
+                "payout_used": null,
+                "settle_status": null,
+                "settled": false
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-no-eval",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              0
+            ],
+            "race_evaluations": []
+          }
+        }
+      },
+      {
+        "call_id": "ev-idempotent",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1,
+              0
+            ],
+            "race_evaluations": [
+              {
+                "hit": 1,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": 3.5,
+                "settle_status": "settled",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-force-after-provisional",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1,
+              0,
+              null,
+              0,
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": 1,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": 5.2,
+                "settle_status": "settled",
+                "settled": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "call_id": "ev-late-evaluation",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              1,
+              null,
+              1
+            ],
+            "race_evaluations": [
+              {
+                "hit": 1,
+                "id": 1,
+                "is_provisional": 0,
+                "payout_used": 3.5,
+                "settle_status": "settled",
+                "settled": true
+              },
+              {
+                "hit": 0,
+                "id": 2,
+                "is_provisional": 0,
+                "payout_used": 0.0,
+                "settle_status": "settled",
+                "settled": true
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "fixture_id": "golden/GD11-SETTLE-EVAL-002/v1",
+  "generator": {
+    "tool": "tools/golden",
+    "tool_version": "0.1.0"
+  },
+  "input": {
+    "calls": [
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 350.0,
+                "race_id": "E-wide-hit"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"3-2\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-wide-hit",
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-wide-hit",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-wide-hit",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-wide-hit",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-wide-hit",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-wide-hit",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-wide-hit"
+            }
+          ]
+        },
+        "call_id": "ev-wide-hit",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "1-2-3",
+                "market": "sanrenpuku",
+                "payout": 1280.0,
+                "race_id": "E-sanren-hit"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"三連複\", \"combo_key\": \"3-1-2\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-sanren-hit",
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-sanren-hit",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-sanren-hit",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-sanren-hit",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-sanren-hit",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-sanren-hit",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-sanren-hit"
+            }
+          ]
+        },
+        "call_id": "ev-sanren-hit",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 350.0,
+                "race_id": "E-wide-miss"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"1-4\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-wide-miss",
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-wide-miss",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-wide-miss",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-wide-miss",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-wide-miss",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-wide-miss",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-wide-miss"
+            }
+          ]
+        },
+        "call_id": "ev-wide-miss",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "combo_odds_snapshots": [
+              {
+                "collected_at": "2026-03-01T15:10:00",
+                "combo_key": "2-3",
+                "market": "wide",
+                "odds": 4.2,
+                "race_id": "E-prov-odds"
+              },
+              {
+                "collected_at": "2026-03-01T15:35:00",
+                "combo_key": "2-3",
+                "market": "wide",
+                "odds": 4.8,
+                "race_id": "E-prov-odds"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"2-3\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-prov-odds",
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-prov-odds",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-prov-odds",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-prov-odds",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-prov-odds",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-prov-odds",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-prov-odds"
+            }
+          ]
+        },
+        "call_id": "ev-prov-odds",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "combo_odds_snapshots": [
+              {
+                "collected_at": "2026-03-01T15:30:00",
+                "combo_key": "2-3",
+                "market": "wide",
+                "odds": 3.3,
+                "race_id": "E-pay-zero"
+              }
+            ],
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 0.0,
+                "race_id": "E-pay-zero"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"2-3\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-pay-zero",
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-pay-zero",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-pay-zero",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-pay-zero",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-pay-zero",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-pay-zero",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-pay-zero"
+            }
+          ]
+        },
+        "call_id": "ev-pay-zero",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"2-3\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-no-payout",
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-no-payout",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-no-payout",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-no-payout",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-no-payout",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-no-payout",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-no-payout"
+            }
+          ]
+        },
+        "call_id": "ev-no-payout",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 1,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 200.0,
+                "race_id": "E-prov-row"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"2-3\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-prov-row",
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-prov-row",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-prov-row",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-prov-row",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-prov-row",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-prov-row",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-prov-row"
+            }
+          ]
+        },
+        "call_id": "ev-prov-row",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"1-2\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-short",
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-short",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-short",
+                "umaban": 1
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-short"
+            }
+          ]
+        },
+        "call_id": "ev-short",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"三連複\", \"combo_key\": \"1-2-3\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-short3",
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-short3",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-short3",
+                "umaban": 1
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-short3",
+                "umaban": 2
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-short3"
+            }
+          ]
+        },
+        "call_id": "ev-short3-sanren",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"1-2\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-noresult",
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-noresult",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-noresult"
+            }
+          ]
+        },
+        "call_id": "ev-noresult",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 150.0,
+                "race_id": "E-nocand"
+              },
+              {
+                "is_provisional": 0,
+                "key": "1-2-3",
+                "market": "sanrenpuku",
+                "payout": 900.0,
+                "race_id": "E-nocand"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": null,
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-nocand",
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-nocand",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-nocand",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-nocand",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-nocand",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-nocand",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-nocand"
+            }
+          ]
+        },
+        "call_id": "ev-nocand",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 150.0,
+                "race_id": "E-badjson"
+              },
+              {
+                "is_provisional": 0,
+                "key": "1-2-3",
+                "market": "sanrenpuku",
+                "payout": 900.0,
+                "race_id": "E-badjson"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{not json",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-badjson",
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-badjson",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-badjson",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-badjson",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-badjson",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-badjson",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-badjson"
+            }
+          ]
+        },
+        "call_id": "ev-badjson",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 150.0,
+                "race_id": "E-win"
+              },
+              {
+                "is_provisional": 0,
+                "key": "1-2-3",
+                "market": "sanrenpuku",
+                "payout": 900.0,
+                "race_id": "E-win"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"単勝\", \"combo_key\": \"3\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-win",
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-win",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-win",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-win",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-win",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-win",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-win"
+            }
+          ]
+        },
+        "call_id": "ev-win",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 150.0,
+                "race_id": "E-array"
+              },
+              {
+                "is_provisional": 0,
+                "key": "1-2-3",
+                "market": "sanrenpuku",
+                "payout": 900.0,
+                "race_id": "E-array"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "[1,2]",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-array",
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-array",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-array",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-array",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-array",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-array",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-array"
+            }
+          ]
+        },
+        "call_id": "ev-array",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 150.0,
+                "race_id": "E-nokey"
+              },
+              {
+                "is_provisional": 0,
+                "key": "1-2-3",
+                "market": "sanrenpuku",
+                "payout": 900.0,
+                "race_id": "E-nokey"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-nokey",
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-nokey",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-nokey",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-nokey",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-nokey",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-nokey",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-nokey"
+            }
+          ]
+        },
+        "call_id": "ev-nokey",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 150.0,
+                "race_id": "E-unknown-type"
+              },
+              {
+                "is_provisional": 0,
+                "key": "1-2-3",
+                "market": "sanrenpuku",
+                "payout": 900.0,
+                "race_id": "E-unknown-type"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"馬連\", \"combo_key\": \"1-2\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-unknown-type",
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-unknown-type",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-unknown-type",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-unknown-type",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-unknown-type",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-unknown-type",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-unknown-type"
+            }
+          ]
+        },
+        "call_id": "ev-unknown-type",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 150.0,
+                "race_id": "E-english-wide"
+              },
+              {
+                "is_provisional": 0,
+                "key": "1-2-3",
+                "market": "sanrenpuku",
+                "payout": 900.0,
+                "race_id": "E-english-wide"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"wide\", \"combo_key\": \"2-3\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-english-wide",
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-english-wide",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-english-wide",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-english-wide",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-english-wide",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-english-wide",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-english-wide"
+            }
+          ]
+        },
+        "call_id": "ev-english-wide",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 150.0,
+                "race_id": "E-english-sanren"
+              },
+              {
+                "is_provisional": 0,
+                "key": "1-2-3",
+                "market": "sanrenpuku",
+                "payout": 900.0,
+                "race_id": "E-english-sanren"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"sanrenpuku\", \"combo_key\": \"2-3-1\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-english-sanren",
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-english-sanren",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-english-sanren",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-english-sanren",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-english-sanren",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-english-sanren",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-english-sanren"
+            }
+          ]
+        },
+        "call_id": "ev-english-sanren",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 150.0,
+                "race_id": "E-c-kumi"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"kumi\": \"3-2\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-c-kumi",
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-c-kumi",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-c-kumi",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-c-kumi",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-c-kumi",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-c-kumi",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-c-kumi"
+            }
+          ]
+        },
+        "call_id": "ev-cand-kumi",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 150.0,
+                "race_id": "E-c-combo"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"type\": \"ワイド\", \"combo\": \"2-3\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-c-combo",
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-c-combo",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-c-combo",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-c-combo",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-c-combo",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-c-combo",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-c-combo"
+            }
+          ]
+        },
+        "call_id": "ev-cand-combo",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 150.0,
+                "race_id": "E-c-tickets"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"tickets\": [{\"kumi\": \"3-2\"}, {\"kumi\": \"1-4\"}]}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-c-tickets",
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-c-tickets",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-c-tickets",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-c-tickets",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-c-tickets",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-c-tickets",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-c-tickets"
+            }
+          ]
+        },
+        "call_id": "ev-cand-tickets",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 150.0,
+                "race_id": "E-c-tickets-combo"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"tickets\": [{\"combo_key\": \"2-3\"}]}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-c-tickets-combo",
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-c-tickets-combo",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-c-tickets-combo",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-c-tickets-combo",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-c-tickets-combo",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-c-tickets-combo",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-c-tickets-combo"
+            }
+          ]
+        },
+        "call_id": "ev-cand-tickets-combo",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 410.0,
+                "race_id": "E-ticket"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"1-4\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-ticket",
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-ticket",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-ticket",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-ticket",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-ticket",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-ticket",
+                "umaban": 4
+              }
+            ],
+            "ticket_evaluations": [
+              {
+                "accepted": 0,
+                "bet_type": "ワイド",
+                "combo_key": "1-4",
+                "id": 1,
+                "odds": 9.0,
+                "race_evaluation_id": 1,
+                "race_id": "E-ticket",
+                "rank": 1,
+                "snapshot_at": "2026-03-01T15:00:00"
+              },
+              {
+                "accepted": 1,
+                "bet_type": "ワイド",
+                "combo_key": "3-2",
+                "id": 2,
+                "odds": 5.0,
+                "race_evaluation_id": 1,
+                "race_id": "E-ticket",
+                "rank": 2,
+                "snapshot_at": "2026-03-01T15:00:00"
+              },
+              {
+                "accepted": 1,
+                "bet_type": "単勝",
+                "combo_key": "3",
+                "id": 3,
+                "odds": 5.0,
+                "race_evaluation_id": 1,
+                "race_id": "E-ticket",
+                "rank": 1,
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-ticket"
+            }
+          ]
+        },
+        "call_id": "ev-ticket-priority",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 410.0,
+                "race_id": "E-ticket-nokey"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"2-3\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-ticket-nokey",
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-ticket-nokey",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-ticket-nokey",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-ticket-nokey",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-ticket-nokey",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-ticket-nokey",
+                "umaban": 4
+              }
+            ],
+            "ticket_evaluations": [
+              {
+                "accepted": 1,
+                "bet_type": "ワイド",
+                "combo_key": "",
+                "id": 1,
+                "odds": 9.0,
+                "race_evaluation_id": 1,
+                "race_id": "E-ticket-nokey",
+                "rank": 1,
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-ticket-nokey"
+            }
+          ]
+        },
+        "call_id": "ev-ticket-empty-key",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 300.0,
+                "race_id": "E-rep-latest"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"2-3\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-rep-latest",
+                "snapshot_at": "2026-03-01T14:00:00"
+              },
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"1-4\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 2,
+                "race_id": "E-rep-latest",
+                "snapshot_at": "2026-03-01T15:30:00"
+              },
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"2-3\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 3,
+                "race_id": "E-rep-latest",
+                "snapshot_at": "2026-03-01T16:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-rep-latest",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-rep-latest",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-rep-latest",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-rep-latest",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-rep-latest",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-rep-latest"
+            }
+          ]
+        },
+        "call_id": "ev-rep-latest",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 300.0,
+                "race_id": "E-rep-tie"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"2-3\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-rep-tie",
+                "snapshot_at": "2026-03-01T15:00:00"
+              },
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"1-4\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 2,
+                "race_id": "E-rep-tie",
+                "snapshot_at": "2026-03-01T15:00:00"
+              },
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"2-3\"}",
+                "created_at": "2026-03-01T13:00:00",
+                "id": 3,
+                "race_id": "E-rep-tie",
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-rep-tie",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-rep-tie",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-rep-tie",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-rep-tie",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-rep-tie",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-rep-tie"
+            }
+          ]
+        },
+        "call_id": "ev-rep-tie",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 300.0,
+                "race_id": "E-rep-allafter"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"2-3\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-rep-allafter",
+                "snapshot_at": "2026-03-01T16:00:00"
+              },
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"1-4\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 2,
+                "race_id": "E-rep-allafter",
+                "snapshot_at": "2026-03-01T17:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-rep-allafter",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-rep-allafter",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-rep-allafter",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-rep-allafter",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-rep-allafter",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-rep-allafter"
+            }
+          ]
+        },
+        "call_id": "ev-rep-allafter",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 300.0,
+                "race_id": "E-rep-boundary"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"2-3\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-rep-boundary",
+                "snapshot_at": "2026-03-01T15:40:00"
+              },
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"1-4\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 2,
+                "race_id": "E-rep-boundary",
+                "snapshot_at": "2026-03-01T15:40:01"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-rep-boundary",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-rep-boundary",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-rep-boundary",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-rep-boundary",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-rep-boundary",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-rep-boundary"
+            }
+          ]
+        },
+        "call_id": "ev-rep-boundary",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 300.0,
+                "race_id": "E-rep-dateonly"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"2-3\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-rep-dateonly",
+                "snapshot_at": "2026-03-01"
+              },
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"1-4\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 2,
+                "race_id": "E-rep-dateonly",
+                "snapshot_at": "2026-03-01T15:39:59.999999"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-rep-dateonly",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-rep-dateonly",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-rep-dateonly",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-rep-dateonly",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-rep-dateonly",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-rep-dateonly"
+            }
+          ]
+        },
+        "call_id": "ev-rep-dateonly",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 300.0,
+                "race_id": "E-rep-nosnap"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"1-4\"}",
+                "created_at": "2026-03-01T13:00:00",
+                "id": 1,
+                "race_id": "E-rep-nosnap",
+                "snapshot_at": ""
+              },
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"2-3\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 2,
+                "race_id": "E-rep-nosnap",
+                "snapshot_at": ""
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-rep-nosnap",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-rep-nosnap",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-rep-nosnap",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-rep-nosnap",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-rep-nosnap",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-rep-nosnap"
+            }
+          ]
+        },
+        "call_id": "ev-rep-nosnap",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 300.0,
+                "race_id": "E-rep-baddate"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"1-4\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-rep-baddate",
+                "snapshot_at": "2026-03-01T15:00:00"
+              },
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"2-3\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 2,
+                "race_id": "E-rep-baddate",
+                "snapshot_at": "2026-03-01T16:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "2026-03-01",
+                "post_time": "15:40",
+                "race_id": "E-rep-baddate",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-rep-baddate",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-rep-baddate",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-rep-baddate",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-rep-baddate",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-rep-baddate"
+            }
+          ]
+        },
+        "call_id": "ev-rep-baddate",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 300.0,
+                "race_id": "E-rep-nopost"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"1-4\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-rep-nopost",
+                "snapshot_at": "2026-03-01T15:00:00"
+              },
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"2-3\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 2,
+                "race_id": "E-rep-nopost",
+                "snapshot_at": "2026-03-01T16:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "",
+                "race_id": "E-rep-nopost",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-rep-nopost",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-rep-nopost",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-rep-nopost",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-rep-nopost",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-rep-nopost"
+            }
+          ]
+        },
+        "call_id": "ev-rep-nopost",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 300.0,
+                "race_id": "E-rep-postsec"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"2-3\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-rep-postsec",
+                "snapshot_at": "2026-03-01T15:40:20"
+              },
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"1-4\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 2,
+                "race_id": "E-rep-postsec",
+                "snapshot_at": "2026-03-01T15:40:40"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40:30",
+                "race_id": "E-rep-postsec",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-rep-postsec",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-rep-postsec",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-rep-postsec",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-rep-postsec",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-rep-postsec"
+            }
+          ]
+        },
+        "call_id": "ev-rep-postsec",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-no-eval",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-no-eval",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-no-eval",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-no-eval",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-no-eval",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-no-eval"
+            }
+          ]
+        },
+        "call_id": "ev-no-eval",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 350.0,
+                "race_id": "E-idem"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"2-3\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-idem",
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-idem",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-idem",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-idem",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-idem",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-idem",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-idem"
+            },
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-idem"
+            }
+          ]
+        },
+        "call_id": "ev-idempotent",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "combo_odds_snapshots": [
+              {
+                "collected_at": "2026-03-01T15:30:00",
+                "combo_key": "2-3",
+                "market": "wide",
+                "odds": 4.0,
+                "race_id": "E-force"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"2-3\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-force",
+                "snapshot_at": "2026-03-01T15:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-force",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-force",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-force",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-force",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-force",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-force"
+            },
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-force"
+            },
+            {
+              "is_provisional": 0,
+              "key": "2-3",
+              "market": "wide",
+              "op": "add_payout",
+              "payout": 520.0,
+              "race_id": "E-force"
+            },
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-force"
+            },
+            {
+              "force": true,
+              "op": "settle_evaluations",
+              "race_id": "E-force"
+            }
+          ]
+        },
+        "call_id": "ev-force-after-provisional",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "payouts": [
+              {
+                "is_provisional": 0,
+                "key": "2-3",
+                "market": "wide",
+                "payout": 350.0,
+                "race_id": "E-rep-switch"
+              }
+            ],
+            "race_evaluations": [
+              {
+                "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"2-3\"}",
+                "created_at": "2026-03-01T14:00:00",
+                "id": 1,
+                "race_id": "E-rep-switch",
+                "snapshot_at": "2026-03-01T14:00:00"
+              }
+            ],
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "E-rep-switch",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "E-rep-switch",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "E-rep-switch",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "E-rep-switch",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "E-rep-switch",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-rep-switch"
+            },
+            {
+              "best_candidate_json": "{\"bet_type\": \"ワイド\", \"combo_key\": \"1-4\"}",
+              "created_at": "2026-03-01T14:00:00",
+              "id": 2,
+              "op": "add_evaluation",
+              "race_id": "E-rep-switch",
+              "snapshot_at": "2026-03-01T15:00:00"
+            },
+            {
+              "op": "settle_evaluations",
+              "race_id": "E-rep-switch"
+            }
+          ]
+        },
+        "call_id": "ev-late-evaluation",
+        "function": "settle_batch"
+      }
+    ]
+  },
+  "known_defects": [
+    "E16"
+  ],
+  "legacy_behavior_note": "expected_output は旧実装が実際に返した値（欠陥候補を含む）。新仕様の期待値ではない。",
+  "scenario_ids": [
+    "GD11"
+  ],
+  "schema_version": 1,
+  "source_commit": "f7dbf69fd8940121782870de902e8c449e6ca149",
+  "source_function": [
+    "jraev.storage.evaluation_repo.EvaluationRepository.settle_evaluations_for_race"
+  ],
+  "source_repository": "puttun777/jra-bot"
+}

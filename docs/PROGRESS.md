@@ -10,6 +10,21 @@
 旧: 2026-10-27（Stage 3-G: T3.7 Discord 通知）
 旧: 2026-10-26（Public 化の準備）／2026-10-24（Stage 3-F2・3-F1・3-E）
 
+## 2026-11-01 PR #30 作成・CI 修正・独立レビュー反映・T3.9 ①（claude/stage3-bot-orchestration = claude/jra-bot-replace-continue-l1lk71）
+**Actions は再利用可能**（保留解除の指示）。PR #30（T3.8・V5・保留の再適用）を作成して CI を実行。
+| 項目 | 結果 |
+|---|---|
+| CI 1 回目 | `changes and repo hygiene` 失敗（PUBLIC_READINESS.md が秘密検査のパターン文字列を含む誤検知）→ 文言を言い換え（検査は弱めていない）。後続ジョブは skipped |
+| CI 2 回目 | `agent python` 失敗（ruff format 1 件・mypy 1 件。CI の固定版 ruff 0.17.2 / mypy 2.4.0 をローカルで再現して直した。pytest 213 件成功）|
+| 独立レビュー（Opus・読取り専用・1 名） | 高 0・中 2・低 8。**M1 修正**（D-230: checkpoint に origin、再現試験は修正を外すと失敗）。M2・低は UNRESOLVED G-32 |
+| T3.9 ① 決済の計算 | `:domain` `settlement.SettlementCalculator`（純粋関数）+ ゴールデン GD11（3 ケース/54 呼び出し）。**Kotlin と旧実装が全一致**（35 ケース中 34 対応・1042 呼び出し、不一致 0）。D-231/D-232（旧欠陥 E16: 旧の評価決済は常に例外）|
+**ローカル検証**（JDK 21、合成データ。Maven Central の 429 を再試行で回避）: `:domain:test` 全件成功（`BotRunIntegrityTest` +1、`SettlementCalculatorTest` 10）、`:golden-runner:test`、ktlintCheck・checkModuleDependencies 成功、Python golden `run_tests` 93 件成功。**参照元 jra-bot は読み取りのみ**（実行で作られた `__pycache__` は削除済み・`git status` クリーン）。
+**未実施**: PR #30 の最新コミットでの CI 全体の結果（確認後に追記）、MySQL 統合のローカル再実行（変更が `:domain` のみのため CI に委ねる）。
+**承認待ち/本人判断**: V6 の最終 SQL と追加 GRANT（docs/T39_DESIGN.md §9。適用対象の Flyway には入れていない）、払戻の単位以外の同着・返還・取消（JV-Data 仕様）、COMP-4。
+**次の手順**: ① PR #30 の CI を確認（全ジョブ。skipped を成功扱いにしない）し、レビュー修正差分を再確認 → 条件を満たせばマージ。② T3.9 ②（結果・払戻の取込 → RaceStatusUpdater → ResultSettler と bot-run の結果待ち）。
+
+---
+
 ## 保留の再適用のレビューと公開準備（claude/stage3-bot-orchestration・2026-10-30。PR なし・**CI 未実行**。D-229）
 **費用条件**: リポジトリは Private。分岐保護 API が「Upgrade to GitHub Pro」と返すため GitHub Free と推測（billing API は 403 で、残り無料枠・予算上限は**確認できていない**）。`ci.yml` は main 宛て PR と main への push で起動するので、**PR 作成・マージは保留**。ブランチへの push は CI を起動しない（確認済み: `push` は `branches: [main]` のみ）。
 | 項目 | 内容 | 試験 |

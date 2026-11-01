@@ -142,6 +142,7 @@ P0 の順: F26/F04/F05/F06/F07（基礎純関数）→ F16（DB）→ F08/F09（
 | E13 | `estimate_prob(odds)` は 0.99 上限、`estimate_prob_normalized` は ±10% 補正（正規化の後に元確率基準の範囲に押し戻す） | 合計は再正規化で 1 | `ProbabilityPipeline` に取り込み |
 | E14 | 急落フィルタは `recent_snapshots[-1]`（リストは新しい順なので**最古**）との比較のみ。連続的な変化は見ない | — | 仕様として固定。スナップショットの並びを型で保証 |
 | E15 | 時刻依存: decision 内に `datetime.now()` は `ensemble_params` の経過日数のみ。daemon 側は `minutes_to_post`（naive）でウィンドウ/EV スケジュールを決定 | TZ ずれ | `Clock` 注入（F04） |
+| E16 | 旧 `settle_evaluations_for_race` は `sqlite3.Row.get` が無く、`races` 行があると常に AttributeError（呼び出し側が握って警告のみ。D-232）→ `race_evaluations` の決済結果は旧では実質入っていない可能性 | 決済が動かない | 意図どおり決済する（T3.9。GD11 は `.get` 付きの行で比較） |
 
 ### 7.4 浮動小数・丸め
 - 全て Python `float`（IEEE754 倍精度）。**丸め処理は計算内に無い**（表示のみ `:.1%`/`:.2f`）。Kotlin は `Double` で同順序の演算を行う（結合順序の入替えを禁止）。許容: 確率 1e-9、EV/金額 1e-9（絶対）。

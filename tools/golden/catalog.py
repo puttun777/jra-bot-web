@@ -32,6 +32,10 @@ CATALOG = [
          remaining="odds=1.0（E5）・odds 0・人気 0・ML 無効時の市場フォールバックは生成済み。ML 例外時のラベル（E1）は G7-LEGACY-FAIL-001（T3.6-A）。bet_strategy 例外（ワイド/三連複）は未実施"),
     dict(id="GD10", title="設定値・デフォルト", status="partial", case_ids=["GD10-DEFAULTS-001"],
          remaining="関数シグネチャの既定値のみ。config.example.yaml 全キーとの突合は実 config/example の読込が必要で未実施（T1.20）"),
+    dict(id="GD11", title="結果の決済（勝ち馬券キー・評価の決済・単勝 bets の決済・払戻の取得）", status="implemented",
+         case_ids=["GD11-WINKEYS-001", "GD11-SETTLE-EVAL-002", "GD11-SETTLE-WIN-003"],
+         remaining="合成 SQLite のみ。旧 settle_evaluations_for_race は sqlite3.Row.get が無く常に例外になる（E16）ため、行に .get を持たせた上で比較（意図どおりの値）。"
+                   "ワイド/三連複の bets の決済（settle_open_combo_bets_for_race）は bets の扱い（Q3）が保留のため対象外。同着・返還・取消の払戻の単位は旧実装に分岐が無く、JV-Data 仕様の確認後（G-5/G-16）"),
     # --- ML_DESIGN §7.3 ---
     dict(id="G1", title="線形+Platt+市場ブレンド", status="implemented", case_ids=["G1-MODEL-001"],
          remaining="合成重みの WinProbabilityModel のみ（実 pkl 不使用）。Kotlin は :golden-runner の互換モジュール（旧 _align_feature_matrix の切詰め/ゼロ埋めを含む）で比較し、"
@@ -77,6 +81,7 @@ KOTLIN_PORT = {
         "G1-MODEL-001", "G2-HASH-001",                                                                             # T3.6-A: 既存フィクスチャ（線形+Platt+市場ブレンド / ハッシュ特徴）
         "G6-FEATURES-001", "G3-ML-NORM-002", "G4-ENSEMBLE-002", "G5-BLEND-002", "G7-LEGACY-FAIL-001",             # T3.6-A で追加: 特徴量 / ML 経路（正規化・ensemble・ブレンド・失敗時）
         "G8-SPLIT-001", "G8-RETRY-002", "G8-DEDUP-003", "G8-SINGLE-004", "G8-GROUPED-005", "G8-REASON-006",        # T3.7 で追加: Discord 通知の分割・429 の待機・重複除外・本文・理由文
+        "GD11-WINKEYS-001", "GD11-SETTLE-EVAL-002", "GD11-SETTLE-WIN-003",                                         # T3.9 ①: 決済（SettlementCalculator）
     ],
     "unsupported": {
         "GD10-DEFAULTS-001": "旧関数のシグネチャ既定値の突合。運用の既定値は T1.20/T3.8 で決める（D-016）",

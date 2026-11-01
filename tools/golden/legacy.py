@@ -122,6 +122,10 @@ def load(path):
         ns.model = importlib.import_module("jraev.ml.model")
         ns.models = importlib.import_module("jraev.data.models")
         ns.discord = _import_discord()  # Discord 通知の本文・分割・Retry-After の解釈（T3.7）。送信は呼ばない
+        ns.repo = importlib.import_module("jraev.storage.repo")  # 決済（T3.9 GD11）: 結果・払戻・評価・買い目の各 Repository（合成 SQLite のみ）
+        ns.bets_repo = importlib.import_module("jraev.storage.bets_repo")
+        ns.evaluation_repo = importlib.import_module("jraev.storage.evaluation_repo")
+        ns.combo_odds_repo = importlib.import_module("jraev.storage.combo_odds_repo")
         ns.db = importlib.import_module("jraev.storage.db")  # 合成 SQLite（特徴量 G6・ML 経路 G3〜G5）。ネットワーク・実 DB は使わない
     ns.inspect = inspect
     return ns

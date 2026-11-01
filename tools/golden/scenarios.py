@@ -2,7 +2,7 @@
 from dataclasses import dataclass, field
 from itertools import product
 
-from . import constants as C, scenarios_ml as M, scenarios_notify as N
+from . import constants as C, scenarios_ml as M, scenarios_notify as N, scenarios_settle as S
 
 ABS = lambda path, tol: {"path": path, "mode": "abs_tol", "abs_tol": tol}  # noqa: E731
 
@@ -690,6 +690,20 @@ CASES += [
          ("jraev.notify.discord.send_signals_grouped",), N.grouped_calls(), default_abs_tol=0.0, known_defects=("N1",)),
     Case("G8-REASON-006", ("G8", "G6"), "format_reason_from_features: 合成 SQLite（馬名・近走・間隔・脚質・適性・条件・血統。H3 を含む旧挙動）。db=None・race_id 空は空文字",
          ("jraev.ml.features.format_reason_from_features",), N.reason_calls(), default_abs_tol=0.0, known_defects=("H3",), ml=True),
+]
+
+# ---- T3.9: 結果の決済（GD11）。旧 get_winning_combo_keys / settle_evaluations_for_race / settle_open_win_bets_for_race / get_payout ------------------------
+# 合成 SQLite（旧スキーマ）に対して呼ぶ。E16: 旧 settle_evaluations_for_race は sqlite3.Row.get が無く常に AttributeError（意図どおりの値を比較するため、
+# このゴールデンだけ行を .get 付きにする）。
+CASES += [
+    Case("GD11-WINKEYS-001", ("GD11",), "get_winning_combo_keys: 着順 0/NULL の除外・同着・3 着同着・数値順・欠番の着順・着順不足",
+         ("jraev.storage.repo.ResultRepository.get_winning_combo_keys",), S.winning_keys_calls(), default_abs_tol=0.0),
+    Case("GD11-SETTLE-EVAL-002", ("GD11",), "settle_evaluations_for_race: 代表評価の選択（発走前の最新 1 件・同値・境界・日付不正・post_time 無し）・的中/外れ/no_ticket・確定払戻 /100・"
+         "combo_odds の暫定・payout 0・冪等・force・ticket_evaluations の優先・best_candidate の各形式",
+         ("jraev.storage.evaluation_repo.EvaluationRepository.settle_evaluations_for_race",), S.eval_calls(), default_abs_tol=1e-12, known_defects=("E16",)),
+    Case("GD11-SETTLE-WIN-003", ("GD11",), "settle_open_win_bets_for_race: 単勝 bets の決済（的中=stake*odds・外れ・stake/odds 0・未確定・同着・決済済み/他券種/他レース・数値でない selection・結果の後着）と get_payout",
+         ("jraev.storage.bets_repo.BetsRepository.settle_open_win_bets_for_race", "jraev.storage.bets_repo.BetsRepository.get_payout"),
+         S.win_bet_calls() + S.payout_calls(), default_abs_tol=1e-12),
 ]
 
 CASES_BY_ID = {c.case_id: c for c in CASES}

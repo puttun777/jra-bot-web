@@ -276,7 +276,13 @@ class BotRunOrchestrator(
          */
         private fun restore(): RunCheckpoint {
             val previous = runs.listByDate(req.tenantId, req.date).filter { it.runId != keeper.run.runId }
-            val written = previous.filter { !it.checkpoint.isNullOrBlank() }
+            val liveRun = req.origin == NotificationOrigin.LIVE
+            // LIVE の run は、LIVE 以外の run の checkpoint を引き継がない（実際には通知していないタイミングを『発火済み』にして取りこぼすため。レビュー M1）
+            val written =
+                previous.filter { p ->
+                    !p.checkpoint.isNullOrBlank() &&
+                        !(liveRun && RunCheckpoint.parse(p.checkpoint)?.origin.let { it != null && it != NotificationOrigin.LIVE.name })
+                }
             val latestCorrupt = written.firstOrNull()?.let { RunCheckpoint.parse(it.checkpoint) == null } ?: false
             val usable =
                 written.firstNotNullOfOrNull { p ->
@@ -317,7 +323,7 @@ class BotRunOrchestrator(
                     "races=${quarantined.size} corrupt=$latestCorrupt",
                 )
             }
-            return base.copy(races = merged)
+            return base.copy(races = merged, origin = req.origin.name)
         }
 
         private fun recoverStaleClaims() {

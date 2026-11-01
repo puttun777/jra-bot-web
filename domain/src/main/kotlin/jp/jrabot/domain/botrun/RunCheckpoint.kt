@@ -56,6 +56,11 @@ data class RunCheckpoint(
     val cycle: Long,
     val lastCycleAt: Instant?,
     val races: Map<RaceId, RaceCheckpoint>,
+    /**
+     * この checkpoint を書いた run の通知の出どころ（[jp.jrabot.domain.notify.NotificationOrigin] の名前）。null は記録が無い旧い checkpoint。
+     * LIVE 以外（BACKFILL など）の run の『発火済み』は実際には通知していないので、LIVE の run は引き継がない（レビュー M1）。
+     */
+    val origin: String? = null,
 ) {
     init {
         require(cycle >= 0) { "cycle は 0 以上" }
@@ -73,6 +78,7 @@ data class RunCheckpoint(
             )
         val fields = linkedMapOf<String, JsonValue>("v" to JsonInt(VERSION.toLong()), "cycle" to JsonInt(cycle), "races" to raceObjects)
         lastCycleAt?.let { fields["last_cycle_at"] = JsonString(it.toString()) }
+        origin?.let { fields["origin"] = JsonString(it) }
         return CanonicalJson.encode(JsonObject(fields))
     }
 
@@ -106,7 +112,7 @@ data class RunCheckpoint(
                             }?.toSet() ?: emptySet()
                     races[id] = RaceCheckpoint(stage, (o["last_observed_at"] as? JsonString)?.value?.let { Instant.parse(it) }, fired)
                 }
-                RunCheckpoint(cycle, last, races)
+                RunCheckpoint(cycle, last, races, (root["origin"] as? JsonString)?.value)
             } catch (_: JsonFormatException) {
                 null
             } catch (_: RuntimeException) {

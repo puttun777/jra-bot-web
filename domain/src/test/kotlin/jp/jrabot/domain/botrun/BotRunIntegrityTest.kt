@@ -1,6 +1,7 @@
 package jp.jrabot.domain.botrun
 
 import jp.jrabot.domain.bot.BotRunState
+import jp.jrabot.domain.bot.BotRunTrigger
 import jp.jrabot.domain.botrun.testing.StubJudge
 import jp.jrabot.domain.calendar.Cal
 import jp.jrabot.domain.calendar.CalendarSettings
@@ -124,6 +125,20 @@ class BotRunIntegrityTest {
         assertEquals(1, r1Observations(k).size, "R1 に新しいオッズの観測の Signal が増えない（同じタイミングを再評価していない）")
         assertEquals(3, k.timings.rows.size, "各レース 1 つのタイミング")
         assertTrue(k.events.none { it.startsWith("RACES_QUARANTINED") })
+    }
+
+    @Test
+    fun `BACKFILL の run が途中で終わった後の LIVE の run は 通知していないタイミングも通知する（M1）`() {
+        val k = Kit()
+        k.onPause = { if (k.clock.now() >= k.at(9, 52)) k.stop = true }
+        assertEquals("SIGTERM", k.run(k.request(origin = NotificationOrigin.BACKFILL, trigger = BotRunTrigger.BACKFILL)).reason)
+        assertEquals(0, k.notifier.signals.size, "BACKFILL は通知しない")
+        k.stop = false
+        k.onPause = {}
+        val out = k.run(k.request(owner = "owner-B"))
+        assertEquals("ALL_RACES_OFF", out.reason)
+        assertEquals(3, k.notifier.signals.size, "R1 も含めて LIVE が通知する（BACKFILL の checkpoint の発火済みを引き継がない）")
+        assertEquals(3, k.timings.rows.size)
     }
 
     @Test

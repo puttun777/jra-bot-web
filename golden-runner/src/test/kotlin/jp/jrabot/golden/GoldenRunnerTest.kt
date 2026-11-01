@@ -246,6 +246,10 @@ class GoldenRunnerTest {
                 "G8-SINGLE-004",
                 "G8-GROUPED-005",
                 "G8-REASON-006",
+                // T3.9 ① で対応（結果の決済: 当たりのキー・評価の決済・単勝 bets の決済・払戻の取得）
+                "GD11-WINKEYS-001",
+                "GD11-SETTLE-EVAL-002",
+                "GD11-SETTLE-WIN-003",
             ),
             supported.keys,
         )
@@ -270,9 +274,9 @@ class GoldenRunnerTest {
                 id,
             )
         }
-        // 旧 Python の 32 ケース・994 呼び出し（T3.6-A 時点の 26 ケース・880 + T3.7 で追加した Discord 通知 6 ケース・114）
-        assertEquals(994, supported.values.sum() + unsupported.values.sum())
-        assertEquals(988, supported.values.sum()) // T3.6-A の 874 + G8 の 114
+        // 旧 Python の 35 ケース・1048 呼び出し（T3.6-A 時点の 26 ケース・880 + T3.7 で追加した Discord 通知 6 ケース・114 + T3.9 ① の決済 3 ケース・54）
+        assertEquals(1048, supported.values.sum() + unsupported.values.sum())
+        assertEquals(1042, supported.values.sum()) // T3.6-A の 874 + G8 の 114 + GD11 の 54
         assertEquals(6, unsupported.values.sum()) // GD10-DEFAULTS-001（旧関数の既定値。T1.20）だけ
     }
 
