@@ -564,8 +564,7 @@ class BotRunOrchestrator(
                         },
                 )
             val active = stages.filterValues { it != RaceStage.CANCELLED }
-            // 結果を待つレースが 0 件（全レースが中止・延期・除外）の日は、待つものが無いので完了にする（reconcile と同じ扱い）
-            if (stages.isNotEmpty() && (active.isEmpty() || active.values.all { it == RaceStage.SETTLED })) {
+            if (active.isNotEmpty() && active.values.all { it == RaceStage.SETTLED }) {
                 if (live) advancer.advance(req.tenantId, req.date, RaceDayStatus.COMPLETED, "run:${req.runId.value}")
                 events.event("ALL_SETTLED", "races=${active.size}")
                 return CycleResult(Done(BotRunState.SUCCEEDED, REASON_ALL_SETTLED, RunExit.OK), rw.poll)
