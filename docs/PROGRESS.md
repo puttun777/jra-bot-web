@@ -19,6 +19,8 @@
 | 独立レビュー（Opus・読取り専用・1 名） | 高 0・中 2・低 8。**M1 修正**（D-230: checkpoint に origin、再現試験は修正を外すと失敗）。M2・低は UNRESOLVED G-32 |
 | T3.9 ① 決済の計算 | `:domain` `settlement.SettlementCalculator`（純粋関数）+ ゴールデン GD11（3 ケース/54 呼び出し）。**Kotlin と旧実装が全一致**（35 ケース中 34 対応・1042 呼び出し、不一致 0）。D-231/D-232（旧欠陥 E16: 旧の評価決済は常に例外）|
 **ローカル検証**（JDK 21、合成データ。Maven Central の 429 を再試行で回避）: `:domain:test` 全件成功（`BotRunIntegrityTest` +1、`SettlementCalculatorTest` 10）、`:golden-runner:test`、ktlintCheck・checkModuleDependencies 成功、Python golden `run_tests` 93 件成功。**参照元 jra-bot は読み取りのみ**（実行で作られた `__pycache__` は削除済み・`git status` クリーン）。
+**CI（124b95b）**: build / db 8.4 / db 9.7 / golden / agent python・windows / release tools / hygiene は成功。`images`（スモーク）が失敗: T3.8 で `bot-run` に運用値の環境変数が必須になった（既定なし）ためスモークの bot-run が exit 2 → スモークに合成の `BOT_RUN_*` を渡して修正（dfe391d。運用値ではない）。`ml tools`/`ml-train`/`connectorj26` は変更範囲外のため skipped（設計どおり）。
+**T3.9 ②（結果・払戻の取込）**: D-233。`:domain` の観測・ポート・`ObservationApplier`、`:persistence` の `ResultDao`/`PayoutDao`（条件付き upsert）、`:ingest` の合成レコード `NRS`/`NHR`。ローカル: `:persistence` 統合 5 件 + 単体、`:ingest` 統合（AGENT_PYTHON 指定で全件）、`:domain`/`:bot` 単体、ktlint・依存検査すべて成功。
 **未実施**: PR #30 の最新コミットでの CI 全体の結果（確認後に追記）、MySQL 統合のローカル再実行（変更が `:domain` のみのため CI に委ねる）。
 **承認待ち/本人判断**: V6 の最終 SQL と追加 GRANT（docs/T39_DESIGN.md §9。適用対象の Flyway には入れていない）、払戻の単位以外の同着・返還・取消（JV-Data 仕様）、COMP-4。
 **次の手順**: ① PR #30 の CI を確認（全ジョブ。skipped を成功扱いにしない）し、レビュー修正差分を再確認 → 条件を満たせばマージ。② T3.9 ②（結果・払戻の取込 → RaceStatusUpdater → ResultSettler と bot-run の結果待ち）。

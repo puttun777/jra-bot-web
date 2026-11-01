@@ -35,6 +35,8 @@ internal object TenantSqlGuard {
             "ml_model",
             "horse_master_history",
             "race_timing_notice",
+            "results",
+            "payouts",
             "race_horses",
             "race_evaluations",
             "horses",

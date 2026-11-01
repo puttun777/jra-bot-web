@@ -199,6 +199,8 @@ fun TestDb.resetData() {
         "signals",
         "race_evaluations",
         "race_horses",
+        "results",
+        "payouts",
         "combo_odds_snapshots",
         "odds_snapshots",
         "bot_run",

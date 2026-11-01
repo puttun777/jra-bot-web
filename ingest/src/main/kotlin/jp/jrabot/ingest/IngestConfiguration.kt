@@ -19,8 +19,10 @@ import jp.jrabot.domain.ingest.IngestBatchStore
 import jp.jrabot.domain.ingest.IngestCursorStore
 import jp.jrabot.domain.ingest.IngestGapStore
 import jp.jrabot.domain.ingest.ObservationApplier
+import jp.jrabot.domain.ingest.PayoutStore
 import jp.jrabot.domain.ingest.RawRecordStore
 import jp.jrabot.domain.ingest.RecordParsers
+import jp.jrabot.domain.ingest.ResultStore
 import jp.jrabot.domain.ingest.UnitOfWork
 import jp.jrabot.domain.odds.ComboOddsSnapshotRepository
 import jp.jrabot.domain.odds.OddsSnapshotRepository
@@ -113,6 +115,8 @@ class IngestConfiguration {
         races: RaceRepository,
         odds: OddsSnapshotRepository,
         combos: ComboOddsSnapshotRepository,
+        results: ResultStore,
+        payouts: PayoutStore,
         clock: Clock,
     ): ObservationApplier =
         ObservationApplier(
@@ -122,6 +126,8 @@ class IngestConfiguration {
             races,
             odds,
             combos,
+            results,
+            payouts,
             ApplyPolicy(settings.ingest.oddsBelowPar, settings.ingest.storeComboOdds),
         )
 

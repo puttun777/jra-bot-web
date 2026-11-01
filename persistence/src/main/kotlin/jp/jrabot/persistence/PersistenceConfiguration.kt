@@ -16,7 +16,9 @@ import jp.jrabot.domain.ingest.IngestBatchStore
 import jp.jrabot.domain.ingest.IngestCursorStore
 import jp.jrabot.domain.ingest.IngestGapStore
 import jp.jrabot.domain.ingest.NonceStore
+import jp.jrabot.domain.ingest.PayoutStore
 import jp.jrabot.domain.ingest.RawRecordStore
+import jp.jrabot.domain.ingest.ResultStore
 import jp.jrabot.domain.ingest.UnitOfWork
 import jp.jrabot.domain.ml.dataset.DatasetSource
 import jp.jrabot.domain.ml.features.FeatureSource
@@ -46,12 +48,14 @@ import jp.jrabot.persistence.dao.IngestRawDaoImpl
 import jp.jrabot.persistence.dao.MlModelDaoImpl
 import jp.jrabot.persistence.dao.MlSourceDaoImpl
 import jp.jrabot.persistence.dao.OddsSnapshotDaoImpl
+import jp.jrabot.persistence.dao.PayoutDaoImpl
 import jp.jrabot.persistence.dao.RaceDaoImpl
 import jp.jrabot.persistence.dao.RaceDayDaoImpl
 import jp.jrabot.persistence.dao.RaceEvaluationDaoImpl
 import jp.jrabot.persistence.dao.RaceHorseNameDaoImpl
 import jp.jrabot.persistence.dao.RaceScheduleDaoImpl
 import jp.jrabot.persistence.dao.RaceTimingNoticeDaoImpl
+import jp.jrabot.persistence.dao.ResultDaoImpl
 import jp.jrabot.persistence.dao.ScheduleEventDaoImpl
 import jp.jrabot.persistence.dao.SignalDaoImpl
 import jp.jrabot.persistence.doma.jrabotMysqlDialect
@@ -75,12 +79,14 @@ import jp.jrabot.persistence.repository.IngestGapStoreImpl
 import jp.jrabot.persistence.repository.MlModelRegistryRepository
 import jp.jrabot.persistence.repository.NonceStoreImpl
 import jp.jrabot.persistence.repository.OddsSnapshotRepositoryImpl
+import jp.jrabot.persistence.repository.PayoutStoreImpl
 import jp.jrabot.persistence.repository.RaceDayRepositoryImpl
 import jp.jrabot.persistence.repository.RaceEntryReaderImpl
 import jp.jrabot.persistence.repository.RaceEvaluationRepositoryImpl
 import jp.jrabot.persistence.repository.RaceRepositoryImpl
 import jp.jrabot.persistence.repository.RaceScheduleRepositoryImpl
 import jp.jrabot.persistence.repository.RawRecordStoreImpl
+import jp.jrabot.persistence.repository.ResultStoreImpl
 import jp.jrabot.persistence.repository.ScheduleEventRepositoryImpl
 import jp.jrabot.persistence.repository.SignalRepositoryImpl
 import jp.jrabot.persistence.repository.SpringUnitOfWork
@@ -258,6 +264,21 @@ class PersistenceConfiguration {
         tx: TransactionOperations,
         clock: Clock,
     ): ComboOddsSnapshotRepository = ComboOddsSnapshotRepositoryImpl(ComboOddsSnapshotDaoImpl(config), tx, clock)
+
+    /** 着順・払戻（取込が書く。bot は読むだけ: R__grants.sql）。 */
+    @Bean
+    fun resultStore(
+        config: Config,
+        tx: TransactionOperations,
+        clock: Clock,
+    ): ResultStore = ResultStoreImpl(ResultDaoImpl(config), tx, clock)
+
+    @Bean
+    fun payoutStore(
+        config: Config,
+        tx: TransactionOperations,
+        clock: Clock,
+    ): PayoutStore = PayoutStoreImpl(PayoutDaoImpl(config), tx, clock)
 
     /** 判定の記録（bot-run が書く。冪等な追記）。 */
     @Bean

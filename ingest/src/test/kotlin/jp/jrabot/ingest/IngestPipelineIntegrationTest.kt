@@ -367,6 +367,95 @@ class IngestPipelineIntegrationTest {
     }
 
     @Test
+    fun `着順と払戻の保存（T3-9）： 検証・冪等・確定を速報で上書きしない・レース未登録は保留・取込ユーザーの権限で書ける`() {
+        it.ingest(it.one, it.envelope(records = listOf(it.nra(race, "2", "20261030"))))
+
+        fun send(vararg r: Map<String, Any?>) =
+            it.ingest(
+                it.one,
+                it.envelope(
+                    cls = "R",
+                    dataspec = "0B12",
+                    eof = false,
+                    option = null,
+                    fromtime = null,
+                    lastFileTimestamp = null,
+                    records = r.toList(),
+                    observedAt = ItClock.now(),
+                ),
+            )
+
+        val rs =
+            it.norm(
+                "NRS",
+                mapOf(
+                    "raceId" to race,
+                    "entries" to listOf(mapOf("umaban" to 1, "finish" to 2), mapOf("umaban" to 2, "finish" to 1), mapOf("umaban" to 3, "finish" to null)),
+                ),
+            )
+        assertEquals(0, it.parse(send(rs))["quarantined"])
+        assertEquals(3, it.count("SELECT COUNT(*) FROM results"))
+        assertEquals("1", it.db.scalar("SELECT finish FROM results WHERE umaban = 2"))
+        send(rs) // 再送は増えない
+        assertEquals(3, it.count("SELECT COUNT(*) FROM results"))
+
+        // 不正（着順 0・馬番の重複・払戻 0・キーの表記違い）は隔離され 何も保存しない
+        val badFinish = it.norm("NRS", mapOf("raceId" to race, "entries" to listOf(mapOf("umaban" to 4, "finish" to 0))))
+        val dupUmaban = it.norm("NRS", mapOf("raceId" to race, "entries" to listOf(mapOf("umaban" to 4, "finish" to 3), mapOf("umaban" to 4, "finish" to 4))))
+        val zeroPayout =
+            it.norm(
+                "NHR",
+                mapOf(
+                    "raceId" to race,
+                    "market" to "wide",
+                    "provisional" to false,
+                    "entries" to listOf(mapOf("key" to "02-03", "payout" to 0.0)),
+                ),
+            )
+        val badKey =
+            it.norm(
+                "NHR",
+                mapOf(
+                    "raceId" to race,
+                    "market" to "wide",
+                    "provisional" to false,
+                    "entries" to listOf(mapOf("key" to "3-2", "payout" to 350.0)),
+                ),
+            )
+        assertEquals(4, it.parse(send(badFinish, dupUmaban, zeroPayout, badKey))["quarantined"])
+        assertEquals(3, it.count("SELECT COUNT(*) FROM results"))
+        assertEquals(0, it.count("SELECT COUNT(*) FROM payouts"))
+
+        // 払戻: 速報 → 確定 → 確定の後の速報は無視
+        fun payout(
+            value: Double,
+            provisional: Boolean,
+        ) = it.norm(
+            "NHR",
+            mapOf(
+                "raceId" to race,
+                "market" to "wide",
+                "provisional" to provisional,
+                "entries" to listOf(mapOf("key" to "02-03", "payout" to value)),
+            ),
+        )
+        send(payout(300.0, true))
+        assertEquals("1", it.db.scalar("SELECT is_provisional FROM payouts"))
+        send(payout(350.0, false))
+        assertEquals("350", it.db.scalar("SELECT payout FROM payouts")?.removeSuffix(".0"))
+        assertEquals("0", it.db.scalar("SELECT is_provisional FROM payouts"))
+        send(payout(999.0, true))
+        assertEquals("350", it.db.scalar("SELECT payout FROM payouts")?.removeSuffix(".0"))
+        assertEquals(1, it.count("SELECT COUNT(*) FROM payouts"))
+
+        // レース未登録は保存せず保留
+        val other = it.norm("NRS", mapOf("raceId" to "202611020511", "entries" to listOf(mapOf("umaban" to 1, "finish" to 1))))
+        assertEquals(1, it.parse(send(other))["unsupported"])
+        assertEquals(0, it.count("SELECT COUNT(*) FROM results WHERE race_id = '202611020511'"))
+        assertEquals("PENDING", it.db.scalar("SELECT parse_status FROM ingest_raw WHERE parse_error LIKE 'RACE_NOT_FOUND%'"))
+    }
+
+    @Test
     fun `ワイド・三連複： 組み合わせキーを昇順に正規化して保存し、矛盾するキーは隔離する`() {
         it.ingest(it.one, it.envelope(records = listOf(it.nra(race, "2", "20261030"))))
         val wide =

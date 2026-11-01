@@ -29,6 +29,15 @@ enum class ComboMarket(
     }
 }
 
+/**
+ * 組み合わせキーの表記。[LEGACY] は旧 Python（`2-3` のように 0 埋めなし）で、ゴールデン GD11 の比較用。
+ * [PADDED] は新 DB の `ComboKeys`（`02-03`）で、実運用（`ResultSettler`）はこちらを使う。
+ */
+enum class KeyFormat {
+    LEGACY,
+    PADDED,
+}
+
 /** 着順の 1 行（取消などで着順が無い馬は [finish] が null）。 */
 data class FinishRow(
     val umaban: Int,
@@ -110,27 +119,38 @@ object SettlementCalculator {
      * 同着は着順が同じ馬を**馬番の昇順**に並べる（旧は SQL の `ORDER BY finish` だけで同値の並びは未規定。SQLite の実際の並び = 主キー順を再現）。
      * 同着が 2・3 着の境目に掛かる場合の当たりは JRA の確定払戻が正で、ここでは決めない（払戻の取込後に `payouts` の行を正とする: T3.9 ②）。
      */
-    fun winningKeys(rows: List<FinishRow>): WinningKeys {
+    fun winningKeys(
+        rows: List<FinishRow>,
+        format: KeyFormat = KeyFormat.LEGACY,
+    ): WinningKeys {
         val order =
             rows
                 .filter { it.finish != null && it.finish > 0 }
                 .sortedWith(compareBy<FinishRow> { it.finish }.thenBy { it.umaban })
                 .map { it.umaban }
 
-        fun key(n: Int): String? = if (order.size >= n) order.take(n).sorted().joinToString("-") else null
+        fun key(n: Int): String? = if (order.size >= n) order.take(n).sorted().joinToString("-") { fmt(it, format) } else null
         return WinningKeys(wide = key(2), sanrenpuku = key(3))
     }
 
     /**
      * 旧 `_normalize_combo_key`。`-` で分けた整数を昇順にそろえる。整数にできない部分があれば前後の空白を除いた元の文字列、空なら空文字。
      */
-    fun normalizeComboKey(selection: String?): String {
+    fun normalizeComboKey(
+        selection: String?,
+        format: KeyFormat = KeyFormat.LEGACY,
+    ): String {
         if (selection.isNullOrEmpty()) return ""
         val parts = selection.split("-").map { it.trim() }.filter { it.isNotEmpty() }
         if (parts.isEmpty()) return ""
         val numbers = parts.map { it.toIntOrNull() ?: return selection.trim() }
-        return numbers.sorted().joinToString("-")
+        return numbers.sorted().joinToString("-") { fmt(it, format) }
     }
+
+    private fun fmt(
+        n: Int,
+        format: KeyFormat,
+    ): String = if (format == KeyFormat.PADDED) "%02d".format(n) else n.toString()
 
     /**
      * 旧 `_resolve_best_combo`。① 買い目（賭式が「ワイド」「三連複」のどちらかで、採用済みまたは順位 1。英語表記は含めない = 旧 SQL どおり）の先頭（採用済み優先 → 順位の昇順。順位なしが先）が空でないキーを持てばそれ。
@@ -139,6 +159,7 @@ object SettlementCalculator {
     fun resolveBestCombo(
         tickets: List<TicketRef>,
         candidate: CandidateView?,
+        format: KeyFormat = KeyFormat.LEGACY,
     ): ResolvedCombo? {
         val top =
             tickets
@@ -149,7 +170,7 @@ object SettlementCalculator {
                 ).firstOrNull()
         if (top != null && !top.comboKey.isNullOrEmpty()) {
             val market = ComboMarket.fromBetType(top.betType)
-            if (market != null) return ResolvedCombo(market, normalizeComboKey(top.comboKey))
+            if (market != null) return ResolvedCombo(market, normalizeComboKey(top.comboKey, format))
         }
         if (candidate == null) return null
         val market = ComboMarket.fromBetType(candidate.betType?.takeIf { it.isNotEmpty() } ?: candidate.type) ?: return null
@@ -158,7 +179,7 @@ object SettlementCalculator {
             key = candidate.firstTicketKumi?.takeIf { it.isNotEmpty() } ?: candidate.firstTicketComboKey?.takeIf { it.isNotEmpty() }
         }
         if (key == null) return null
-        return ResolvedCombo(market, normalizeComboKey(key))
+        return ResolvedCombo(market, normalizeComboKey(key, format))
     }
 
     /** 旧 `_race_start_iso`: `date`（8 桁 `yyyyMMdd`）と `post_time`（`HH:MM` は秒を補う。無ければ `00:00`）から `yyyy-MM-ddTHH:MM:SS` を作る。作れなければ null。 */

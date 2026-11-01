@@ -215,6 +215,8 @@ object IngestIt {
             "ingest_fetch",
             "ingest_backfill",
             "ingest_gap",
+            "results",
+            "payouts",
             "odds_snapshots",
             "combo_odds_snapshots",
             "race_day",

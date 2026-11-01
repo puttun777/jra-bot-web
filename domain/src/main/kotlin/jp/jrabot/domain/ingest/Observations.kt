@@ -76,6 +76,32 @@ data class SanrenpukuOddsObservation(
     val entries: List<SanrenpukuOddsEntry>,
 ) : Observation
 
+/** 着順の 1 行。[finish] が null は着順なし（取消・除外など。旧と同じく『着順なし』として保存し、勝ち馬券の判定では数えない）。 */
+data class ResultEntry(
+    val umaban: Int,
+    val finish: Int?,
+)
+
+/** 確定した（または速報の）着順。馬ごとの行を**そのレース分まとめて**置き換える単位ではなく、馬番ごとに upsert する。 */
+data class ResultObservation(
+    val raceId: RaceId,
+    val entries: List<ResultEntry>,
+) : Observation
+
+/** 払戻 1 行。[payout] は **100 円あたりの払戻金額（円）**（旧 `payouts.payout` と同じ。公式仕様での確認は G-5/G-16）。 */
+data class PayoutRow(
+    val comboKey: String,
+    val payout: Double,
+)
+
+/** 払戻。[provisional] が true は速報（確定を上書きしない）。[market] は単勝・ワイド・三連複。 */
+data class PayoutObservation(
+    val raceId: RaceId,
+    val market: jp.jrabot.domain.odds.Market,
+    val rows: List<PayoutRow>,
+    val provisional: Boolean,
+) : Observation
+
 sealed interface ParseOutcome {
     data class Parsed(
         val observations: List<Observation>,
