@@ -17,6 +17,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.http.CacheControl
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.transaction.support.TransactionOperations
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -66,6 +67,8 @@ class AdminApi(
     private val service: CalendarOverrideService,
     private val reader: CalendarOverrideReader,
     private val audit: AuditLogWriter,
+    /** 変更と監査記録を**同じトランザクション**にする（監査を書けなければ変更も取り消す）。 */
+    private val tx: TransactionOperations,
 ) {
     @GetMapping("/overrides")
     fun list(
@@ -95,17 +98,22 @@ class AdminApi(
                 OverrideAction.POSTPONE_TO -> OverrideValue.PostponedTo(parseDate(body.postponedTo) ?: throw bad())
                 else -> null
             }
+        // 変更と監査記録を 1 つのトランザクションで行う（service/repository は同じ TransactionOperations に参加する）。監査に失敗すれば例外 → 変更も取り消される
         val created =
             try {
-                service.create(p.tenantId, scope, date, raceId, action, value, reason, p.email.value, parseInstant(body.validUntil))
+                tx.execute {
+                    val r = service.create(p.tenantId, scope, date, raceId, action, value, reason, p.email.value, parseInstant(body.validUntil))
+                    if (r is CreateOverrideOutcome.Created) record(request, "CALENDAR_OVERRIDE_CREATE", r.override.id, null, dto(r.override), reason)
+                    r
+                }
             } catch (_: IllegalArgumentException) {
                 throw bad() // ドメインの検証（scope と action の組合せ・日付の整合など）。メッセージは出さない
+            } catch (e: AuditFailure) {
+                throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "audit_failed", e)
             }
         return when (created) {
             is CreateOverrideOutcome.Created -> {
-                val out = dto(created.override)
-                record(request, "CALENDAR_OVERRIDE_CREATE", out.id, null, out, reason)
-                ok(HttpStatus.CREATED, out)
+                ok(HttpStatus.CREATED, dto(created.override))
             }
 
             CreateOverrideOutcome.Duplicate -> {
@@ -125,25 +133,25 @@ class AdminApi(
     ): ResponseEntity<OverrideDto> {
         val p = ApiAuthFilter.principalOf(request)
         if (id < 1) throw bad()
-        val before = reader.find(p.tenantId, id)?.let(::dto)
-        return when (val r = service.revoke(p.tenantId, id, p.email.value)) {
-            is OverrideRevokeResult.Revoked -> {
-                val out = dto(r.override)
-                record(request, "CALENDAR_OVERRIDE_REVOKE", id, before, out, null)
-                ok(HttpStatus.OK, out)
+        val result =
+            try {
+                tx.execute {
+                    val before = reader.find(p.tenantId, id)?.let(::dto)
+                    val r = service.revoke(p.tenantId, id, p.email.value)
+                    if (r is OverrideRevokeResult.Revoked) record(request, "CALENDAR_OVERRIDE_REVOKE", id, before, dto(r.override), null)
+                    r
+                }
+            } catch (e: AuditFailure) {
+                throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "audit_failed", e)
             }
-
-            OverrideRevokeResult.AlreadyRevoked -> {
-                throw ResponseStatusException(HttpStatus.CONFLICT, "already_revoked")
-            }
-
-            OverrideRevokeResult.NotFound -> {
-                throw ResponseStatusException(HttpStatus.NOT_FOUND, "not_found")
-            }
+        return when (result) {
+            is OverrideRevokeResult.Revoked -> ok(HttpStatus.OK, dto(result.override))
+            OverrideRevokeResult.AlreadyRevoked -> throw ResponseStatusException(HttpStatus.CONFLICT, "already_revoked")
+            OverrideRevokeResult.NotFound -> throw ResponseStatusException(HttpStatus.NOT_FOUND, "not_found")
         }
     }
 
-    /** 監査記録。**変更の後**に書く。書けなかった場合は成功にせず 500 を返す（変更は済んでいる = ログに残して運用者が確認する）。 */
+    /** 監査記録。変更と**同じトランザクションの中**で書く。書けなければ [AuditFailure]（呼び出し側のトランザクションが取り消す）。 */
     private fun record(
         request: HttpServletRequest,
         action: String,
@@ -169,21 +177,32 @@ class AdminApi(
                 clock.now(),
             )
         } catch (e: Exception) {
-            log.error("AUDIT_FAILED action={} target={} error={}（変更は適用済み。監査記録を確認すること）", action, id, e.javaClass.simpleName)
-            throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "audit_failed")
+            log.error("AUDIT_FAILED action={} target={} error={}（変更は取り消される）", action, id, e.javaClass.simpleName)
+            throw AuditFailure(e)
         }
     }
 
-    private fun json(d: OverrideDto): String =
-        "{" +
+    private class AuditFailure(
+        cause: Exception,
+    ) : RuntimeException("audit failed", cause)
+
+    /** 監査に残す JSON。秘密を含まない値だけ（enum・日付・レース ID・設定した値・期限・取消者）。値は JSON 文字列として安全にエスケープする。 */
+    private fun json(d: OverrideDto): String {
+        fun q(v: Any?): String = if (v == null) "null" else "\"" + v.toString().replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+        return "{" +
             listOf(
                 "\"id\":${d.id}",
-                "\"scope\":\"${d.scope}\"",
-                "\"date\":\"${d.date}\"",
-                "\"raceId\":${d.raceId?.let { "\"$it\"" }}",
-                "\"action\":\"${d.action}\"",
-                "\"revokedAt\":${d.revokedAt?.let { "\"$it\"" }}",
-            ).joinToString(",") + "}"
+                "\"scope\":${q(d.scope)}",
+                "\"date\":${q(d.date)}",
+                "\"raceId\":${q(d.raceId)}",
+                "\"action\":${q(d.action)}",
+                "\"value\":${q(d.value)}",
+                "\"validUntil\":${q(d.validUntil)}",
+                "\"revokedAt\":${q(d.revokedAt)}",
+                "\"revokedBy\":${q(d.revokedBy)}",
+            ).joinToString(",") +
+            "}"
+    }
 
     private fun dto(o: CalendarOverride) =
         OverrideDto(

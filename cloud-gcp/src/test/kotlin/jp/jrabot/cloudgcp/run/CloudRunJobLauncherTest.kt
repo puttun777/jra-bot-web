@@ -103,4 +103,11 @@ class CloudRunJobLauncherTest {
         responseBody = "not json"
         assertEquals(LaunchResult.Launched("unknown"), launcher().launch(req()))
     }
+
+    @Test
+    fun `予約済みのキー（task・tenant-id）と空の値は依頼の時点で拒否する`() {
+        for (bad in listOf(mapOf("task" to "retention"), mapOf("tenant-id" to "2"), mapOf("date" to ""))) {
+            kotlin.test.assertFailsWith<IllegalArgumentException>(bad.toString()) { JobLaunchRequest(TenantId.of(1), LaunchableJob.BOT_RUN, bad) }
+        }
+    }
 }

@@ -129,7 +129,7 @@ class PerformanceReadServiceTest {
         sentSignal(r1, 2, at) // 的中
         sentSignal(r1, 4, at, odds = 15.0, stake = 1.0) // 外れ
         sentSignal(r1, 6, at, send = false) // 未通知は対象外
-        store.res[r1] = listOf(ResultEntry(2, 1), ResultEntry(4, 2), ResultEntry(5, 3))
+        store.res[r1] = listOf(ResultEntry(2, 1), ResultEntry(4, 2), ResultEntry(5, 3), ResultEntry(7, 4))
         store.pay[r1 to Market.WIN] = listOf(StoredPayout("02", 800.0, false))
         notice(r1, at, 500, "5-7", 300.0)
         store.pay[r1 to Market.WIDE] = listOf(StoredPayout("05-07", 1200.0, false))
@@ -144,6 +144,37 @@ class PerformanceReadServiceTest {
         assertEquals(Market.WIDE, wide.market)
         assertEquals(3600.0, wide.actualPayout)
         assertEquals(0, r.unreadableNotices)
+    }
+
+    @Test
+    fun `見送りの item と 本文に載せなかった買い目（重複・EV 下位）は数えない`() {
+        val at = post1.minusSeconds(300)
+
+        fun ticket(
+            kumi: String,
+            ev: Double,
+        ) = TicketView(kumi, "3.0〜4.0", 0.2, ev, 100.0)
+        // 7 点（EV 降順で 7 点目 = "01-12" は載らない）+ 同じ組み合わせの重複 + 見送り item
+        val tickets =
+            listOf("05-07", "05-08", "05-09", "05-10", "05-11", "05-12", "01-12").mapIndexed { i, k -> ticket(k, 1.0 - i * 0.1) } + ticket("[BOX]05-07", 0.1)
+
+        fun view(skip: String?) =
+            SignalView(
+                "ワイド",
+                5,
+                3.0,
+                0.2,
+                0.1,
+                skipReason = skip,
+                bundle = BundleView(listOf(StrategyView("ワイド", 100.0, 1.0, 3.0, 0.2, 0.1, null, tickets, null)), null, 100.0, 1.0),
+            )
+        val snap = NoticeSnapshot(RaceLabel("東京", 1, "R1"), listOf(NoticeItem(SignalId.of(1), view(null)), NoticeItem(SignalId.of(2), view("見送り"))))
+        timings.claim(listOf(TimingNotice(t1, r1, 500, "run", 1L, at, NoticeSnapshot.SCHEMA, snap.canonicalJson(), snap.sha256(), at)))
+        store.res[r1] = (1..12).map { ResultEntry(it, it) }
+        store.pay[r1 to Market.WIDE] = listOf(StoredPayout("01-02", 500.0, false))
+        val wide = service.report(t1, Cal.DATE, Cal.DATE).combos.single()
+        assertEquals(6, wide.count, "載せた 6 点だけ（重複 BOX・EV 下位・見送りは数えない）")
+        assertEquals(600.0, wide.totalStake)
     }
 
     @Test

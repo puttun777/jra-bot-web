@@ -1,5 +1,6 @@
 package jp.jrabot.domain.performance
 
+import jp.jrabot.domain.ingest.ResultEntry
 import jp.jrabot.domain.ingest.StoredPayout
 import jp.jrabot.domain.odds.Market
 import jp.jrabot.domain.race.RaceId
@@ -21,6 +22,8 @@ class ComboPaperSettlementTest {
         stake: Double = 300.0,
         observed: Instant = post.minusSeconds(300),
     ) = ComboTicketInput(race, market, kumi, stake, observed, post)
+
+    private val finishers = (1..12).map { ResultEntry(it, it) } // 全馬に着順がある
 
     private fun pay(
         key: String,
@@ -44,11 +47,11 @@ class ComboPaperSettlementTest {
     fun `ワイドは 3 着までの任意の 2 頭が的中で 払戻の行にある組み合わせが正（旧実装の 1・2 着だけは引き継がない）`() {
         // 1 着 3 番・2 着 7 番・3 着 5 番 → ワイドの払戻は 03-07 / 03-05 / 05-07 の 3 行
         val payouts = listOf(pay("03-07", 450.0), pay("03-05", 280.0), pay("05-07", 1200.0))
-        val hit = ComboPaperSettlement.settle(ticket(Market.WIDE, "5-7"), payouts) as ComboOutcome.Settled
+        val hit = ComboPaperSettlement.settle(ticket(Market.WIDE, "5-7"), payouts, finishers) as ComboOutcome.Settled
         assertTrue(hit.hit)
         assertEquals(3600.0, hit.actualPayout) // 300 × 1200 / 100
         assertEquals(3300.0, hit.actualProfit)
-        val miss = ComboPaperSettlement.settle(ticket(Market.WIDE, "3-9"), payouts) as ComboOutcome.Settled
+        val miss = ComboPaperSettlement.settle(ticket(Market.WIDE, "3-9"), payouts, finishers) as ComboOutcome.Settled
         assertEquals(false, miss.hit)
         assertEquals(0.0, miss.actualPayout)
         assertEquals(-300.0, miss.actualProfit)
@@ -57,37 +60,59 @@ class ComboPaperSettlementTest {
     @Test
     fun `同着で払戻の行が増えても 行の有無で判定する`() {
         val payouts = listOf(pay("03-07", 450.0), pay("03-05", 280.0), pay("05-07", 1200.0), pay("03-08", 300.0), pay("07-08", 900.0), pay("05-08", 600.0))
-        assertEquals(true, (ComboPaperSettlement.settle(ticket(Market.WIDE, "08-03"), payouts) as ComboOutcome.Settled).hit)
+        assertEquals(true, (ComboPaperSettlement.settle(ticket(Market.WIDE, "08-03"), payouts, finishers) as ComboOutcome.Settled).hit)
     }
 
     @Test
     fun `三連複の的中と外れ`() {
         val payouts = listOf(pay("03-05-07", 8200.0))
-        val hit = ComboPaperSettlement.settle(ticket(Market.SANRENPUKU, "7-3-5", stake = 100.0), payouts) as ComboOutcome.Settled
+        val hit = ComboPaperSettlement.settle(ticket(Market.SANRENPUKU, "7-3-5", stake = 100.0), payouts, finishers) as ComboOutcome.Settled
         assertEquals(8200.0, hit.actualPayout)
-        assertEquals(false, (ComboPaperSettlement.settle(ticket(Market.SANRENPUKU, "03-05-08"), payouts) as ComboOutcome.Settled).hit)
+        assertEquals(false, (ComboPaperSettlement.settle(ticket(Market.SANRENPUKU, "03-05-08"), payouts, finishers) as ComboOutcome.Settled).hit)
     }
 
     @Test
     fun `確定した払戻が無い間は判定しない 速報だけでも外れにしない`() {
-        assertEquals(ComboOutcome.Unsettled(ComboUnsettledReason.NO_CONFIRMED_PAYOUT), ComboPaperSettlement.settle(ticket(Market.WIDE, "3-9"), emptyList()))
         assertEquals(
             ComboOutcome.Unsettled(ComboUnsettledReason.NO_CONFIRMED_PAYOUT),
-            ComboPaperSettlement.settle(ticket(Market.WIDE, "3-9"), listOf(pay("03-07", 450.0, provisional = true))),
+            ComboPaperSettlement.settle(ticket(Market.WIDE, "3-9"), emptyList(), finishers),
+        )
+        assertEquals(
+            ComboOutcome.Unsettled(ComboUnsettledReason.NO_CONFIRMED_PAYOUT),
+            ComboPaperSettlement.settle(ticket(Market.WIDE, "3-9"), listOf(pay("03-07", 450.0, provisional = true)), finishers),
         )
         // 速報の的中は実払戻に使わない（確定で変わり得る）
         assertEquals(
             ComboOutcome.Unsettled(ComboUnsettledReason.NO_CONFIRMED_PAYOUT),
-            ComboPaperSettlement.settle(ticket(Market.WIDE, "3-7"), listOf(pay("03-07", 450.0, provisional = true))),
+            ComboPaperSettlement.settle(ticket(Market.WIDE, "3-7"), listOf(pay("03-07", 450.0, provisional = true)), finishers),
         )
+    }
+
+    @Test
+    fun `着順の無い馬（取消・除外）を含む券は 外れにも当たりにもしない`() {
+        val payouts = listOf(pay("03-07", 450.0))
+        val scratched = listOf(ResultEntry(3, 1), ResultEntry(7, 2), ResultEntry(9, 0), ResultEntry(5, 3))
+        assertEquals(
+            ComboOutcome.Unsettled(ComboUnsettledReason.HORSE_WITHOUT_FINISH),
+            ComboPaperSettlement.settle(ticket(Market.WIDE, "3-9"), payouts, scratched),
+        )
+        assertEquals(
+            ComboOutcome.Unsettled(ComboUnsettledReason.HORSE_WITHOUT_FINISH),
+            ComboPaperSettlement.settle(ticket(Market.WIDE, "3-11"), payouts, scratched),
+            "結果に載っていない馬",
+        )
+        assertEquals(true, (ComboPaperSettlement.settle(ticket(Market.WIDE, "3-7"), payouts, scratched) as ComboOutcome.Settled).hit)
     }
 
     @Test
     fun `見送り・読めない買い目・対象外の賭式は損益の対象にしない`() {
         val payouts = listOf(pay("03-07", 450.0))
-        assertEquals(ComboOutcome.Unsettled(ComboUnsettledReason.NOT_A_BET), ComboPaperSettlement.settle(ticket(Market.WIDE, "3-7", stake = 0.0), payouts))
-        assertEquals(ComboOutcome.Unsettled(ComboUnsettledReason.UNPARSEABLE_KUMI), ComboPaperSettlement.settle(ticket(Market.WIDE, "3"), payouts))
-        assertEquals(ComboOutcome.Unsettled(ComboUnsettledReason.UNSUPPORTED_MARKET), ComboPaperSettlement.settle(ticket(Market.WIN, "3"), payouts))
+        assertEquals(
+            ComboOutcome.Unsettled(ComboUnsettledReason.NOT_A_BET),
+            ComboPaperSettlement.settle(ticket(Market.WIDE, "3-7", stake = 0.0), payouts, finishers),
+        )
+        assertEquals(ComboOutcome.Unsettled(ComboUnsettledReason.UNPARSEABLE_KUMI), ComboPaperSettlement.settle(ticket(Market.WIDE, "3"), payouts, finishers))
+        assertEquals(ComboOutcome.Unsettled(ComboUnsettledReason.UNSUPPORTED_MARKET), ComboPaperSettlement.settle(ticket(Market.WIN, "3"), payouts, finishers))
     }
 
     @Test

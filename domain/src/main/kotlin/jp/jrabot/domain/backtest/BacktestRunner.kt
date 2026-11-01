@@ -155,7 +155,7 @@ class BacktestRunner(
                                 val stake = t.stake ?: continue
                                 if (!(stake > 0.0)) continue
                                 val input = ComboTicketInput(race.raceId, market, t.kumi, stake, win.observedAt, postAt)
-                                val outcome = ComboPaperSettlement.settle(input, payouts.list(req.tenantId, race.raceId, market))
+                                val outcome = ComboPaperSettlement.settle(input, payouts.list(req.tenantId, race.raceId, market), finishers)
                                 val key = ComboPaperSettlement.comboKey(market, t.kumi)
                                 if (outcome is ComboOutcome.Settled && key != null) {
                                     comboItems += SettledCombo(race.raceId, market, key, win.observedAt, postAt, outcome)

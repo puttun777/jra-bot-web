@@ -1,5 +1,6 @@
 package jp.jrabot.domain.performance
 
+import jp.jrabot.domain.ingest.ResultEntry
 import jp.jrabot.domain.ingest.StoredPayout
 import jp.jrabot.domain.odds.ComboKeys
 import jp.jrabot.domain.odds.Market
@@ -14,7 +15,7 @@ import java.time.Instant
  * 実払戻 = 推奨額 × 100 円あたりの払戻 / 100。通知時の予測オッズ（範囲表示）は払戻の根拠ではないので使わない。
  */
 
-enum class ComboUnsettledReason { NOT_A_BET, UNSUPPORTED_MARKET, UNPARSEABLE_KUMI, NO_CONFIRMED_PAYOUT }
+enum class ComboUnsettledReason { NOT_A_BET, UNSUPPORTED_MARKET, UNPARSEABLE_KUMI, NO_CONFIRMED_PAYOUT, HORSE_WITHOUT_FINISH }
 
 sealed interface ComboOutcome {
     data class Unsettled(
@@ -57,16 +58,25 @@ object ComboPaperSettlement {
         }
     }
 
-    /** [payouts] はこのレース・この賭式の払戻。**確定（provisional = false）の行だけ**を使い、1 行も無ければ判定できない（外れにしない）。 */
+    /**
+     * [payouts] はこのレース・この賭式の払戻。**確定（provisional = false）の行だけ**を使い、1 行も無ければ判定できない（外れにしない）。
+     * [results] は着順（出走取消・競走除外などで着順が付かない馬を含む券を『外れ』にしないために使う。払戻の行に返還は含まれない: G-5/G-16）。
+     */
     fun settle(
         ticket: ComboTicketInput,
         payouts: List<StoredPayout>,
+        results: List<ResultEntry>,
     ): ComboOutcome {
         if (ticket.market != Market.WIDE && ticket.market != Market.SANRENPUKU) return ComboOutcome.Unsettled(ComboUnsettledReason.UNSUPPORTED_MARKET)
         if (!(ticket.stake > 0.0)) return ComboOutcome.Unsettled(ComboUnsettledReason.NOT_A_BET)
         val key = comboKey(ticket.market, ticket.kumi) ?: return ComboOutcome.Unsettled(ComboUnsettledReason.UNPARSEABLE_KUMI)
         val confirmed = payouts.filter { !it.provisional }
         if (confirmed.isEmpty()) return ComboOutcome.Unsettled(ComboUnsettledReason.NO_CONFIRMED_PAYOUT)
+        // 券の馬に着順が無い（取消・除外・結果に載っていない）なら、外れにも当たりにもしない（返還の扱いが未決のため）
+        val horses = key.split('-').map { it.toInt() }
+        if (horses.any { h -> (results.firstOrNull { it.umaban == h }?.finish ?: 0) <= 0 }) {
+            return ComboOutcome.Unsettled(ComboUnsettledReason.HORSE_WITHOUT_FINISH)
+        }
         val per100 = confirmed.firstOrNull { it.comboKey == key }?.payout
         return if (per100 != null) {
             ComboOutcome.Settled(true, ticket.stake, ticket.stake * per100 / 100.0)

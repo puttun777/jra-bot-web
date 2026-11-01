@@ -6,6 +6,7 @@ import jp.jrabot.domain.ingest.PayoutStore
 import jp.jrabot.domain.ingest.ResultStore
 import jp.jrabot.domain.notify.NoticeSnapshot
 import jp.jrabot.domain.notify.NoticeSnapshotException
+import jp.jrabot.domain.notify.NoticeTickets
 import jp.jrabot.domain.odds.Market
 import jp.jrabot.domain.race.RaceScheduleReader
 import jp.jrabot.domain.signal.NotificationState
@@ -97,7 +98,9 @@ class PerformanceReadService(
                             unreadable++
                             continue
                         }
-                    for (item in snapshot.items) {
+                    // 通知の本文に実際に載せた買い目だけを数える（見送りの item を除き、賭式ごとに重複除去 → EV 降順 → 上位 N 点: NoticeTickets.displayed）
+                    val byMarket = LinkedHashMap<Market, MutableList<jp.jrabot.domain.notify.TicketView>>()
+                    for (item in snapshot.items.filter { it.view.skipReason == null }) {
                         for (strategy in item.view.bundle
                             ?.strategies
                             .orEmpty()) {
@@ -107,19 +110,24 @@ class PerformanceReadService(
                                     BetType.SANRENPUKU.label -> Market.SANRENPUKU
                                     else -> continue
                                 }
-                            for (t in strategy.tickets) {
-                                val stake = t.stake?.takeIf { it > 0.0 } ?: continue
-                                val key = ComboPaperSettlement.comboKey(market, t.kumi)
-                                val outcome =
-                                    ComboPaperSettlement.settle(
-                                        ComboTicketInput(race.raceId, market, t.kumi, stake, n.oddsObservedAt, postAt),
-                                        payouts.list(tenantId, race.raceId, market),
-                                    )
-                                if (outcome is ComboOutcome.Settled && key != null) {
-                                    comboItems += SettledCombo(race.raceId, market, key, n.oddsObservedAt, postAt, outcome)
-                                } else {
-                                    comboUnsettled++
-                                }
+                            byMarket.getOrPut(market) { mutableListOf() } += strategy.tickets
+                        }
+                    }
+                    for ((market, all) in byMarket) {
+                        val pay = payouts.list(tenantId, race.raceId, market)
+                        for (t in NoticeTickets.displayed(all)) {
+                            val stake = t.stake?.takeIf { it > 0.0 } ?: continue
+                            val key = ComboPaperSettlement.comboKey(market, t.kumi)
+                            val outcome =
+                                ComboPaperSettlement.settle(
+                                    ComboTicketInput(race.raceId, market, t.kumi, stake, n.oddsObservedAt, postAt),
+                                    pay,
+                                    finishers,
+                                )
+                            if (outcome is ComboOutcome.Settled && key != null) {
+                                comboItems += SettledCombo(race.raceId, market, key, n.oddsObservedAt, postAt, outcome)
+                            } else {
+                                comboUnsettled++
                             }
                         }
                     }

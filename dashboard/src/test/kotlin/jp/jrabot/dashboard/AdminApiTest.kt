@@ -80,6 +80,24 @@ class AdminApiTest {
     }
 
     private val repo = Repo()
+
+    /** 本物のトランザクションの代わり: コールバックが例外で終わったら、リポジトリの内容を開始時点に戻す（ロールバックの確認用）。 */
+    private val tx =
+        object : org.springframework.transaction.support.TransactionOperations {
+            override fun <T : Any?> execute(action: org.springframework.transaction.support.TransactionCallback<T>): T {
+                val snapshot = repo.rows.toList()
+                try {
+                    return action.doInTransaction(
+                        org.springframework.transaction.support
+                            .SimpleTransactionStatus(),
+                    )
+                } catch (e: Throwable) {
+                    repo.rows.clear()
+                    repo.rows.addAll(snapshot)
+                    throw e
+                }
+            }
+        }
     private val audits = mutableListOf<AuditEntry>()
     private var auditFails = false
     private val schedule = RaceSchedule(t1, raceId, now.plusSeconds(3600), false, RaceScheduleStatus.CARD, '2', "202610232", "R11", now)
@@ -89,6 +107,7 @@ class AdminApiTest {
             CalendarOverrideService(repo, InMemoryScheduleReader(listOf(schedule)), clock),
             repo,
             AuditLogWriter { e, _ -> if (auditFails) error("db down") else audits += e },
+            tx,
         )
 
     private fun req(
@@ -147,9 +166,27 @@ class AdminApiTest {
     }
 
     @Test
-    fun `監査記録に失敗したら成功にせず 500 を返す`() {
+    fun `監査記録に失敗したら 500 を返し 変更も取り消される（監査なしの変更を残さない）`() {
         auditFails = true
         assertEquals(500, assertFailsWith<ResponseStatusException> { api.create(req(), cancelRace()) }.statusCode.value())
+        assertTrue(repo.rows.isEmpty(), "補正が残っている")
+        auditFails = false
+        val id = assertNotNull(api.create(req(), cancelRace()).body).id!!
+        auditFails = true
+        assertEquals(500, assertFailsWith<ResponseStatusException> { api.revoke(req(), id) }.statusCode.value())
+        assertNull(repo.rows.single().revokedAt, "取消が残っている")
+    }
+
+    @Test
+    fun `監査記録には設定した値・期限・取消者も残る`() {
+        val body = CreateOverrideRequest("RACE", "2026-10-24", raceId.value, "SET_POST_TIME", "2026-10-24T06:30:00Z", null, "時刻変更", "2026-10-24T12:00:00Z")
+        val id = assertNotNull(api.create(req(), body).body).id!!
+        assertTrue(
+            audits.single().afterJson!!.contains("2026-10-24T06:30:00Z") && audits.single().afterJson!!.contains("2026-10-24T12:00:00Z"),
+            audits.single().afterJson,
+        )
+        api.revoke(req(), id)
+        assertTrue(audits.last().afterJson!!.contains("\"revokedBy\":\"me@example.com\""), audits.last().afterJson)
     }
 
     @Test

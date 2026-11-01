@@ -176,7 +176,7 @@ class ReadApi(
         val p = ApiAuthFilter.principalOf(request)
         val pageNo = page ?: 0
         val pageSize = size ?: DEFAULT_PAGE_SIZE
-        if (pageNo < 0 || pageSize !in 1..MAX_PAGE_SIZE) throw bad()
+        if (pageNo !in 0..MAX_PAGE || pageSize !in 1..MAX_PAGE_SIZE) throw bad()
         val all =
             schedules
                 .listByDate(p.tenantId, parseDate(date) ?: clock.today())
@@ -265,6 +265,7 @@ class ReadApi(
         const val STALE_AFTER_MINUTES = 120L
         const val DEFAULT_PAGE_SIZE = 50
         const val MAX_PAGE_SIZE = 200
+        const val MAX_PAGE = 100_000
         const val DEFAULT_RANGE_DAYS = 30L
     }
 }
