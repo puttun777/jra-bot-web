@@ -42,3 +42,12 @@ enum class RejectReason {
 fun interface InternalCallerVerifier {
     fun verify(token: String?): CallerVerification
 }
+
+/**
+ * 人の利用者の署名付きトークン（dashboard: IAP の JWT）を検証し、**検証済みのメールアドレス**を返す（CONTRACTS §11.1）。署名・issuer・audience・有効期限は
+ * [InternalCallerVerifier] と同じ。**ops 用サービスアカウントかどうかは見ない**（人の認可は [jp.jrabot.domain.tenant.HumanAuthorizer] が
+ * `ALLOWED_USERS`・`app_user`・ロールで行う）。ヘッダーが存在するだけでは認めない。
+ */
+fun interface PersonVerifier {
+    fun verifyPerson(token: String?): CallerVerification
+}

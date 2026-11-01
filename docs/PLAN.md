@@ -70,7 +70,7 @@
 - [ ] T4.5 セキュリティテスト（認可マトリクス）
 
 ## 第5段階 ― インフラ（I、一部 W）
-- [ ] **T5.0（必須の前提）infra の文書を web CONTRACTS 0.4.0 に追従させる（PROGRESS の I-H1〜I-H7）。解消するまで第5段階の実装に着手しない。web が古い infra 文書に合わせて 0.4.0 を戻すことはしない**
+- [x] **T5.0（完了 2026-11-01: infra PR #3 マージ済み〔CONTRACTS 0.4.15 に同期〕）** ~~infra の文書を web CONTRACTS 0.4.0 に追従させる（PROGRESS の I-H1〜I-H7）。解消するまで第5段階の実装に着手しない。web が古い infra 文書に合わせて 0.4.0 を戻すことはしない**
 - [ ] T5.1 Terraform 基盤（state、WIF、ネットワーク、Secret、Registry）← T1.7
 - [ ] T5.2 Web/Job/DB/Scheduler リソース、IAP、スケールゼロ
 - [ ] T5.3 deploy workflow（release-manifest 入力、migrate→更新）

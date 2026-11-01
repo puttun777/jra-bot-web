@@ -190,8 +190,8 @@ class DashboardReadyIntegrationTest {
             val before = MySqlSupport.serverConnections()
             for (m in listOf(OpsMode.STARTING, OpsMode.STOPPING, OpsMode.STOPPED, OpsMode.UNKNOWN)) {
                 mode.mode = m
-                assertEquals(409, http.send("POST", "/api/v1/admin/probe").status, "$m")
-                assertEquals(409, http.send("DELETE", "/api/v1/admin/probe").status, "$m")
+                assertEquals(409, http.send("POST", "/api/v1/admin/probe", TestAuth.human()).status, "$m")
+                assertEquals(409, http.send("DELETE", "/api/v1/admin/probe", TestAuth.human()).status, "$m")
             }
             assertEquals(0, probe.reached.get())
             val after = MySqlSupport.serverConnections()

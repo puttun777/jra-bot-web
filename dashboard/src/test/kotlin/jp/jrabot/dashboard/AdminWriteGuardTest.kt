@@ -52,7 +52,7 @@ class AdminWriteGuardTest {
 
     @Test
     fun `NORMAL なら通過して後続(Stage 4 の認可)へ進む`() {
-        for (m in writes) assertEquals(200, http.send(m, "/api/v1/admin/probe").status, m)
+        for (m in writes) assertEquals(200, http.send(m, "/api/v1/admin/probe", TestAuth.human()).status, m)
         assertEquals(200, http.send("POST", "/other/write").status)
         assertEquals(5, probe.reached.get())
     }
@@ -62,7 +62,7 @@ class AdminWriteGuardTest {
         for (md in listOf(OpsMode.STARTING, OpsMode.STOPPING, OpsMode.STOPPED)) {
             mode.mode = md
             for (m in writes) {
-                val r = http.send(m, "/api/v1/admin/probe")
+                val r = http.send(m, "/api/v1/admin/probe", TestAuth.human())
                 assertEquals(409, r.status, "$md $m")
                 assertEquals("""{"error":"OPS_MODE_NOT_NORMAL"}""", r.body)
                 assertEquals("no-store", r.header("Cache-Control"))
@@ -75,7 +75,7 @@ class AdminWriteGuardTest {
     @Test
     fun `UNKNOWN も書込みは 409`() {
         mode.mode = OpsMode.UNKNOWN
-        for (m in writes) assertEquals(409, http.send(m, "/api/v1/admin/probe").status, m)
+        for (m in writes) assertEquals(409, http.send(m, "/api/v1/admin/probe", TestAuth.human()).status, m)
         assertEquals(0, probe.reached.get())
     }
 
@@ -91,7 +91,7 @@ class AdminWriteGuardTest {
     fun `読み取り(GET)はモードで拒否しない（STOPPED や UNKNOWN のバナー表示のため。閲覧の可否は Stage 4）`() {
         for (md in listOf(OpsMode.STARTING, OpsMode.STOPPING, OpsMode.STOPPED, OpsMode.UNKNOWN)) {
             mode.mode = md
-            assertEquals(200, http.get("/api/v1/admin/probe").status, "$md")
+            assertEquals(200, http.get("/api/v1/admin/probe", TestAuth.human()).status, "$md")
         }
     }
 
@@ -106,7 +106,7 @@ class AdminWriteGuardTest {
     fun `ガードは 1 リクエストにつきモードを 1 回だけ読む`() {
         mode.mode = OpsMode.STOPPED
         mode.calls.set(0)
-        http.send("POST", "/api/v1/admin/probe")
+        http.send("POST", "/api/v1/admin/probe", TestAuth.human())
         assertEquals(1, mode.calls.get())
         assertNotEquals(0, mode.calls.get())
     }
@@ -115,7 +115,7 @@ class AdminWriteGuardTest {
     fun `管理操作の本番コードは存在しない（ガードの先に公開するルートが無い）`() {
         mode.mode = OpsMode.NORMAL
         // 受け皿を除くと、書込み系のルートは本番の構成に無い。ここでは受け皿以外のパスが 404 であることを確認する
-        assertEquals(404, http.send("POST", "/api/v1/admin/real-operation").status)
-        assertEquals(404, http.send("DELETE", "/api/v1/admin/agents/1").status)
+        assertEquals(404, http.send("POST", "/api/v1/admin/real-operation", TestAuth.human()).status)
+        assertEquals(404, http.send("DELETE", "/api/v1/admin/agents/1", TestAuth.human()).status)
     }
 }
