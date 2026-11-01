@@ -10,6 +10,20 @@
 旧: 2026-10-27（Stage 3-G: T3.7 Discord 通知）
 旧: 2026-10-26（Public 化の準備）／2026-10-24（Stage 3-F2・3-F1・3-E）
 
+
+## 現在の状態と次の作業（2026-11-01 時点。main = f9c61af）
+**マージ済み**: web PR #30（T3.8 bot-run・V5・保留の再適用）、web PR #31（T3.9 単勝の紙上成績の計算・T4.1 人の認証・認可）、infra PR #3（T5.0 文書同期）。いずれも `ci gate` と実行された全ジョブが最新コミットで成功（スキップは変更範囲外）、独立レビュー（Opus・読取り専用）の高指摘なし・中は修正または UNRESOLVED（G-32/G-34/G-35）に記録。
+| 区分 | 内容 |
+|---|---|
+| **コード実装完了 + 合成データ検証済み（CI 済み）** | T3.1〜T3.8、V5、結果・払戻の取込（NRS/NHR〔合成レコード〕）、決済の計算 `SettlementCalculator`（旧実装と GD11 全一致）、単勝の紙上成績の計算、`/api` の認証・認可と `GET /api/v1/me` |
+| **未実装（スタブ/未接続）** | bot-run の結果待ち・race_schedule/race_day の状態更新（T3.9③）、reconcile（スタブ）、ワイド/三連複の買い目の決済、バックテスト、成績の読取り API（T4.2）・UI（T4.3）・管理操作（T4.4）・認可マトリクス全体（T4.5）、第5段階の Terraform/ワークフロー（T5.1〜T5.6）、第6段階 |
+| **実機・本番で未確認** | Windows/JV-Link 実機、実 Discord、実 GCP（IAP の JWT `aud`、Cloud Run/SQL）、実データ。JV-Data の実パーサは公式仕様待ち（T1.17）。COMP-4 のゲートは維持 |
+| **本人の判断・操作が必要（包括承認していない）** | V6 の最終 SQL と GRANT（T39_DESIGN §9。決済の保存が不要になったので範囲は縮小 = D-234。必要なら再提示）、V5 の本番適用、GCP 課金リソース・apply、運用値（CALENDAR_*/BOT_RUN_*）の確定、T1.20/T1.21（実 SQLite・設定・モデルの確認）、COMP-4、P-1（`agent-kek`）、G-OPS-7（実 IAP の確認）、Public 化 |
+**次に実行する手順（順）**: ① T3.9③ bot-run の結果待ち（`RaceMonitorPlanner`/`CompletionAssessment` に RESULT_PENDING 以降を追加。checkpoint v2。`ResultStore`/`PayoutStore` の読取りと `PaperSettlement` を使う）+ reconcile の実装 + G-34（非 LIVE の run に塞がれた LIVE の警告）。② ワイド/三連複の買い目の決済（通知スナップショットの買い目から）。③ T4.2 成績・予測・レースの読取り API（DTO、テナント境界、`PerformanceAggregator`）→ T4.3 UI → T4.4 管理操作（CSRF・監査ログ）→ T4.5 認可マトリクス。④ 第5段階 T5.1〜（infra `CONTRACTS.md` §5 を入力に。`terraform plan` まで。apply は承認後）。⑤ バックテスト、統合比較、OPERATIONS.md。
+**注意（この環境）**: Maven Central への取得で 429 が出ることがある（再試行で進む）。`LC_ALL=C.UTF-8` が無いと Kotlin のコンパイルが日本語のテスト名で失敗する。Docker は `dockerd` を手で起動。`ML_TRAIN_PYTHON`/`AGENT_PYTHON` が無いと該当の統合試験は失敗（CI は設定する）。
+
+---
+
 ## 2026-11-01 PR #30 作成・CI 修正・独立レビュー反映・T3.9 ①（claude/stage3-bot-orchestration = claude/jra-bot-replace-continue-l1lk71）
 **Actions は再利用可能**（保留解除の指示）。PR #30（T3.8・V5・保留の再適用）を作成して CI を実行。
 | 項目 | 結果 |
