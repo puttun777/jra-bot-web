@@ -137,7 +137,7 @@ class BotRunOrchestratorIntegrationTest {
             }
             // 取込側が結果・確定払戻を保存する（発走の 35 分後）。2 番が 1 着、単勝 800 円
             if (resultWait != null && !clock.now().isBefore(postAt.plus(Duration.ofMinutes(35))) && seed.results.list(T1, raceId).isEmpty()) {
-                seed.results.upsertAll(T1, raceId, listOf(ResultEntry(2, 1), ResultEntry(1, 2), ResultEntry(3, 3)))
+                seed.results.upsertAll(T1, raceId, listOf(ResultEntry(2, 1), ResultEntry(1, 2), ResultEntry(3, 3), ResultEntry(4, 4)))
                 seed.payouts.upsertAll(T1, raceId, Market.WIN, listOf(PayoutRow("02", 800.0)), provisional = false)
             }
         }
