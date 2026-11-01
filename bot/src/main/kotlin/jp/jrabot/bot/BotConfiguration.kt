@@ -133,7 +133,7 @@ class BotConfiguration {
     ): ErrorReporter = ErrorReporter(notifier, clock)
 
     /**
-     * タスクごとの実装。**calendar-check（T3.3）と export-dataset（T3.6-B）が実装済み**で、他（bot-run・reconcile・retention）は未実装のスタブ
+     * タスクごとの実装。**calendar-check（T3.3）・export-dataset（T3.6-B）・bot-run（T3.8）・reconcile（T3.9）が実装済み**で、残り（retention）は未実装のスタブ
      * （[StubTaskHandler]。T3.8 以降で差し替える）。
      */
     @Bean
@@ -160,6 +160,8 @@ class BotConfiguration {
         errors: ErrorReporter,
         stop: StopFlag,
         leaseProbe: jp.jrabot.domain.botrun.LeaseProbe,
+        resultStore: jp.jrabot.domain.ingest.ResultStore,
+        payoutStore: jp.jrabot.domain.ingest.PayoutStore,
     ): BotTaskHandler =
         when (runtime.command.task) {
             BotTask.CALENDAR_CHECK -> {
@@ -198,11 +200,37 @@ class BotConfiguration {
                             errors,
                             stop,
                             leaseProbe,
+                            jp.jrabot.domain.botrun
+                                .StoreResultAvailability(resultStore, payoutStore),
                         )
                     },
                     clock = clock,
                     stop = stop,
                     signals = SignalInstaller.SIGTERM,
+                )
+            }
+
+            BotTask.RECONCILE -> {
+                val settings = checkNotNull(runtime.settings.calendar) { "reconcile の設定が無い（BotSettings が検証しているはず）" }
+                val availability =
+                    jp.jrabot.domain.botrun
+                        .StoreResultAvailability(resultStore, payoutStore)
+                ReconcileTaskHandler(
+                    jp.jrabot.domain.botrun.ReconcileService(
+                        clock,
+                        days,
+                        schedules,
+                        availability,
+                        jp.jrabot.domain.botrun
+                            .RaceDayAdvancerImpl(
+                                days,
+                                jp.jrabot.domain.calendar
+                                    .RaceDayUpdater(days, clock),
+                            ),
+                        runs,
+                        settings,
+                    ),
+                    clock,
                 )
             }
 

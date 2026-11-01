@@ -16,7 +16,7 @@ class BotSettings(
     /** `OpsModeProviders.fromEnvironment` に渡す環境（`OPS_MODE_SOURCE`、`APP_ENV`）。 */
     val opsEnv: Map<String, String>,
     val releaseIdOverride: String?,
-    /** `calendar-check` だけが必要とする設定（他のタスクでは null）。環境変数は [CalendarSettingsParser]。 */
+    /** `calendar-check` と `reconcile` が必要とする設定（他のタスクでは null）。環境変数は [CalendarSettingsParser]。 */
     val calendar: CalendarSettings? = null,
     /** `export-dataset` だけが必要とする保管先（`MODEL_STORE_URI`: `gs://<bucket>[/<prefix>]`、`APP_ENV=local` では `file:///絶対パス`）。他のタスクでは null。 */
     val modelStoreUri: String? = null,
@@ -37,7 +37,7 @@ class BotSettings(
             // 最小権限: 本番では bot 用のユーザー以外（migrate など強い権限）で動かさない。ローカルは任意のユーザーを許す
             check(appEnv == AppEnv.LOCAL || db.user == DB_USER) { "DB_USER が bot 用のユーザー($DB_USER)ではない" }
             val opsEnv = env.filterKeys { it == OpsModeProviders.ENV_SOURCE || it == OpsModeProviders.ENV_APP }
-            val calendar = if (task == BotTask.CALENDAR_CHECK) CalendarSettingsParser.fromEnv(env) else null
+            val calendar = if (task == BotTask.CALENDAR_CHECK || task == BotTask.RECONCILE) CalendarSettingsParser.fromEnv(env) else null
             val storeUri =
                 if (task == BotTask.EXPORT_DATASET) {
                     val uri = env["MODEL_STORE_URI"]?.trim().orEmpty()

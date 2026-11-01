@@ -4,6 +4,7 @@ import jp.jrabot.domain.bot.LeaseSettings
 import jp.jrabot.domain.botrun.BotRunConfig
 import jp.jrabot.domain.botrun.HitRateSchedule
 import jp.jrabot.domain.botrun.PollingIntervals
+import jp.jrabot.domain.botrun.ResultWaitConfig
 import jp.jrabot.domain.botrun.SnapshotPolicy
 import jp.jrabot.domain.botrun.TightenMode
 import jp.jrabot.domain.decision.PriorityMode
@@ -35,6 +36,7 @@ class BotRunSettings(
  * | `BOT_RUN_TIGHTEN_NEAR` | 『5 分前の強化』: `false`=しない / `true`=**修正後**（残り 5 分以下の評価で強化。`30,5` の 5 分前にも働く）/ `legacy`=旧の癖（最大のタイミングが 5 分以下のときだけ） |
  * | `BOT_RUN_PRIORITY_MODE` / `BOT_RUN_HIT_RATE_MIN_EV` / `BOT_RUN_HIT_RATE_MIN_EV_SCHEDULE` | **任意**。未設定なら profile のまま（固定閾値方式）。`hit_rate` + `far=…,mid=…,near=…`（旧 `hit_rate_min_ev_schedule`。残り >=30 分 far、>=5 分 mid、それ以下 near） |
  * | `BOT_RUN_SNAPSHOT_HISTORY_LIMIT` | 急落判定に使う直近スナップショットの件数（2〜100。旧の既定は 3） |
+ * | `BOT_RUN_RESULT_AFTER_MINUTES` / `BOT_RUN_RESULT_POLL_SECONDS` | 発走後の結果待ち（T3.9）。発走から結果の確認を始めるまで（1〜720 分。設計の案は 30）／確認の間隔（10〜3600 秒。案は 300）。締切は `CALENDAR_SETTLE_DEADLINE_MINUTES` |
  * | `BOT_RUN_ML_MODEL_TYPE` | `off`（ML 無効=市場確率）/ `legacy` / `calibration` / `alpha` / `ensemble`。パイプラインは legacy 固定（v2 は未承認） |
  * | `BOT_RUN_DECISION_PROFILE` | 判定の設定。**今は `legacy_function_defaults`（旧 `evaluate_odds` の関数既定値）だけ**。運用値ではない: 実 config の確認（T1.20）と承認までの明示的な選択 |
  * | `MODEL_STORE_URI` / `MODEL_VERIFY_PUBKEY` | ML を有効にするときだけ必須（CONTRACTS §5.1） |
@@ -171,6 +173,11 @@ object BotRunSettingsParser {
                 mlModelType = ml,
                 decision = decision,
                 hitRateSchedule = schedule,
+                resultWait =
+                    ResultWaitConfig(
+                        Duration.ofMinutes(long("BOT_RUN_RESULT_AFTER_MINUTES", 1, 720)),
+                        seconds("BOT_RUN_RESULT_POLL_SECONDS", 10, 3600),
+                    ),
             )
         return BotRunSettings(config, storeUri, pubKey)
     }

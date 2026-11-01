@@ -130,6 +130,8 @@ fun botRunEnv(): Map<String, String> =
         "BOT_RUN_SNAPSHOT_MINUTES" to "30,5",
         "BOT_RUN_TIGHTEN_NEAR" to "false",
         "BOT_RUN_SNAPSHOT_HISTORY_LIMIT" to "3",
+        "BOT_RUN_RESULT_AFTER_MINUTES" to "30",
+        "BOT_RUN_RESULT_POLL_SECONDS" to "300",
         "BOT_RUN_ML_MODEL_TYPE" to "off",
         "BOT_RUN_DECISION_PROFILE" to "legacy_function_defaults",
     )

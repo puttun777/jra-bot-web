@@ -48,9 +48,10 @@ class CalendarSettingsParserTest {
     }
 
     @Test
-    fun `calendar-check だけが設定を必須にする（他のタスクは無くても通り、設定は null）`() {
+    fun `calendar-check と reconcile だけが設定を必須にする（他のタスクは無くても通り、設定は null）`() {
         val base = baseEnv("/dev/null", *ok.keys.map { it to null }.toTypedArray())
-        assertNull(BotSettings.from(base, BotTask.RECONCILE).calendar)
+        assertNull(BotSettings.from(base, BotTask.RETENTION).calendar)
+        assertFailsWith<IllegalStateException> { BotSettings.from(base, BotTask.RECONCILE) }
         // bot-run も監視ウィンドウを必須にする（T3.8。設定は botRun の中にあり、calendar-check 用の calendar は null）
         assertFailsWith<IllegalStateException> { BotSettings.from(base, BotTask.BOT_RUN) }
         assertNull(BotSettings.from(baseEnv("/dev/null"), BotTask.BOT_RUN).calendar)
