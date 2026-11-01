@@ -22,7 +22,8 @@
 **CI（124b95b）**: build / db 8.4 / db 9.7 / golden / agent python・windows / release tools / hygiene は成功。`images`（スモーク）が失敗: T3.8 で `bot-run` に運用値の環境変数が必須になった（既定なし）ためスモークの bot-run が exit 2 → スモークに合成の `BOT_RUN_*` を渡して修正（dfe391d。運用値ではない）。`ml tools`/`ml-train`/`connectorj26` は変更範囲外のため skipped（設計どおり）。
 **T3.9 ②（結果・払戻の取込）**: D-233。`:domain` の観測・ポート・`ObservationApplier`、`:persistence` の `ResultDao`/`PayoutDao`（条件付き upsert）、`:ingest` の合成レコード `NRS`/`NHR`。ローカル: `:persistence` 統合 5 件 + 単体、`:ingest` 統合（AGENT_PYTHON 指定で全件）、`:domain`/`:bot` 単体、ktlint・依存検査すべて成功。
 **T3.9 方針転換（D-234）**: 新 bot-run は評価に最良コンボを記録しないため、旧の評価単位の決済（GD11 の `SettlementCalculator`）は実運用の入力が無い（計算と旧実装との一致は検証済みで残す）。通知した Signal × results × payouts から**純粋関数で紙上成績を計算**（`PaperSettlement`・`PerformanceAggregator`。代表集計は (レース, 馬番) ごとの発走前の最新 1 件）。DB への決済結果の保存（V6）は不要になった。残: ワイド/三連複の買い目の決済（通知スナップショットの買い目から）、bot-run の結果待ち・race_schedule/race_day の状態更新、reconcile、バックテスト。
-**未実施**: PR #30 の最新コミットでの CI 全体の結果（確認後に追記）、MySQL 統合のローカル再実行（変更が `:domain` のみのため CI に委ねる）。
+**PR #30 はマージ済み**（merge 73f74c8。822644d で `ci gate`・build・db 8.4/9.7・golden・images・agent すべて成功、skipped は ml tools/ml-train/connectorj26 のみで変更範囲外。委任の条件を確認: 独立レビューの高指摘なし・M1 修正を再確認・V6 なし）。**infra PR #3 もマージ済み**（T5.0 完了。文書のみ）。残るレビュー指摘: M2・低 L1〜L8・G-34（UNRESOLVED G-32/G-34）。
+**未実施**: MySQL 統合のローカル再実行（変更が `:domain` のみのため CI に委ねる）。
 **承認待ち/本人判断**: V6 の最終 SQL と追加 GRANT（docs/T39_DESIGN.md §9。適用対象の Flyway には入れていない）、払戻の単位以外の同着・返還・取消（JV-Data 仕様）、COMP-4。
 **次の手順**: ① PR #30 の CI を確認（全ジョブ。skipped を成功扱いにしない）し、レビュー修正差分を再確認 → 条件を満たせばマージ。② T3.9 ②（結果・払戻の取込 → RaceStatusUpdater → ResultSettler と bot-run の結果待ち）。
 
