@@ -57,6 +57,9 @@ jobs:
         run: python3 -m tools.ci.classify
       - name: Check tracked files (secrets / real data)
         run: bash .github/scripts/check-repo-hygiene.sh
+      # 設定・契約の整合（Flyway 版 = requiredSchemaVersion、bot-run の必須環境変数 = スモーク設定、DAO の表 = Flyway + GRANT）。push 前の preflight と同じ検査
+      - name: Consistency checks (schema version, required env vars, grants)
+        run: python3 -m tools.ci.consistency
 
   build:
     name: build (Temurin 25)
@@ -314,7 +317,7 @@ jobs:
       - name: Verify that the app integration tests actually ran
         if: always() && contains(env.DB_SUITES, 'apps')
         run: |
-          python3 .github/scripts/verify_test_results.py "bot integration" bot/build/test-results/integrationTest 36 "BotJobIntegrationTest,CalendarCheckIntegrationTest,MlTrainInteropIntegrationTest"
+          python3 .github/scripts/verify_test_results.py "bot integration" bot/build/test-results/integrationTest 40 "BotJobIntegrationTest,CalendarCheckIntegrationTest,MlTrainInteropIntegrationTest,ReconcileIntegrationTest"
           python3 .github/scripts/verify_test_results.py "ingest integration" ingest/build/test-results/integrationTest 50 "IngestReadyIntegrationTest,AgentAuthIntegrationTest,IngestIdempotencyIntegrationTest,IngestPipelineIntegrationTest,AgentInteropIntegrationTest"
           python3 .github/scripts/verify_test_results.py "dashboard integration" dashboard/build/test-results/integrationTest 9 "DashboardReadyIntegrationTest"
 

@@ -42,8 +42,8 @@ class BotJobIntegrationTest {
     }
 
     @Test
-    fun `NORMAL かつスキーマ版 OK なら、スタブのタスクはローカルでは終了コード 0（calendar-check・export-dataset・bot-run は実装済みで別のテスト）`() {
-        for (t in BotTask.entries.filter { it != BotTask.CALENDAR_CHECK && it != BotTask.EXPORT_DATASET && it != BotTask.BOT_RUN }) {
+    fun `NORMAL かつスキーマ版 OK なら、スタブのタスクはローカルでは終了コード 0（calendar-check・export-dataset・bot-run・reconcile は実装済みで別のテスト）`() {
+        for (t in BotTask.entries.filter { it != BotTask.CALENDAR_CHECK && it != BotTask.EXPORT_DATASET && it != BotTask.BOT_RUN && it != BotTask.RECONCILE }) {
             assertEquals(
                 0,
                 exit(t.cliName, env("NORMAL")),
@@ -76,7 +76,7 @@ class BotJobIntegrationTest {
         val launcher = BotLauncher(modeProviderFactory = { FixedMode(OpsMode.NORMAL) })
         val prodEnv = env("NORMAL") + mapOf("APP_ENV" to "prod", "OPS_MODE_SOURCE" to "gs://synthetic/ops.json")
         for (t in BotTask.entries.filter {
-            it != BotTask.CALENDAR_CHECK && it != BotTask.EXPORT_DATASET && it != BotTask.BOT_RUN
+            it != BotTask.CALENDAR_CHECK && it != BotTask.EXPORT_DATASET && it != BotTask.BOT_RUN && it != BotTask.RECONCILE
         }) {
             assertEquals(1, launcher.run(args(t.cliName), prodEnv), t.cliName)
         }

@@ -77,6 +77,8 @@ BOT_RUN_ENV = {
     "BOT_RUN_SNAPSHOT_MINUTES": "30,5",
     "BOT_RUN_TIGHTEN_NEAR": "false",
     "BOT_RUN_SNAPSHOT_HISTORY_LIMIT": "3",
+    "BOT_RUN_RESULT_AFTER_MINUTES": "30",
+    "BOT_RUN_RESULT_POLL_SECONDS": "300",
     "BOT_RUN_ML_MODEL_TYPE": "off",
     "BOT_RUN_DECISION_PROFILE": "legacy_function_defaults",
 }
@@ -370,10 +372,13 @@ class Smoke:
         self.r.check("[bot] STOPPED -> exit 0 for all 5 tasks", set(codes.values()) == {0}, str(codes))
         self.r.check("[bot] STOPPED never opens a DB connection (server Connections delta == 1: the probe itself)", after - before == 1, f"delta={after - before}")
         before = self.connections()
-        rc, out, err = self.run("bot", args=["--task=reconcile", "--tenant-id=1"], env={**base, "OPS_MODE_SOURCE": "/ops/NORMAL.json"}, network=self.network, mounts=mounts, desc="bot NORMAL local stub", timeout=120)
+        # retention は未実装のスタブ（V6 の DELETE 権限の承認待ち）。reconcile は実装済み（T3.9）: 対象の開催日が無い DB では RECONCILED で exit 0
+        rc, out, err = self.run("bot", args=["--task=retention", "--tenant-id=1"], env={**base, "OPS_MODE_SOURCE": "/ops/NORMAL.json"}, network=self.network, mounts=mounts, desc="bot NORMAL local stub", timeout=120)
         after = self.connections()
-        self.r.check("[bot] NORMAL (local only) connects to the DB and runs the stub task -> exit 0", rc == 0 and after - before >= 2, f"rc={rc} delta={after - before}\n{(out + err)[-300:]}")
+        self.r.check("[bot] NORMAL (local only) connects to the DB and runs the stub task (retention) -> exit 0", rc == 0 and after - before >= 2, f"rc={rc} delta={after - before}\n{(out + err)[-300:]}")
         self.r.check("[bot] the stub says so in the log (TASK_NOT_IMPLEMENTED, result STUB_LOCAL_OK: local only)", "TASK_NOT_IMPLEMENTED" in out + err and "STUB_LOCAL_OK" in out + err, (out + err)[-300:])
+        rc, out, err = self.run("bot", args=["--task=reconcile", "--tenant-id=1"], env={**base, "OPS_MODE_SOURCE": "/ops/NORMAL.json"}, network=self.network, mounts=mounts, desc="bot reconcile empty", timeout=120)
+        self.r.check("[bot] reconcile on an empty DB -> exit 0 RECONCILED (implemented, not a stub)", rc == 0 and "RECONCILED" in out + err and "STUB_LOCAL_OK" not in out + err, f"rc={rc}\n{(out + err)[-300:]}")
         # calendar-check は実装済み（T3.3）。予定の無い DB・取得の事実なしでは「不明」= exit 75 で、起動を要求しない（スタブの成功ではない）
         rc, out, err = self.run("bot", args=["--task=calendar-check", "--tenant-id=1"], env={**base, "OPS_MODE_SOURCE": "/ops/NORMAL.json"}, network=self.network, mounts=mounts, desc="bot calendar-check unknown", timeout=120)
         self.r.check("[bot] calendar-check on an empty schedule -> exit 75 SCHEDULE_UNKNOWN (fail closed, no launch)", rc == 75 and "SCHEDULE_UNKNOWN" in out + err, f"rc={rc}\n{(out + err)[-300:]}")

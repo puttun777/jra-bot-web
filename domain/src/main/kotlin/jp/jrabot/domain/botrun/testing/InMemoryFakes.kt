@@ -172,7 +172,10 @@ class InMemoryRaces(
 /** 開催日・予定・補正の読取りの偽物（テスト中に差し替えて、予定の変更・中止を再現する）。 */
 class InMemoryRaceDays(
     @Volatile var rows: List<RaceDay> = emptyList(),
-) : RaceDayReader {
+) : jp.jrabot.domain.calendar.RaceDayRepository {
+    /** 追記された履歴（開催日の状態遷移）。 */
+    val events = java.util.concurrent.CopyOnWriteArrayList<jp.jrabot.domain.calendar.ScheduleEvent>()
+
     override fun find(
         tenantId: TenantId,
         date: LocalDate,
@@ -183,6 +186,48 @@ class InMemoryRaceDays(
         tenantId: TenantId,
         date: LocalDate,
     ): List<RaceDay> = rows.filter { it.tenantId == tenantId && it.raceDate == date }
+
+    @Synchronized
+    override fun insertIfAbsent(
+        day: RaceDay,
+        event: jp.jrabot.domain.calendar.ScheduleEvent,
+    ): jp.jrabot.domain.calendar.ChangeResult<RaceDay> {
+        if (find(day.tenantId, day.raceDate, day.venue) != null) return jp.jrabot.domain.calendar.ChangeResult.AlreadyExists
+        if (events.any { it.dedupHash == event.dedupHash }) return jp.jrabot.domain.calendar.ChangeResult.Duplicate
+        rows = rows + day
+        events += event
+        return jp.jrabot.domain.calendar.ChangeResult
+            .Applied(day, event)
+    }
+
+    @Synchronized
+    override fun update(
+        day: RaceDay,
+        event: jp.jrabot.domain.calendar.ScheduleEvent,
+    ): jp.jrabot.domain.calendar.ChangeResult<RaceDay> {
+        val current = find(day.tenantId, day.raceDate, day.venue) ?: return jp.jrabot.domain.calendar.ChangeResult.NotFound
+        if (current.version != day.version) return jp.jrabot.domain.calendar.ChangeResult.Conflict
+        if (events.any { it.dedupHash == event.dedupHash }) return jp.jrabot.domain.calendar.ChangeResult.Duplicate
+        val next = day.copy(version = day.version + 1)
+        rows = rows.map { if (it.tenantId == next.tenantId && it.raceDate == next.raceDate && it.venue == next.venue) next else it }
+        events += event
+        return jp.jrabot.domain.calendar.ChangeResult
+            .Applied(next, event)
+    }
+
+    @Synchronized
+    override fun confirm(
+        tenantId: TenantId,
+        date: LocalDate,
+        venue: Venue,
+        observedAt: java.time.Instant,
+    ): Boolean {
+        val current = find(tenantId, date, venue) ?: return false
+        if (current.lastConfirmedAt == null || observedAt.isAfter(current.lastConfirmedAt)) {
+            rows = rows.map { if (it == current) current.copy(lastConfirmedAt = observedAt, version = current.version + 1) else it }
+        }
+        return true
+    }
 }
 
 class InMemoryScheduleReader(

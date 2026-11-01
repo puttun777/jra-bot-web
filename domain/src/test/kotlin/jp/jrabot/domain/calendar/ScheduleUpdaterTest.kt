@@ -325,6 +325,28 @@ class ScheduleUpdaterTest {
     }
 
     @Test
+    fun `bot-run が進めた日（RUNNING 以降）に CONFIRMED を再観測しても 確認の時刻は進む（STALE にしない）`() {
+        dayApply(RaceDayStatus.CONFIRMED)
+        applied(dayUpdater.advance(Cal.T1, d, Venue.TOKYO, RaceDayStatus.RUNNING, "run:x"))
+        val lastBefore = days.find(Cal.T1, d, Venue.TOKYO)!!.lastConfirmedAt
+        // 取込（RA）は毎回 CONFIRMED を観測する。RUNNING に進んだ後でも、拒否して確認時刻を止めてはならない
+        val r = dayApply(RaceDayStatus.CONFIRMED, at = Cal.jst(d, 9, 30), group = "ra-1")
+        assertEquals(ApplyResult.NoChange(NoChangeReason.CONFIRMED_ONLY), r)
+        val row = days.find(Cal.T1, d, Venue.TOKYO)!!
+        assertEquals(RaceDayStatus.RUNNING, row.status)
+        assertEquals(Cal.jst(d, 9, 30), row.lastConfirmedAt)
+        assertTrue(lastBefore == null || lastBefore.isBefore(row.lastConfirmedAt))
+        // SETTLING / COMPLETED / INCOMPLETE でも同じ
+        for (st in listOf(RaceDayStatus.SETTLING, RaceDayStatus.COMPLETED)) {
+            applied(dayUpdater.advance(Cal.T1, d, Venue.TOKYO, st, "run:$st"))
+            val at = Cal.jst(d, 12, 0)
+            assertEquals(ApplyResult.NoChange(NoChangeReason.CONFIRMED_ONLY), dayApply(RaceDayStatus.CONFIRMED, at = at, group = "ra-$st"))
+            assertEquals(at, days.find(Cal.T1, d, Venue.TOKYO)!!.lastConfirmedAt)
+            assertEquals(st, days.find(Cal.T1, d, Venue.TOKYO)!!.status)
+        }
+    }
+
+    @Test
     fun `古い取得時刻の状態変更は反映しない`() {
         dayApply(RaceDayStatus.PLANNED, at = Cal.jst(d, 8, 0))
         assertEquals(RejectReason.OLDER_OBSERVATION, rejected(dayApply(RaceDayStatus.CANCELLED, at = Cal.jst(d, 6, 0))))

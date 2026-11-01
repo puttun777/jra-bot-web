@@ -14,7 +14,7 @@ import jp.jrabot.domain.botrun.RunEvents
 import jp.jrabot.domain.botrun.SignalNotifiedProbe
 import jp.jrabot.domain.botrun.TimingNoticeStore
 import jp.jrabot.domain.calendar.CalendarOverrideReader
-import jp.jrabot.domain.calendar.RaceDayReader
+import jp.jrabot.domain.calendar.RaceDayRepository
 import jp.jrabot.domain.calendar.ScheduleFetchFactReader
 import jp.jrabot.domain.ml.features.FeatureSource
 import jp.jrabot.domain.ml.model.ModelLoader
@@ -43,7 +43,7 @@ internal object BotRunWiring {
         clock: Clock,
         modes: ModeProvider,
         runs: BotRunRepository,
-        days: RaceDayReader,
+        days: RaceDayRepository,
         schedules: RaceScheduleReader,
         overrides: CalendarOverrideReader,
         facts: ScheduleFetchFactReader,
@@ -60,6 +60,7 @@ internal object BotRunWiring {
         errors: ErrorReporter,
         stop: StopFlag,
         leaseProbe: jp.jrabot.domain.botrun.LeaseProbe,
+        availability: jp.jrabot.domain.botrun.ResultAvailability,
     ): BotRunOrchestrator {
         val config = settings.run
         return BotRunOrchestrator(
@@ -98,6 +99,14 @@ internal object BotRunWiring {
             isTransient = BotRunTaskHandler::isTransient,
             events = RunEvents { name, detail -> log.info("BOT_RUN_EVENT name={} {}", name, detail) },
             leaseProbe = leaseProbe,
+            availability = availability,
+            advancer =
+                jp.jrabot.domain.botrun
+                    .RaceDayAdvancerImpl(
+                        days,
+                        jp.jrabot.domain.calendar
+                            .RaceDayUpdater(days, clock),
+                    ),
         )
     }
 

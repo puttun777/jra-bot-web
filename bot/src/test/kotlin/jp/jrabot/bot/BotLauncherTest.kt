@@ -53,7 +53,10 @@ class BotLauncherTest {
         }
         // 他のタスクは calendar の設定が無くても動く
         val other = Harness(OpsMode.NORMAL) { JobResult(JobExit.OK, "EXECUTED") }
-        assertEquals(0, other.launcher.run(args("reconcile"), baseEnv("/dev/null", "CALENDAR_WATCH_START_MINUTES" to null)))
+        assertEquals(0, other.launcher.run(args("retention"), baseEnv("/dev/null", "CALENDAR_WATCH_START_MINUTES" to null)))
+        // reconcile は締切の計算に監視ウィンドウの設定が必要（T3.9）
+        val reconcile = Harness(OpsMode.NORMAL) { JobResult(JobExit.OK, "EXECUTED") }
+        assertEquals(2, reconcile.launcher.run(args("reconcile"), baseEnv("/dev/null", "CALENDAR_SETTLE_DEADLINE_MINUTES" to null)))
     }
 
     @Test

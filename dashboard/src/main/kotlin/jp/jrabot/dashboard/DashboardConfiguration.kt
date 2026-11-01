@@ -1,8 +1,6 @@
 package jp.jrabot.dashboard
 
 import jp.jrabot.cloudgcp.auth.GoogleSignedTokenVerifier
-import jp.jrabot.cloudgcp.auth.InternalCallerVerifier
-import jp.jrabot.cloudgcp.auth.PersonVerifier
 import jp.jrabot.cloudgcp.ops.OpsModeProviders
 import jp.jrabot.domain.ops.InspectableModeProvider
 import jp.jrabot.domain.tenant.AppUserRepository
@@ -52,13 +50,6 @@ class DashboardConfiguration {
         info: AppBuildInfo,
     ): SchemaVersionVerifier = SchemaVersionVerifier(dataSource, info.requiredSchemaVersion)
 
-    /** 人の利用者の検証（`/api`。同じ IAP JWT の検証器で、ops SA かどうかは見ない）。テストは差し替える。 */
-    @Bean
-    fun personVerifier(
-        settings: DashboardSettings,
-        clock: Clock,
-    ): PersonVerifier = GoogleSignedTokenVerifier.iap(settings.iapAudience, settings.opsServiceAccountEmail, clock)
-
     @Bean
     fun humanAuthorizer(
         settings: DashboardSettings,
@@ -66,10 +57,14 @@ class DashboardConfiguration {
     ): HumanAuthorizer =
         HumanAuthorizer(settings.allowedUsers, settings.adminUsers, users, listOfNotNull(EmailAddress.ofOrNull(settings.opsServiceAccountEmail)))
 
-    /** `/internal` の呼び出し元の検証（CONTRACTS §11.1: IAP JWT、ES256、aud=IAP_AUDIENCE、email=OPS_SA_EMAIL）。 */
+    /**
+     * IAP の JWT の検証器。**1 つの Bean を 2 つの用途で使う**: 人の利用者（`/api`: [PersonVerifier]）と内部 API の呼び出し元（`/internal`: [InternalCallerVerifier]。
+     * aud=IAP_AUDIENCE、email=OPS_SA_EMAIL）。型の違う 2 つの Bean に分けると、同じ具象型が 2 つ見つかって注入が曖昧になり、**本番の起動に失敗する**
+     * （試験は @Primary の差し替えで隠れていた: DashboardDefaultWiringTest が防ぐ）。テストは [GoogleSignedTokenVerifier] の Bean を @Primary で差し替える。
+     */
     @Bean
-    fun internalCallerVerifier(
+    fun iapVerifier(
         settings: DashboardSettings,
         clock: Clock,
-    ): InternalCallerVerifier = GoogleSignedTokenVerifier.iap(settings.iapAudience, settings.opsServiceAccountEmail, clock)
+    ): GoogleSignedTokenVerifier = GoogleSignedTokenVerifier.iap(settings.iapAudience, settings.opsServiceAccountEmail, clock)
 }

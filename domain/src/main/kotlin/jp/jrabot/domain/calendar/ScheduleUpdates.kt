@@ -381,6 +381,11 @@ class RaceDayUpdater(
     private val days: RaceDayRepository,
     private val clock: Clock,
 ) {
+    private companion object {
+        /** bot-run・reconcile が進めた状態（取込の再観測で CONFIRMED に戻さない）。 */
+        val PROGRESSED = setOf(RaceDayStatus.RUNNING, RaceDayStatus.SETTLING, RaceDayStatus.COMPLETED, RaceDayStatus.INCOMPLETE)
+    }
+
     fun apply(
         tenantId: TenantId,
         date: LocalDate,
@@ -414,6 +419,43 @@ class RaceDayUpdater(
         return ApplyResult.Conflict
     }
 
+    /**
+     * bot-run・reconcile が開催日の**進行**（RUNNING → SETTLING → COMPLETED / INCOMPLETE）を記録する。**`last_confirmed_at`（スケジュール取得で確認できた時刻）は変えない**
+     * （進行の記録で『確認済み』を更新すると、予定が古くなったこと〈STALE〉を隠してしまうため）。遷移表を通らない辺・既に同じ状態・行が無い場合は何もしない。
+     * 履歴（DAY_STATUS）は同じトランザクションで追記する。競合は読み直して再判定（最大 [RaceScheduleUpdater.MAX_ATTEMPTS] 回）。
+     */
+    fun advance(
+        tenantId: TenantId,
+        date: LocalDate,
+        venue: Venue,
+        target: RaceDayStatus,
+        dedupGroup: String,
+    ): ApplyResult<RaceDay> {
+        repeat(RaceScheduleUpdater.MAX_ATTEMPTS) {
+            val existing = days.find(tenantId, date, venue) ?: return ApplyResult.NoChange(NoChangeReason.NO_EFFECTIVE_CHANGE)
+            if (existing.status == target) return ApplyResult.NoChange(NoChangeReason.NO_EFFECTIVE_CHANGE)
+            if (!RaceDayTransitions.canTransition(existing.status, target)) return ApplyResult.Rejected(RejectReason.INVALID_TRANSITION)
+            val now = clock.now()
+            val event = event(tenantId, date, venue, existing.status, target, now, now, ScheduleEventSource.SYSTEM, dedupGroup, null)
+            when (val r = days.update(existing.copy(status = target), event)) {
+                is ChangeResult.Applied -> {
+                    return ApplyResult.Applied(r.value, r.event)
+                }
+
+                ChangeResult.Duplicate -> {
+                    return ApplyResult.NoChange(NoChangeReason.DUPLICATE_EVENT)
+                }
+
+                ChangeResult.Conflict, ChangeResult.NotFound -> {}
+
+                ChangeResult.AlreadyExists -> {
+                    error("update が AlreadyExists を返した")
+                }
+            }
+        }
+        return ApplyResult.Conflict
+    }
+
     /** 取得で確認できた時刻だけを進める。行が無ければ false。 */
     fun confirm(
         tenantId: TenantId,
@@ -434,6 +476,12 @@ class RaceDayUpdater(
         dedupGroup: String,
     ): ApplyResult<RaceDay>? {
         require(kai == existing.kai && nichime == existing.nichime) { "開催回・日目は変更できない（別の開催日の行）" }
+        // bot-run が進めた状態（RUNNING 以降）の日に、取込（RA など）が CONFIRMED を再観測しても、遷移は拒否して構わないが
+        // **確認時刻は更新する**（更新しないと予定が古い〈STALE〉と見なされ、実行中の bot-run が途中で通知を止める）
+        if (target == RaceDayStatus.CONFIRMED && existing.status in PROGRESSED) {
+            days.confirm(existing.tenantId, existing.raceDate, existing.venue, observedAt)
+            return ApplyResult.NoChange(NoChangeReason.CONFIRMED_ONLY)
+        }
         val statusChanged = target != existing.status
         val refinesTarget = !statusChanged && target == RaceDayStatus.POSTPONED && existing.replacedByDate == null && replacedByDate != null
         if (!statusChanged && !refinesTarget) {

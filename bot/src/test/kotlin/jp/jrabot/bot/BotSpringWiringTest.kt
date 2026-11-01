@@ -72,7 +72,7 @@ class BotSpringWiringTest {
     }
 
     @Test
-    fun `タスクごとのハンドラ（calendar-check・export-dataset・bot-run が実装済み、reconcile と retention はスタブ）と、本番の起動基盤・取得の事実の配線は fail closed`() {
+    fun `タスクごとのハンドラ（calendar-check・export-dataset・bot-run が実装済み、reconcile も実装済み、retention だけがスタブ）と、本番の起動基盤・取得の事実の配線は fail closed`() {
         start(runtime("calendar-check")).use { ctx ->
             assertIs<CalendarCheckTaskHandler>(ctx.getBean(BotTaskHandler::class.java))
             assertIs<UnconfiguredJobLauncher>(ctx.getBean(JobLauncher::class.java), "起動基盤の本番の配線は未設定（fail closed）")
@@ -82,9 +82,8 @@ class BotSpringWiringTest {
                 "取得の事実は DB の ingest_fetch から読む（合成の FixedScheduleFetchFacts や、常に null の NoScheduleFetchFacts ではない）",
             )
         }
-        for (task in listOf("reconcile", "retention")) {
-            start(runtime(task)).use { ctx -> assertIs<StubTaskHandler>(ctx.getBean(BotTaskHandler::class.java), task) }
-        }
+        start(runtime("retention")).use { ctx -> assertIs<StubTaskHandler>(ctx.getBean(BotTaskHandler::class.java), "retention") }
+        start(runtime("reconcile")).use { ctx -> assertIs<ReconcileTaskHandler>(ctx.getBean(BotTaskHandler::class.java)) }
         start(runtime("bot-run")).use { ctx -> assertIs<BotRunTaskHandler>(ctx.getBean(BotTaskHandler::class.java)) }
         start(runtime("export-dataset")).use { ctx -> assertIs<ExportDatasetTaskHandler>(ctx.getBean(BotTaskHandler::class.java)) }
     }

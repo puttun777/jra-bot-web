@@ -42,6 +42,13 @@ class BotRunSettingsParserTest {
     }
 
     @Test
+    fun `結果の確認開始が締切以上なら拒否する（最後のレースが確認されないまま INCOMPLETE になるため）`() {
+        val e = assertFailsWith<IllegalStateException> { parse(ok + ("BOT_RUN_RESULT_AFTER_MINUTES" to "90")) }
+        assertTrue(e.message!!.contains("BOT_RUN_RESULT_AFTER_MINUTES"))
+        parse(ok + ("BOT_RUN_RESULT_AFTER_MINUTES" to "89")) // 締切(90 分)より短ければ可
+    }
+
+    @Test
     fun `運用値に既定は無い どの変数が欠けても拒否し メッセージは変数名だけで値を含めない`() {
         for (name in botRunEnv().keys) {
             val e = assertFailsWith<IllegalStateException>(name) { parse(ok - name) }
