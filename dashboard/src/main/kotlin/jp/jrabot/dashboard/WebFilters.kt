@@ -4,6 +4,7 @@ import jp.jrabot.cloudgcp.auth.InternalCallerVerifier
 import jp.jrabot.cloudgcp.auth.PersonVerifier
 import jp.jrabot.dashboard.api.ApiAuthFilter
 import jp.jrabot.dashboard.guard.AdminWriteGuardFilter
+import jp.jrabot.dashboard.guard.SecurityHeadersFilter
 import jp.jrabot.dashboard.internal.InternalAuthFilter
 import jp.jrabot.domain.ops.InspectableModeProvider
 import jp.jrabot.domain.tenant.HumanAuthorizer
@@ -14,6 +15,13 @@ import org.springframework.context.annotation.Configuration
 /** サーブレットフィルタの登録と順序（内部 API の認証 → 書込みのモードガード）。すべての URL に掛け、対象かどうかはフィルタが正規化したパスで判断する。 */
 @Configuration(proxyBeanMethods = false)
 class WebFilters {
+    @Bean
+    fun securityHeadersFilter(): FilterRegistrationBean<SecurityHeadersFilter> =
+        FilterRegistrationBean(SecurityHeadersFilter()).apply {
+            addUrlPatterns("/*")
+            order = SecurityHeadersFilter.ORDER
+        }
+
     @Bean
     fun internalAuthFilter(verifier: InternalCallerVerifier): FilterRegistrationBean<InternalAuthFilter> =
         FilterRegistrationBean(InternalAuthFilter(verifier)).apply {

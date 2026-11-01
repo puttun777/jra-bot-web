@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JRA Bot ダッシュボード</title>
+<link rel="stylesheet" href="/style.css">
+<script src="/app.js" defer></script>
+</head>
+<body>
+<header>
+  <h1>JRA Bot</h1>
+  <div id="statusbar" class="statusbar" role="status" aria-live="polite">読み込み中…</div>
+</header>
+<nav aria-label="画面">
+  <button type="button" data-tab="overview" aria-selected="true">概要</button>
+  <button type="button" data-tab="signals" aria-selected="false">シグナル</button>
+  <button type="button" data-tab="performance" aria-selected="false">成績</button>
+  <button type="button" data-tab="ops" aria-selected="false">運用</button>
+  <span class="spacer"></span>
+  <label>日付 <input type="date" id="date"></label>
+  <button type="button" id="reload">更新</button>
+</nav>
+<main>
+  <section id="overview" class="tab">
+    <h2>本日のレース</h2>
+    <div id="races" class="table-wrap"></div>
+  </section>
+  <section id="signals" class="tab" hidden>
+    <h2>シグナル</h2>
+    <div id="signal-table" class="table-wrap"></div>
+    <div class="pager"><button type="button" id="prev">前へ</button><span id="pageinfo"></span><button type="button" id="next">次へ</button></div>
+  </section>
+  <section id="performance" class="tab" hidden>
+    <h2>紙上成績（購入していない仮想の損益）</h2>
+    <p class="note">通知した推奨の成績を、確定した結果・払戻から毎回計算しています。結果が無いものは数えず、件数を併記します。</p>
+    <label>期間 <input type="date" id="from"> 〜 <input type="date" id="to"></label>
+    <div id="perf" class="table-wrap"></div>
+  </section>
+  <section id="ops" class="tab" hidden>
+    <h2>運用</h2>
+    <div id="runs" class="table-wrap"></div>
+  </section>
+</main>
+</body>
+</html>

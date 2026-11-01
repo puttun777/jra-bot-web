@@ -27,11 +27,11 @@
 | R12 | reconcile（F15）: INCOMPLETE/異常終了の回復・冪等・排他 | `ReconcileService`、`ReconcileTaskHandler` | `race_day` | 単体 6 件 | **A（単体）/ C（MySQL 統合）** |
 | R13 | 決済の計算（単勝）・紙上成績・代表集計（F15/F20） | `domain/performance`、`domain/settlement` | （読取り API は R15） | 単体 + 旧実装ゴールデン | **A（計算）** |
 | R14 | ワイド・三連複の紙上決済（通知スナップショットの買い目 × 確定払戻）と賭式別の代表集計 | `domain/performance/ComboPaperSettlement`（純粋関数。DB に書かない: D-234） | 読取り API（R15）から呼ぶ | 単体 8（同着・速報・二重計上・発走後の除外・キー読取り） | **A（計算）/ C（API への接続は R15）**。旧のワイド判定との差異は E17 |
-| R15 | 成績・シグナル・買い目・結果の読取り API（DTO・絞り込み・ページング） | `:dashboard`（`/api/v1/me` のみ） | MySQL（`app` ユーザー） | — | **C** |
+| R15 | 成績・シグナル・買い目・結果の読取り API（DTO・絞り込み・ページング） | `:dashboard` `ReadApi`（`/api/v1/status|runs|races|signals|performance`。GET のみ・テナントは本人の行から・入力検査 400・no-store） | `app` ユーザー（SELECT のみ）→ MySQL | 単体 6（テナント分離・ページング・400・未更新判定）。**MySQL 実接続の通し試験は未作成（C）** | **A（API）/ C（MySQL 通し）**。買い目の個別一覧・馬単位の詳細は未実装 |
 | R16 | バックテスト（F20）: 保存済みデータ・未来情報の遮断・除外件数/率 | `domain/backtest/BacktestRunner`（純粋な計算。DB に書かない: D-234） | 管理 API（R15/R20）から呼ぶ | 単体 5（未来のオッズを渡さない・理由別の除外件数と率・二重計上なし） | **A（計算）/ C（API への接続は R15）**。実データでの検証は B |
 | R17 | retention（F14/F16: 保持期間の削除。**既定はドライラン**、削除は `RETENTION_EXECUTE=true` の明示） | `domain/retention`、`persistence/RetentionDao`、`bot/RetentionTaskHandler` | `bot --task=retention`（DELETE 権限は V5 で付与済み） | 単体 + MySQL 通し試験（ドライラン・削除・テナント分離・冪等） | **A**（実データの削除の実行は本人の承認事項。単勝オッズの間引きは未実装 = 別の判断） |
 | R18 | 人の認証・認可（IAP JWT・許可リスト・ロール・deny by default） | `HumanAuthorizer`、`ApiAuthFilter` | dashboard `/api/**` | 単体 + Tomcat 統合 | **A**（実 IAP の `aud` は B: G-OPS-7） |
-| R19 | ダッシュボード UI（日本語・レスポンシブ・bot 状態・次回予定・最終更新・未更新表示・シグナル/買い目/結果/成績/バックテスト画面） | `:dashboard`（UI なし） | — | — | **C** |
+| R19 | ダッシュボード UI（日本語・レスポンシブ・bot 状態・次回予定・最終更新・未更新表示・シグナル/成績/運用画面） | `dashboard/src/main/resources/static`（HTML/CSS/JS。D-243） | `/`（IAP の内側） | 静的検査（インライン script・外部 CDN・innerHTML なし）。**ブラウザでの目視確認は未実施（B）** | **A（実装）/ B（実機の目視）**。バックテスト画面・馬詳細・グラフは未実装（C） |
 | R20 | 管理操作（手動補正・エージェント失効・モデル有効化）+ CSRF + 監査ログ | `AdminWriteGuardFilter`（ガードのみ） | — | — | **C** |
 | R21 | ML 学習 Job・推論・モデル署名・ゲート・レジストリ（F10/F11/F12） | `ml/`、`domain/ml`、`:bot` | GCS model-store | pytest 128 + Kotlin/Python 結合 5 | **A**（実モデル・実データでの学習は B: T1.20/T1.21） |
 | R22 | ML 管理 UI（有効化・メトリクス表示） | — | — | — | **C**（R19/R20 に含む） |
