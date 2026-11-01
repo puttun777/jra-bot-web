@@ -287,4 +287,51 @@ class FeatureBuilderTest {
         assertFailsWith<IllegalArgumentException> { FeatureVector(FeatureSchema.ALPHA_35, DoubleArray(34), FeatureMeta.EMPTY) }
         assertFailsWith<IllegalArgumentException> { FeatureVector(FeatureSchema.ALPHA_35, DoubleArray(35) { Double.NaN }, FeatureMeta.EMPTY) }
     }
+
+    // ---- 監査 G3: 現在の races 行（天候・馬場）を過去時点の事実として使わない ----
+
+    private fun sourceWithConditionsUpdatedAt(updatedAt: Instant?): InMemoryFeatureSource {
+        val s = source()
+        s.putRace(tenant, raceId, RaceConditions(raceDate, postTime, 1600, "11", "00", "1", "2", "3", updatedAt), unknownUpdatedAt = updatedAt == null)
+        return s
+    }
+
+    @Test
+    fun `PIT races 行が asOf より後に更新されていたら 天候と馬場は使わず フラグを付ける`() {
+        val after = PointInTimeFeatureBuilder(sourceWithConditionsUpdatedAt(asOf.plusSeconds(1))).build(FeatureSchema.CALIBRATION_40, req())
+        assertEquals(0.0, after.valueOf("tenko_cd"), "未来の値かもしれないので推測しない")
+        assertEquals(0.0, after.valueOf("baba_cd"))
+        assertTrue(FeatureFlag.RACE_CONDITIONS_NEWER_THAN_AS_OF in after.meta.flags)
+        assertEquals(1.0, after.valueOf("is_turf"), "距離・コース種別など変わらない条件は使う")
+        assertEquals(1.6, after.valueOf("distance_km"))
+    }
+
+    @Test
+    fun `PIT races 行が asOf 以前の更新なら 天候と馬場をそのまま使う`() {
+        for (u in listOf(asOf, asOf.minusSeconds(60))) {
+            val v = PointInTimeFeatureBuilder(sourceWithConditionsUpdatedAt(u)).build(FeatureSchema.CALIBRATION_40, req())
+            assertEquals(1.0, v.valueOf("tenko_cd"), "updatedAt=$u")
+            assertEquals(2.0, v.valueOf("baba_cd"), "芝のレースは芝の馬場コード updatedAt=$u")
+            assertFalse(FeatureFlag.RACE_CONDITIONS_NEWER_THAN_AS_OF in v.meta.flags)
+        }
+    }
+
+    @Test
+    fun `PIT races 行の更新時刻が不明(null)なら 観測時刻が分からないので 天候と馬場は使わず フラグを付ける 推論側も同じ`() {
+        val b = PointInTimeFeatureBuilder(sourceWithConditionsUpdatedAt(null))
+        val v = b.build(FeatureSchema.CALIBRATION_40, req())
+        assertEquals(0.0, v.valueOf("tenko_cd"))
+        assertEquals(0.0, v.valueOf("baba_cd"))
+        assertTrue(FeatureFlag.RACE_CONDITIONS_NEWER_THAN_AS_OF in v.meta.flags)
+        assertEquals(1.6, v.valueOf("distance_km"), "変わらない条件は使う")
+        assertEquals("", b.reasonFacts(req(), "合成馬").conditions?.tenkoCd, "通知の理由文の材料も同じ規則")
+    }
+
+    @Test
+    fun `PIT 通知の理由文の材料も asOf より後に更新された天候と馬場を出さない`() {
+        val facts = PointInTimeFeatureBuilder(sourceWithConditionsUpdatedAt(asOf.plusSeconds(1))).reasonFacts(req(), "合成馬")
+        assertEquals("", facts.conditions?.tenkoCd)
+        assertEquals("", facts.conditions?.shibaBabaCd)
+        assertEquals(1600, facts.conditions?.distanceM)
+    }
 }

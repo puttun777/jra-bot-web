@@ -199,6 +199,21 @@ class DatasetExporterTest {
     }
 
     @Test
+    fun `races 行が asOf より後に更新されたレースは 天候と馬場を復元できないので学習対象から外す 0 件なら manifest に出さない`() {
+        val (f, d) = world()
+        val ok = export(FeatureSchema.ALPHA_35, f, d)
+        assertTrue(((ok.manifest["quality"] as JsonObject)["skipped"] as JsonObject).fields.keys.none { it == "conditions_newer_than_as_of" })
+        // 1 日だけ、行が発走の後（as_of=発走 10 分前より後）に更新された
+        val date = LocalDate.of(2026, 1, 6)
+        val post = date.atTime(15, 25).atZone(java.time.ZoneId.of("Asia/Tokyo")).toInstant()
+        f.putRace(tenant, "202601060511", RaceConditions(date, post, 1600, "11", "00", "1", "2", "3", post.plusSeconds(3600)))
+        val e = export(FeatureSchema.ALPHA_35, f, d)
+        val skipped = (e.manifest["quality"] as JsonObject)["skipped"] as JsonObject
+        assertEquals(JsonInt(6), skipped["conditions_newer_than_as_of"])
+        assertEquals(JsonInt(54), e.manifest["rows"])
+    }
+
+    @Test
     fun `manifest は sha256 の自己検証ができ、特徴量スキーマと CSV の sha256 を持つ`() {
         val e = export(FeatureSchema.CALIBRATION_40)
         val m = e.manifest

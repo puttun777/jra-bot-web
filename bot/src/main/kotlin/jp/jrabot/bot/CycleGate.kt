@@ -1,7 +1,8 @@
 package jp.jrabot.bot
 
+import jp.jrabot.domain.botrun.ModeDecision
+import jp.jrabot.domain.botrun.ModeGate
 import jp.jrabot.domain.ops.ModeProvider
-import jp.jrabot.domain.ops.OpsMode
 
 /** bot-run の各サイクルの開始時の判断（CONTRACTS §5.3）。 */
 sealed interface CycleDecision {
@@ -24,50 +25,20 @@ sealed interface CycleDecision {
 }
 
 /**
- * bot-run の「サイクルごとにモードを再確認する」判断の骨組み（T2.8 では**どこからも呼ばれない**。Stage 3 の bot-run ループが使う）。
- * ModeProvider は状態を持たないので、UNKNOWN の連続回数はここで数える（約 15 秒キャッシュ × 3 回 ≒ 45 秒）。
- *
- * - NORMAL → [CycleDecision.StartCycle]（連続回数をリセット）。
- * - STARTING / STOPPING / STOPPED → [CycleDecision.Drain]（exit 0、理由 `STOPPED_BY_MODE`）。
- * - UNKNOWN → 連続 1〜2 回目は [CycleDecision.SkipCycle]、[maxConsecutiveUnknown] 回目で [CycleDecision.Drain]（exit 75、理由 `MODE_UNKNOWN`）。NORMAL とみなさない。
- * - 一度 Drain を返した後は、以降の呼び出しも Drain を返し続ける（NORMAL に戻っても新しいサイクルを始めない）。スレッドセーフではない（ループ 1 本から使う）。
+ * bot-run の「サイクルごとにモードを再確認する」判断（T2.8 の骨組み）。**T3.8 で判断の本体を `:domain` の [ModeGate] に移した**
+ * （bot-run のループは `:domain` にあるため）。ここは `:bot` 側の型（[CycleDecision]・[JobExit]）への薄い変換で、規則は [ModeGate] の KDoc のとおり
+ * （NORMAL → 開始、確定した非 NORMAL → Drain exit 0 `STOPPED_BY_MODE`、UNKNOWN は連続 [maxConsecutiveUnknown] 回で Drain exit 75 `MODE_UNKNOWN`）。
  */
 class CycleGate(
-    private val modeProvider: ModeProvider,
+    modeProvider: ModeProvider,
     val maxConsecutiveUnknown: Int = 3,
 ) {
-    private var consecutiveUnknown = 0
-    private var draining: CycleDecision.Drain? = null
+    private val gate = ModeGate(modeProvider, maxConsecutiveUnknown)
 
-    init {
-        require(maxConsecutiveUnknown >= 1) { "maxConsecutiveUnknown は 1 以上" }
-    }
-
-    fun onCycleStart(): CycleDecision {
-        draining?.let { return it }
-        return when (modeProvider.current()) {
-            OpsMode.NORMAL -> {
-                consecutiveUnknown = 0
-                CycleDecision.StartCycle
-            }
-
-            OpsMode.STARTING, OpsMode.STOPPING, OpsMode.STOPPED -> {
-                drain(CycleDecision.Drain("STOPPED_BY_MODE", JobExit.OK))
-            }
-
-            OpsMode.UNKNOWN -> {
-                consecutiveUnknown++
-                if (consecutiveUnknown >= maxConsecutiveUnknown) {
-                    drain(CycleDecision.Drain("MODE_UNKNOWN", JobExit.TEMPFAIL))
-                } else {
-                    CycleDecision.SkipCycle(consecutiveUnknown)
-                }
-            }
+    fun onCycleStart(): CycleDecision =
+        when (val d = gate.onCycleStart()) {
+            ModeDecision.Proceed -> CycleDecision.StartCycle
+            is ModeDecision.Skip -> CycleDecision.SkipCycle(d.consecutiveUnknown)
+            is ModeDecision.Drain -> CycleDecision.Drain(d.reason, d.exitCode)
         }
-    }
-
-    private fun drain(d: CycleDecision.Drain): CycleDecision.Drain {
-        draining = d
-        return d
-    }
 }

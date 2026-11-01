@@ -1,0 +1,738 @@
+{
+  "case_id": "GD11-WINKEYS-001",
+  "comparison_rules": {
+    "default": {
+      "float": {
+        "abs_tol": 0.0,
+        "mode": "abs_tol"
+      }
+    },
+    "overrides": [],
+    "strict": {
+      "key_set": true,
+      "list_order": true,
+      "nonfinite": "reject",
+      "types": true
+    }
+  },
+  "data_classification": "synthetic",
+  "description": "get_winning_combo_keys: 着順 0/NULL の除外・同着・3 着同着・数値順・欠番の着順・着順不足",
+  "execution_parameters": {
+    "clock": "not_used (対象関数は現在時刻を読まない。datetime.now を使う経路は対象外)",
+    "cwd": "empty temporary directory",
+    "fixed_time": "2026-01-01T00:00:00+09:00",
+    "libraries": {
+      "numpy": "2.5.3"
+    },
+    "ml_cfg": {
+      "enabled": false
+    },
+    "network": "blocked",
+    "seed": 20260101,
+    "timezone": "Asia/Tokyo"
+  },
+  "expected_output": {
+    "results": [
+      {
+        "call_id": "wk-normal",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              {
+                "sanrenpuku": "1-2-3",
+                "wide": "2-3"
+              }
+            ],
+            "race_evaluations": []
+          }
+        }
+      },
+      {
+        "call_id": "wk-two_only",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              {
+                "sanrenpuku": null,
+                "wide": "5-7"
+              }
+            ],
+            "race_evaluations": []
+          }
+        }
+      },
+      {
+        "call_id": "wk-one_only",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              {
+                "sanrenpuku": null,
+                "wide": null
+              }
+            ],
+            "race_evaluations": []
+          }
+        }
+      },
+      {
+        "call_id": "wk-none",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              {
+                "sanrenpuku": null,
+                "wide": null
+              }
+            ],
+            "race_evaluations": []
+          }
+        }
+      },
+      {
+        "call_id": "wk-all_null",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              {
+                "sanrenpuku": null,
+                "wide": null
+              }
+            ],
+            "race_evaluations": []
+          }
+        }
+      },
+      {
+        "call_id": "wk-zero_finish",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              {
+                "sanrenpuku": "3-4-5",
+                "wide": "3-4"
+              }
+            ],
+            "race_evaluations": []
+          }
+        }
+      },
+      {
+        "call_id": "wk-scratch_mixed",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              {
+                "sanrenpuku": "2-3-4",
+                "wide": "2-3"
+              }
+            ],
+            "race_evaluations": []
+          }
+        }
+      },
+      {
+        "call_id": "wk-tie_first",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              {
+                "sanrenpuku": "3-6-9",
+                "wide": "3-6"
+              }
+            ],
+            "race_evaluations": []
+          }
+        }
+      },
+      {
+        "call_id": "wk-tie_third",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              {
+                "sanrenpuku": "1-2-4",
+                "wide": "1-2"
+              }
+            ],
+            "race_evaluations": []
+          }
+        }
+      },
+      {
+        "call_id": "wk-big_umaban",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              {
+                "sanrenpuku": "2-10-18",
+                "wide": "2-18"
+              }
+            ],
+            "race_evaluations": []
+          }
+        }
+      },
+      {
+        "call_id": "wk-gap_finish",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              {
+                "sanrenpuku": "1-2-3",
+                "wide": "1-2"
+              }
+            ],
+            "race_evaluations": []
+          }
+        }
+      },
+      {
+        "call_id": "wk-unknown-race",
+        "outcome": {
+          "status": "ok",
+          "value": {
+            "bets": [],
+            "ops": [
+              {
+                "sanrenpuku": null,
+                "wide": null
+              }
+            ],
+            "race_evaluations": []
+          }
+        }
+      }
+    ]
+  },
+  "fixture_id": "golden/GD11-WINKEYS-001/v1",
+  "generator": {
+    "tool": "tools/golden",
+    "tool_version": "0.1.0"
+  },
+  "input": {
+    "calls": [
+      {
+        "args": {
+          "db": {
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "W-normal",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "W-normal",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "W-normal",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "W-normal",
+                "umaban": 3
+              },
+              {
+                "finish": 4,
+                "payout": null,
+                "race_id": "W-normal",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "winning_keys",
+              "race_id": "W-normal"
+            }
+          ]
+        },
+        "call_id": "wk-normal",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "W-two_only",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "W-two_only",
+                "umaban": 5
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "W-two_only",
+                "umaban": 7
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "winning_keys",
+              "race_id": "W-two_only"
+            }
+          ]
+        },
+        "call_id": "wk-two_only",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "W-one_only",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "W-one_only",
+                "umaban": 5
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "winning_keys",
+              "race_id": "W-one_only"
+            }
+          ]
+        },
+        "call_id": "wk-one_only",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "W-none",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": []
+          },
+          "ops": [
+            {
+              "op": "winning_keys",
+              "race_id": "W-none"
+            }
+          ]
+        },
+        "call_id": "wk-none",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "W-all_null",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": null,
+                "payout": null,
+                "race_id": "W-all_null",
+                "umaban": 1
+              },
+              {
+                "finish": null,
+                "payout": null,
+                "race_id": "W-all_null",
+                "umaban": 2
+              },
+              {
+                "finish": null,
+                "payout": null,
+                "race_id": "W-all_null",
+                "umaban": 3
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "winning_keys",
+              "race_id": "W-all_null"
+            }
+          ]
+        },
+        "call_id": "wk-all_null",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "W-zero_finish",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 0,
+                "payout": null,
+                "race_id": "W-zero_finish",
+                "umaban": 1
+              },
+              {
+                "finish": 0,
+                "payout": null,
+                "race_id": "W-zero_finish",
+                "umaban": 2
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "W-zero_finish",
+                "umaban": 3
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "W-zero_finish",
+                "umaban": 4
+              },
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "W-zero_finish",
+                "umaban": 5
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "winning_keys",
+              "race_id": "W-zero_finish"
+            }
+          ]
+        },
+        "call_id": "wk-zero_finish",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "W-scratch_mixed",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": null,
+                "payout": null,
+                "race_id": "W-scratch_mixed",
+                "umaban": 1
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "W-scratch_mixed",
+                "umaban": 2
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "W-scratch_mixed",
+                "umaban": 3
+              },
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "W-scratch_mixed",
+                "umaban": 4
+              },
+              {
+                "finish": 0,
+                "payout": null,
+                "race_id": "W-scratch_mixed",
+                "umaban": 5
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "winning_keys",
+              "race_id": "W-scratch_mixed"
+            }
+          ]
+        },
+        "call_id": "wk-scratch_mixed",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "W-tie_first",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "W-tie_first",
+                "umaban": 3
+              },
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "W-tie_first",
+                "umaban": 6
+              },
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "W-tie_first",
+                "umaban": 9
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "winning_keys",
+              "race_id": "W-tie_first"
+            }
+          ]
+        },
+        "call_id": "wk-tie_first",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "W-tie_third",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "W-tie_third",
+                "umaban": 1
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "W-tie_third",
+                "umaban": 2
+              },
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "W-tie_third",
+                "umaban": 8
+              },
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "W-tie_third",
+                "umaban": 4
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "winning_keys",
+              "race_id": "W-tie_third"
+            }
+          ]
+        },
+        "call_id": "wk-tie_third",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "W-big_umaban",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 1,
+                "payout": null,
+                "race_id": "W-big_umaban",
+                "umaban": 18
+              },
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "W-big_umaban",
+                "umaban": 2
+              },
+              {
+                "finish": 3,
+                "payout": null,
+                "race_id": "W-big_umaban",
+                "umaban": 10
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "winning_keys",
+              "race_id": "W-big_umaban"
+            }
+          ]
+        },
+        "call_id": "wk-big_umaban",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "races": [
+              {
+                "date": "20260301",
+                "post_time": "15:40",
+                "race_id": "W-gap_finish",
+                "race_no": 11,
+                "track": "東京"
+              }
+            ],
+            "results": [
+              {
+                "finish": 2,
+                "payout": null,
+                "race_id": "W-gap_finish",
+                "umaban": 1
+              },
+              {
+                "finish": 5,
+                "payout": null,
+                "race_id": "W-gap_finish",
+                "umaban": 2
+              },
+              {
+                "finish": 9,
+                "payout": null,
+                "race_id": "W-gap_finish",
+                "umaban": 3
+              }
+            ]
+          },
+          "ops": [
+            {
+              "op": "winning_keys",
+              "race_id": "W-gap_finish"
+            }
+          ]
+        },
+        "call_id": "wk-gap_finish",
+        "function": "settle_batch"
+      },
+      {
+        "args": {
+          "db": {
+            "races": [],
+            "results": []
+          },
+          "ops": [
+            {
+              "op": "winning_keys",
+              "race_id": "NOPE"
+            }
+          ]
+        },
+        "call_id": "wk-unknown-race",
+        "function": "settle_batch"
+      }
+    ]
+  },
+  "known_defects": [],
+  "legacy_behavior_note": "expected_output は旧実装が実際に返した値（欠陥候補を含む）。新仕様の期待値ではない。",
+  "scenario_ids": [
+    "GD11"
+  ],
+  "schema_version": 1,
+  "source_commit": "f7dbf69fd8940121782870de902e8c449e6ca149",
+  "source_function": [
+    "jraev.storage.repo.ResultRepository.get_winning_combo_keys"
+  ],
+  "source_repository": "puttun777/jra-bot"
+}

@@ -261,9 +261,22 @@ Reader/Writer は分かれており、`XxxRepository` は両方を継承する�
 
 ### 14.13 T3.6-B の結果と T3.7 / T3.8 以降への引き継ぎ（ML の学習 Job。2026-10-24。判断 D-165〜D-179、詳細は ML_DESIGN §12、未解決は UNRESOLVED.md）
 - **実装済み**: `ml/`（Python 3.13。`python -m ml_train train|…`）、`bot --task=export-dataset`、`:persistence` の `FeatureSource`/`DatasetSource`、V4 `horse_master_history`、`:cloud-gcp` の `GcsModelStore`/`GcsDatasetStore`、旧 pkl 変換、ml-train イメージ、release-manifest v2、CI `ml-train` ジョブ。
-- **スキーマ版は 4**（`requiredSchemaVersion`。bot / ingest / dashboard）。infra の DB 移行・GRANT の同期は T5.0（G-9）。
+- **スキーマ版は 5**（V5: 通知タイミングの確定。`requiredSchemaVersion`。bot / ingest / dashboard）。infra の DB 移行・GRANT の同期は T5.0（G-9）。
 - **検証ゲート**: 実データでの G-ML-1〜3、品質閾値（D-13）は未実施・未承認。ML は `legacy` のまま。ACTIVE への昇格は人手（ml-train はしない）。
 - **（T3.7 は 2026-10-27 に実装済み。引き継ぎは UNRESOLVED G-21 と PROGRESS の Stage 3-G）** 元の記述: **T3.7（Discord）が最初にやること**: 通知文 `format_reason_from_features`（G-17 ⑥）。ML の通知は REJECTED の扱い（D-14）を決めてから。**T3.7 へは自動で進まない**。
 - **T3.8**: bot-run 統合（G-17 ①②）。履歴の追記（C-21）を取込側に入れる。
 - **再開手順（ローカル）**: `ml/README.md`。Kotlin ⇄ Python の結合テストは `ML_TRAIN_PYTHON=<ml の venv の python>`、MySQL は `JRABOT_TEST_MYSQL_EXTERNAL`。
+
+## 15. T3.8（Stage 3-H）以降の再開手順とローカルの検証コマンド（2026-10-27）
+順序: **T3.9（Stage 3-I）→ 第4段階 → 第5段階**。各段階の完了後はユーザーのレビューを挟む。**自動で次へ進まない**。全体の依存・ゲートは PLAN.md「T3.8 後の道筋」。
+| 目的 | コマンド（JDK 21 のローカルは `-PjdkVersion=21`。完了判定の正は GitHub Actions: D-056） |
+|---|---|
+| 単体（Docker 不要） | `LC_ALL=C.UTF-8 ./gradlew :domain:test :bot:test :persistence:test :golden-runner:test :ingest:test :dashboard:test :cloud-gcp:test -PjdkVersion=21` |
+| 静的検査 | `./gradlew checkModuleDependencies ktlintCheck -PjdkVersion=21`（`ktlintFormat` で整形。整形後に `-Werror` の警告が出ることがある） |
+| MySQL 統合（Docker なし） | ローカルに MySQL 8.0.46 を `apt-get install mysql-server-core-8.0` で入れ、`mysqld --no-defaults --initialize-insecure` → `mysqld … --port=3307 --secure-file-priv=NULL --default-time-zone=+00:00` → root のパスワードを `root-pw-for-ci-container`（`MySqlSupport.ROOT_PASSWORD`）にして `JRABOT_TEST_MYSQL_EXTERNAL=127.0.0.1:3307 ./gradlew :persistence:integrationTest :bot:integrationTest -PjdkVersion=21`。既知の失敗: `WiringIntegrationTest` のサーバ版（8.4 を期待）、`MlTrainInteropIntegrationTest`（`ML_TRAIN_PYTHON` が要る） |
+| ゴールデン | `./gradlew :golden-runner:run -PjdkVersion=21 --args="--fixtures $PWD/tools/golden/fixtures --out /tmp/k.json --coverage /tmp/c.json"` → `python3 -m tools.golden.kotlin_compare --actual /tmp/k.json --coverage /tmp/c.json --fixtures tools/golden/fixtures`（期待: 31 ケース / 988 呼び出し一致） |
+| Python/リポジトリ | `python3 -m tools.ci.run_tests --min-tests 100`、`bash .github/scripts/check-repo-hygiene.sh` |
+| Gradle の 429 | repo.maven.apache.org が 429 を返すことがある。同じコマンドを再実行すると依存が少しずつキャッシュされて通る（待機の再試行を挟む） |
+- **GitHub Actions の無料枠**: Private リポジトリでは PR 作成と main への push が CI を起動する。`claude/*` ブランチへの push だけでは起動しない（`ci.yml` は `pull_request: [main]` と `push: [main]`、`images.yml`/`compat` は手動のみ）。枠が戻る（または Public 化）までは PR を作らず、ブランチを保持する。CI を通すために品質ゲートを緩めない。
+- **T3.8 の検証ゲート（実現済みとして扱わない）**: 実 Discord（G-22）、Cloud Run Jobs の SIGTERM（F-8）、JDK 25 / MySQL 8.4・9.7 / Docker イメージ（F-7）、実データでの ML 精度（F-5）。
 

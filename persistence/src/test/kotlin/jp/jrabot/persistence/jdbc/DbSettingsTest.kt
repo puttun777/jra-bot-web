@@ -39,6 +39,7 @@ class DbSettingsTest {
         assertEquals(10_000L, config.connectionTimeout)
         assertEquals(4, config.maximumPoolSize)
         assertEquals("SET time_zone = '+00:00'", config.connectionInitSql)
+        assertEquals("TRANSACTION_REPEATABLE_READ", config.transactionIsolation) // 監査 D: READ COMMITTED にならない
         assertTrue(config.maxLifetime < 8 * 60 * 60 * 1000L) // Cloud SQL の wait_timeout(既定 8 時間)より短い
         val props = config.dataSourceProperties
         assertEquals("true", props.getProperty("useAffectedRows"))

@@ -65,6 +65,7 @@ internal class DbFeatureSource(
             tenkoCd = r.tenkoCd.code(),
             shibaBabaCd = r.shibaBabaCd.code(),
             dirtBabaCd = r.dirtBabaCd.code(),
+            updatedAt = r.updatedAt.toInstantUtc(),
         )
     }
 

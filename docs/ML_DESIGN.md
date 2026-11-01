@@ -308,7 +308,7 @@ data class ProbabilityResult(val probs: List<Double>, val source: ProbSource, va
 - CSV: UTF-8・LF・ヘッダあり。列 = `tenant_id,race_id,umaban,race_date,as_of` + 特徴量（`feature_schema.names` の順）+ `label`（1 着 = 1、他 = 0。取消・除外・結果なしは出力しない）+ `split`（`train` / `valid`）。浮動小数は Python の `repr`（`pandas.read_csv` でそのまま読める）。行は (レース日, race_id, 馬番) の昇順。
 - `split`: Kotlin がレース日の昇順に分ける（先頭の約 80% の**日**が train、残りが valid。同じ日のレースは分けない）。**Python は再分割しない**（walk-forward などは valid の中でだけ行う）。
 - `as_of` = 発走時刻 − 10 分（manifest の `as_of_policy.lead_seconds`）。オッズは `as_of` 以前の最新だけ。calibration は `as_of` 以前のオッズが無い行を出力しない（旧 `dataset_builder` と同じ）。
-- manifest の主な項目: `dataset_schema_version`・`dataset_id`・`tenant_id`・`feature_schema`（同梱）・`columns`・`csv.{sha256,bytes}`（**非圧縮 CSV** の SHA-256。gzip のバイト列は zlib の版で変わるので正本にしない）・`rows`・`range`・`label`・`as_of_policy`・`split`（件数・`valid_starts_at`）・`builder.{mode:"point_in_time", legacy_compat_used:false}`・`quality.{has_horse_master_ratio, has_past_runs_ratio, constant_features, flags, skipped}`・`sha256`（自己ハッシュ）。出力しなかった行は理由別に `quality.skipped` へ（黙って捨てない）。
+- manifest の主な項目: `dataset_schema_version`・`dataset_id`・`tenant_id`・`feature_schema`（同梱）・`columns`・`csv.{sha256,bytes}`（**非圧縮 CSV** の SHA-256。gzip のバイト列は zlib の版で変わるので正本にしない）・`rows`・`range`・`label`・`as_of_policy`・`split`（件数・`valid_starts_at`）・`builder.{mode:"point_in_time", legacy_compat_used:false}`・`quality.{has_horse_master_ratio, has_past_runs_ratio, constant_features, flags, skipped}`・`sha256`（自己ハッシュ）。出力しなかった行は理由別に `quality.skipped` へ（黙って捨てない）。**`quality.skipped.conditions_newer_than_as_of`（監査 G3。D-214）**: `races` 行の最終更新が asOf より後の行は、天候・馬場の asOf 時点の値を復元できない（履歴が無い）ので出力しない。**1 件以上あるときだけ**このキーが入る（0 件なら従来の manifest とバイト列が同じ）。`quality.flags` にも `race_conditions_newer_than_as_of` は出さない（その行は出力しないため）。履歴表の追加は UNRESOLVED G-28。
 - `sample_weight`（Python が計算）: `w_i = 0.5 ** ((ref − race_date_i).days / halflife)`、`ref` = train の最大 `race_date`、`halflife` ∈ {90, 180, 240}（旧 `retrain_models.py` と同じ候補）。計算後に train の平均 1 へ正規化（旧 `fit` と同じ）。
 - 検証: `python3 -m tools.ml.dataset_contract --csv-gz X.csv.gz --manifest X.manifest.json`（manifest の自己ハッシュ・`feature_schema.hash` の再計算・列の構成と順序・CSV の SHA-256・行の昇順・数値の有限性・label が 0/1・valid が train より後の日・as_of（JST）がレース日と一致・`legacy_compat_used=false`）。**学習側は検証に失敗したデータセットで学習しない。**
 
@@ -354,3 +354,23 @@ H6・H7・H9 は学習側/データ側（F2・T1.20）。
 
 ## 13. T3.7: 通知の理由文（G-17 ⑥）
 `format_reason_from_features` は `jp.jrabot.domain.ml.features.ReasonFormatter` に移植。材料 `HorseReasonFacts` は 2 通りで作る: ①`LegacyFeatureBuilder.reasonFacts`（旧互換。H3 を含み、ゴールデン G8-REASON-006 の比較専用）②`PointInTimeFeatureBuilder.reasonFacts`（asOf 以前だけ。`LeakageException` の検査は `build` と同じ。累積値〔適性・脚質〕が asOf より後に更新されていたら出さない＝0% などの架空の値を出さない）。馬名は呼び出し側（出走表）が渡す。旧の適性率が 100% を超え得る癖（D-159）は共有の式のまま表示に出る（G8-REASON-006 の『距離=147%』）。実データの通知は COMP-4 まで送らない。
+
+## 14. T3.8: bot-run への ML の接続（2026-10-27。判断 D-199。合成データのみ）
+- **固定**: bot-run の開始時（リース取得後・RUNNING の前）に 1 回だけ `ModelRunPin.capture` → `ModelSession`（保管先から読み、**署名・sha256・feature_schema_hash・次元をレジストリの記録と照合**）→ `MlInference`（`MlRunStarter`）。run の途中でレジストリの ACTIVE が替わっても固定したモデルを使う。`BOT_RUN_ML_MODEL_TYPE=off` なら読み込まない。パイプラインは **legacy 固定**（v2 は設定項目すら無い）。
+- **判定への配線**: `RaceEvaluator` が point-in-time の特徴量（`PointInTimeFeatureBuilder`。`asOf = 評価時刻`、発走時刻以降は `LeakageException` → `MODEL_PREDICTION_FAILED` のフォールバック。過去走はレース日より前だけ、馬マスタは `horseAsOf`）で `MlInference.probabilities` を呼び、`ProbabilityResult.probs` を `MlProbabilityInput` として `WinDecisionEvaluator` に渡す。確率源のラベルは legacy の旧ラベル（H10）。EV・Kelly・賭け額・買い目・丸めは変更なし（ゴールデン 31 ケース / 988 呼び出し一致を維持）。
+- **記録**: `race_evaluations.model_type_used`（`calibration` など、ML が使えなかったら `market`）、`model_id`（固定した ID。市場確率のみなら NULL）、`fallback_reason`（`FallbackReason` の名前。ML 無効は `ML_DISABLED`）。
+- **フォールバックの検知**: ML を有効にしたのに市場確率だけになったら（H1 のサイレントフォールバックの再発防止）、運用者へ run あたり 1 回エラー通知する（理由つき）。署名不正・成果物なし・ACTIVE なし（CANDIDATE のみ）・レジストリ/保管先の障害・特徴量の元データ欠損をテストで確認。
+- **しないこと（未承認）**: モデルの ACTIVE への昇格、品質閾値の設定、v2 の有効化、実 pkl の変換、実データでの学習。**合成テストの成功は予測精度の証明ではない**（F-5・G-ML-1〜3 は実データで）。
+- **履歴の追記（G-26）**: `horse_master_history` は取込側がいつ版を足すか未実装。履歴が貯まるまで過去分の PIT は不完全。
+
+
+## 15. 天候・馬場の観測履歴の設計（G-28/G-31。2026-10-29。**設計のみ。表も特徴量スキーマの変更も今は入れない**）
+**問題**: `races` の天候・馬場は現在値で、変更履歴が無い。`races.updated_at` は『取込時刻』であって『観測時刻』ではない。遅れて取り込んだ過去レース（バックフィル）は、取込時刻が as-of より後になるため、学習・バックテストから安全側で除外される（D-214）。履歴を持てば、as-of 時点の値を復元して除外を減らせる。
+**原則（破ってはならない）**
+1. **取込時刻を過去の観測時刻として扱わない**。遅れて取り込んだ値には、『いつ観測された値か』が分からないので観測時刻を付けない（`observed_at = NULL`、`provenance = BACKFILL`）。BACKFILL の行は as-of 復元に**使わない**（除外のまま）。
+2. **架空の履歴を作らない**。過去時点の天候・馬場が不明なら、補間・現在値のコピー・推測をしない（欠損のまま）。
+3. as-of 復元は『`observed_at <= asOf` の最新の LIVE 行』だけ。無ければ欠損（そのレースは学習・バックテストの対象外。件数と率を報告: T39 §8）。
+4. 学習と推論で同じ復元規則を使う（片方だけ現在値を使わない）。
+**将来の表の案（承認が先。今は作らない）**: `race_condition_observations(tenant_id, race_id, observed_at NOT NULL, source_ts, kind ENUM('weather','going_turf','going_dirt'), value_cd, provenance ENUM('LIVE','BACKFILL'), batch_id, created_at)`。追記専用・UNIQUE `(tenant_id, race_id, kind, observed_at)`。**LIVE は取込時刻ではなく、JV-Link のレコードが示す発表時刻**（WE レコードの発表日時。仕様の確認が前提: T1.17）か、速報を受け取った時刻で、後者は『受け取った時刻 = 観測時刻の上限』として `LIVE` にだけ使う（それより前の観測は主張しない）。BACKFILL の行を入れる場合は `observed_at` を持たせず別の列で区別する。bot は SELECT、ingest が INSERT、`R__grants.sql` の追加が要る（V6 以降の別の承認）。
+**未解決（UNRESOLVED G-31）**: ①WE レコードの発表時刻の意味と粒度（T1.17）②LIVE 行の取得が運用開始後に限られるので、運用開始前のレースの履歴は永久に無い（その分は常に除外）③別スキーマ（天候・馬場なし。T39 §8.1）との比較は、実データの除外率を見てから。
+**今回の実装（安全側の除外）**: `races.updated_at` が as-of より後、または**不明（null）**なら天候・馬場を使わず `RACE_CONDITIONS_NEWER_THAN_AS_OF` を付け、データセットから除外する（null の扱いは D-226）。

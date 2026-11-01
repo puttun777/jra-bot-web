@@ -65,14 +65,14 @@ class BotSpringWiringTest {
                 assertNotNull(ctx.getBean(type), type.simpleName)
             }
             assertSame(mode, ctx.getBean(ModeProvider::class.java), "モード確認に使ったものと同じインスタンス")
-            assertEquals("4", ctx.getBean(SchemaVersionVerifier::class.java).required.toString())
+            assertEquals("5", ctx.getBean(SchemaVersionVerifier::class.java).required.toString())
             assertTrue(ctx.getBeansOfType(Class.forName("org.seasar.doma.jdbc.Config")).isNotEmpty())
             assertNotNull(ctx.getBean(BotJobExecutor::class.java))
         }
     }
 
     @Test
-    fun `タスクごとのハンドラ（calendar-check と export-dataset が実装済み、他はスタブ）と、本番の起動基盤・取得の事実の配線は fail closed`() {
+    fun `タスクごとのハンドラ（calendar-check・export-dataset・bot-run が実装済み、reconcile と retention はスタブ）と、本番の起動基盤・取得の事実の配線は fail closed`() {
         start(runtime("calendar-check")).use { ctx ->
             assertIs<CalendarCheckTaskHandler>(ctx.getBean(BotTaskHandler::class.java))
             assertIs<UnconfiguredJobLauncher>(ctx.getBean(JobLauncher::class.java), "起動基盤の本番の配線は未設定（fail closed）")
@@ -82,9 +82,10 @@ class BotSpringWiringTest {
                 "取得の事実は DB の ingest_fetch から読む（合成の FixedScheduleFetchFacts や、常に null の NoScheduleFetchFacts ではない）",
             )
         }
-        for (task in listOf("bot-run", "reconcile", "retention")) {
+        for (task in listOf("reconcile", "retention")) {
             start(runtime(task)).use { ctx -> assertIs<StubTaskHandler>(ctx.getBean(BotTaskHandler::class.java), task) }
         }
+        start(runtime("bot-run")).use { ctx -> assertIs<BotRunTaskHandler>(ctx.getBean(BotTaskHandler::class.java)) }
         start(runtime("export-dataset")).use { ctx -> assertIs<ExportDatasetTaskHandler>(ctx.getBean(BotTaskHandler::class.java)) }
     }
 

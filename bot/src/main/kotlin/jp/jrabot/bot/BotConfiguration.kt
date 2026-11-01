@@ -6,17 +6,24 @@ import jp.jrabot.bot.discord.JdkWebhookTransport
 import jp.jrabot.bot.discord.StopFlag
 import jp.jrabot.domain.bot.BotRunRepository
 import jp.jrabot.domain.bot.JobLauncher
+import jp.jrabot.domain.botrun.RaceEntryReader
+import jp.jrabot.domain.botrun.RaceEvaluationWriter
+import jp.jrabot.domain.botrun.TimingNoticeStore
 import jp.jrabot.domain.calendar.CalendarCheckService
 import jp.jrabot.domain.calendar.CalendarOverrideRepository
 import jp.jrabot.domain.calendar.RaceDayRepository
 import jp.jrabot.domain.calendar.ScheduleFetchFactReader
 import jp.jrabot.domain.ml.dataset.DatasetSource
 import jp.jrabot.domain.ml.features.FeatureSource
+import jp.jrabot.domain.ml.registry.ModelRegistryReader
 import jp.jrabot.domain.notify.ErrorReporter
 import jp.jrabot.domain.notify.MentionPolicy
 import jp.jrabot.domain.notify.Notifier
 import jp.jrabot.domain.notify.SignalNotificationDispatcher
+import jp.jrabot.domain.odds.ComboOddsSnapshotRepository
+import jp.jrabot.domain.odds.OddsSnapshotRepository
 import jp.jrabot.domain.ops.ModeProvider
+import jp.jrabot.domain.race.RaceRepository
 import jp.jrabot.domain.race.RaceScheduleRepository
 import jp.jrabot.domain.signal.SignalRepository
 import jp.jrabot.domain.time.Clock
@@ -70,7 +77,7 @@ class BotConfiguration {
     // 取得の事実（ScheduleFetchFactReader）は :persistence の `scheduleFetchFactReader`（DB の ingest_fetch。T3.4）。
     // DB に事実が無い日は null（= 行の無い日は「不明」のまま。開催なしを確認したことにしない）。
 
-    /** 停止要求の旗。シグナルハンドラの設置は bot-run（T3.8）。立っている間は通知の新規送信を始めない。 */
+    /** 停止要求の旗。SIGTERM のハンドラの設置は [BotRunTaskHandler]（T3.8）。立っている間は新しいサイクルも通知の新規送信も始めない。 */
     @Bean
     fun stopFlag(): StopFlag = StopFlag()
 
@@ -79,13 +86,27 @@ class BotConfiguration {
      * 実際の送信は bot-run（T3.8）が [SignalNotificationDispatcher] / [ErrorReporter] を呼んだときだけで、**他のタスクは通知を送らない**。
      */
     @Bean
+    fun leaseProbe(): jp.jrabot.domain.botrun.LeaseProbe =
+        jp.jrabot.domain.botrun
+            .LeaseProbe()
+
+    @Bean
     @ConditionalOnMissingBean(Notifier::class)
     fun notifier(
         runtime: BotRuntime,
         stop: StopFlag,
+        leaseProbe: jp.jrabot.domain.botrun.LeaseProbe,
     ): Notifier {
         val d = runtime.settings.discord ?: DiscordSettings.NONE
-        return DiscordNotifier(d.signalUrl, d.errorUrl, d.mention, JdkWebhookTransport(), stopRequested = stop::isRequested)
+        return DiscordNotifier(
+            d.signalUrl,
+            d.errorUrl,
+            d.mention,
+            JdkWebhookTransport(),
+            stopRequested = stop::isRequested,
+            // 送信の試行ごとに、運用モード（STOPPED なら送らない）と run のリース（失っていれば送らない）を確認する
+            sendAllowed = { runCatching { runtime.modeProvider.current().allowsWork }.getOrDefault(false) && leaseProbe.holds() },
+        )
     }
 
     @Bean
@@ -127,6 +148,18 @@ class BotConfiguration {
         launcher: JobLauncher,
         features: FeatureSource,
         datasets: DatasetSource,
+        odds: OddsSnapshotRepository,
+        combos: ComboOddsSnapshotRepository,
+        races: RaceRepository,
+        evaluations: RaceEvaluationWriter,
+        entries: RaceEntryReader,
+        signals: SignalRepository,
+        timings: TimingNoticeStore,
+        registry: ModelRegistryReader,
+        dispatcher: SignalNotificationDispatcher,
+        errors: ErrorReporter,
+        stop: StopFlag,
+        leaseProbe: jp.jrabot.domain.botrun.LeaseProbe,
     ): BotTaskHandler =
         when (runtime.command.task) {
             BotTask.CALENDAR_CHECK -> {
@@ -137,6 +170,40 @@ class BotConfiguration {
             BotTask.EXPORT_DATASET -> {
                 val uri = checkNotNull(runtime.settings.modelStoreUri) { "export-dataset の保管先が無い（BotSettings が検証しているはず）" }
                 ExportDatasetTaskHandler(features, datasets, DatasetStoreFactory.create(uri), clock)
+            }
+
+            BotTask.BOT_RUN -> {
+                val settings = checkNotNull(runtime.settings.botRun) { "bot-run の設定が無い（BotSettings が検証しているはず）" }
+                BotRunTaskHandler(
+                    runnerFactory = {
+                        BotRunWiring.orchestrator(
+                            settings,
+                            clock,
+                            runtime.modeProvider,
+                            runs,
+                            days,
+                            schedules,
+                            overrides,
+                            facts,
+                            odds,
+                            combos,
+                            races,
+                            evaluations,
+                            entries,
+                            signals,
+                            timings,
+                            registry,
+                            features,
+                            dispatcher,
+                            errors,
+                            stop,
+                            leaseProbe,
+                        )
+                    },
+                    clock = clock,
+                    stop = stop,
+                    signals = SignalInstaller.SIGTERM,
+                )
             }
 
             else -> {

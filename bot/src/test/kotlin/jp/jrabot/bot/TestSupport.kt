@@ -79,7 +79,7 @@ fun baseEnv(
     opsSource: String,
     vararg override: Pair<String, String?>,
 ): Map<String, String> {
-    val m =
+    val m: MutableMap<String, String> =
         mutableMapOf(
             "APP_ENV" to "local",
             "DB_URL" to "jdbc:mysql://127.0.0.1:1/jrabot",
@@ -93,7 +93,7 @@ fun baseEnv(
             "CALENDAR_PRESTART_MINUTES" to "10",
             "CALENDAR_SETTLE_DEADLINE_MINUTES" to "90",
             "CALENDAR_STALE_AFTER_MINUTES" to "120",
-        )
+        ).also { it.putAll(botRunEnv()) }
     override.forEach { (k, v) -> if (v == null) m.remove(k) else m[k] = v }
     return m
 }
@@ -114,3 +114,22 @@ fun exportDefaults(
     } else {
         emptyArray()
     }
+
+/** bot-run の設定（テスト用の固定値。運用の既定値ではない）。 */
+fun botRunEnv(): Map<String, String> =
+    mapOf(
+        "BOT_RUN_LEASE_SECONDS" to "300",
+        "BOT_RUN_HEARTBEAT_SECONDS" to "60",
+        "BOT_RUN_POLL_FAR_SECONDS" to "300",
+        "BOT_RUN_POLL_MID_SECONDS" to "60",
+        "BOT_RUN_POLL_NEAR_SECONDS" to "30",
+        "BOT_RUN_MAX_ODDS_AGE_SECONDS" to "180",
+        "BOT_RUN_MAX_RUNTIME_MINUTES" to "840",
+        "BOT_RUN_STALE_CLAIM_SECONDS" to "900",
+        "BOT_RUN_MAX_CYCLE_FAILURES" to "3",
+        "BOT_RUN_SNAPSHOT_MINUTES" to "30,5",
+        "BOT_RUN_TIGHTEN_NEAR" to "false",
+        "BOT_RUN_SNAPSHOT_HISTORY_LIMIT" to "3",
+        "BOT_RUN_ML_MODEL_TYPE" to "off",
+        "BOT_RUN_DECISION_PROFILE" to "legacy_function_defaults",
+    )

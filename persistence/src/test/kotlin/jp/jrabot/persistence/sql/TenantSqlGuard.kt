@@ -34,11 +34,18 @@ internal object TenantSqlGuard {
             "ingest_backfill",
             "ml_model",
             "horse_master_history",
+            "race_timing_notice",
+            "results",
+            "payouts",
             "race_horses",
+            "race_evaluations",
             "horses",
             "horse_past_runs",
             "results",
         )
+
+    /** テナントを持たない表（`INSERT … SELECT … FROM DUAL WHERE NOT EXISTS (…)` の DUAL）。 */
+    private val NON_TENANT_TABLES = setOf("dual")
 
     val TENANT_BIND = Regex("""tenant_id\s*=\s*/\*\s*(?:entity\.|rows\.)?tenantId\s*\*/\s*[^\s,)]+""")
     private val TABLE_REF = Regex("""\b(?:FROM|JOIN|UPDATE|INTO)\s+([a-z_]+)""", RegexOption.IGNORE_CASE)
@@ -59,14 +66,23 @@ internal object TenantSqlGuard {
                 .map {
                     it.groupValues[1].lowercase()
                 }.toList()
-        for (t in tables.filter { it !in TENANT_TABLES }) problems += "$name: テナント別の表の一覧に無い表 '$t'（一覧とこの検査を見直す）"
+        for (t in tables.filter { it !in TENANT_TABLES && it !in NON_TENANT_TABLES }) problems += "$name: テナント別の表の一覧に無い表 '$t'（一覧とこの検査を見直す）"
         val tenantTableRefs = tables.count { it in TENANT_TABLES }
         if (tenantTableRefs == 0) problems += "$name: 表の参照が見つからない"
 
         if (statement == "INSERT") {
             val columns = sql.substringAfter('(', "").substringBefore(')')
             if (!Regex("""\btenant_id\b""").containsMatchIn(columns)) problems += "$name: INSERT の列に tenant_id が無い"
-            if (!Regex("""/\*\s*(?:entity|rows)\.tenantId\s*\*/""").containsMatchIn(sql)) problems += "$name: INSERT の値に tenantId の束縛が無い"
+            // 値の束縛が 1 つ。`INSERT … SELECT … WHERE NOT EXISTS (…)` の形では、副問い合わせの WHERE にもテナントの束縛が必要（合計 2 つ以上）
+            val binds = Regex("""/\*\s*(?:entity|rows)\.tenantId\s*\*/""").findAll(sql).count()
+            val hasWhere = WHERE.containsMatchIn(sql)
+            val required = if (hasWhere) 2 else 1
+            if (binds < required) problems += "$name: INSERT の tenantId の束縛が $binds 個（$required 個必要）"
+            if (hasWhere &&
+                !TENANT_BIND.containsMatchIn(sql.substring(WHERE.find(sql)!!.range.first))
+            ) {
+                problems += "$name: INSERT … SELECT の WHERE に tenant_id の束縛が無い"
+            }
             return problems
         }
 

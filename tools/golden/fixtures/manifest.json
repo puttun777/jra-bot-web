@@ -159,6 +159,21 @@
       "case_id": "GD10-DEFAULTS-001",
       "path": "GD10-DEFAULTS-001.json",
       "sha256": "e7cc6e6c9df189a1be3408a1109668f75f19268459ea6f946160b00ff0f858c7"
+    },
+    {
+      "case_id": "GD11-SETTLE-EVAL-002",
+      "path": "GD11-SETTLE-EVAL-002.json",
+      "sha256": "ec6e36b46afd305bee9684ad4092b1fc33fea33015da9d338ed33c9311b09a6f"
+    },
+    {
+      "case_id": "GD11-SETTLE-WIN-003",
+      "path": "GD11-SETTLE-WIN-003.json",
+      "sha256": "fc2db3fa2458837d01578cf4e2d52df04b165cc1b24222ed05d977bacda6e13a"
+    },
+    {
+      "case_id": "GD11-WINKEYS-001",
+      "path": "GD11-WINKEYS-001.json",
+      "sha256": "3811d09486ccf237fcac4012cf2d4787408d8f5c31b32bd12721acabc31e208a"
     }
   ],
   "generator": {

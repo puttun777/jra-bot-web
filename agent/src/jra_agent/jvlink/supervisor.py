@@ -157,7 +157,7 @@ class WorkerSupervisor:
             msg = json.loads(line)
         except ValueError as e:
             raise WorkerCrashed("BAD_PROTOCOL") from e
-        if msg.get("id") != rid:
+        if not isinstance(msg, dict) or msg.get("id") != rid:  # JSON でも辞書でない行（配列・数値）は不正なプロトコル
             raise WorkerCrashed("BAD_PROTOCOL")
         if not msg.get("ok"):
             raise WorkerRemoteError(str(msg.get("error", "ERROR")))

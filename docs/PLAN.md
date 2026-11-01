@@ -59,8 +59,8 @@
 - [ ] T3.6 ML ← T1.9。**前半 T3.6-A（Stage 3-F1）は実装完了（2026-10-24、claude/stage3-ml-inference-h7e43j。PR は PROGRESS を参照）**: Kotlin `FeatureBuilder`（旧互換 + point-in-time）・ハッシュ特徴・ロジスティック回帰推論・`ProbabilityPipeline`（legacy / v2 / ensemble / 市場フォールバック・理由コード）・モデル JSON の検証（正準 JSON・sha256・Ed25519・feature_schema_hash）・レジストリの読取りと run 開始時の固定・合成のローカル `ModelStore`・`DatasetExporter`（学習用データセットの出力契約）・ゴールデン G1〜G7（26 ケース/880 呼び出し中 25 ケース/874 呼び出しが Kotlin と全一致、最大誤差 1.07e-14）。ML_DESIGN §11、D-152〜D-164。**本番の確率は引き続き `legacy`。v2 は未承認で無効。**
   - [x] **T3.6-B（Stage 3-F2。実装完了 2026-10-24、claude/stage3-ml-training。PR は PROGRESS を参照。マージはユーザー。自動では T3.7 へ進まない）**: `ml/`（Python の学習 Job: データセット検証・v2 学習・評価・品質ゲート〔fail closed〕・署名つきモデル JSON・保管・レジストリ登録 CANDIDATE/REJECTED のみ）、`bot --task=export-dataset` の配線、`FeatureSource`/`DatasetSource` の MySQL 実装、馬マスタの時点履歴（V4）、GCS の `ModelStore`/`DatasetStore`、旧 pkl→JSON 変換ツール（許可リスト式。実 pkl の変換は未実施）、ml-train イメージ（5 つ目）、release-manifest v2（`feature_schemas`）、CI `ml-train` ジョブ。D-165〜D-179。**合成データのみ。実データでの学習・精度・品質閾値（D-13）・実 pkl 変換・実 GCS は未検証で、ML は本番利用可能ではない。**
 - [x] T3.7 Discord 通知（分割・Retry-After・リトライ） — **実装完了（2026-10-27、claude/stage3-discord-notification。合成データ・Fake サーバのみ。実 Discord への送信は未検証。実データ由来の通知は COMP-4 まで送らない）**。`:domain` の `notify`（本文・分割・Retry-After・メンション・`SignalNotificationDispatcher`・`ErrorReporter`・理由文 G-17 ⑥）、`:bot` の `discord`（URL 検証・JDK HttpClient・`DiscordNotifier`・Bean 配線）、`listClaimedBefore`、ゴールデン G8（旧 `discord.py` と全一致）。D-181〜D-189、PROGRESS の Stage 3-G。**bot-run からの呼出し・出どころ判定・エラー通知のイベントは T3.8**
-- [ ] T3.8 bot-run オーケストレーション（監視ウィンドウ、結果反映後終了）← T3.1–T3.7
-- [ ] T3.9 バックテスト・成績集計（settle/recovery）
+- [x] T3.8 bot-run オーケストレーション（監視ウィンドウ、結果反映後終了）← T3.1–T3.7 — **実装完了（2026-10-27、claude/stage3-bot-orchestration。合成データ・Fake HTTP サーバ・メモリ上の偽物・ローカル MySQL 8.0.46 のみ。CI〈JDK 25・MySQL 8.4/9.7〉・実 Discord・Cloud Run は未検証。PR は未作成〈Actions の無料枠不足〉）**。`:domain` の `jp.jrabot.domain.botrun`（`BotRunOrchestrator`・`LeaseKeeper`・`ModeGate`・`RaceMonitorPlanner`・`RaceCycleProcessor`・`RaceEvaluator`・`MlRunStarter`・`RunCheckpoint`）、`:persistence`（`race_evaluations` の冪等追記・馬名の読取り）、`:bot`（`BotRunSettingsParser`・`BotRunTaskHandler`・SIGTERM・`BotRunWiring`）。D-190〜D-203、CONTRACTS 0.4.12、PROGRESS の Stage 3-H。**範囲は発走まで**（評価・記録・通知）。**結果・払戻・決済・race_schedule/race_day の状態更新・reconcile は T3.9**（UNRESOLVED G-25）。通知方式〈各タイミング 1 回〉・hit_rate schedule・5 分前の強化の修正を反映済み（D-204〜D-207）。運用値は暫定サンプルのみで本番は未確定（G-23）、adaptive_relaxation は T3.9 の後に再判断（G-24）。レビュー修正後も CI は未実施
+- [ ] T3.9 結果反映・払戻・決済・成績集計・recovery（reconcile）・バックテスト ← T3.8（詳細は下の「T3.8 後の道筋」と **docs/T39_DESIGN.md**〈2026-10-29 の詳細設計。本体は未着手〉）。**T3.8 のレビューとユーザーの承認の後に着手する。自動では進まない**
 
 ## 第4段階 ― dashboard（W）
 - [ ] T4.1 認証/認可（IAP JWT 検証、許可リスト、ロール、deny by default）← T2.4
@@ -90,3 +90,35 @@
 
 ## 依存の要点
 T1.1 → T1.2 → T1.3 → T3.3 / T1.4,T1.7,T1.10 → T2.x / T1.6 → T1.7 → T5.x。第1段階の T1.6/T1.8（I）は T1.1〜T1.5（W）と独立に別セッション可。
+
+## T3.8 後の道筋（Stage 3-I → 第4段階 → 第5段階。2026-10-27 時点。各段階の完了後にユーザーのレビューを挟む。自動で次へ進まない）
+```mermaid
+flowchart LR
+  T38[T3.8 bot-run 実装済み] --> T39[T3.9 結果反映・決済・reconcile・成績・バックテスト]
+  T39 --> T4[第4段階 dashboard: T4.1〜T4.5]
+  T38 --> T4
+  T4 --> T50[T5.0 infra 契約の同期]
+  T39 --> T50
+  T50 --> T5[T5.1〜T5.6 Terraform・Job・deploy・start/stop/status・監視]
+  USER[ユーザー承認・確認: G-23 運用値 / T1.20 / T1.21 / COMP-4 / E-7 / Actions 枠] -.-> T39
+  USER -.-> T5
+```
+### Stage 3-I（T3.9）— 前提: T3.8 のマージ（または T3.8 の上に積む判断はユーザー）。合成データだけで進められる
+| 内容 | 前提・依存 | 完了の根拠（案） | 注意 |
+|---|---|---|---|
+| ① 結果・払戻の取込（ingest の `results`/`payouts` の合成観測。JV-Data の実パーサは T1.17 の確認後: G-5/G-16）と、bot-run の結果待ち（発走 + 30 分で RESULT_PENDING、5 分毎に再確認、`settle_deadline` で INCOMPLETE） | T3.4 の ingest、T3.8 のループ | 状態遷移表（`RaceScheduleTransitions`・`RaceDayTransitions`）どおりに `race_schedule.status`・`race_day.status` を更新するテスト | `bot` は `race_schedule`/`race_day` に INSERT・UPDATE 権限あり（R__grants）。履歴（`race_schedule_event`）の追記は同じトランザクション |
+| ② 決済: `race_evaluations.settled_at/hit/payout_used/is_provisional/settle_status`、`bets`/`bet_legs`、`ticket_evaluations`（買い目ごとの内訳。T3.8 では未実装: MIGRATION_MATRIX §12） | ①、旧 `settle_*` のゴールデン（GD の拡張） | 旧実装との数値一致（払戻・的中判定。小数の丸め） | 払戻の計算式・丸めを変えない。未承認の改善案を有効化しない |
+| ③ `--task=reconcile`（スタブからの置換）: 月曜 14:00 以降の確定成績との照合・INCOMPLETE の回復・`INCOMPLETE_AT_DEADLINE` の run の補完 | ①②、`CalendarCheckReason.NEEDS_RECONCILE` | C27（RACE_CALENDAR_DESIGN §9）のテスト | `trigger_type=RECONCILE` は通知しない |
+| ④ 成績集計とバックテスト（旧新比較。`tools/` と Kotlin の範囲を決める。ML の G-ML-3 は実データが要るのでユーザーの PC） | ①②、T1.20 の実データ（あれば） | 合成データでの再現性。実データの結果は『未検証』と明記 | v2 の有効化・閾値の変更は承認が先 |
+| ⑤ 持ち越し: `completed` の日の bot-run の再起動を止める（`race_day` を COMPLETED にする）、`INCOMPLETE_AT_DEADLINE` | G-25 | calendar-check の `ALREADY_COMPLETED` が働く | D-190 |
+### 第4段階（dashboard）— 依存: T2.4 の土台、T3.8（bot 状態・SEND_UNKNOWN・race_evaluations）、成績の画面は T3.9
+- T4.1 認証/認可（IAP JWT・許可リスト `ALLOWED_USERS`/`ADMIN_USERS`、空なら全拒否。**本人 1 名専用**。登録・招待・共有機能は作らない）→ T4.2 API（DTO、Entity 非公開）→ T4.3 UI（レース・予測・成績、最終更新、bot 状態、次回予定、未更新表示、**SEND_UNKNOWN と ML のフォールバック理由の表示**〈G-21 ⑥・D-199〉）→ T4.4 管理者操作（手動補正、DENY_RUN/ALLOW_RUN、モード表示、**モデルの ACTIVE 昇格は D-13/D-14 の承認後だけ**）→ T4.5 セキュリティテスト（認可マトリクス）。
+- 成績の表示は T3.9 の後。それまでは『未集計』と表示する。
+### 第5段階（infra）— **最初に T5.0。それまで実装しない**
+- **T5.0（必須の前提）**: infra の文書を web CONTRACTS に追従（I-H1〜I-H9、G-9・G-14、CONTRACTS 0.4.12 の `BOT_RUN_*`・`CALENDAR_*`・`DISCORD_MENTION_USER_ID`・`MODEL_VERIFY_PUBKEY`、スキーマ版 4 と `mltrain`/`bot` の GRANT、ml-train の実行契約、Job の最大実行時間）。web のセッションから infra を直接変更しない（infra のセッション・PR で）。
+- T5.1 Terraform 基盤 → T5.2 Web/Job/DB/Scheduler → T5.3 deploy workflow → T5.4 start/stop/status → T5.5 Terraform が mode/DB を変えない検証 → T5.6 監視・予算・ロールバック。**apply・課金リソースの作成はユーザーの明示的な承認後**。実データのクラウド投入は COMP-4 の公式回答の後（テストは合成）。
+- ゲート: F-2（実 GCP の G-OPS-1〜9 ほか）、F-7/F-8（JDK 25・MySQL 8.4/9.7・SIGTERM）、本番 release-manifest、署名鍵運用（D-14）、E-7（ソース公開の許可）。
+### 横断（どの段階でも）
+- 未完了のまま持ち越す: T1.16（規約確認）・T1.17（仕様書の 12 項目）・T1.20（実 SQLite/config/pkl）・T1.21（legacy/v2・E 項目の C 分類）・COMP-4・T3.0（Windows 実機 PoC）・各種の実環境検証（F-1〜F-8）。**完了扱いにしない**。
+- Actions 無料枠: 枠が戻る（またはユーザーが Public 化を完了して知らせる）まで PR を作らない。`claude/*` への push は CI を起動しない。ローカルの検証は STAGE2_HANDOFF §15。
+

@@ -69,6 +69,7 @@ object GoldenCalls {
             "send_signal_content",
             "send_signals_grouped_content",
             "reason_from_features",
+            "settle_batch",
         )
 
     /** 1 回の呼び出しを実行し、`{"status":"ok","value":…}` または `{"status":"exception",…}` を返す。 */
@@ -220,6 +221,10 @@ object GoldenCalls {
 
             "reason_from_features" -> {
                 GoldenNotify.reasonFromFeatures(a)
+            }
+
+            "settle_batch" -> {
+                GoldenSettle.settleBatch(a)
             }
 
             "evaluate_odds_ml" -> {

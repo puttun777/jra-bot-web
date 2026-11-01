@@ -25,8 +25,11 @@ class InMemoryFeatureSource : FeatureSource {
         tenantId: TenantId,
         raceId: String,
         conditions: RaceConditions,
+        /** true なら更新時刻が不明（null）のまま入れる（D-226 の試験用）。既定は『十分に古い更新』にして、既存の試験の前提（条件は使える）を保つ。 */
+        unknownUpdatedAt: Boolean = false,
     ) {
-        races[Key(tenantId.value, raceId)] = conditions
+        races[Key(tenantId.value, raceId)] =
+            if (unknownUpdatedAt || conditions.updatedAt != null) conditions else conditions.copy(updatedAt = java.time.Instant.EPOCH)
     }
 
     fun putEntry(

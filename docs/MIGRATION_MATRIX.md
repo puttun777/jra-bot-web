@@ -142,6 +142,7 @@ P0 の順: F26/F04/F05/F06/F07（基礎純関数）→ F16（DB）→ F08/F09（
 | E13 | `estimate_prob(odds)` は 0.99 上限、`estimate_prob_normalized` は ±10% 補正（正規化の後に元確率基準の範囲に押し戻す） | 合計は再正規化で 1 | `ProbabilityPipeline` に取り込み |
 | E14 | 急落フィルタは `recent_snapshots[-1]`（リストは新しい順なので**最古**）との比較のみ。連続的な変化は見ない | — | 仕様として固定。スナップショットの並びを型で保証 |
 | E15 | 時刻依存: decision 内に `datetime.now()` は `ensemble_params` の経過日数のみ。daemon 側は `minutes_to_post`（naive）でウィンドウ/EV スケジュールを決定 | TZ ずれ | `Clock` 注入（F04） |
+| E16 | 旧 `settle_evaluations_for_race` は `sqlite3.Row.get` が無く、`races` 行があると常に AttributeError（呼び出し側が握って警告のみ。D-232）→ `race_evaluations` の決済結果は旧では実質入っていない可能性 | 決済が動かない | 意図どおり決済する（T3.9。GD11 は `.get` 付きの行で比較） |
 
 ### 7.4 浮動小数・丸め
 - 全て Python `float`（IEEE754 倍精度）。**丸め処理は計算内に無い**（表示のみ `:.1%`/`:.2f`）。Kotlin は `Double` で同順序の演算を行う（結合順序の入替えを禁止）。許容: 確率 1e-9、EV/金額 1e-9（絶対）。
@@ -272,3 +273,30 @@ P0 の順: F26/F04/F05/F06/F07（基礎純関数）→ F16（DB）→ F08/F09（
 | N4 | `_post_webhook_with_retry` は 5xx・タイムアウトも再送（同一メッセージが重複し得る） | R | 比較対象外 | 5xx・要求タイムアウト・切断は `UNKNOWN`（再送しない） |
 | N5 | 旧 `mention` は自由文字列を先頭に付ける（`@everyone` などが入り得る）。`mention_user_id` は任意の文字列から数字だけを抜き出す | R | 移植しない | 17〜20 桁の ID だけ。不正は exit 2 |
 | F24 | エラー用 Webhook: 旧 `_send_error_webhook`/`_notify_error`（クールダウン 300 秒・`allowed_mentions` 固定・失敗は握りつぶす）は `ErrorReporter` として基盤だけ移植。**どのイベントから呼ぶか・D-14 の REJECTED 通知は T3.8/未承認のまま** | K（基盤）+ 後続 | - | 再帰しない・秘密を除く・クールダウン |
+
+## 12. T3.8 での分類の追記（2026-10-27。旧 `scripts/run_daemon.py` の機能。既存機能を黙って削除しない）
+旧 `run_daemon.main_loop`（2,010 行の 1 本のループ）の機能を、新しい構成のどこへ移したかを示す。区分: **K** = Kotlin へ移行済み（T3.8）、**S** = 別プロセスへ（既存の Job）、**P** = 段階移行（後続タスク）、**N** = 今回は移さない（理由とユーザー判断を併記）。
+
+| 旧の機能（`run_daemon`） | 区分 | 新しい実装・理由 |
+|---|---|---|
+| 無限ループ＋`time.sleep(interval)` | K | `BotRunOrchestrator`（開始〜終了の状態機械。最大稼働・窓の締切・停止要求・モードで必ず終わる）。待機は `Pacer` |
+| `get_polling_interval`（30 分超 / 5 分超 / それ以下で far/mid/near） | K | `PollingIntervals.forMinutesToPost`（分岐は同じ。間隔の運用値は環境変数で必須・既定なし: G-23） |
+| `main_snapshot_minutes` / `extra_snapshot_minutes`（通知タイミング） | K（方式は暫定） | `SnapshotPolicy`。旧の『最大のタイミングで決まる』癖はそのまま。重複通知の抑止は新しい仕様『各タイミング 1 回』（D-196。ユーザー確認 G-23） |
+| 5 分前の強化（`drop_threshold × 0.7`、`*_max_over_market × 0.8`） | K（opt-in。修正後と旧互換を区別） | `BOT_RUN_TIGHTEN_NEAR=true`（修正後）/ `legacy`（旧の癖）/ `false`（D-198・D-205）。数式は旧のまま |
+| `snapshot_history_limit`（急落判定の履歴件数） | K | `BotRunConfig.snapshotHistoryLimit`（新しい順・既定なし） |
+| `provider.get_odds`（オッズ取得）・`odds_repo.save_snapshot`・`race_horses` の補完保存 | S | Windows エージェント＋ingest（T3.4/T3.5）が取込み、bot-run は DB のスナップショットを読むだけ（保存しない） |
+| オッズが取れない／古い（旧は鮮度の検査なし） | K（是正 R） | `OddsFreshness`。観測が `max_odds_age` を超えたら通知しない（RACE_CALENDAR_DESIGN §6.3）。旧は古いオッズでも通知し得た |
+| `evaluate_odds`（判定）・Plackett–Luce・買い目 | K（T3.1/T3.2） | `RaceEvaluator` が接続するだけ。数値は変えない（ゴールデン 31 ケース / 988 呼び出し一致を維持） |
+| ML 推論（`ml_cfg`・モデルパス・フォールバック） | K（T3.6-A + T3.8） | `MlRunStarter`（run 開始時に固定）。サイレントフォールバックは理由つき（E1）。H1 の可視化は `race_evaluations.fallback_reason` とアラート |
+| `race_evaluations` / `ticket_evaluations` の保存（`enable_eval_persistence`・`persist_skipped`・`persist_top_n`） | K（一部）／P | `race_evaluations` は判定のたびに冪等に追記（D-200）。**`ticket_evaluations`（買い目ごとの内訳）は未実装**（G-25。T3.9 の成績集計で必要になる時に追加）。`persist_skipped`/`persist_top_n` は未移植（見送りは `rejection_summary_json` に件数で残す） |
+| シグナルの保存・Discord 送信・`mark_sent` | K（T3.7 + T3.8） | `signals` に insert-if-absent → `SignalNotificationDispatcher`（claim → 送信 → 記録。at-most-once） |
+| `_notify_error`（エラー用 Webhook） | K（T3.7 + T3.8） | `ErrorReporter` を呼ぶイベントを決定（D-201） |
+| `include_tomorrow`（今日＋明日を同時に監視） | N | 1 回の run は 1 日（`--date`）。calendar-check が日ごとに起動する設計（RACE_CALENDAR_DESIGN）。明日分が必要なら別の run。ユーザー判断は不要（設計の違い） |
+| 開催日・発走の推測（`active_races`・`watch_end`・曜日・00:00 の補正） | K（是正） | DB の有効予定（`EffectiveCalendar`）だけで決める。曜日・祝日で推測しない。発走時刻が不明なら補完せず通知しない（D-024） |
+| 結果取得・払戻・`bets`／`race_evaluations` の決済（`result_fetched`・`settle_*`） | P（T3.9） | D-190。メモリの `result_fetched` は使わず、DB の `race_schedule.status` から再導出する設計 |
+| 自動再学習（`auto_retrain`・`retrain_interval_hours`・`_run_training_async`） | S | `ml-train` Job（T3.6-B）。bot-run は学習しない（学習と推論の分離。モデルの昇格はしない） |
+| `_maybe_cover_ingest`（取込の補完） | S | ingest の `plan`/backfill（T3.4/T3.5） |
+| `hit_rate_min_ev_schedule`（far/mid/near で EV 閾値） | K（明示設定のみ。D-206） | `HitRateSchedule`。旧の式の境界（>=30 / >=5）まで一致。未設定は固定の `hitRateMinEv` |
+| `adaptive_relaxation`（無通知が続くと EV 閾値を段階的に緩和） | N（T3.9 のバックテスト後に再判断。G-24） | 実装・有効化しない。状態を持つ調整で、再起動で巻き戻る旧の欠点もある |
+| `status_log_interval_seconds`・`log_summary`・`log_no_signal_top`・`debug_rejections`（診断ログ） | P | 構造化ログ（`BOT_RUN_EVENT`）で代替。件数の集計ログは運用が必要としてから（Stage 5 の監視） |
+| `KeyboardInterrupt` での停止 | K | SIGTERM → `INTERRUPTED`（D-202） |

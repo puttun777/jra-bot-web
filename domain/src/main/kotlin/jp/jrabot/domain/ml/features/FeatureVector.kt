@@ -32,6 +32,9 @@ enum class FeatureFlag {
     /** 過去走の供給元が、レース日以降の行を返した。除外した（供給元の不具合の可能性）。 */
     SOURCE_RETURNED_FUTURE_RUNS,
 
+    /** `races` 行が評価時点より後に更新されている。天候・馬場は asOf 時点の値が分からないので使わず、空（0）にした（現在の行を過去の事実として使わない）。 */
+    RACE_CONDITIONS_NEWER_THAN_AS_OF,
+
     /** 評価時点以前のオッズが無く、旧互換の既定値（odds=100.0・人気=0）を使った。 */
     ODDS_MISSING,
 }

@@ -77,6 +77,13 @@ _DB_INSERTS = {
     "horses": ("ketto_num", "bamei", "birth_date", "pedigree_json", "style_tendency_json", "chaku_by_distance_json", "chaku_by_surface_json",
                "chaku_by_condition_json"),
     "horse_past_runs": ("ketto_num", "race_id", "date", "finish"),
+    # T3.9 決済（GD11）
+    "results": ("race_id", "umaban", "finish", "payout"),
+    "payouts": ("race_id", "market", "key", "payout", "is_provisional"),
+    "race_evaluations": ("id", "race_id", "snapshot_at", "best_candidate_json", "created_at"),
+    "ticket_evaluations": ("id", "race_evaluation_id", "race_id", "snapshot_at", "bet_type", "combo_key", "umaban", "odds", "rank", "accepted"),
+    "combo_odds_snapshots": ("race_id", "collected_at", "market", "combo_key", "odds"),
+    "bets": ("id", "race_id", "ts", "market", "stake", "selection", "odds_at_bet", "status"),
 }
 
 
@@ -127,6 +134,66 @@ def _build_features_batch(L, a):
                                                             num_horses=q.get("num_horses", 18))
             out.append({"vector": vec.tolist(), "meta": meta})
     return {"names": {"calibration": L.features.get_feature_names(), "alpha": L.features.get_feature_names_alpha()}, "rows": out}
+
+
+class _GetRow(dict):
+    """`sqlite3.Row` に `.get` が無いため、旧 `EvaluationRepository._race_start_iso` は常に AttributeError になる（旧欠陥 E16。実運用の
+    `race_evaluations` は決済されない）。意図どおりに動いた場合の値を比較するため、**このゴールデンだけ**行を `.get` 付きの dict にする
+    （`row[0]` の添字参照も `sqlite3.Row` と同じく使える）。"""
+
+    def __getitem__(self, k):
+        return list(self.values())[k] if isinstance(k, int) else super().__getitem__(k)
+
+
+def _dict_factory(cursor, row):
+    return _GetRow({d[0]: row[i] for i, d in enumerate(cursor.description)})
+
+
+def _settle_batch(L, a):
+    """GD11: 結果・払戻・評価・買い目の合成 DB に対し、旧の決済関数を ops の順に呼び、戻り値と操作後の関連行を返す（時刻列は真偽のみ）。"""
+    import tempfile
+    out = []
+    with tempfile.TemporaryDirectory(prefix="golden-db-") as d:
+        db = _make_db(L, a["db"], d)
+        orig = db.get_connection
+
+        def _conn():
+            c = orig()
+            c.row_factory = _dict_factory
+            return c
+
+        db.get_connection = _conn
+        res_repo, bets_repo = L.repo.ResultRepository(db), L.bets_repo.BetsRepository(db)
+        eval_repo, combo_repo = L.evaluation_repo.EvaluationRepository(db), L.combo_odds_repo.ComboOddsRepository(db)
+        for op in a["ops"]:
+            kind = op["op"]
+            if kind == "winning_keys":
+                out.append(res_repo.get_winning_combo_keys(op["race_id"]))
+            elif kind == "settle_evaluations":
+                out.append(eval_repo.settle_evaluations_for_race(op["race_id"], res_repo, combo_repo, bets_repo, force=op.get("force", False)))
+            elif kind == "settle_win_bets":
+                out.append(bets_repo.settle_open_win_bets_for_race(race_id=op["race_id"]))
+            elif kind == "get_payout":
+                out.append(bets_repo.get_payout(race_id=op["race_id"], market=op["market"], key=op["key"]))
+            elif kind in ("add_payout", "add_evaluation", "add_result"):
+                table = {"add_payout": "payouts", "add_evaluation": "race_evaluations", "add_result": "results"}[kind]
+                cols = _DB_INSERTS[table]
+                c = db.get_connection()
+                c.execute(f"INSERT INTO {table} ({', '.join(cols)}) VALUES ({', '.join('?' for _ in cols)})", tuple(op.get(k) for k in cols))
+                c.commit()
+                c.close()
+                out.append(None)
+            else:
+                raise ValueError(f"未知の op: {kind}")
+        c = db.get_connection()
+        try:
+            evals = [dict(id=r["id"], hit=r["hit"], payout_used=r["payout_used"], is_provisional=r["is_provisional"], settle_status=r["settle_status"],
+                          settled=bool(r["settled_at"])) for r in c.execute("SELECT * FROM race_evaluations ORDER BY id")]
+            bets = [dict(id=r["id"], status=r["status"], settled=bool(r["settled_at"]), payout=r["payout"], profit=r["profit"])
+                    for r in c.execute("SELECT * FROM bets ORDER BY id")]
+        finally:
+            c.close()
+    return {"ops": out, "race_evaluations": evals, "bets": bets}
 
 
 def _feature_names(L, kind):
@@ -284,6 +351,7 @@ CALLS = {
     "suggest_multiple_bet_strategies": _suggest,
     "evaluate_odds": _eval,
     "build_features_batch": _build_features_batch,
+    "settle_batch": _settle_batch,
     "evaluate_odds_ml": _evaluate_odds_ml,
     "signature_defaults": lambda L, a: _sig_defaults(L, getattr(L, a["module"]), a["function"]),
 }

@@ -217,3 +217,55 @@ def test_lock_is_released_when_holder_process_dies(tmp_path: Path) -> None:
     finally:
         holder.kill()
         holder.wait()
+
+
+# ------------------------------------------------------------------ 監査 G6: 展開サイズ・件数・パスの検証
+def _stage_expect(tmp_path: Path, data: bytes, code: str) -> None:
+    s = BeaconSigner()
+    inst = Installer(tmp_path / "install")
+    m = verify_manifest(make_manifest(s, data), (s.public,), "0.1.0")
+    with pytest.raises(VerificationError, match=code):
+        inst.stage(data, m)
+    assert not list((tmp_path / "install" / "versions").glob("*"))  # 何も展開されていない（残骸なし）
+
+
+@pytest.mark.parametrize("name", ["..\\evil.exe", "C:\\evil.exe", "C:/evil.exe", "a\\..\\..\\evil", "\\abs.exe"])
+def test_stage_rejects_windows_style_paths(tmp_path: Path, name: str) -> None:
+    _stage_expect(tmp_path, zip_bytes({name: b"x"}), "UNSAFE_PATH")
+
+
+def test_stage_rejects_too_many_entries(tmp_path: Path) -> None:
+    from jra_agent import update
+
+    data = zip_bytes({f"f{i}": b"x" for i in range(update.MAX_ENTRIES + 1)})
+    _stage_expect(tmp_path, data, "TOO_MANY_ENTRIES")
+
+
+def test_stage_rejects_zip_bomb_by_declared_size_and_ratio(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from jra_agent import update
+
+    monkeypatch.setattr(update, "MAX_UNPACKED_BYTES", 10_000)
+    monkeypatch.setattr(update, "MAX_UNPACKED_FILE_BYTES", 8_000)
+    bomb = io.BytesIO()
+    with zipfile.ZipFile(bomb, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("big", b"\0" * 9_000)  # 1 ファイルの上限超え
+    _stage_expect(tmp_path, bomb.getvalue(), "ENTRY_TOO_LARGE")
+    many = io.BytesIO()
+    with zipfile.ZipFile(many, "w", zipfile.ZIP_DEFLATED) as z:
+        for i in range(3):
+            z.writestr(f"f{i}", b"\0" * 5_000)  # 合計 15,000 > 10,000
+    monkeypatch.setattr(update, "MAX_COMPRESSION_RATIO", 10_000)
+    _stage_expect(tmp_path, many.getvalue(), "UNPACKED_TOO_LARGE")
+    ratio = io.BytesIO()
+    with zipfile.ZipFile(ratio, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("r", b"\0" * 7_000)
+    monkeypatch.setattr(update, "MAX_COMPRESSION_RATIO", 5)
+    _stage_expect(tmp_path, ratio.getvalue(), "COMPRESSION_RATIO")
+
+
+def test_stage_rejects_duplicate_and_case_colliding_entries(tmp_path: Path) -> None:
+    b = io.BytesIO()
+    with zipfile.ZipFile(b, "w") as z:
+        z.writestr("Agent.exe", b"a")
+        z.writestr("agent.EXE", b"b")  # Windows では同じファイル
+    _stage_expect(tmp_path, b.getvalue(), "DUPLICATE_ENTRY")

@@ -97,7 +97,7 @@ run 39921807006（T2.6、head 6f24519。全ジョブが毎回実行）。壁時�
 
 ## 4. イメージの手順
 ### 4.1 ビルド（ローカルのみ・push しない）
-`README.md` の「Docker イメージ」のコマンド。ビルド引数は `GIT_SHA`（40 桁のコミット SHA。jar の `releaseId` と OCI ラベルに入る）。レジストリのタグは使わない（デプロイは digest 指定: CONTRACTS §1）。クラウドセッションの注意: Docker Hub・Maven Central が 429 を返すことがある（時間を空けて再実行。依存はキャッシュマウントに溜まる）。企業プロキシ配下ではビルドに CA の注入が必要（リポジトリの Dockerfile は変更しない）。
+`docs/DEVELOPER_GUIDE.md` の「Docker イメージ」のコマンド。ビルド引数は `GIT_SHA`（40 桁のコミット SHA。jar の `releaseId` と OCI ラベルに入る）。レジストリのタグは使わない（デプロイは digest 指定: CONTRACTS §1）。クラウドセッションの注意: Docker Hub・Maven Central が 429 を返すことがある（時間を空けて再実行。依存はキャッシュマウントに溜まる）。企業プロキシ配下ではビルドに CA の注入が必要（リポジトリの Dockerfile は変更しない）。
 ### 4.2 スモークが確認すること（`tools/release/image_smoke.py`、D-096）
 | 区分 | 内容 |
 |---|---|

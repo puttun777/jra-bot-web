@@ -43,6 +43,15 @@ class ApplyContext(
     val dataspec: String,
 )
 
+/** 保留（PENDING）の理由: 依存するレースがまだ無い。レースが入ったとき、この理由の生レコードを再適用する（[BatchIngestor]）。 */
+const val REASON_RACE_NOT_FOUND = "RACE_NOT_FOUND"
+
+/**
+ * レース待ちの保留の理由。**待っているレースを含める**（`RACE_NOT_FOUND:<race_id>`）ので、そのレースが入ったときに該当の保留だけを漏れなく探せる。
+ * V5 以前の保留は印の無い [REASON_RACE_NOT_FOUND]（待っているレースが分からない）。
+ */
+fun raceNotFoundReason(raceId: jp.jrabot.domain.race.RaceId): String = "$REASON_RACE_NOT_FOUND:${raceId.value}"
+
 sealed interface ApplyOutcome {
     data object Applied : ApplyOutcome
 
@@ -77,6 +86,8 @@ class ObservationApplier(
     private val races: RaceRepository,
     private val odds: OddsSnapshotRepository,
     private val combos: ComboOddsSnapshotRepository,
+    private val results: ResultStore,
+    private val payouts: PayoutStore,
     private val policy: ApplyPolicy = ApplyPolicy(),
 ) {
     fun apply(
@@ -91,7 +102,65 @@ class ObservationApplier(
             is WinOddsObservation -> applyWin(tenantId, obs, ctx)
             is WideOddsObservation -> applyWide(tenantId, obs, ctx)
             is SanrenpukuOddsObservation -> applySanrenpuku(tenantId, obs, ctx)
+            is ResultObservation -> applyResult(tenantId, obs)
+            is PayoutObservation -> applyPayout(tenantId, obs)
         }
+
+    /** 着順。馬番は 1〜99・重複なし、着順は 1〜99 または null。レースが無ければ保留（レース到着後に再適用）。 */
+    private fun applyResult(
+        tenantId: TenantId,
+        o: ResultObservation,
+    ): ApplyOutcome {
+        if (o.entries.isEmpty()) return ApplyOutcome.Quarantined("EMPTY_RESULT")
+        if (o.entries.any { it.umaban !in 1..99 }) return ApplyOutcome.Quarantined("INVALID_UMABAN")
+        if (o.entries
+                .map { it.umaban }
+                .toSet()
+                .size != o.entries.size
+        ) {
+            return ApplyOutcome.Quarantined("DUPLICATE_UMABAN")
+        }
+        if (o.entries.any { it.finish != null && it.finish !in 1..99 }) return ApplyOutcome.Quarantined("INVALID_FINISH")
+        if (races.find(tenantId, o.raceId) == null) return ApplyOutcome.Deferred(raceNotFoundReason(o.raceId))
+        return upserted(results.upsertAll(tenantId, o.raceId, o.entries))
+    }
+
+    /**
+     * 払戻（100 円あたりの円）。金額は有限で 0 より大きい値だけ（負・0・非有限は隔離）。組み合わせキーは賭式に合った 0 埋めの昇順
+     * （単勝 `07`、ワイド `02-07`、三連複 `02-07-09`）。同じキーが重複して値が違えば隔離。
+     */
+    private fun applyPayout(
+        tenantId: TenantId,
+        o: PayoutObservation,
+    ): ApplyOutcome {
+        if (o.rows.isEmpty()) return ApplyOutcome.Quarantined("EMPTY_PAYOUT")
+        val seen = HashMap<String, Double>()
+        for (r in o.rows) {
+            if (!r.payout.isFinite() || r.payout <= 0.0) return ApplyOutcome.Quarantined("INVALID_PAYOUT")
+            if (!validPayoutKey(o.market, r.comboKey)) return ApplyOutcome.Quarantined("INVALID_COMBO_KEY")
+            val prev = seen.putIfAbsent(r.comboKey, r.payout)
+            if (prev != null && prev != r.payout) return ApplyOutcome.Quarantined("DUPLICATE_COMBO_KEY")
+        }
+        if (races.find(tenantId, o.raceId) == null) return ApplyOutcome.Deferred(raceNotFoundReason(o.raceId))
+        return upserted(payouts.upsertAll(tenantId, o.raceId, o.market, seen.map { PayoutRow(it.key, it.value) }.sortedBy { it.comboKey }, o.provisional))
+    }
+
+    private fun validPayoutKey(
+        market: Market,
+        key: String,
+    ): Boolean {
+        val parts = key.split("-")
+        val nums = parts.map { if (it.length == 2 && it.all { c -> c in '0'..'9' }) it.toInt() else return false }
+        val expected =
+            if (market == Market.WIN) {
+                1
+            } else if (market == Market.WIDE) {
+                2
+            } else {
+                3
+            }
+        return nums.size == expected && nums.all { it in 1..99 } && nums == nums.sorted() && nums.toSet().size == nums.size
+    }
 
     private fun applyDay(
         tenantId: TenantId,
@@ -192,7 +261,7 @@ class ObservationApplier(
         ctx: ApplyContext,
     ): ApplyOutcome {
         if (belowPar(o.entries.map { it.odds.value })) return ApplyOutcome.Quarantined("ODDS_BELOW_PAR")
-        if (races.find(tenantId, o.raceId) == null) return ApplyOutcome.Deferred("RACE_NOT_FOUND")
+        if (races.find(tenantId, o.raceId) == null) return ApplyOutcome.Deferred(raceNotFoundReason(o.raceId))
         val snapshot =
             try {
                 OddsSnapshot(tenantId, o.raceId, Market.WIN, ctx.observedAt, o.entries)
@@ -245,7 +314,7 @@ class ObservationApplier(
     ): ApplyOutcome {
         if (rows.isEmpty()) return ApplyOutcome.Quarantined("EMPTY_SNAPSHOT")
         if (!policy.storeComboOdds) return ApplyOutcome.Rejected("COMBO_ODDS_STORAGE_DISABLED")
-        if (races.find(tenantId, raceId) == null) return ApplyOutcome.Deferred("RACE_NOT_FOUND")
+        if (races.find(tenantId, raceId) == null) return ApplyOutcome.Deferred(raceNotFoundReason(raceId))
         return upserted(combos.upsert(ComboOddsSnapshot(tenantId, raceId, market, ctx.observedAt, rows, ctx.dataspec)))
     }
 

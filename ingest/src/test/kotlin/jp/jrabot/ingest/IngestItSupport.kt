@@ -62,10 +62,18 @@ class Faults {
 
     @Volatile var fetchSaveFails = false
 
+    /** true の間、保留の確定（settlePending）が失敗する（保留の再適用が行ごとに失敗する状況）。 */
+    @Volatile var settleFails = false
+
+    /** 生レコードの最初の保存の直前に 1 回だけ実行する（この時点で、このバッチの適用は終わり、コミットはまだ）。 */
+    @Volatile var beforeFirstRawInsert: (() -> Unit)? = null
+
     fun reset() {
         rawInsertFailOn = 0
         rawCalls.set(0)
         fetchSaveFails = false
+        settleFails = false
+        beforeFirstRawInsert = null
     }
 }
 
@@ -89,9 +97,30 @@ class IngestItConfig {
         object : RawRecordStore {
             override fun insertIfAbsent(row: RawRecordRow): Boolean {
                 val n = f.rawCalls.incrementAndGet()
+                f.beforeFirstRawInsert?.let {
+                    f.beforeFirstRawInsert = null
+                    it()
+                }
                 if (f.rawInsertFailOn != 0 && n == f.rawInsertFailOn) throw InjectedFailure()
                 return real.insertIfAbsent(row)
             }
+
+            override fun settlePending(
+                tenantId: TenantId,
+                recordHash: String,
+                status: jp.jrabot.domain.ingest.ParseStatus,
+                error: String?,
+            ): Boolean {
+                if (f.settleFails) throw InjectedFailure()
+                return real.settlePending(tenantId, recordHash, status, error)
+            }
+
+            override fun listPending(
+                tenantId: TenantId,
+                reasons: List<String>,
+                limit: Int,
+                after: jp.jrabot.domain.ingest.PendingCursor?,
+            ): List<jp.jrabot.domain.ingest.PendingRawRecord> = real.listPending(tenantId, reasons, limit, after)
         }
 
     @Bean @Primary
@@ -186,6 +215,8 @@ object IngestIt {
             "ingest_fetch",
             "ingest_backfill",
             "ingest_gap",
+            "results",
+            "payouts",
             "odds_snapshots",
             "combo_odds_snapshots",
             "race_day",

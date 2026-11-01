@@ -53,6 +53,39 @@ class ErrorReporterTest {
     }
 
     @Test
+    fun `クールダウンで送らなかった件数を数え 次に送るときに本文へ書く`() {
+        assertEquals(ErrorReporter.Outcome.SENT, reporter.report("t", "m", "race=A"))
+        assertEquals(ErrorReporter.Outcome.COOLDOWN, reporter.report("t", "m", "race=B"))
+        assertEquals(ErrorReporter.Outcome.COOLDOWN, reporter.report("t", "m", "race=C"))
+        assertEquals(2L, reporter.suppressedTotal)
+        assertFalse(
+            notifier.sent
+                .single()
+                .body
+                .contains("件を cooldown"),
+            "最初の通知には書かない",
+        )
+        clock.instant = clock.instant.plus(Duration.ofMinutes(6))
+        assertEquals(ErrorReporter.Outcome.SENT, reporter.report("t", "m", "race=D"))
+        assertTrue(
+            notifier.sent
+                .last()
+                .body
+                .contains("同じ内容 2 件を cooldown のため送っていません"),
+            notifier.sent.last().body,
+        )
+        clock.instant = clock.instant.plus(Duration.ofMinutes(6))
+        assertEquals(ErrorReporter.Outcome.SENT, reporter.report("t", "m", "race=E"))
+        assertFalse(
+            notifier.sent
+                .last()
+                .body
+                .contains("件を cooldown"),
+            "数え直し",
+        )
+    }
+
+    @Test
     fun `送信に失敗しても例外にせず 失敗をさらに通知し直さない`() {
         notifier.result = { DeliveryResult.UNKNOWN }
         assertEquals(ErrorReporter.Outcome.NOT_DELIVERED, reporter.report("t", "m"))

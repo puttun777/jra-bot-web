@@ -96,6 +96,8 @@ GRANT SELECT ON `${flyway:defaultSchema}`.`ingest_backfill` TO 'app'@'%';
 REVOKE ALL PRIVILEGES ON `${flyway:defaultSchema}`.`ingest_backfill` FROM 'app'@'%';
 GRANT SELECT ON `${flyway:defaultSchema}`.`horse_master_history` TO 'app'@'%';
 REVOKE ALL PRIVILEGES ON `${flyway:defaultSchema}`.`horse_master_history` FROM 'app'@'%';
+GRANT SELECT ON `${flyway:defaultSchema}`.`race_timing_notice` TO 'app'@'%';
+REVOKE ALL PRIVILEGES ON `${flyway:defaultSchema}`.`race_timing_notice` FROM 'app'@'%';
 GRANT SELECT ON `${flyway:defaultSchema}`.`ml_model` TO 'app'@'%';
 REVOKE ALL PRIVILEGES ON `${flyway:defaultSchema}`.`ml_model` FROM 'app'@'%';
 GRANT SELECT ON `${flyway:defaultSchema}`.`flyway_schema_history` TO 'app'@'%';
@@ -174,6 +176,8 @@ GRANT SELECT ON `${flyway:defaultSchema}`.`ingest_backfill` TO 'ingest'@'%';
 REVOKE ALL PRIVILEGES ON `${flyway:defaultSchema}`.`ingest_backfill` FROM 'ingest'@'%';
 GRANT SELECT ON `${flyway:defaultSchema}`.`horse_master_history` TO 'ingest'@'%';
 REVOKE ALL PRIVILEGES ON `${flyway:defaultSchema}`.`horse_master_history` FROM 'ingest'@'%';
+GRANT SELECT ON `${flyway:defaultSchema}`.`race_timing_notice` TO 'ingest'@'%';
+REVOKE ALL PRIVILEGES ON `${flyway:defaultSchema}`.`race_timing_notice` FROM 'ingest'@'%';
 GRANT SELECT ON `${flyway:defaultSchema}`.`ml_model` TO 'ingest'@'%';
 REVOKE ALL PRIVILEGES ON `${flyway:defaultSchema}`.`ml_model` FROM 'ingest'@'%';
 GRANT SELECT ON `${flyway:defaultSchema}`.`flyway_schema_history` TO 'ingest'@'%';
@@ -252,6 +256,8 @@ GRANT SELECT ON `${flyway:defaultSchema}`.`ingest_backfill` TO 'bot'@'%';
 REVOKE ALL PRIVILEGES ON `${flyway:defaultSchema}`.`ingest_backfill` FROM 'bot'@'%';
 GRANT SELECT ON `${flyway:defaultSchema}`.`horse_master_history` TO 'bot'@'%';
 REVOKE ALL PRIVILEGES ON `${flyway:defaultSchema}`.`horse_master_history` FROM 'bot'@'%';
+GRANT SELECT ON `${flyway:defaultSchema}`.`race_timing_notice` TO 'bot'@'%';
+REVOKE ALL PRIVILEGES ON `${flyway:defaultSchema}`.`race_timing_notice` FROM 'bot'@'%';
 GRANT SELECT ON `${flyway:defaultSchema}`.`ml_model` TO 'bot'@'%';
 REVOKE ALL PRIVILEGES ON `${flyway:defaultSchema}`.`ml_model` FROM 'bot'@'%';
 GRANT SELECT ON `${flyway:defaultSchema}`.`flyway_schema_history` TO 'bot'@'%';
@@ -330,12 +336,16 @@ GRANT SELECT ON `${flyway:defaultSchema}`.`ingest_backfill` TO 'mltrain'@'%';
 REVOKE ALL PRIVILEGES ON `${flyway:defaultSchema}`.`ingest_backfill` FROM 'mltrain'@'%';
 GRANT SELECT ON `${flyway:defaultSchema}`.`horse_master_history` TO 'mltrain'@'%';
 REVOKE ALL PRIVILEGES ON `${flyway:defaultSchema}`.`horse_master_history` FROM 'mltrain'@'%';
+GRANT SELECT ON `${flyway:defaultSchema}`.`race_timing_notice` TO 'mltrain'@'%';
+REVOKE ALL PRIVILEGES ON `${flyway:defaultSchema}`.`race_timing_notice` FROM 'mltrain'@'%';
 GRANT SELECT ON `${flyway:defaultSchema}`.`ml_model` TO 'mltrain'@'%';
 REVOKE ALL PRIVILEGES ON `${flyway:defaultSchema}`.`ml_model` FROM 'mltrain'@'%';
 GRANT SELECT ON `${flyway:defaultSchema}`.`flyway_schema_history` TO 'mltrain'@'%';
 REVOKE ALL PRIVILEGES ON `${flyway:defaultSchema}`.`flyway_schema_history` FROM 'mltrain'@'%';
 
 -- ===== 付与: app =====
+-- 通知タイミングと通知内容のスナップショット（V5。表示専用。将来の本人専用ダッシュボードで認証・認可を通った利用者だけが読む）。
+GRANT SELECT ON `${flyway:defaultSchema}`.`race_timing_notice` TO 'app'@'%';
 GRANT SELECT ON `${flyway:defaultSchema}`.`horse_master_history` TO 'app'@'%';
 GRANT SELECT ON `${flyway:defaultSchema}`.`ingest_fetch` TO 'app'@'%';
 GRANT SELECT ON `${flyway:defaultSchema}`.`ingest_backfill` TO 'app'@'%';
@@ -410,6 +420,8 @@ GRANT INSERT ON `${flyway:defaultSchema}`.`race_schedule_event` TO 'ingest'@'%';
 GRANT SELECT, INSERT, DELETE ON `${flyway:defaultSchema}`.`agent_nonce` TO 'ingest'@'%';
 
 -- ===== 付与: bot =====
+-- 通知タイミングの確定とスナップショットの保存（V5。SELECT と INSERT だけ。追記専用なので UPDATE・DELETE は付けない）。
+GRANT SELECT, INSERT ON `${flyway:defaultSchema}`.`race_timing_notice` TO 'bot'@'%';
 -- 学習用データセット（export-dataset）が時点ごとの馬マスタを読む（V4）。
 GRANT SELECT ON `${flyway:defaultSchema}`.`horse_master_history` TO 'bot'@'%';
 -- 取得の事実（ScheduleFetchFactReader。calendar-check が読む）とバックフィル要求（T3.4）。

@@ -31,6 +31,7 @@ internal data class RaceConditionRow(
     val tenkoCd: String?,
     val shibaBabaCd: String?,
     val dirtBabaCd: String?,
+    val updatedAt: LocalDateTime,
 )
 
 @Entity(immutable = true, naming = NamingType.SNAKE_LOWER_CASE)

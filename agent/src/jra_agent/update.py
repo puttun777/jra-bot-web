@@ -29,6 +29,11 @@ from .errors import VerificationError
 
 SEMVER = re.compile(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)")
 MAX_ARTIFACT_BYTES = 200 * 1024 * 1024
+# 展開後の上限（zip bomb 対策。署名・ハッシュ検証済みの成果物でも、展開前に宣言サイズを確認する）
+MAX_UNPACKED_BYTES = 1024 * 1024 * 1024
+MAX_UNPACKED_FILE_BYTES = 512 * 1024 * 1024
+MAX_ENTRIES = 5000
+MAX_COMPRESSION_RATIO = 200  # 宣言サイズ / 圧縮サイズ（0 バイトの圧縮は除く）
 _KEYS = {"schema_version", "version", "platform", "sha256", "size", "url", "issuedAt", "kid", "sig"}
 
 
@@ -122,17 +127,40 @@ class Installer:
             import io
 
             with zipfile.ZipFile(io.BytesIO(data)) as z:
-                for info in z.infolist():
+                infos = z.infolist()
+                if len(infos) > MAX_ENTRIES:
+                    raise VerificationError("TOO_MANY_ENTRIES")
+                total = 0
+                seen: set[str] = set()
+                for info in infos:
+                    # Windows の区切り（\）・ドライブ指定（C:）・絶対パス・`..` をすべて拒否する（OS ごとの Path の解釈の差に頼らない）
                     name = info.filename
+                    parts = name.replace("\\", "/").split("/")
                     target = (tmp / name).resolve()
                     if (
                         name.startswith(("/", "\\"))
-                        or ".." in Path(name).parts
+                        or ".." in parts
+                        or ":" in name
+                        or "\x00" in name
                         or (tmp.resolve() not in target.parents and target != tmp.resolve())
                     ):
                         raise VerificationError("UNSAFE_PATH")
-                    if (info.external_attr >> 16) & 0o170000 == 0o120000:
+                    mode = (info.external_attr >> 16) & 0o170000
+                    if mode == 0o120000:
                         raise VerificationError("SYMLINK")
+                    if mode not in (0, 0o100000, 0o040000):  # 通常のファイル・ディレクトリ以外（デバイス・FIFO など）
+                        raise VerificationError("SPECIAL_FILE")
+                    key = "/".join(p for p in parts if p).lower()
+                    if key in seen:
+                        raise VerificationError("DUPLICATE_ENTRY")  # 同じパス（大文字小文字違いを含む）の重ね書きを許さない
+                    seen.add(key)
+                    if info.file_size > MAX_UNPACKED_FILE_BYTES:
+                        raise VerificationError("ENTRY_TOO_LARGE")
+                    if info.compress_size > 0 and info.file_size / info.compress_size > MAX_COMPRESSION_RATIO:
+                        raise VerificationError("COMPRESSION_RATIO")
+                    total += info.file_size
+                    if total > MAX_UNPACKED_BYTES:
+                        raise VerificationError("UNPACKED_TOO_LARGE")
                 z.extractall(tmp)
         except zipfile.BadZipFile as e:
             shutil.rmtree(tmp, ignore_errors=True)

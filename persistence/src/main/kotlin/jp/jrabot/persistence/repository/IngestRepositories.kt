@@ -12,6 +12,7 @@ import jp.jrabot.domain.ingest.BackfillRequestResult
 import jp.jrabot.domain.ingest.BackfillStatus
 import jp.jrabot.domain.ingest.BackfillStore
 import jp.jrabot.domain.ingest.BatchClaim
+import jp.jrabot.domain.ingest.BatchClass
 import jp.jrabot.domain.ingest.BatchCounts
 import jp.jrabot.domain.ingest.ClaimResult
 import jp.jrabot.domain.ingest.EncryptedSigningKey
@@ -29,6 +30,8 @@ import jp.jrabot.domain.ingest.IssuedAgentCredential
 import jp.jrabot.domain.ingest.NewBackfill
 import jp.jrabot.domain.ingest.NonceStore
 import jp.jrabot.domain.ingest.ParseStatus
+import jp.jrabot.domain.ingest.PendingCursor
+import jp.jrabot.domain.ingest.PendingRawRecord
 import jp.jrabot.domain.ingest.RawRecordRow
 import jp.jrabot.domain.ingest.RawRecordStore
 import jp.jrabot.domain.ingest.UnitOfWork
@@ -293,6 +296,53 @@ internal class RawRecordStoreImpl(
                     ),
                 ).count == 1
         }
+
+    override fun settlePending(
+        tenantId: TenantId,
+        recordHash: String,
+        status: ParseStatus,
+        error: String?,
+    ): Boolean {
+        require(status != ParseStatus.PENDING) { "PENDING へは戻さない" }
+        return tx.inTransaction {
+            dao
+                .settlePending(
+                    IngestRawEntity(tenantId.value, recordHash, "", 0, "", "", ByteArray(0), java.time.LocalDateTime.of(2000, 1, 1, 0, 0), status.name, error),
+                ).count == 1
+        }
+    }
+
+    override fun listPending(
+        tenantId: TenantId,
+        reasons: List<String>,
+        limit: Int,
+        after: PendingCursor?,
+    ): List<PendingRawRecord> {
+        require(limit in 1..1000) { "limit は 1〜1000" }
+        require(reasons.isNotEmpty()) { "reasons は 1 つ以上" }
+        return dao
+            .selectPending(
+                tenantId.value,
+                reasons,
+                limit,
+                after != null,
+                after?.receivedAt?.toDbTime() ?: java.time.LocalDateTime.of(2000, 1, 1, 0, 0),
+                after?.batchId.orEmpty(),
+                after?.seq ?: 0,
+            ).map {
+                PendingRawRecord(
+                    it.recordHash,
+                    it.batchId,
+                    BatchClass.entries.first { c -> c.code == it.batchClass },
+                    it.observedAt.toInstantUtc(),
+                    it.dataspec,
+                    it.recordId,
+                    it.payload,
+                    it.receivedAt.toInstantUtc(),
+                    it.seq,
+                )
+            }
+    }
 }
 
 internal class FetchStoreImpl(

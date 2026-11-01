@@ -35,7 +35,8 @@ class DiscordNotifierFakeServerTest {
         policy: DiscordRetryPolicy = DiscordRetryPolicy(),
         stop: () -> Boolean = { false },
         sleeper: Sleeper = Sleeper { sleeps += it },
-    ) = DiscordNotifier(url, url, mention, transport, sleeper, policy, stop, log)
+        sendAllowed: () -> Boolean = { true },
+    ) = DiscordNotifier(url, url, mention, transport, sleeper, policy, stop, log, sendAllowed)
 
     private fun signal(body: String = "本文") = Notification(tenant, NotificationChannel.SIGNAL, "件名", body)
 
@@ -300,5 +301,40 @@ class DiscordNotifierFakeServerTest {
     fun `JSON の制御文字 孤立サロゲート 引用符を安全に符号化する`() {
         assertEquals("\"a\\\"b\\\\c\\n\\u0001\\ufffd\\u2028\"", JsonText.quote("a\"b\\c\n\u0001\uD800 "))
         assertEquals("\"🐴\"", JsonText.quote("🐴"))
+    }
+
+    @Test
+    fun `429 の待機中に STOPPED UNKNOWN になったら 再試行の POST をしない`() {
+        var allowed = true
+        server.script(Reply.Status(429, """{"retry_after":2}"""), Reply.Status(204))
+        // 待機（sleep）の間にモードが NORMAL でなくなる
+        val n =
+            notifier(
+                sleeper =
+                    Sleeper {
+                        sleeps += it
+                        allowed = false
+                    },
+                sendAllowed = { allowed },
+            )
+        assertEquals(DeliveryResult.NOT_SENT, send(n = n), "1 通目は確実に届いていない（429 は未処理）")
+        assertEquals(1, server.requests.size, "待機後に再試行しない")
+        assertEquals(listOf(Duration.ofSeconds(2)), sleeps.toList())
+    }
+
+    @Test
+    fun `2 チャンク目の再試行前にモードが変わったら UNKNOWN 一部は届いている`() {
+        var allowed = true
+        server.script(Reply.Status(204), Reply.Status(429, """{"retry_after":2}"""), Reply.Status(204))
+        val n = notifier(sleeper = Sleeper { allowed = false }, sendAllowed = { allowed })
+        assertEquals(DeliveryResult.UNKNOWN, send("a".repeat(1900) + "b".repeat(1900), n))
+        assertEquals(2, server.requests.size, "1 通目を再送せず 2 通目も再試行しない")
+    }
+
+    @Test
+    fun `エラー通知はモードに関わらず送る 停止やUNKNOWNで終わる run の警告を届ける`() {
+        val n = notifier(sendAllowed = { false })
+        assertEquals(DeliveryResult.DELIVERED, n.send(Notification(tenant, NotificationChannel.ERROR, "警告", "本文")))
+        assertEquals(1, server.requests.size)
     }
 }

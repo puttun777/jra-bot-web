@@ -5,8 +5,12 @@ import jp.jrabot.domain.calendar.RaceDayStatus
 import jp.jrabot.domain.ingest.IngestRecordIn
 import jp.jrabot.domain.ingest.ParseContext
 import jp.jrabot.domain.ingest.ParseOutcome
+import jp.jrabot.domain.ingest.PayoutObservation
+import jp.jrabot.domain.ingest.PayoutRow
 import jp.jrabot.domain.ingest.RaceObservation
 import jp.jrabot.domain.ingest.RecordParser
+import jp.jrabot.domain.ingest.ResultEntry
+import jp.jrabot.domain.ingest.ResultObservation
 import jp.jrabot.domain.ingest.SanrenpukuOddsEntry
 import jp.jrabot.domain.ingest.SanrenpukuOddsObservation
 import jp.jrabot.domain.ingest.ScheduleDayObservation
@@ -14,6 +18,7 @@ import jp.jrabot.domain.ingest.TimeChangeObservation
 import jp.jrabot.domain.ingest.WideOddsEntry
 import jp.jrabot.domain.ingest.WideOddsObservation
 import jp.jrabot.domain.ingest.WinOddsObservation
+import jp.jrabot.domain.odds.Market
 import jp.jrabot.domain.odds.Odds
 import jp.jrabot.domain.odds.OddsEntry
 import jp.jrabot.domain.race.HorseNumber
@@ -37,6 +42,8 @@ import java.time.format.DateTimeParseException
  * | `NOW` | 単勝オッズ | raceId entries:[{umaban, odds, pop(null 可)}] |
  * | `NOD` | ワイドオッズ | raceId entries:[{a, b, low, high(null 可), pop(null 可)}] |
  * | `NOS` | 三連複オッズ | raceId entries:[{a, b, c, odds, pop(null 可)}] |
+ * | `NRS` | 着順（T3.9） | raceId entries:[{umaban, finish(null 可: 着順なし)}] |
+ * | `NHR` | 払戻（T3.9。100 円あたりの円） | raceId market(`win`/`wide`/`sanrenpuku`) provisional(bool) entries:[{key(0 埋めの昇順 `07` / `02-07` / `02-07-09`), payout}] |
  */
 class NormalizedJsonRecordParser(
     private val json: JsonTrees,
@@ -139,6 +146,29 @@ class NormalizedJsonRecordParser(
             )
         }
 
+        "NRS" -> {
+            keys(o, "raceId", "entries")
+            val entries =
+                list(o).map { e ->
+                    keys(e, "umaban", "finish")
+                    ResultEntry(int(e, "umaban"), optInt(e, "finish"))
+                }
+            ResultObservation(raceId(o), entries)
+        }
+
+        "NHR" -> {
+            keys(o, "raceId", "market", "provisional", "entries")
+            PayoutObservation(
+                raceId(o),
+                Market.fromCodeOrNull(str(o, "market")) ?: bad("MARKET"),
+                list(o).map { e ->
+                    keys(e, "key", "payout")
+                    PayoutRow(str(e, "key"), dbl(e, "payout"))
+                },
+                o["provisional"] as? Boolean ?: bad("PROVISIONAL"),
+            )
+        }
+
         else -> {
             keys(o, "raceId", "entries")
             SanrenpukuOddsObservation(
@@ -224,7 +254,7 @@ class NormalizedJsonRecordParser(
     }
 
     private companion object {
-        val IDS = setOf("NYS", "NRA", "NTC", "NOW", "NOD", "NOS")
+        val IDS = setOf("NYS", "NRA", "NTC", "NOW", "NOD", "NOS", "NRS", "NHR")
         val YSCH_STATUSES = setOf(RaceDayStatus.PLANNED, RaceDayStatus.CANCELLED, RaceDayStatus.POSTPONED)
         const val MAX_ENTRIES = 5000
     }
