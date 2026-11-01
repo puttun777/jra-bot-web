@@ -50,6 +50,7 @@ class Step:
     needs_docker: bool = False
     needs_jdk25: bool = False
     caveat: str = ""
+    verify: list[str] = field(default_factory=list)  # ci.yml の『Verify that …』ステップ名（実行後に同じ検査を行う）
 
 
 @dataclass
@@ -77,6 +78,16 @@ def changed_files(base: str) -> list[str]:
     names = set(filter(None, sh("git", "diff", "--name-only", "--no-renames", base).split("\n")))
     names |= set(filter(None, sh("git", "ls-files", "--others", "--exclude-standard").split("\n")))
     return sorted(names)
+
+
+def ci_verify_block(step_name: str) -> str:
+    """ci.yml の『Verify that …』ステップの run ブロックをそのまま取り出す（実行テスト数の下限・必須クラス・スキップ 0 の検査。二重管理しない）。"""
+    text = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    m = re.search(r"- name: " + re.escape(step_name) + r"\n(?:\s+if:[^\n]*\n)?\s+run: \|\n((?:(?:\s{10}[^\n]*)?\n)+)", text)
+    if not m:
+        raise SystemExit(f"ci.yml に『{step_name}』が見つからない")
+    lines = [ln[10:] if ln.strip() else "" for ln in m.group(1).split("\n")]
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------------------------- 環境の検出
@@ -149,6 +160,7 @@ def steps_for(plan: classify.Plan, files: list[str]) -> list[Step]:
                 "kotlin-build",
                 "Kotlin: ./gradlew build + checkModuleDependencies + ktlintCheck（JDK 25）",
                 [["./gradlew", "build", "--stacktrace"], ["./gradlew", "checkModuleDependencies", "ktlintCheck"]],
+                verify=["Verify that the cloud-gcp unit tests actually ran", "Verify that the app and persistence unit tests actually ran"],
                 env={"LC_ALL": "C.UTF-8", "LANG": "C.UTF-8"},
                 needs_jdk25=True,
             )
@@ -175,6 +187,7 @@ def steps_for(plan: classify.Plan, files: list[str]) -> list[Step]:
             tasks.append(["./gradlew", ":persistence:integrationTest", "--stacktrace"])
         if "apps" in suites:
             tasks.append(["./gradlew", ":bot:integrationTest", ":ingest:integrationTest", ":dashboard:integrationTest", "--continue", "--stacktrace"])
+        verify = [n for key, n in (("migration", "Verify that the integration tests actually ran"), ("persistence", "Verify that the persistence integration tests actually ran"), ("apps", "Verify that the app integration tests actually ran")) if key in suites]
         if tasks:
             s.append(
                 Step(
@@ -184,6 +197,7 @@ def steps_for(plan: classify.Plan, files: list[str]) -> list[Step]:
                     env={"LC_ALL": "C.UTF-8", "LANG": "C.UTF-8", "MYSQL_IMAGE": f"mysql:{mysql}"},
                     needs_docker=True,
                     needs_jdk25=True,
+                    verify=verify,
                     caveat="AGENT_PYTHON/ML_TRAIN_PYTHON は preflight が venv を用意して渡す（CI と同じ）",
                 )
             )
@@ -320,8 +334,15 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 for c in st.commands:
                     rc = run_cmd(c, env, log)
-                    if rc:
+                    if rc and not st.id.startswith("db-it-"):
                         break
+                # 実行されたテスト数・必須クラス・スキップ 0 の検査（CI と同じ手順。db-it は失敗しても件数検査を行う: CI の always() と同じ）
+                if not rc or st.id.startswith("db-it-"):
+                    for name in st.verify:
+                        log.write(f"$ verify: {name}\n")
+                        log.flush()
+                        v = subprocess.run(["bash", "-e", "-c", ci_verify_block(name)], cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT).returncode
+                        rc = rc or v
         r = Result(st.id, st.title, "ok" if rc == 0 else "fail", time.time() - t0, st.caveat)
         results.append(r)
         print(f"    {'OK' if rc == 0 else 'FAIL'} ({r.seconds:.0f}s) → build/preflight/{st.id}.log", flush=True)

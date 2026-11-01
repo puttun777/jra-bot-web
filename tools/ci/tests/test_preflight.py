@@ -63,6 +63,13 @@ class MirrorsCiTests(unittest.TestCase):
                     self.assertIn(cmd[2], CI_YML, f"{step.id}: ci.yml に {cmd[2]} が無い")
         self.assertIn("check-repo-hygiene.sh", CI_YML)
 
+    def test_verify_steps_exist_in_ci_yml_and_are_extractable(self):
+        for step in preflight.steps_for(classify.full_plan("test"), []):
+            for name in step.verify:
+                block = preflight.ci_verify_block(name)
+                self.assertIn("test-results", block, name)  # テスト結果ディレクトリを検査するブロック
+                self.assertTrue(block.strip(), name)
+
     def test_legacy_commit_matches_golden_constants(self):
         text = (ROOT / "tools/golden/constants.py").read_text(encoding="utf-8")
         self.assertIn(preflight.LEGACY_COMMIT, text)
