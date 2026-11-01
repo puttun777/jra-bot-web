@@ -38,6 +38,10 @@ data class BotRunConfig(
     val decision: WinDecisionConfig,
     /** 旧 `hit_rate_min_ev_schedule`。**明示した場合だけ有効**（null なら `decision.hitRateMinEv` の固定方式。さらに `priorityMode=HIT_RATE` のときだけ使う）。 */
     val hitRateSchedule: HitRateSchedule? = null,
+    /**
+     * 結果待ち（T3.9）。**null なら全レースが発走した時点で終了する**（結果を待たない構成。テスト用）。本番の構成（`BotRunSettingsParser`）は必須。
+     */
+    val resultWait: ResultWaitConfig? = null,
 ) {
     init {
         require(snapshotHistoryLimit in 2..100) { "snapshotHistoryLimit は 2〜100（急落の判定は 2 件以上で働く）" }
@@ -149,4 +153,18 @@ data class HitRateSchedule(
             minutesToPost >= 5.0 -> mid
             else -> near
         }
+}
+
+/**
+ * 発走後の結果待ち。[resultAfter] は発走から結果の確認を始めるまでの時間（旧設計: 30 分）、[poll] は確認の間隔（旧設計: 5 分）。
+ * 締切は `CALENDAR_SETTLE_DEADLINE_MINUTES`（最終発走からの上限。超えたら開催日を INCOMPLETE にして FAILED で終わり、reconcile が後で回復する）。
+ */
+data class ResultWaitConfig(
+    val resultAfter: Duration,
+    val poll: Duration,
+) {
+    init {
+        require(resultAfter.isPositive && resultAfter <= Duration.ofHours(12)) { "resultAfter は正で 12 時間以下: $resultAfter" }
+        require(poll >= Duration.ofSeconds(10) && poll <= Duration.ofHours(1)) { "poll は 10 秒〜1 時間: $poll" }
+    }
 }

@@ -15,6 +15,7 @@ import jp.jrabot.domain.calendar.DayVerdict
 import jp.jrabot.domain.calendar.EffectiveCalendar
 import jp.jrabot.domain.calendar.EffectiveDay
 import jp.jrabot.domain.calendar.RaceDayReader
+import jp.jrabot.domain.calendar.RaceDayStatus
 import jp.jrabot.domain.calendar.ScheduleFetchFactReader
 import jp.jrabot.domain.calendar.WatchWindow
 import jp.jrabot.domain.notify.ErrorReporter
@@ -109,6 +110,10 @@ class BotRunOrchestrator(
     private val events: RunEvents = RunEvents.NONE,
     /** 通知の送信の直前にリースを確認する窓口（Discord 通知の `sendAllowed` と共有する）。 */
     private val leaseProbe: LeaseProbe = LeaseProbe(),
+    /** 発走後の結果の取り込み状況（T3.9。`config.resultWait` が有効なときに使う）。 */
+    private val availability: ResultAvailability = ResultAvailability.NONE,
+    /** 開催日の状態（RUNNING → SETTLING → COMPLETED / INCOMPLETE）を進める（LIVE の run だけ）。 */
+    private val advancer: RaceDayAdvancer = RaceDayAdvancer.NONE,
 ) : BotRunRunner {
     override fun run(request: RunRequest): RunOutcome =
         try {
@@ -134,12 +139,48 @@ class BotRunOrchestrator(
             runs.acquire(LeaseRequest(req.tenantId, req.runId, req.date, req.trigger, req.owner, clock.now(), config.lease.duration))
         val run: BotRun =
             when (acquired) {
-                is AcquireResult.Acquired -> acquired.run
-                is AcquireResult.AlreadyActive -> return RunOutcome(RunExit.OK, "ALREADY_ACTIVE", null, null)
-                AcquireResult.Contended -> return RunOutcome(RunExit.TEMPFAIL, "LEASE_CONTENDED", null, null)
+                is AcquireResult.Acquired -> {
+                    acquired.run
+                }
+
+                is AcquireResult.AlreadyActive -> {
+                    warnIfBlockedByNonLive(req, acquired)
+                    return RunOutcome(RunExit.OK, "ALREADY_ACTIVE", null, null)
+                }
+
+                AcquireResult.Contended -> {
+                    return RunOutcome(RunExit.TEMPFAIL, "LEASE_CONTENDED", null, null)
+                }
             }
         events.event("LEASE_ACQUIRED", "takenOver=${acquired.takenOver != null}")
         return Session(req, LeaseKeeper(runs, req.owner, clock, config.lease, run)).execute()
+    }
+
+    /**
+     * G-34: LIVE の bot-run が、LIVE 以外（BACKFILL / RECONCILE / 出どころ不明）の実行中の run に塞がれて起動できないとき、**黙って終わらず警告する**
+     * （その間は開催日の通知が止まる）。LIVE どうしの二重起動は正常なので警告しない。通知の失敗は本処理を止めない。
+     */
+    private fun warnIfBlockedByNonLive(
+        req: RunRequest,
+        active: AcquireResult.AlreadyActive,
+    ) {
+        if (req.origin != NotificationOrigin.LIVE) return
+        try {
+            val run = runs.listByDate(req.tenantId, req.date).firstOrNull { it.runId == active.activeRunId } ?: return
+            val checkpointOrigin = RunCheckpoint.parse(run.checkpoint)?.origin
+            val nonLive =
+                run.trigger == BotRunTrigger.BACKFILL || run.trigger == BotRunTrigger.RECONCILE ||
+                    (checkpointOrigin != null && checkpointOrigin != NotificationOrigin.LIVE.name)
+            if (!nonLive) return
+            events.event("LIVE_BLOCKED_BY_NON_LIVE_RUN", "trigger=${run.trigger} origin=${checkpointOrigin ?: "unknown"}")
+            errors.report(
+                "bot-run: LIVE_BLOCKED",
+                "実行中の LIVE 以外の bot-run（BACKFILL/RECONCILE 等）があるため、LIVE の bot-run を起動できず、その間の通知は止まります",
+                "trigger=${run.trigger} leaseExpiresAt=${active.leaseExpiresAt}",
+            )
+        } catch (_: Exception) {
+            // 警告の失敗で終了の結果（ALREADY_ACTIVE）を変えない
+        }
     }
 
     /**
@@ -216,6 +257,9 @@ class BotRunOrchestrator(
         private var leaseLost: String? = null
         private val reported = HashSet<String>()
 
+        /** 全レースが発走した後の結果待ちに入っている（[settleCycle]）。 */
+        private var settlePhase = false
+
         /** checkpoint を信頼できず、二重通知を避けるため通知を止めたレース（[restore]）。 */
         private val quarantined = HashSet<RaceId>()
         private lateinit var processor: RaceCycleProcessor
@@ -254,7 +298,31 @@ class BotRunOrchestrator(
             val s = keeper.transition(BotRunState.RUNNING, null, null)
             if (s is LeaseStatus.Lost) return lost(s)
             events.event("RUNNING", "cycle=${checkpoint.cycle}")
+            if (req.origin == NotificationOrigin.LIVE) {
+                advancer.advance(req.tenantId, req.date, RaceDayStatus.RUNNING, "run:${req.runId.value}")
+                detectCommittedButUnsent()
+            }
             return null
+        }
+
+        /**
+         * M2: 通知タイミングを確定したのに Signal が UNSENT のまま（確定の直後に落ちた・checkpoint の保存に失敗した等）のレースを検出し、**1 回だけ警告する**。
+         * **再送はしない**（D-18: 確定済みは at-most-once。二重通知より取りこぼしを選ぶ）。運用者は管理画面・Discord で確認する。
+         */
+        private fun detectCommittedButUnsent() {
+            val affected = mutableListOf<RaceId>()
+            for (race in deriveDay(req, clock.now()).races) {
+                val committed = timings.list(req.tenantId, race.raceId).map { it.oddsObservedAt }.toSet()
+                if (committed.isEmpty()) continue
+                if ((notifiedProbe.unsentObservations(req.tenantId, race.raceId) intersect committed).isNotEmpty()) affected += race.raceId
+            }
+            if (affected.isEmpty()) return
+            events.event("COMMITTED_BUT_UNSENT", "races=${affected.size}")
+            report(
+                "COMMITTED_BUT_UNSENT",
+                "通知のタイミングを確定したのに送信されていない通知があります（自動では再送しません）。内容は管理画面で確認してください",
+                "races=${affected.size} first=${affected.first().value}",
+            )
         }
 
         private fun finishStarting(verdict: RunOutcome): RunOutcome {
@@ -408,11 +476,24 @@ class BotRunOrchestrator(
             val window = day.window(config.calendar.watch) ?: cachedWindow
             dayFinish(day)?.let { return CycleResult(it, config.lease.heartbeatInterval) }
             val plan = RaceMonitorPlanner.plan(day, window, now)
+            if (plan.allDone && settlePhase) return settleCycle(day, window, now)
             if (plan.allDone) {
                 // 時刻が過ぎただけでは正常終了にしない。予定を信頼できず評価を逃したレースがあれば FAILED、データ不足の取りこぼしは警告付きの SUCCEEDED
                 val assessment = CompletionAssessment.assess(checkpoint.races, plan.stages, config.snapshot.descending, quarantined)
                 checkpoint = checkpoint.copy(lastCycleAt = clock.now(), races = mergeStages(plan))
-                return CycleResult(completion(assessment), config.lease.heartbeatInterval)
+                val finish = completion(assessment)
+                // 評価の機会を失っていなければ、結果待ちに入る（有効な構成のとき）。失っていれば従来どおり FAILED（結果は reconcile が後で回復する）
+                if (config.resultWait != null && finish is Done && finish.state == BotRunState.SUCCEEDED) {
+                    settlePhase = true
+                    if (req.origin ==
+                        NotificationOrigin.LIVE
+                    ) {
+                        advancer.advance(req.tenantId, req.date, RaceDayStatus.SETTLING, "run:${req.runId.value}")
+                    }
+                    events.event("SETTLE_WAIT_STARTED", "races=${plan.stages.size}")
+                    return settleCycle(day, window, now)
+                }
+                return CycleResult(finish, config.lease.heartbeatInterval)
             }
             if (window == null) return CycleResult(Done(BotRunState.ABORTED, "NO_POST_TIME", RunExit.TEMPFAIL, alert = true), config.lease.heartbeatInterval)
             if (now.isAfter(window.settleDeadlineAt)) {
@@ -431,6 +512,64 @@ class BotRunOrchestrator(
             }
             checkpoint = checkpoint.copy(cycle = checkpoint.cycle + 1, lastCycleAt = clock.now(), races = mergeStages(plan))
             return CycleResult(null, tickFor(plan, postAt, clock.now()))
+        }
+
+        /**
+         * 発走後の結果待ち（T3.9）。発走から [ResultWaitConfig.resultAfter] 後に、各レースの結果の取り込み状況（[ResultAvailability]）を [ResultWaitConfig.poll] ごとに確認する。
+         * 全レース（中止を除く）の結果がそろえば開催日を COMPLETED にして `ALL_SETTLED` で終了。締切（`CALENDAR_SETTLE_DEADLINE_MINUTES`）を過ぎてもそろわなければ
+         * 開催日を INCOMPLETE にして FAILED（`INCOMPLETE_AT_DEADLINE`）で終了し、後から届いた結果は reconcile が回復する。状態は DB から毎回導出する（再起動しても同じ）。
+         */
+        private fun settleCycle(
+            day: EffectiveDay,
+            window: WatchWindow?,
+            now: Instant,
+        ): CycleResult {
+            val rw = checkNotNull(config.resultWait)
+            val live = req.origin == NotificationOrigin.LIVE
+            val stages = LinkedHashMap<RaceId, RaceStage>()
+            var nextDue: Instant? = null
+            for (race in day.races.sortedBy { it.raceId }) {
+                val postAt = race.postAt
+                if (race.status == jp.jrabot.domain.race.RaceScheduleStatus.CANCELLED || race.status == jp.jrabot.domain.race.RaceScheduleStatus.DELETED) {
+                    stages[race.raceId] = RaceStage.CANCELLED
+                    continue
+                }
+                val due = postAt?.plus(rw.resultAfter)
+                if (due == null || now.isBefore(due)) {
+                    stages[race.raceId] = RaceStage.OFF
+                    if (due != null) nextDue = nextDue?.let { minOf(it, due) } ?: due
+                    continue
+                }
+                stages[race.raceId] =
+                    when (availability.state(req.tenantId, race.raceId)) {
+                        ResultState.NONE -> RaceStage.RESULT_PENDING
+                        ResultState.RESULT_ONLY -> RaceStage.RESULT_PARTIAL
+                        ResultState.COMPLETE -> RaceStage.SETTLED
+                    }
+            }
+            checkpoint =
+                checkpoint.copy(
+                    cycle = checkpoint.cycle + 1,
+                    lastCycleAt = clock.now(),
+                    races =
+                        stages.mapValues { (id, st) ->
+                            RaceCheckpoint(st, checkpoint.races[id]?.lastObservedAt, checkpoint.races[id]?.firedMinutes.orEmpty())
+                        },
+                )
+            val active = stages.filterValues { it != RaceStage.CANCELLED }
+            if (active.isNotEmpty() && active.values.all { it == RaceStage.SETTLED }) {
+                if (live) advancer.advance(req.tenantId, req.date, RaceDayStatus.COMPLETED, "run:${req.runId.value}")
+                events.event("ALL_SETTLED", "races=${active.size}")
+                return CycleResult(Done(BotRunState.SUCCEEDED, REASON_ALL_SETTLED, RunExit.OK), rw.poll)
+            }
+            if (window != null && now.isAfter(window.settleDeadlineAt)) {
+                if (live) advancer.advance(req.tenantId, req.date, RaceDayStatus.INCOMPLETE, "run:${req.runId.value}")
+                val pending = active.filterValues { it != RaceStage.SETTLED }.size
+                events.event("SETTLE_DEADLINE", "unsettled=$pending")
+                return CycleResult(Done(BotRunState.FAILED, "INCOMPLETE_AT_DEADLINE", RunExit.FAILURE, alert = true), rw.poll)
+            }
+            val untilDue = nextDue?.let { Duration.between(now, it) }
+            return CycleResult(null, maxOf(MIN_TICK, listOfNotNull(rw.poll, untilDue?.takeIf { it.isPositive }).min()))
         }
 
         /**
@@ -647,6 +786,9 @@ class BotRunOrchestrator(
     companion object {
         /** 必要な評価のタイミングを逃して終えた run の理由（`bot_run.exit_reason`）。 */
         const val REASON_OPPORTUNITY_LOST = "EVALUATION_OPPORTUNITY_LOST"
+
+        /** 全レースの結果（着順と単勝の確定払戻）がそろって終えた run の理由。 */
+        const val REASON_ALL_SETTLED = "ALL_SETTLED"
 
         private val MIN_TICK: Duration = Duration.ofSeconds(1)
     }

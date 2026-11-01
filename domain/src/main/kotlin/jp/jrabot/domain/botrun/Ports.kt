@@ -117,6 +117,15 @@ fun interface NotifiedSignalProbe {
         tenantId: TenantId,
         raceId: RaceId,
     ): Set<Instant>
+
+    /**
+     * そのレースで**通知がまだ試みられていない**（UNSENT のまま）Signal の観測時刻。確定した通知タイミング（[TimingNoticeStore]）の観測時刻と重なるものは、
+     * 『確定したが送れなかった』通知（確定の直後に落ちた・checkpoint 保存に失敗した等）。**自動では再送しない**（D-18。運用者に知らせるだけ: レビュー M2）。
+     */
+    fun unsentObservations(
+        tenantId: TenantId,
+        raceId: RaceId,
+    ): Set<Instant> = emptySet()
 }
 
 /** [NotifiedSignalProbe] の実装（保存済みの Signal の状態から）。 */
@@ -130,6 +139,16 @@ class SignalNotifiedProbe(
         signals
             .listByRace(tenantId, raceId)
             .filter { it.state != jp.jrabot.domain.signal.NotificationState.UNSENT }
+            .map { it.observedAt }
+            .toSet()
+
+    override fun unsentObservations(
+        tenantId: TenantId,
+        raceId: RaceId,
+    ): Set<Instant> =
+        signals
+            .listByRace(tenantId, raceId)
+            .filter { it.state == jp.jrabot.domain.signal.NotificationState.UNSENT }
             .map { it.observedAt }
             .toSet()
 }

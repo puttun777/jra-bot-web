@@ -119,6 +119,23 @@ class Kit(
         SignalNotificationDispatcher(signals, notifier, mode, clock, MentionPolicy.NONE, stopRequested = { stop })
     val errorReporter = ErrorReporter(notifier, clock, Duration.ofMinutes(5))
 
+    /** レースごとの結果の取り込み状況（結果待ちの試験で切り替える）。呼ばれた回数も数える。 */
+    val resultStates = HashMap<RaceId, ResultState>()
+    val availabilityCalls = mutableListOf<Pair<RaceId, Instant>>()
+    val availability =
+        ResultAvailability { _, race ->
+            availabilityCalls += race to clock.now()
+            resultStates[race] ?: ResultState.NONE
+        }
+
+    /** 実物の [RaceDayAdvancerImpl] + [jp.jrabot.domain.calendar.RaceDayUpdater]（メモリ上の開催日）。状態遷移表を通ることを試験で確認する。 */
+    val advancer =
+        RaceDayAdvancerImpl(
+            days,
+            jp.jrabot.domain.calendar
+                .RaceDayUpdater(days, clock),
+        )
+
     private val pacer =
         Pacer { d, _ ->
             pauses += d
@@ -172,6 +189,8 @@ class Kit(
             stopRequested = { stop },
             isTransient = { transient(it) },
             events = RunEvents { n, d -> events += "$n $d" },
+            availability = availability,
+            advancer = advancer,
         )
 
     fun request(
