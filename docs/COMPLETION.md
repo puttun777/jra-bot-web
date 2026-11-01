@@ -23,13 +23,13 @@
 | R8 | 判定（EV/Kelly/確率/ワイド/三連複/買い目）（F05〜F09） | `domain/decision` | bot-run | 旧実装とのゴールデン 34 ケース全一致 | **A** |
 | R9 | bot-run: 監視・評価・通知タイミングの確定・Discord 通知（F13/F14/F24） | `domain/botrun`、`bot/` | Discord Webhook | 単体 + MySQL 統合 + Fake HTTP | **A**（実 Discord は B: `USER_ACTIONS`） |
 | R10 | bot-run: 発走後の結果待ち・開催日の進行（RUNNING→SETTLING→COMPLETED/INCOMPLETE）・履歴 | `BotRunOrchestrator.settleCycle`、`RaceDayAdvancerImpl` | `race_day`/`race_schedule_event` | 単体（12 件）。MySQL 統合は **C**（次の増分） | **A（単体）/ C（統合）** |
-| R11 | レース単位の状態（MONITORING/OFF/RESULT_*/SETTLED）の永続化と履歴 | — | — | — | **B**（`race_schedule_event.event_type` に `STATUS` を追加する Flyway V6 が必要。最終 SQL を `docs/V6_PROPOSAL.md` に準備して承認待ち。導出表示で代替中） |
+| R11 | レース単位の状態（MONITORING/OFF/RESULT_*/SETTLED）の永続化と履歴 | — | — | — | **B**（任意。履歴の粒度のために `event_type` へ `STATUS` を足す V6。`docs/V6_PROPOSAL.md` に最終 SQL・影響・検証を準備済みで承認待ち。無くても導出表示で動く） |
 | R12 | reconcile（F15）: INCOMPLETE/異常終了の回復・冪等・排他 | `ReconcileService`、`ReconcileTaskHandler` | `race_day` | 単体 6 件 | **A（単体）/ C（MySQL 統合）** |
 | R13 | 決済の計算（単勝）・紙上成績・代表集計（F15/F20） | `domain/performance`、`domain/settlement` | （読取り API は R15） | 単体 + 旧実装ゴールデン | **A（計算）** |
 | R14 | ワイド・三連複の紙上決済（通知スナップショットの買い目 × 払戻） | — | — | — | **C** |
 | R15 | 成績・シグナル・買い目・結果の読取り API（DTO・絞り込み・ページング） | `:dashboard`（`/api/v1/me` のみ） | MySQL（`app` ユーザー） | — | **C** |
 | R16 | バックテスト（F20）: 保存済みデータ・未来情報の遮断・除外件数/率 | — | — | — | **C** |
-| R17 | retention（F14/F16: 保持期間の削除） | `StubTaskHandler`（スタブ） | — | — | **B**（bot ユーザーへの DELETE 権限 = V6。対象表・保持期間の案を `V6_PROPOSAL.md` に準備して承認待ち） |
+| R17 | retention（F14/F16: 保持期間の削除。既定はドライラン、削除は明示設定） | `StubTaskHandler`（スタブ）→ 実装予定 | `bot --task=retention`（DELETE 権限は V5 の GRANT で付与済み） | — | **C**（実装する。実データの削除は本人の承認事項なので既定はドライラン） |
 | R18 | 人の認証・認可（IAP JWT・許可リスト・ロール・deny by default） | `HumanAuthorizer`、`ApiAuthFilter` | dashboard `/api/**` | 単体 + Tomcat 統合 | **A**（実 IAP の `aud` は B: G-OPS-7） |
 | R19 | ダッシュボード UI（日本語・レスポンシブ・bot 状態・次回予定・最終更新・未更新表示・シグナル/買い目/結果/成績/バックテスト画面） | `:dashboard`（UI なし） | — | — | **C** |
 | R20 | 管理操作（手動補正・エージェント失効・モデル有効化）+ CSRF + 監査ログ | `AdminWriteGuardFilter`（ガードのみ） | — | — | **C** |
@@ -52,7 +52,7 @@
 | Windows/JV-Link 実機（R4） | 実機で `agent/poc` を実行し結果（成否・件数のみ）を返す | 手順書は `docs/USER_ACTIONS.md`（作成予定） |
 | JV-Data 仕様（R5） | JV-Link 仕様書（Ver.4.9）の該当ページ、`JVLINK_DESIGN.md` の 12 項目の回答 | 項目は特定済み |
 | 旧 SQLite・設定・モデルの確認（T1.20/T1.21） | `SELECT` 2 本の集計結果（行数のみ）、legacy/v2 の判断 | SQL は `UNRESOLVED.md` D |
-| V6（R11/R17） | 最終 SQL と GRANT の承認 | `docs/V6_PROPOSAL.md`（作成予定） |
+| V6（R11 のみ・任意） | ENUM 追加 1 件の承認（GRANT 変更なし） | `docs/V6_PROPOSAL.md`（作成済み） |
 | GCP（R27）・OAuth・Secret・予算 | 請求アカウント、OAuth クライアント、Secret の投入、apply の承認 | plan までコード化。手順は infra docs |
 | 実 Discord | Webhook を Secret に入れて送信確認 | 手順は `USER_ACTIONS` |
 | COMP-4 | JRA-VAN への回答（実データのクラウド投入可否） | 問い合わせ文面は `DATA_SOURCE_COMPLIANCE.md` |
