@@ -28,7 +28,7 @@
 | R13 | 決済の計算（単勝）・紙上成績・代表集計（F15/F20） | `domain/performance`、`domain/settlement` | （読取り API は R15） | 単体 + 旧実装ゴールデン | **A（計算）** |
 | R14 | ワイド・三連複の紙上決済（通知スナップショットの買い目 × 確定払戻）と賭式別の代表集計 | `domain/performance/ComboPaperSettlement`（純粋関数。DB に書かない: D-234） | 読取り API（R15）から呼ぶ | 単体 8（同着・速報・二重計上・発走後の除外・キー読取り） | **A（計算）/ C（API への接続は R15）**。旧のワイド判定との差異は E17 |
 | R15 | 成績・シグナル・買い目・結果の読取り API（DTO・絞り込み・ページング） | `:dashboard`（`/api/v1/me` のみ） | MySQL（`app` ユーザー） | — | **C** |
-| R16 | バックテスト（F20）: 保存済みデータ・未来情報の遮断・除外件数/率 | — | — | — | **C** |
+| R16 | バックテスト（F20）: 保存済みデータ・未来情報の遮断・除外件数/率 | `domain/backtest/BacktestRunner`（純粋な計算。DB に書かない: D-234） | 管理 API（R15/R20）から呼ぶ | 単体 5（未来のオッズを渡さない・理由別の除外件数と率・二重計上なし） | **A（計算）/ C（API への接続は R15）**。実データでの検証は B |
 | R17 | retention（F14/F16: 保持期間の削除。**既定はドライラン**、削除は `RETENTION_EXECUTE=true` の明示） | `domain/retention`、`persistence/RetentionDao`、`bot/RetentionTaskHandler` | `bot --task=retention`（DELETE 権限は V5 で付与済み） | 単体 + MySQL 通し試験（ドライラン・削除・テナント分離・冪等） | **A**（実データの削除の実行は本人の承認事項。単勝オッズの間引きは未実装 = 別の判断） |
 | R18 | 人の認証・認可（IAP JWT・許可リスト・ロール・deny by default） | `HumanAuthorizer`、`ApiAuthFilter` | dashboard `/api/**` | 単体 + Tomcat 統合 | **A**（実 IAP の `aud` は B: G-OPS-7） |
 | R19 | ダッシュボード UI（日本語・レスポンシブ・bot 状態・次回予定・最終更新・未更新表示・シグナル/買い目/結果/成績/バックテスト画面） | `:dashboard`（UI なし） | — | — | **C** |
