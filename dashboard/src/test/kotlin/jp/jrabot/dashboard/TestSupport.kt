@@ -1,7 +1,6 @@
 package jp.jrabot.dashboard
 
 import jp.jrabot.cloudgcp.auth.GoogleSignedTokenVerifier
-import jp.jrabot.cloudgcp.auth.InternalCallerVerifier
 import jp.jrabot.cloudgcp.auth.testing.Claims
 import jp.jrabot.cloudgcp.auth.testing.FakeJwksServer
 import jp.jrabot.cloudgcp.auth.testing.FixedClock
@@ -9,6 +8,11 @@ import jp.jrabot.cloudgcp.auth.testing.TestSigner
 import jp.jrabot.domain.ops.InspectableModeProvider
 import jp.jrabot.domain.ops.ModeSnapshot
 import jp.jrabot.domain.ops.OpsMode
+import jp.jrabot.domain.tenant.AppUser
+import jp.jrabot.domain.tenant.AppUserRepository
+import jp.jrabot.domain.tenant.AppUserRole
+import jp.jrabot.domain.tenant.EmailAddress
+import jp.jrabot.domain.tenant.TenantId
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Primary
@@ -30,6 +34,9 @@ object TestAuth {
     val jwks = FakeJwksServer(listOf(signer))
     val clock = FixedClock()
 
+    /** 人の利用者のトークン（既定は管理者の合成メール）。 */
+    fun human(email: String = "me@example.com"): String = token(email = email)
+
     fun validToken(): String = signer.token(Claims.iap(clock.instant, audience = AUDIENCE, email = OPS_EMAIL))
 
     fun token(
@@ -45,8 +52,27 @@ class TestAuthConfig {
     /** 本番と同じ [GoogleSignedTokenVerifier]。鍵の取得先だけを偽の JWKS サーバにする（本番の設定に近道は無い）。 */
     @Bean
     @Primary
-    fun testInternalCallerVerifier(): InternalCallerVerifier =
+    fun testInternalCallerVerifier(): GoogleSignedTokenVerifier =
         GoogleSignedTokenVerifier.iap(TestAuth.AUDIENCE, TestAuth.OPS_EMAIL, TestAuth.clock, TestAuth.jwks.url)
+
+    /** DB を使わない固定の利用者表（合成）。 */
+    @Bean
+    @Primary
+    fun testUsers(): AppUserRepository =
+        object : AppUserRepository {
+            private val rows =
+                listOf(
+                    AppUser(TenantId.of(1), EmailAddress.of("me@example.com"), AppUserRole.ADMIN, true),
+                    AppUser(TenantId.of(1), EmailAddress.of("viewer@example.com"), AppUserRole.VIEWER, true),
+                    AppUser(TenantId.of(1), EmailAddress.of("off@example.com"), AppUserRole.VIEWER, false),
+                    AppUser(TenantId.of(2), EmailAddress.of("t2@example.com"), AppUserRole.VIEWER, true),
+                    AppUser(TenantId.of(1), EmailAddress.of("admin-unlisted@example.com"), AppUserRole.ADMIN, true),
+                )
+
+            override fun findByEmail(email: EmailAddress) = rows.firstOrNull { it.email == email }
+
+            override fun listByTenant(tenantId: TenantId) = rows.filter { it.tenantId == tenantId }
+        }
 }
 
 /** モードをテストから切り替えられる ModeProvider。呼ばれた回数を数える。 */
@@ -144,4 +170,6 @@ fun baseProperties(opsFile: Path): Array<String> =
         "OPS_MODE_SOURCE=${opsFile.toAbsolutePath()}",
         "IAP_AUDIENCE=${TestAuth.AUDIENCE}",
         "OPS_SA_EMAIL=${TestAuth.OPS_EMAIL}",
+        "ALLOWED_USERS=me@example.com,viewer@example.com",
+        "ADMIN_USERS=me@example.com",
     )

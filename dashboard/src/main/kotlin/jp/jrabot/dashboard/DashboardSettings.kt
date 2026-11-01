@@ -2,6 +2,8 @@ package jp.jrabot.dashboard
 
 import jp.jrabot.cloudgcp.ops.OpsModeProviders
 import jp.jrabot.domain.ops.AppEnv
+import jp.jrabot.domain.tenant.EmailAddress
+import jp.jrabot.domain.tenant.HumanAuthorizer
 import jp.jrabot.persistence.jdbc.DbSettings
 
 /**
@@ -16,6 +18,10 @@ class DashboardSettings(
     val iapAudience: String,
     val opsServiceAccountEmail: String,
     val releaseIdOverride: String?,
+    /** `ALLOWED_USERS`（空なら全拒否）。 */
+    val allowedUsers: List<EmailAddress> = emptyList(),
+    /** `ADMIN_USERS`（ロール ADMIN の行は、ここにも載っているときだけ認める）。 */
+    val adminUsers: List<EmailAddress> = emptyList(),
 ) {
     companion object {
         const val DEFAULT_POOL_MAX = 3 // CONTRACTS §8.3: dashboard
@@ -40,7 +46,16 @@ class DashboardSettings(
             check(audience.isNotEmpty()) { "IAP_AUDIENCE が未設定" }
             val opsSa = get("OPS_SA_EMAIL")?.trim().orEmpty()
             check(opsSa.isNotEmpty()) { "OPS_SA_EMAIL が未設定" }
-            return DashboardSettings(appEnv, db, opsEnv, audience, opsSa, get("RELEASE_ID"))
+            return DashboardSettings(
+                appEnv,
+                db,
+                opsEnv,
+                audience,
+                opsSa,
+                get("RELEASE_ID"),
+                HumanAuthorizer.parseList("ALLOWED_USERS", get("ALLOWED_USERS")),
+                HumanAuthorizer.parseList("ADMIN_USERS", get("ADMIN_USERS")),
+            )
         }
     }
 }

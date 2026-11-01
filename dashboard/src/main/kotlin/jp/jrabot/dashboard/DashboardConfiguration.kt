@@ -2,8 +2,11 @@ package jp.jrabot.dashboard
 
 import jp.jrabot.cloudgcp.auth.GoogleSignedTokenVerifier
 import jp.jrabot.cloudgcp.auth.InternalCallerVerifier
+import jp.jrabot.cloudgcp.auth.PersonVerifier
 import jp.jrabot.cloudgcp.ops.OpsModeProviders
 import jp.jrabot.domain.ops.InspectableModeProvider
+import jp.jrabot.domain.tenant.AppUserRepository
+import jp.jrabot.domain.tenant.HumanAuthorizer
 import jp.jrabot.domain.time.Clock
 import jp.jrabot.domain.time.SystemClock
 import jp.jrabot.persistence.PersistenceConfiguration
@@ -47,6 +50,19 @@ class DashboardConfiguration {
         dataSource: DataSource,
         info: AppBuildInfo,
     ): SchemaVersionVerifier = SchemaVersionVerifier(dataSource, info.requiredSchemaVersion)
+
+    /** 人の利用者の検証（`/api`。同じ IAP JWT の検証器で、ops SA かどうかは見ない）。テストは差し替える。 */
+    @Bean
+    fun personVerifier(
+        settings: DashboardSettings,
+        clock: Clock,
+    ): PersonVerifier = GoogleSignedTokenVerifier.iap(settings.iapAudience, settings.opsServiceAccountEmail, clock)
+
+    @Bean
+    fun humanAuthorizer(
+        settings: DashboardSettings,
+        users: AppUserRepository,
+    ): HumanAuthorizer = HumanAuthorizer(settings.allowedUsers, settings.adminUsers, users)
 
     /** `/internal` の呼び出し元の検証（CONTRACTS §11.1: IAP JWT、ES256、aud=IAP_AUDIENCE、email=OPS_SA_EMAIL）。 */
     @Bean

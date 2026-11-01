@@ -27,7 +27,8 @@ class GoogleSignedTokenVerifier private constructor(
     private val clock: Clock,
     certificatesLocation: String?,
     private val log: Logger,
-) : InternalCallerVerifier {
+) : InternalCallerVerifier,
+    PersonVerifier {
     enum class Kind(
         val algorithm: String,
         val issuers: Set<String>,
@@ -49,11 +50,18 @@ class GoogleSignedTokenVerifier private constructor(
             .also { if (certificatesLocation != null) it.setCertificatesLocation(certificatesLocation) }
             .build()
 
-    override fun verify(token: String?): CallerVerification {
+    override fun verify(token: String?): CallerVerification = verifyToken(token, requireOps = true)
+
+    override fun verifyPerson(token: String?): CallerVerification = verifyToken(token, requireOps = false)
+
+    private fun verifyToken(
+        token: String?,
+        requireOps: Boolean,
+    ): CallerVerification {
         if (token.isNullOrBlank()) return reject(RejectReason.MISSING)
         if (token.length > MAX_TOKEN_LENGTH) return reject(RejectReason.MALFORMED)
         return try {
-            check(delegate.verify(token))
+            check(delegate.verify(token), requireOps)
         } catch (_: TokenVerifier.VerificationException) {
             reject(RejectReason.INVALID)
         } catch (_: RuntimeException) {
@@ -61,7 +69,10 @@ class GoogleSignedTokenVerifier private constructor(
         }
     }
 
-    private fun check(jws: JsonWebSignature): CallerVerification {
+    private fun check(
+        jws: JsonWebSignature,
+        requireOps: Boolean,
+    ): CallerVerification {
         if (jws.header.algorithm != kind.algorithm) return reject(RejectReason.ALGORITHM)
         val payload = jws.payload
         if (payload.issuer !in kind.issuers) return reject(RejectReason.ISSUER)
@@ -72,7 +83,7 @@ class GoogleSignedTokenVerifier private constructor(
         val email = payload["email"] as? String
         if (email.isNullOrEmpty()) return reject(RejectReason.EMAIL)
         if (kind.requiresVerifiedEmail && payload["email_verified"] != true) return reject(RejectReason.EMAIL)
-        if (email != opsServiceAccountEmail) return reject(RejectReason.NOT_OPS_PRINCIPAL)
+        if (requireOps && email != opsServiceAccountEmail) return reject(RejectReason.NOT_OPS_PRINCIPAL)
         return CallerVerification.Verified(email)
     }
 
