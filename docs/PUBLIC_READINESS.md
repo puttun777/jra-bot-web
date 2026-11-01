@@ -6,7 +6,7 @@
 | 対象 | 方法 | 結果 |
 |---|---|---|
 | 現在のコード・設定・サンプル | CI の `repo-hygiene`（`.github/scripts/check-repo-hygiene.sh`）と同じ規則の手元確認、下の履歴スキャン | 追跡禁止の拡張子・PDF・jar（wrapper 以外）・2MB 超なし |
-| 全ブランチ・タグから到達可能な履歴 | 32 の ref（ローカル・リモートのブランチ。タグは 0）と PR の head 29 件を取得し、到達可能な 144 コミットを `git grep -E` で検査。パターン: 秘密鍵ヘッダ、Discord Webhook URL、AWS アクセスキー ID、Google API キー、GitHub トークン、Slack トークン、JWT 形、`"private_key":`、`sk-` 形 | **該当は秘密鍵ヘッダのみ**: `ErrorReporterTest.kt`・`test_dockerfile.py` の**ダミー文字列**（本文は 14 文字の `MIIBVQIBADANBg` 等で、鍵ではない。長い Base64 行なし）|
+| 全ブランチ・タグから到達可能な履歴 | 32 の ref（ローカル・リモートのブランチ。タグは 0）と PR の head 29 件を取得し、到達可能な 144 コミットを `git grep -E` で検査。パターン: 秘密鍵ヘッダ、Discord Webhook URL、AWS アクセスキー ID、Google API キー、GitHub トークン、Slack トークン、JWT 形、サービスアカウント鍵 JSON の private_key 項目、`sk-` 形 | **該当は秘密鍵ヘッダのみ**: `ErrorReporterTest.kt`・`test_dockerfile.py` の**ダミー文字列**（本文は 14 文字の `MIIBVQIBADANBg` 等で、鍵ではない。長い Base64 行なし）|
 | 履歴に入ったファイル名 | `git log --all --name-only` | 禁止拡張子（`.sqlite` `.db` `.pkl` `.pem` `.key` `.tfstate` `.tfvars` `.pdf` `.env` 等）は一度も追跡されていない。`.csv` 2 件は合成の ML 試験データ（`synthetic-*.csv`）、`gradle-wrapper.jar` は標準の Wrapper |
 | 大きな blob（1MB 超） | `git cat-file --batch-check` | `tools/golden/fixtures/` の合成フィクスチャ JSON 3 件（約 1.3MB）。合成入力から旧実装で生成したもの |
 | 個人情報（メール・電話・ホームディレクトリのパス） | 履歴に対する正規表現 | 個人のメールアドレスなし。コミットの作者は `noreply` 形式（`Claude`、所有者の GitHub noreply、dependabot）。電話番号形の一致は数値の試験データ（偽陽性）。`/home/<名前>/`・`C:\Users\<名前>` なし |
