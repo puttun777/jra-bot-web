@@ -261,7 +261,7 @@ def test_mode_turns_stopped_during_pacing_wait_sends_nothing(env: Env) -> None:
         orig(sec)
         env.modes.on_beacon(BeaconResult(BeaconStatus.VALID, Beacon("STOPPED", 6, "k", env.clock.now(), None)))
 
-    env.clock.sleep = sleep_then_stop  # type: ignore[method-assign]
+    env.clock.sleep = sleep_then_stop  # type: ignore[method-assign,assignment]
     r = env.sender.send_next()
     assert r.step is Step.HALTED
     assert len(env.transport.calls) == 0
