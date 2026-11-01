@@ -4,6 +4,7 @@ import jp.jrabot.cloudgcp.auth.InternalCallerVerifier
 import jp.jrabot.cloudgcp.auth.PersonVerifier
 import jp.jrabot.dashboard.api.ApiAuthFilter
 import jp.jrabot.dashboard.guard.AdminWriteGuardFilter
+import jp.jrabot.dashboard.guard.CsrfGuardFilter
 import jp.jrabot.dashboard.guard.SecurityHeadersFilter
 import jp.jrabot.dashboard.internal.InternalAuthFilter
 import jp.jrabot.domain.ops.InspectableModeProvider
@@ -20,6 +21,13 @@ class WebFilters {
         FilterRegistrationBean(SecurityHeadersFilter()).apply {
             addUrlPatterns("/*")
             order = SecurityHeadersFilter.ORDER
+        }
+
+    @Bean
+    fun csrfGuardFilter(): FilterRegistrationBean<CsrfGuardFilter> =
+        FilterRegistrationBean(CsrfGuardFilter()).apply {
+            addUrlPatterns("/*")
+            order = CsrfGuardFilter.ORDER
         }
 
     @Bean

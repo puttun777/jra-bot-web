@@ -34,7 +34,9 @@ class ApiAuthFilter(
         when (val decision = authorizer.authorize(verified.email)) {
             is AuthDecision.Allowed -> {
                 // 既定: 読取り以外（GET/HEAD/OPTIONS 以外）は管理者だけ。書込みを足すときにコントローラがロールの確認を忘れても閲覧者は通さない（レビュー A1）
-                if (request.method !in READ_METHODS && !decision.principal.isAdmin) {
+                // /api/v1/admin 以下は読取りも管理者だけ（管理用の一覧・履歴を閲覧者に見せない）
+                val adminOnly = request.method !in READ_METHODS || RequestPaths.isUnder(request.requestURI, "/api/v1/admin")
+                if (adminOnly && !decision.principal.isAdmin) {
                     log.info("api auth denied: reason=ROLE_NOT_ADMIN method={}", request.method)
                     return reject(response, HttpServletResponse.SC_FORBIDDEN, "forbidden")
                 }

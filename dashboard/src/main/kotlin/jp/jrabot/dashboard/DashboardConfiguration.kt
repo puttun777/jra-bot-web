@@ -3,6 +3,8 @@ package jp.jrabot.dashboard
 import jp.jrabot.cloudgcp.auth.GoogleSignedTokenVerifier
 import jp.jrabot.cloudgcp.ops.OpsModeProviders
 import jp.jrabot.domain.botrun.TimingNoticeStore
+import jp.jrabot.domain.calendar.CalendarOverrideRepository
+import jp.jrabot.domain.calendar.CalendarOverrideService
 import jp.jrabot.domain.ingest.PayoutStore
 import jp.jrabot.domain.ingest.ResultStore
 import jp.jrabot.domain.ops.InspectableModeProvider
@@ -83,4 +85,12 @@ class DashboardConfiguration {
         results: ResultStore,
         payouts: PayoutStore,
     ): PerformanceReadService = PerformanceReadService(schedules, signals, timings, results, payouts)
+
+    /** 手動補正（管理 API が管理者の認可・監査記録の後に呼ぶ。ドメインのサービスは認可をしない）。 */
+    @Bean
+    fun calendarOverrideService(
+        overrides: CalendarOverrideRepository,
+        schedules: RaceScheduleReader,
+        clock: Clock,
+    ): CalendarOverrideService = CalendarOverrideService(overrides, schedules, clock)
 }

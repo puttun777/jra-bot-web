@@ -35,6 +35,7 @@ import jp.jrabot.persistence.dao.AgentDaoImpl
 import jp.jrabot.persistence.dao.AgentHeartbeatDaoImpl
 import jp.jrabot.persistence.dao.AgentNonceDaoImpl
 import jp.jrabot.persistence.dao.AppUserDaoImpl
+import jp.jrabot.persistence.dao.AuditLogDaoImpl
 import jp.jrabot.persistence.dao.BotRunDaoImpl
 import jp.jrabot.persistence.dao.CalendarOverrideDaoImpl
 import jp.jrabot.persistence.dao.ComboOddsSnapshotDaoImpl
@@ -65,6 +66,7 @@ import jp.jrabot.persistence.repository.AgentRegistrar
 import jp.jrabot.persistence.repository.AgentRegistrarImpl
 import jp.jrabot.persistence.repository.AgentRepositoryImpl
 import jp.jrabot.persistence.repository.AppUserRepositoryImpl
+import jp.jrabot.persistence.repository.AuditLogWriterImpl
 import jp.jrabot.persistence.repository.BackfillStoreImpl
 import jp.jrabot.persistence.repository.BotRunRepositoryImpl
 import jp.jrabot.persistence.repository.CalendarOverrideRepositoryImpl
@@ -274,6 +276,13 @@ class PersistenceConfiguration {
         tx: TransactionOperations,
         clock: Clock,
     ): ResultStore = ResultStoreImpl(ResultDaoImpl(config), tx, clock)
+
+    /** 管理操作の監査記録（追記専用）。 */
+    @Bean
+    fun auditLogWriter(
+        config: Config,
+        tx: TransactionOperations,
+    ): jp.jrabot.domain.audit.AuditLogWriter = AuditLogWriterImpl(AuditLogDaoImpl(config), tx)
 
     /** 保持期間を過ぎた行の件数と削除（retention。ドライランが既定）。 */
     @Bean

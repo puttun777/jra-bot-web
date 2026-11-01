@@ -32,9 +32,9 @@
 | R17 | retention（F14/F16: 保持期間の削除。**既定はドライラン**、削除は `RETENTION_EXECUTE=true` の明示） | `domain/retention`、`persistence/RetentionDao`、`bot/RetentionTaskHandler` | `bot --task=retention`（DELETE 権限は V5 で付与済み） | 単体 + MySQL 通し試験（ドライラン・削除・テナント分離・冪等） | **A**（実データの削除の実行は本人の承認事項。単勝オッズの間引きは未実装 = 別の判断） |
 | R18 | 人の認証・認可（IAP JWT・許可リスト・ロール・deny by default） | `HumanAuthorizer`、`ApiAuthFilter` | dashboard `/api/**` | 単体 + Tomcat 統合 | **A**（実 IAP の `aud` は B: G-OPS-7） |
 | R19 | ダッシュボード UI（日本語・レスポンシブ・bot 状態・次回予定・最終更新・未更新表示・シグナル/成績/運用画面） | `dashboard/src/main/resources/static`（HTML/CSS/JS。D-243） | `/`（IAP の内側） | 静的検査（インライン script・外部 CDN・innerHTML なし）。**ブラウザでの目視確認は未実施（B）** | **A（実装）/ B（実機の目視）**。バックテスト画面・馬詳細・グラフは未実装（C） |
-| R20 | 管理操作（手動補正・エージェント失効・モデル有効化）+ CSRF + 監査ログ | `AdminWriteGuardFilter`（ガードのみ） | — | — | **C** |
+| R20 | 管理操作 + CSRF + 監査ログ | `AdminApi`（手動補正の作成・取消・一覧）、`CsrfGuardFilter`、`AuditLogWriter`（`audit_log` 追記専用）、`ApiAuthFilter`（`/api/v1/admin` は読取りも ADMIN）、`AdminWriteGuardFilter`（NORMAL 以外は 409） | `/api/v1/admin/**`（`app` ユーザー: calendar_override・audit_log の INSERT） | 単体（作成/取消/400/404/409/監査の記録と失敗/CSRF の拒否）+ MySQL（監査の追記・UPDATE/DELETE 不可）は CI | **A（手動補正）/ C（エージェント失効）**。ML モデルの有効化は R22（B） |
 | R21 | ML 学習 Job・推論・モデル署名・ゲート・レジストリ（F10/F11/F12） | `ml/`、`domain/ml`、`:bot` | GCS model-store | pytest 128 + Kotlin/Python 結合 5 | **A**（実モデル・実データでの学習は B: T1.20/T1.21） |
-| R22 | ML 管理 UI（有効化・メトリクス表示） | — | — | — | **C**（R19/R20 に含む） |
+| R22 | ML 管理 UI（有効化・メトリクス表示） | — | — | — | **B**（有効化は品質ゲートの閾値が未承認〔CLAUDE.md: 未承認の数値仕様・品質閾値の有効化は本人判断〕。表示だけなら C） |
 | R23 | DB スキーマ・Flyway V1〜V5・GRANT・複数 MySQL 版 | `:db-migration` | MySQL 8.4/9.7 | 統合 49 + CI | **A**（本番 DB への適用は B） |
 | R24 | SQLite → MySQL のデータ移行ツール（F16、`DATA_MIGRATION_DESIGN`） | `tools/migrate/`（未作成） | 旧 SQLite のコピー | — | **C**（実データの投入は B。ツールは合成 SQLite で検証） |
 | R25 | 運用モード（NORMAL/STOPPED）の読取りと全アプリでの遵守、ビーコン | `:cloud-gcp`、各アプリ | GCS | 単体 + 統合 | **A**（実 GCS は B: G-OPS-*） |

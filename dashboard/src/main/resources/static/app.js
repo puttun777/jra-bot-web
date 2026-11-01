@@ -103,7 +103,40 @@ async function loadRuns() {
     show(box, table(['開始', '終了', '起動', '状態', '理由'], rows.map((r) => [fmtDateTime(r.startedAt), fmtDateTime(r.finishedAt), r.trigger, RUN[r.state] || r.state, r.exitReason || '—'])));
   } catch (e) { show(box, el('div', e.message, 'error')); }
 }
-const LOADERS = { overview: loadRaces, signals: loadSignals, performance: loadPerformance, ops: loadRuns };
+async function post(path, body) {
+  const res = await fetch(path, { method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'jrabot-dashboard' }, body: JSON.stringify(body || {}) });
+  if (!res.ok) throw new Error(res.status === 409 ? '操作できません（停止中、または既に取消済み／重複しています）。' : res.status === 404 ? '対象が見つかりません。' : res.status === 400 ? '入力が正しくありません。' : failure(res));
+  return res.json();
+}
+async function loadOverrides() {
+  const box = $('overrides');
+  try {
+    const rows = await api('/api/v1/admin/overrides' + q());
+    if (!rows.length) return show(box, empty('この日の手動補正はありません。'));
+    const t = table(['作成', '対象', '操作', '理由', '作成者', '状態', ''], rows.map((o) => [fmtDateTime(o.createdAt), o.raceId || o.date, o.action, o.reason, o.createdBy, o.revokedAt ? '取消済み' : '有効', '']));
+    t.querySelectorAll('tbody tr').forEach((tr, i) => {
+      if (rows[i].revokedAt) return;
+      const b = el('button', '取消'); b.type = 'button';
+      b.addEventListener('click', async () => { if (!confirm('この補正を取り消しますか？')) return; try { await post('/api/v1/admin/overrides/' + rows[i].id + '/revoke'); loadOverrides(); } catch (e) { $('o-msg').textContent = e.message; } });
+      tr.lastChild.appendChild(b);
+    });
+    show(box, t);
+  } catch (e) { show(box, el('div', e.message, 'error')); }
+}
+async function initAdmin() {
+  try {
+    const me = await api('/api/v1/me');
+    if (me.role !== 'ADMIN') return;
+    $('admin').hidden = false;
+    $('override-form').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const body = { scope: $('o-scope').value, action: $('o-action').value, date: $('date').value, raceId: $('o-race').value || null, postAt: $('o-postat').value || null, postponedTo: $('o-postponed').value || null, reason: $('o-reason').value };
+      try { await post('/api/v1/admin/overrides', body); $('o-msg').textContent = '追加しました。'; $('o-reason').value = ''; loadOverrides(); } catch (e) { $('o-msg').textContent = e.message; }
+    });
+    loadOverrides();
+  } catch (e) { /* 権限が無い・通信できない場合は管理 UI を出さない */ }
+}
+const LOADERS = { overview: loadRaces, signals: loadSignals, performance: loadPerformance, ops: () => { loadRuns(); if (!$('admin').hidden) loadOverrides(); } };
 function refresh() { loadStatus(); LOADERS[state.tab](); }
 function select(tab) {
   state.tab = tab;
@@ -118,6 +151,6 @@ document.addEventListener('DOMContentLoaded', () => {
   $('from').addEventListener('change', loadPerformance); $('to').addEventListener('change', loadPerformance);
   $('prev').addEventListener('click', () => { state.page = Math.max(0, state.page - 1); loadSignals(); });
   $('next').addEventListener('click', () => { state.page += 1; loadSignals(); });
-  loadStatus().then(() => LOADERS.overview());
+  loadStatus().then(() => { LOADERS.overview(); initAdmin(); });
   setInterval(() => { if (document.visibilityState === 'visible') loadStatus(); }, 60000);
 });

@@ -40,6 +40,23 @@
   <section id="ops" class="tab" hidden>
     <h2>運用</h2>
     <div id="runs" class="table-wrap"></div>
+    <div id="admin" hidden>
+      <h2>手動補正（管理者のみ・監査記録に残ります）</h2>
+      <div id="overrides" class="table-wrap"></div>
+      <form id="override-form" autocomplete="off">
+        <label>対象 <select id="o-scope"><option value="RACE">レース</option><option value="DAY">開催日</option></select></label>
+        <label>操作 <select id="o-action">
+          <option value="CANCEL">中止</option><option value="SET_POST_TIME">発走時刻を設定</option><option value="MARK_NO_RACE">開催なし</option>
+          <option value="MARK_RACE_DAY">開催あり</option><option value="POSTPONE_TO">延期</option><option value="ALLOW_RUN">実行を許可</option><option value="DENY_RUN">実行を禁止</option>
+        </select></label>
+        <label>レース ID <input id="o-race" placeholder="202610240511" inputmode="numeric" maxlength="12"></label>
+        <label>発走時刻（UTC, ISO） <input id="o-postat" placeholder="2026-10-24T06:30:00Z"></label>
+        <label>延期先 <input type="date" id="o-postponed"></label>
+        <label>理由（必須） <input id="o-reason" maxlength="500" required></label>
+        <button type="submit">補正を追加</button>
+        <span id="o-msg" class="note" role="status"></span>
+      </form>
+    </div>
   </section>
 </main>
 </body>
