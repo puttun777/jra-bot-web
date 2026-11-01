@@ -100,8 +100,9 @@ class AgentAuthIntegrationTest {
         val replay = it.post(it.one, "/v1/agent/ingest", body, nonce = n)
         assertEquals(401, replay.status)
         assertEquals(1, it.count("SELECT COUNT(*) FROM agent_nonce WHERE nonce = '$n'"))
-        assertEquals(401, it.post(it.one, "/v1/agent/ingest", body, tsOffsetSec = -301).status)
-        assertEquals(401, it.post(it.one, "/v1/agent/ingest", body, tsOffsetSec = 301).status)
+        // 許容は 300 秒。境界(301)は ts を秒に切り捨てるため、遅い実行でちょうど 300 秒以内に入って 200 になることがある（flaky）。余裕を持たせて 310 にする
+        assertEquals(401, it.post(it.one, "/v1/agent/ingest", body, tsOffsetSec = -310).status)
+        assertEquals(401, it.post(it.one, "/v1/agent/ingest", body, tsOffsetSec = 310).status)
         // 同じ nonce を同時に 6 本: 通るのは 1 本だけ
         val n2 = it.nonce()
         val results = runConcurrently(6) { _ -> it.post(it.one, "/v1/agent/heartbeat", it.bytes(mapOf("agentVersion" to "1.0.0")), nonce = n2).status }
