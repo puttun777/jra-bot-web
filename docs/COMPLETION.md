@@ -1,6 +1,6 @@
 # COMPLETION（完成条件一覧と現在の状態）
 
-最終更新: 2026-11-01（main = f9c61af + 作業ブランチ）。**この表が『開発全体が終わったか』の判定の正本。** 他の文書（PROGRESS の履歴・PLAN のチェック項目）と食い違ったら、コード・PR・検証結果と突合してこちらを直す。
+最終更新: 2026-11-01（web main = f35c167、infra main = e21e9e4）。**この表が『開発全体が終わったか』の判定の正本。** 他の文書（PROGRESS の履歴・PLAN のチェック項目）と食い違ったら、コード・PR・検証結果と突合してこちらを直す。
 要件の出典: `REQUIREMENTS.md` §3〜§5、`MIGRATION_MATRIX.md` §1（F01〜F26）、`PLAN.md`、`UNRESOLVED.md`。
 
 ## 区分
@@ -22,12 +22,12 @@
 | R7 | 結果・払戻の取込（F15 前半） | `ObservationApplier`、`ResultStore`/`PayoutStore` | MySQL（`results`/`payouts`） | 統合試験（合成レコード NRS/NHR） | **A**（実データ形式は R5） |
 | R8 | 判定（EV/Kelly/確率/ワイド/三連複/買い目）（F05〜F09） | `domain/decision` | bot-run | 旧実装とのゴールデン 34 ケース全一致 | **A** |
 | R9 | bot-run: 監視・評価・通知タイミングの確定・Discord 通知（F13/F14/F24） | `domain/botrun`、`bot/` | Discord Webhook | 単体 + MySQL 統合 + Fake HTTP | **A**（実 Discord は B: `USER_ACTIONS`） |
-| R10 | bot-run: 発走後の結果待ち・開催日の進行（RUNNING→SETTLING→COMPLETED/INCOMPLETE）・履歴 | `BotRunOrchestrator.settleCycle`、`RaceDayAdvancerImpl` | `race_day`/`race_schedule_event` | 単体（12 件）。MySQL 統合は **C**（次の増分） | **A（単体）/ C（統合）** |
+| R10 | bot-run: 発走後の結果待ち・開催日の進行（RUNNING→SETTLING→COMPLETED/INCOMPLETE）・履歴 | `BotRunOrchestrator.settleCycle`、`RaceDayAdvancerImpl` | `race_day`/`race_schedule_event` | 単体 + **MySQL 通し**（`BotRunOrchestratorIntegrationTest`） | **A** |
 | R11 | レース単位の状態（MONITORING/OFF/RESULT_*/SETTLED）の永続化と履歴 | — | — | — | **B**（任意。履歴の粒度のために `event_type` へ `STATUS` を足す V6。`docs/V6_PROPOSAL.md` に最終 SQL・影響・検証を準備済みで承認待ち。無くても導出表示で動く） |
-| R12 | reconcile（F15）: INCOMPLETE/異常終了の回復・冪等・排他 | `ReconcileService`、`ReconcileTaskHandler` | `race_day` | 単体 6 件 | **A（単体）/ C（MySQL 統合）** |
+| R12 | reconcile（F15）: INCOMPLETE/異常終了の回復・冪等・排他 | `ReconcileService`、`ReconcileTaskHandler` | `race_day` | 単体 + **MySQL 通し**（`ReconcileIntegrationTest`） | **A** |
 | R13 | 決済の計算（単勝）・紙上成績・代表集計（F15/F20） | `domain/performance`、`domain/settlement` | （読取り API は R15） | 単体 + 旧実装ゴールデン | **A（計算）** |
 | R14 | ワイド・三連複の紙上決済（通知スナップショットの買い目 × 確定払戻）と賭式別の代表集計 | `domain/performance/ComboPaperSettlement`（純粋関数。DB に書かない: D-234） | 読取り API（R15）から呼ぶ | 単体 8（同着・速報・二重計上・発走後の除外・キー読取り） | **A（計算）/ C（API への接続は R15）**。旧のワイド判定との差異は E17 |
-| R15 | 成績・シグナル・買い目・結果の読取り API（DTO・絞り込み・ページング） | `:dashboard` `ReadApi`（`/api/v1/status|runs|races|signals|performance`。GET のみ・テナントは本人の行から・入力検査 400・no-store） | `app` ユーザー（SELECT のみ）→ MySQL | 単体 6（テナント分離・ページング・400・未更新判定）。**MySQL 実接続の通し試験は未作成（C）** | **A（API）/ C（MySQL 通し）**。買い目の個別一覧・馬単位の詳細は未実装 |
+| R15 | 成績・シグナル・買い目・結果の読取り API（DTO・絞り込み・ページング） | `:dashboard` `ReadApi`（`/api/v1/status|runs|races|signals|performance`。GET のみ・テナントは本人の行から・入力検査 400・no-store） | `app` ユーザー（SELECT のみ）→ MySQL | 単体 6（テナント分離・ページング・400・未更新判定）+ **MySQL 通し 4（`ReadAdminApiMySqlIntegrationTest`: 読取り・他テナントの races/signals が見えない・管理者の補正と監査記録の両方が DB に残る・閲覧者 403 で補正も監査も増えない。**監査失敗時のロールバック（同一トランザクション）は単体の偽トランザクション試験〈AdminApiTest〉でのみ確認し、実 MySQL では未検証。performance/status/管理 API 読取りのテナント分離と、他テナント側にデータを入れた逆方向も未試験**。ローカル MySQL 8.4 で成功・CI の dashboard 統合 verify に組込み）** | **A（API + MySQL 通し）**。買い目の個別一覧・馬単位の詳細は未実装 |
 | R16 | バックテスト（F20）: 保存済みデータ・未来情報の遮断・除外件数/率 | `domain/backtest/BacktestRunner`（純粋な計算。DB に書かない: D-234） | 管理 API（R15/R20）から呼ぶ | 単体 5（未来のオッズを渡さない・理由別の除外件数と率・二重計上なし） | **A（計算）/ C（API への接続は R15）**。実データでの検証は B |
 | R17 | retention（F14/F16: 保持期間の削除。**既定はドライラン**、削除は `RETENTION_EXECUTE=true` の明示） | `domain/retention`、`persistence/RetentionDao`、`bot/RetentionTaskHandler` | `bot --task=retention`（DELETE 権限は V5 で付与済み） | 単体 + MySQL 通し試験（ドライラン・削除・テナント分離・冪等） | **A**（実データの削除の実行は本人の承認事項。単勝オッズの間引きは未実装 = 別の判断） |
 | R18 | 人の認証・認可（IAP JWT・許可リスト・ロール・deny by default） | `HumanAuthorizer`、`ApiAuthFilter` | dashboard `/api/**` | 単体 + Tomcat 統合 | **A**（実 IAP の `aud` は B: G-OPS-7） |
@@ -39,12 +39,12 @@
 | R24 | SQLite → MySQL のデータ移行ツール（F16、`DATA_MIGRATION_DESIGN`） | `tools/migrate/`（未作成） | 旧 SQLite のコピー | — | **C**（実データの投入は B。ツールは合成 SQLite で検証） |
 | R25 | 運用モード（NORMAL/STOPPED）の読取りと全アプリでの遵守、ビーコン | `:cloud-gcp`、各アプリ | GCS | 単体 + 統合 | **A**（実 GCS は B: G-OPS-*） |
 | R26 | CI・事前検証・イメージ・release-manifest | `.github/`、`tools/ci`、`tools/release` | GitHub Actions | CI + `tools.ci.preflight` | **A** |
-| R27 | Terraform（基盤・WIF・ネットワーク・IAM・Secret・AR・Cloud Run・Jobs・Cloud SQL・Scheduler・IAP） | `jra-bot-infra`（未作成） | GCP | — | **C**（apply は B） |
-| R28 | deploy / start / stop / status workflow・排他・部分失敗・安全な再実行 | `jra-bot-infra/.github/workflows`（未作成） | GCP | — | **C** |
-| R29 | 監視・アラート・予算・ロールバック・バックアップ復旧・鍵更新の手順 | infra docs / `OPERATIONS.md` | — | — | **C** |
-| R30 | 合成データの全体統合試験（取得側→ingest→DB→判定→Fake 通知→結果→成績） | `:bot` 統合試験 | MySQL | — | **C** |
-| R31 | 旧新比較の総合（意図した差異・旧欠陥の整理）`TEST_RESULTS.md` | docs | — | ゴールデン + 差異表（E1〜E16） | **C**（文書化） |
-| R32 | `OPERATIONS.md`・初期導入・移行手順・本人の最終確認チェックリスト | docs | — | — | **C** |
+| R27 | Terraform（基盤・WIF・ネットワーク・IAM・Secret・AR・Cloud Run・Jobs・Cloud SQL・Scheduler・IAP） | `jra-bot-infra/terraform`（PR #4・#6） | GCP | `fmt/validate/test`（mock 17）。**実 plan は未実施** | **A（コード）/ B（apply・実 plan）** |
+| R28 | deploy / start / stop / status workflow・排他・部分失敗・安全な再実行 | `jra-bot-infra/.github/workflows` + `ops/`（PR #4） | GCP | ops 単体 77（偽 GCP）。**GitHub 上の実行は未実施** | **A（コード）/ B（実行）** |
+| R29 | 監視・アラート・予算・ロールバック・バックアップ復旧・鍵更新の手順 | infra `docs/OPERATIONS.md`、`terraform/monitoring.tf` | — | 文書 + mock | **A（文書・コード）/ B（予算は本人の設定）** |
+| R30 | 合成データの全体統合試験（取得側→ingest→DB→判定→Fake通知→結果→成績） | `BotRunOrchestratorIntegrationTest` の通し + ingest 統合 + agent 相互運用 | MySQL | `TEST_RESULTS.md` §2 | **A（段ごと）/ C（HTTP から bot までを 1 本にした試験は未作成。モジュール間依存の禁止による）** |
+| R31 | 旧新比較の総合（意図した差異・旧欠陥の整理）`TEST_RESULTS.md` | `docs/TEST_RESULTS.md`、MIGRATION_MATRIX E1〜E17 | — | ゴールデン + 差異表 | **A** |
+| R32 | `OPERATIONS.md`・初期導入・移行手順・本人の最終確認チェックリスト | web `OPERATIONS.md`・`USER_ACTIONS.md`、infra `OPERATIONS.md` | — | — | **A（文書）**。移行手順は R24 の実装後に具体化 |
 
 ## 本人の判断・操作が必要なもの（B のまとめ。包括委任の対象外）
 | 項目 | 不足している情報・必要な操作 | 準備状況 |

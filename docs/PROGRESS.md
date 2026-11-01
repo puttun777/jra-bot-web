@@ -1,6 +1,7 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-11-01（T3.9③・reconcile・preflight・infra PR #4。判定の正本は COMPLETION.md）
+最終更新: 2026-11-01 夜（web PR #30〜#33・infra PR #3/#4/#6 はマージ済み。残りは wip/final の TEST_RESULTS.md・D-247・R15 の MySQL 通し試験〈ReadAdminApiMySqlIntegrationTest〉。検証: ktlintCheck 成功、当該 4 試験は MySQL 8.4 で成功（ローカル）。それ以外の統合試験は CI で確認。再開手順: 本ブランチの PR の CI 結果を確認→失敗ジョブのログだけ読む→マージ条件を満たせばマージ→COMPLETION.md の C/B 項目を最終報告。判定の正本は COMPLETION.md）
+旧: 2026-11-01（T3.9③・reconcile・preflight・infra PR #4）
 旧: 2026-10-30（保留の再適用のレビュー・公開準備。D-229。CI 未実施）
 旧: 2026-10-29（追加レビュー 2: リース継続・保留の再適用・G-31 の null・T3.9 設計の訂正〈D-224〜D-228〉。同ブランチ。CI 未実施。PR なし）
 旧: 2026-10-29（追加レビュー・ML 連携の実行・T3.9 の詳細設計。同ブランチ。CI 未実施）

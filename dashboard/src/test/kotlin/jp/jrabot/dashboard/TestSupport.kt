@@ -128,6 +128,7 @@ class Http(
         bearer: String? = null,
         headers: Map<String, String> = emptyMap(),
         csrf: Boolean = true,
+        body: String = "{}",
     ): Resp {
         val b = HttpRequest.newBuilder(URI.create("http://127.0.0.1:$port$rawPath")).timeout(Duration.ofSeconds(30))
         if (bearer != null) b.header("X-Goog-IAP-JWT-Assertion", bearer)
@@ -137,7 +138,7 @@ class Http(
             b.header("Content-Type", "application/json")
         }
         headers.forEach { (k, v) -> b.header(k, v) }
-        b.method(method, if (method in setOf("POST", "PUT", "PATCH")) HttpRequest.BodyPublishers.ofString("{}") else HttpRequest.BodyPublishers.noBody())
+        b.method(method, if (method in setOf("POST", "PUT", "PATCH")) HttpRequest.BodyPublishers.ofString(body) else HttpRequest.BodyPublishers.noBody())
         val r = client.send(b.build(), HttpResponse.BodyHandlers.ofString())
         return Resp(r.statusCode(), r.body(), r.headers().map())
     }
