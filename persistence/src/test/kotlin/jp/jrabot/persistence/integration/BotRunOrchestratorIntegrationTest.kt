@@ -10,20 +10,26 @@ import jp.jrabot.domain.botrun.MlRunContext
 import jp.jrabot.domain.botrun.Pacer
 import jp.jrabot.domain.botrun.PollingIntervals
 import jp.jrabot.domain.botrun.RaceCycleProcessor
+import jp.jrabot.domain.botrun.RaceDayAdvancerImpl
 import jp.jrabot.domain.botrun.RaceEntryReader
 import jp.jrabot.domain.botrun.RaceEvaluationWriter
+import jp.jrabot.domain.botrun.ResultWaitConfig
 import jp.jrabot.domain.botrun.RunExit
 import jp.jrabot.domain.botrun.RunRequest
 import jp.jrabot.domain.botrun.SignalNotifiedProbe
 import jp.jrabot.domain.botrun.SnapshotPolicy
+import jp.jrabot.domain.botrun.StoreResultAvailability
 import jp.jrabot.domain.botrun.TightenMode
 import jp.jrabot.domain.botrun.testing.ManualClock
 import jp.jrabot.domain.botrun.testing.StubJudge
 import jp.jrabot.domain.calendar.CalendarSettings
 import jp.jrabot.domain.calendar.RaceDayStatus
+import jp.jrabot.domain.calendar.RaceDayUpdater
 import jp.jrabot.domain.calendar.ScheduleFetchFactReader
 import jp.jrabot.domain.calendar.WatchSettings
 import jp.jrabot.domain.decision.WinDecisionConfig
+import jp.jrabot.domain.ingest.PayoutRow
+import jp.jrabot.domain.ingest.ResultEntry
 import jp.jrabot.domain.ml.features.FeatureSource
 import jp.jrabot.domain.notify.DeliveryResult
 import jp.jrabot.domain.notify.ErrorReporter
@@ -31,8 +37,10 @@ import jp.jrabot.domain.notify.MentionPolicy
 import jp.jrabot.domain.notify.NotificationOrigin
 import jp.jrabot.domain.notify.Notifier
 import jp.jrabot.domain.notify.SignalNotificationDispatcher
+import jp.jrabot.domain.odds.Market
 import jp.jrabot.domain.ops.ModeProvider
 import jp.jrabot.domain.ops.OpsMode
+import jp.jrabot.domain.performance.PerformanceReadService
 import jp.jrabot.domain.race.RaceScheduleStatus
 import jp.jrabot.domain.signal.NotificationState
 import org.junit.jupiter.api.AfterAll
@@ -108,9 +116,10 @@ class BotRunOrchestratorIntegrationTest {
         start: Instant = Instant.parse("2026-10-24T04:40:00Z"), // JST 13:40（起動可 13:30〜）
         origin: NotificationOrigin = NotificationOrigin.LIVE,
         owner: String = "owner-1",
+        resultWait: ResultWaitConfig? = null,
     ): jp.jrabot.domain.botrun.RunOutcome {
         val clock = ManualClock(start)
-        val cfg = config()
+        val cfg = config().copy(resultWait = resultWait)
         val modes = ModeProvider { OpsMode.NORMAL }
         val signals = bot.signals
         val dispatcher = SignalNotificationDispatcher(signals, notifier, modes, clock, MentionPolicy.NONE)
@@ -125,6 +134,11 @@ class BotRunOrchestratorIntegrationTest {
                 postAt
             ) {
                 seed.odds.upsert(Fixtures.odds(raceId = raceId, observedAt = clock.now(), values = arrayOf(1 to 1.2, 2 to 8.0, 3 to 12.0)))
+            }
+            // 取込側が結果・確定払戻を保存する（発走の 35 分後）。2 番が 1 着、単勝 800 円
+            if (resultWait != null && !clock.now().isBefore(postAt.plus(Duration.ofMinutes(35))) && seed.results.list(T1, raceId).isEmpty()) {
+                seed.results.upsertAll(T1, raceId, listOf(ResultEntry(2, 1), ResultEntry(1, 2), ResultEntry(3, 3), ResultEntry(4, 4)))
+                seed.payouts.upsertAll(T1, raceId, Market.WIN, listOf(PayoutRow("02", 800.0)), provisional = false)
             }
         }
         val orchestrator =
@@ -165,6 +179,8 @@ class BotRunOrchestratorIntegrationTest {
                         feed()
                     },
                 stopRequested = { false },
+                availability = StoreResultAvailability(bot.results, bot.payouts),
+                advancer = RaceDayAdvancerImpl(bot.raceDays, RaceDayUpdater(bot.raceDays, clock)),
             )
         feed()
         return orchestrator.run(RunRequest(T1, Fixtures.DATE, BotRunTrigger.SCHEDULER, origin, owner, RunId.of(UUID.randomUUID())))
@@ -192,6 +208,26 @@ class BotRunOrchestratorIntegrationTest {
             2,
             db.count("SELECT COUNT(*) FROM race_timing_notice WHERE JSON_VALID(notice_json) AND notice_schema = 1 AND CHAR_LENGTH(notice_sha256) = 64"),
         )
+    }
+
+    @Test
+    fun `通し — 監視と通知のあと結果と払戻の取込を待ち 開催日が完了し 紙上成績が MySQL 上で計算できる`() {
+        val out = run(resultWait = ResultWaitConfig(Duration.ofMinutes(30), Duration.ofMinutes(5)))
+        assertEquals("ALL_SETTLED", out.reason)
+        assertEquals(BotRunState.SUCCEEDED, out.state)
+        assertEquals("COMPLETED", db.scalar("SELECT status FROM race_day"))
+        // 履歴: RUNNING → SETTLING → COMPLETED が SYSTEM の DAY_STATUS として残る（最小権限の bot ユーザーで INSERT できた）
+        assertEquals(3, db.count("SELECT COUNT(*) FROM race_schedule_event WHERE event_type = 'DAY_STATUS' AND source = 'SYSTEM'"))
+        val service =
+            PerformanceReadService(bot.schedules, bot.signals, bot.bean(jp.jrabot.domain.botrun.TimingNoticeStore::class.java), bot.results, bot.payouts)
+        val r = service.report(T1, Fixtures.DATE, Fixtures.DATE)
+        // StubJudge は 2 番（推奨額 3・オッズ 8）と 4 番（推奨額 1）を推奨し、30 分前と 5 分前の 2 回通知する。代表集計は馬ごとに発走前の最新 1 件
+        assertEquals(2, r.win.count)
+        assertEquals(1, r.win.hits)
+        assertEquals(4.0, r.win.totalStake)
+        assertEquals(3.0 * 800.0 / 100.0, r.win.actualPayout)
+        assertEquals(3.0 * 8.0, r.win.paperPayout)
+        assertEquals(0, r.winUnsettled)
     }
 
     @Test

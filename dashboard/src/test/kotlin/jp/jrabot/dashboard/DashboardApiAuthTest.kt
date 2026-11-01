@@ -75,6 +75,50 @@ class DashboardApiAuthTest {
     }
 
     @Test
+    fun `実際の配線で 管理者の書込みでも CSRF の条件（カスタムヘッダ・JSON・同一オリジン）を満たさなければ 403`() {
+        val admin = TestAuth.human("me@example.com")
+        // CSRF フィルタが登録から消えると、ヘッダ無しの書込みが認可を通ってしまう（404/405/409）。それを検出する
+        val noHeader = http.send("POST", "/api/v1/admin/overrides", admin, csrf = false, headers = mapOf("Content-Type" to "application/json"))
+        assertEquals(403, noHeader.status)
+        assertEquals("""{"error":"csrf"}""", noHeader.body)
+        assertEquals(
+            403,
+            http
+                .send(
+                    "POST",
+                    "/api/v1/admin/overrides",
+                    admin,
+                    csrf = false,
+                    headers =
+                        mapOf(
+                            "X-Requested-With" to "jrabot-dashboard",
+                            "Content-Type" to "application/x-www-form-urlencoded",
+                        ),
+                ).status,
+            "フォーム形式",
+        )
+        assertEquals(403, http.send("POST", "/api/v1/admin/overrides", admin, headers = mapOf("Origin" to "https://evil.example")).status, "別オリジン")
+        assertEquals(403, http.send("POST", "/api/v1/admin/overrides", admin, headers = mapOf("Sec-Fetch-Site" to "cross-site")).status, "別サイト")
+        // 条件を満たせば CSRF では止まらない（本文が空の JSON なので入力不正 400 か、モード等。403 ではない）
+        assertTrue(http.send("POST", "/api/v1/admin/overrides", admin).status != 403)
+    }
+
+    @Test
+    fun `管理 API は読取りも管理者だけ 閲覧者は 403 で パスの細工でも回避できない`() {
+        val viewer = TestAuth.human("viewer@example.com")
+        for (path in listOf(
+            "/api/v1/admin/overrides",
+            "/api/v1//admin/overrides",
+            "/api/v1/admin;x=1/overrides",
+            "/api/v1/%61dmin/overrides",
+            "/api/v1/./admin/overrides",
+        )) {
+            assertEquals(403, http.send("GET", path, viewer).status, path)
+        }
+        assertTrue(http.send("GET", "/api/v1/admin/overrides", TestAuth.human("me@example.com")).status != 403, "管理者は認可を通る")
+    }
+
+    @Test
     fun `403 と 401 の本文に理由や値を出さない`() {
         val r = me("stranger@example.com")
         assertEquals("""{"error":"forbidden"}""", r.body)

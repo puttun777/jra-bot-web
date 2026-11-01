@@ -125,6 +125,7 @@ class SqlTemplateTenantGuardTest {
                 "RaceScheduleDao",
                 "RaceTimingNoticeDao",
                 "ResultDao",
+                "RetentionDao",
                 "ScheduleEventDao",
                 "SignalDao",
             ),

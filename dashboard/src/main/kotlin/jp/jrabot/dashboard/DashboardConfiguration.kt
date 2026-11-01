@@ -2,7 +2,15 @@ package jp.jrabot.dashboard
 
 import jp.jrabot.cloudgcp.auth.GoogleSignedTokenVerifier
 import jp.jrabot.cloudgcp.ops.OpsModeProviders
+import jp.jrabot.domain.botrun.TimingNoticeStore
+import jp.jrabot.domain.calendar.CalendarOverrideRepository
+import jp.jrabot.domain.calendar.CalendarOverrideService
+import jp.jrabot.domain.ingest.PayoutStore
+import jp.jrabot.domain.ingest.ResultStore
 import jp.jrabot.domain.ops.InspectableModeProvider
+import jp.jrabot.domain.performance.PerformanceReadService
+import jp.jrabot.domain.race.RaceScheduleReader
+import jp.jrabot.domain.signal.SignalReader
 import jp.jrabot.domain.tenant.AppUserRepository
 import jp.jrabot.domain.tenant.EmailAddress
 import jp.jrabot.domain.tenant.HumanAuthorizer
@@ -67,4 +75,22 @@ class DashboardConfiguration {
         settings: DashboardSettings,
         clock: Clock,
     ): GoogleSignedTokenVerifier = GoogleSignedTokenVerifier.iap(settings.iapAudience, settings.opsServiceAccountEmail, clock)
+
+    /** 紙上成績の読取り（保存せず毎回計算: D-234）。`app` ユーザーの SELECT だけで動く。 */
+    @Bean
+    fun performanceReadService(
+        schedules: RaceScheduleReader,
+        signals: SignalReader,
+        timings: TimingNoticeStore,
+        results: ResultStore,
+        payouts: PayoutStore,
+    ): PerformanceReadService = PerformanceReadService(schedules, signals, timings, results, payouts)
+
+    /** 手動補正（管理 API が管理者の認可・監査記録の後に呼ぶ。ドメインのサービスは認可をしない）。 */
+    @Bean
+    fun calendarOverrideService(
+        overrides: CalendarOverrideRepository,
+        schedules: RaceScheduleReader,
+        clock: Clock,
+    ): CalendarOverrideService = CalendarOverrideService(overrides, schedules, clock)
 }

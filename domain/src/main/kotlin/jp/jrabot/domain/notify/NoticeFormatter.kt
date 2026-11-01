@@ -174,7 +174,7 @@ object NoticeFormatter {
         for (stype in listOf("単勝", "ワイド", "三連複")) {
             val agg = strategies[stype] ?: continue
             shown += agg
-            val tickets = NoticeTickets.deduplicated(ticketsByType[stype].orEmpty()).sortedByDescending { it.ev }.take(MAX_TICKETS)
+            val tickets = NoticeTickets.displayed(ticketsByType[stype].orEmpty())
             sb.append("\n**${esc(stype)}:**\n")
             sb.append("  推奨投資額：**${f1(agg.suggestedBet)}点**\n")
             sb.append("  期待利益：**${signed1(agg.expectedProfit)}点**\n")
@@ -226,6 +226,12 @@ object NoticeFormatter {
 }
 
 object NoticeTickets {
+    /** 通知の本文に実際に載せる買い目の上限（賭式ごと）。 */
+    const val MAX_DISPLAYED = 6
+
+    /** 通知の本文に載せる買い目の選び方（重複除去 → EV 降順 → 上位 [MAX_DISPLAYED] 点）。成績の集計も同じ選び方にそろえる（実際に通知した買い目だけを数える）。 */
+    fun displayed(tickets: List<TicketView>): List<TicketView> = deduplicated(tickets).sortedByDescending { it.ev }.take(MAX_DISPLAYED)
+
     /** 旧 `_deduplicate_tickets`: `[BOX]` の有無を無視して同じ組合せを 1 つにし、EV が厳密に大きい方を残す（同値は先のもの。順序は初出順）。 */
     fun deduplicated(tickets: List<TicketView>): List<TicketView> {
         val seen = LinkedHashMap<String, TicketView>()

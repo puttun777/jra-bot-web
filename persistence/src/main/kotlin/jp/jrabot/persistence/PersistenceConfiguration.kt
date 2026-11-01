@@ -35,6 +35,7 @@ import jp.jrabot.persistence.dao.AgentDaoImpl
 import jp.jrabot.persistence.dao.AgentHeartbeatDaoImpl
 import jp.jrabot.persistence.dao.AgentNonceDaoImpl
 import jp.jrabot.persistence.dao.AppUserDaoImpl
+import jp.jrabot.persistence.dao.AuditLogDaoImpl
 import jp.jrabot.persistence.dao.BotRunDaoImpl
 import jp.jrabot.persistence.dao.CalendarOverrideDaoImpl
 import jp.jrabot.persistence.dao.ComboOddsSnapshotDaoImpl
@@ -56,6 +57,7 @@ import jp.jrabot.persistence.dao.RaceHorseNameDaoImpl
 import jp.jrabot.persistence.dao.RaceScheduleDaoImpl
 import jp.jrabot.persistence.dao.RaceTimingNoticeDaoImpl
 import jp.jrabot.persistence.dao.ResultDaoImpl
+import jp.jrabot.persistence.dao.RetentionDaoImpl
 import jp.jrabot.persistence.dao.ScheduleEventDaoImpl
 import jp.jrabot.persistence.dao.SignalDaoImpl
 import jp.jrabot.persistence.doma.jrabotMysqlDialect
@@ -64,6 +66,7 @@ import jp.jrabot.persistence.repository.AgentRegistrar
 import jp.jrabot.persistence.repository.AgentRegistrarImpl
 import jp.jrabot.persistence.repository.AgentRepositoryImpl
 import jp.jrabot.persistence.repository.AppUserRepositoryImpl
+import jp.jrabot.persistence.repository.AuditLogWriterImpl
 import jp.jrabot.persistence.repository.BackfillStoreImpl
 import jp.jrabot.persistence.repository.BotRunRepositoryImpl
 import jp.jrabot.persistence.repository.CalendarOverrideRepositoryImpl
@@ -87,6 +90,7 @@ import jp.jrabot.persistence.repository.RaceRepositoryImpl
 import jp.jrabot.persistence.repository.RaceScheduleRepositoryImpl
 import jp.jrabot.persistence.repository.RawRecordStoreImpl
 import jp.jrabot.persistence.repository.ResultStoreImpl
+import jp.jrabot.persistence.repository.RetentionStoreImpl
 import jp.jrabot.persistence.repository.ScheduleEventRepositoryImpl
 import jp.jrabot.persistence.repository.SignalRepositoryImpl
 import jp.jrabot.persistence.repository.SpringUnitOfWork
@@ -272,6 +276,20 @@ class PersistenceConfiguration {
         tx: TransactionOperations,
         clock: Clock,
     ): ResultStore = ResultStoreImpl(ResultDaoImpl(config), tx, clock)
+
+    /** 管理操作の監査記録（追記専用）。 */
+    @Bean
+    fun auditLogWriter(
+        config: Config,
+        tx: TransactionOperations,
+    ): jp.jrabot.domain.audit.AuditLogWriter = AuditLogWriterImpl(AuditLogDaoImpl(config), tx)
+
+    /** 保持期間を過ぎた行の件数と削除（retention。ドライランが既定）。 */
+    @Bean
+    fun retentionStore(
+        config: Config,
+        tx: TransactionOperations,
+    ): jp.jrabot.domain.retention.RetentionStore = RetentionStoreImpl(RetentionDaoImpl(config), tx)
 
     @Bean
     fun payoutStore(

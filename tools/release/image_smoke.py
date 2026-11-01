@@ -276,7 +276,7 @@ class Smoke:
         bad_db = {"DB_URL": "jdbc:mysql://127.0.0.1:1/jrabot", "DB_USER": "bot", "DB_PASSWORD": pw}
         rc, out, _ = self.run("bot", args=["--task=calendar-check", "--tenant-id=1"], env={"APP_ENV": "local", "OPS_MODE_SOURCE": "/nonexistent/ops-state.json", **CALENDAR_ENV, **bad_db}, desc="bot UNKNOWN")
         self.r.check("[bot] ModeProvider UNKNOWN (unreadable source) -> exit 75", rc == 75, f"rc={rc}")
-        rc, out, _ = self.run("bot", args=["--task=calendar-check", "--tenant-id=1"], env={"APP_ENV": "prod", "OPS_MODE_SOURCE": "/nonexistent/ops-state.json", **CALENDAR_ENV, **bad_db}, desc="bot prod local file")
+        rc, out, _ = self.run("bot", args=["--task=calendar-check", "--tenant-id=1"], env={"APP_ENV": "prod", "OPS_MODE_SOURCE": "/nonexistent/ops-state.json", "RUN_JOBS_PROJECT_ID": "synthetic-proj1", "RUN_JOBS_REGION": "asia-northeast1", **CALENDAR_ENV, **bad_db}, desc="bot prod local file")
         self.r.check("[bot] prod refuses a local-file mode source -> exit 2 (never 0)", rc == 2, f"rc={rc}")
         rc, out, _ = self.run("bot", args=["--task=bot-run", "--tenant-id=1"], env={"APP_ENV": "prod", "OPS_MODE_SOURCE": "gs://synthetic-bucket/state/ops-state.json", **CALENDAR_ENV, **BOT_RUN_ENV, **bad_db}, desc="bot prod gcs unreachable")
         self.r.check("[bot] prod, mode source unreachable (no network) -> exit 75, never 0", rc == 75, f"rc={rc}")
@@ -372,11 +372,11 @@ class Smoke:
         self.r.check("[bot] STOPPED -> exit 0 for all 5 tasks", set(codes.values()) == {0}, str(codes))
         self.r.check("[bot] STOPPED never opens a DB connection (server Connections delta == 1: the probe itself)", after - before == 1, f"delta={after - before}")
         before = self.connections()
-        # retention は未実装のスタブ（V6 の DELETE 権限の承認待ち）。reconcile は実装済み（T3.9）: 対象の開催日が無い DB では RECONCILED で exit 0
-        rc, out, err = self.run("bot", args=["--task=retention", "--tenant-id=1"], env={**base, "OPS_MODE_SOURCE": "/ops/NORMAL.json"}, network=self.network, mounts=mounts, desc="bot NORMAL local stub", timeout=120)
+        # retention は実装済み（T3.9。既定はドライラン = 件数を数えるだけ）。reconcile も実装済み: 対象の開催日が無い DB では RECONCILED で exit 0
+        rc, out, err = self.run("bot", args=["--task=retention", "--tenant-id=1"], env={**base, "OPS_MODE_SOURCE": "/ops/NORMAL.json"}, network=self.network, mounts=mounts, desc="bot NORMAL retention dry-run", timeout=120)
         after = self.connections()
-        self.r.check("[bot] NORMAL (local only) connects to the DB and runs the stub task (retention) -> exit 0", rc == 0 and after - before >= 2, f"rc={rc} delta={after - before}\n{(out + err)[-300:]}")
-        self.r.check("[bot] the stub says so in the log (TASK_NOT_IMPLEMENTED, result STUB_LOCAL_OK: local only)", "TASK_NOT_IMPLEMENTED" in out + err and "STUB_LOCAL_OK" in out + err, (out + err)[-300:])
+        self.r.check("[bot] NORMAL connects to the DB and runs retention as a dry-run -> exit 0", rc == 0 and after - before >= 2, f"rc={rc} delta={after - before}\n{(out + err)[-300:]}")
+        self.r.check("[bot] retention is not a stub and deletes nothing by default (RETENTION_DRY_RUN)", "RETENTION_DRY_RUN" in out + err and "STUB_LOCAL_OK" not in out + err and "TASK_NOT_IMPLEMENTED" not in out + err, (out + err)[-300:])
         rc, out, err = self.run("bot", args=["--task=reconcile", "--tenant-id=1"], env={**base, "OPS_MODE_SOURCE": "/ops/NORMAL.json"}, network=self.network, mounts=mounts, desc="bot reconcile empty", timeout=120)
         self.r.check("[bot] reconcile on an empty DB -> exit 0 RECONCILED (implemented, not a stub)", rc == 0 and "RECONCILED" in out + err and "STUB_LOCAL_OK" not in out + err, f"rc={rc}\n{(out + err)[-300:]}")
         # calendar-check は実装済み（T3.3）。予定の無い DB・取得の事実なしでは「不明」= exit 75 で、起動を要求しない（スタブの成功ではない）

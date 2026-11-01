@@ -14,7 +14,7 @@
 | ID | 完成条件（要件・機能表） | 実装場所 | 接続先（本番経路） | 検証 | 区分 |
 |---|---|---|---|---|---|
 | R1 | 開催日・発走予定に基づく制御（F03）、中止・延期・時刻変更・手動補正 | `domain/calendar`、`bot/CalendarCheckTaskHandler` | calendar-check → `JobLauncher` | 単体 + MySQL 統合 | **A**（起動の実行基盤は R2） |
-| R2 | calendar-check から bot-run を**実際に起動**（Cloud Run Jobs） | `domain/bot/JobLauncher`、`:cloud-gcp`（未実装） | 本番は `UnconfiguredJobLauncher`（常に失敗 = fail closed） | — | **C**（Cloud Run Jobs の run API クライアント） |
+| R2 | calendar-check から bot-run を**実際に起動**（Cloud Run Jobs） | `:cloud-gcp` `CloudRunJobLauncher`、`bot/RunJobsSettings` | 本番の calendar-check は `RUN_JOBS_*` 必須（無ければ exit 2）。無いローカルは未設定の fail closed | 偽サーバで宛先・認証・引数の上書き・失敗の分類を試験。**実 Cloud Run は未検証** | **A（web 側）/ B（実 GCP での確認）**。infra: calendar-check Job に `RUN_JOBS_*` を渡し、`sa-bot` に bot-run Job の `jobsExecutorWithOverrides` を付与（infra PR） |
 | R3 | 取得エージェント（F01/F22/F23）: 署名・キュー・送信・ビーコン・状態機械 | `agent/`（Python） | ingest API | pytest 213 + Linux/Windows CI + Kotlin 相互運用 | **A**（Mock 取得。実機は R4） |
 | R4 | JV-Link 実取得（COM）・実機 PoC（T3.0） | `agent/` の COM ワーカー | Windows 実機 | 未実施 | **B**（Windows 実機で `agent/poc` を実行。手順は `docs/USER_ACTIONS.md`〔作成予定〕） |
 | R5 | JV-Data 実レコードのパーサ（F02: RA/SE/O1〜O6/HR/結果ほか） | `ingest` の `RecordParser`（合成の正規化 JSON のみ） | ingest | 合成のみ | **B**（JV-Link 仕様書 Ver.4.9 の項目位置の確認。T1.17/G-5/G-16。取得できる資料を `JVLINK_DESIGN.md` の 12 項目で特定） |
@@ -26,15 +26,15 @@
 | R11 | レース単位の状態（MONITORING/OFF/RESULT_*/SETTLED）の永続化と履歴 | — | — | — | **B**（任意。履歴の粒度のために `event_type` へ `STATUS` を足す V6。`docs/V6_PROPOSAL.md` に最終 SQL・影響・検証を準備済みで承認待ち。無くても導出表示で動く） |
 | R12 | reconcile（F15）: INCOMPLETE/異常終了の回復・冪等・排他 | `ReconcileService`、`ReconcileTaskHandler` | `race_day` | 単体 6 件 | **A（単体）/ C（MySQL 統合）** |
 | R13 | 決済の計算（単勝）・紙上成績・代表集計（F15/F20） | `domain/performance`、`domain/settlement` | （読取り API は R15） | 単体 + 旧実装ゴールデン | **A（計算）** |
-| R14 | ワイド・三連複の紙上決済（通知スナップショットの買い目 × 払戻） | — | — | — | **C** |
-| R15 | 成績・シグナル・買い目・結果の読取り API（DTO・絞り込み・ページング） | `:dashboard`（`/api/v1/me` のみ） | MySQL（`app` ユーザー） | — | **C** |
-| R16 | バックテスト（F20）: 保存済みデータ・未来情報の遮断・除外件数/率 | — | — | — | **C** |
-| R17 | retention（F14/F16: 保持期間の削除。既定はドライラン、削除は明示設定） | `StubTaskHandler`（スタブ）→ 実装予定 | `bot --task=retention`（DELETE 権限は V5 の GRANT で付与済み） | — | **C**（実装する。実データの削除は本人の承認事項なので既定はドライラン） |
+| R14 | ワイド・三連複の紙上決済（通知スナップショットの買い目 × 確定払戻）と賭式別の代表集計 | `domain/performance/ComboPaperSettlement`（純粋関数。DB に書かない: D-234） | 読取り API（R15）から呼ぶ | 単体 8（同着・速報・二重計上・発走後の除外・キー読取り） | **A（計算）/ C（API への接続は R15）**。旧のワイド判定との差異は E17 |
+| R15 | 成績・シグナル・買い目・結果の読取り API（DTO・絞り込み・ページング） | `:dashboard` `ReadApi`（`/api/v1/status|runs|races|signals|performance`。GET のみ・テナントは本人の行から・入力検査 400・no-store） | `app` ユーザー（SELECT のみ）→ MySQL | 単体 6（テナント分離・ページング・400・未更新判定）。**MySQL 実接続の通し試験は未作成（C）** | **A（API）/ C（MySQL 通し）**。買い目の個別一覧・馬単位の詳細は未実装 |
+| R16 | バックテスト（F20）: 保存済みデータ・未来情報の遮断・除外件数/率 | `domain/backtest/BacktestRunner`（純粋な計算。DB に書かない: D-234） | 管理 API（R15/R20）から呼ぶ | 単体 5（未来のオッズを渡さない・理由別の除外件数と率・二重計上なし） | **A（計算）/ C（API への接続は R15）**。実データでの検証は B |
+| R17 | retention（F14/F16: 保持期間の削除。**既定はドライラン**、削除は `RETENTION_EXECUTE=true` の明示） | `domain/retention`、`persistence/RetentionDao`、`bot/RetentionTaskHandler` | `bot --task=retention`（DELETE 権限は V5 で付与済み） | 単体 + MySQL 通し試験（ドライラン・削除・テナント分離・冪等） | **A**（実データの削除の実行は本人の承認事項。単勝オッズの間引きは未実装 = 別の判断） |
 | R18 | 人の認証・認可（IAP JWT・許可リスト・ロール・deny by default） | `HumanAuthorizer`、`ApiAuthFilter` | dashboard `/api/**` | 単体 + Tomcat 統合 | **A**（実 IAP の `aud` は B: G-OPS-7） |
-| R19 | ダッシュボード UI（日本語・レスポンシブ・bot 状態・次回予定・最終更新・未更新表示・シグナル/買い目/結果/成績/バックテスト画面） | `:dashboard`（UI なし） | — | — | **C** |
-| R20 | 管理操作（手動補正・エージェント失効・モデル有効化）+ CSRF + 監査ログ | `AdminWriteGuardFilter`（ガードのみ） | — | — | **C** |
+| R19 | ダッシュボード UI（日本語・レスポンシブ・bot 状態・次回予定・最終更新・未更新表示・シグナル/成績/運用画面） | `dashboard/src/main/resources/static`（HTML/CSS/JS。D-243） | `/`（IAP の内側） | 静的検査（インライン script・外部 CDN・innerHTML なし）。**ブラウザでの目視確認は未実施（B）** | **A（実装）/ B（実機の目視）**。バックテスト画面・馬詳細・グラフは未実装（C） |
+| R20 | 管理操作 + CSRF + 監査ログ | `AdminApi`（手動補正の作成・取消・一覧）、`CsrfGuardFilter`、`AuditLogWriter`（`audit_log` 追記専用）、`ApiAuthFilter`（`/api/v1/admin` は読取りも ADMIN）、`AdminWriteGuardFilter`（NORMAL 以外は 409） | `/api/v1/admin/**`（`app` ユーザー: calendar_override・audit_log の INSERT） | 単体（作成/取消/400/404/409/監査の記録と失敗/CSRF の拒否）+ MySQL（監査の追記・UPDATE/DELETE 不可）は CI | **A（手動補正）/ C（エージェント失効）**。ML モデルの有効化は R22（B） |
 | R21 | ML 学習 Job・推論・モデル署名・ゲート・レジストリ（F10/F11/F12） | `ml/`、`domain/ml`、`:bot` | GCS model-store | pytest 128 + Kotlin/Python 結合 5 | **A**（実モデル・実データでの学習は B: T1.20/T1.21） |
-| R22 | ML 管理 UI（有効化・メトリクス表示） | — | — | — | **C**（R19/R20 に含む） |
+| R22 | ML 管理 UI（有効化・メトリクス表示） | — | — | — | **B**（有効化は品質ゲートの閾値が未承認〔CLAUDE.md: 未承認の数値仕様・品質閾値の有効化は本人判断〕。表示だけなら C） |
 | R23 | DB スキーマ・Flyway V1〜V5・GRANT・複数 MySQL 版 | `:db-migration` | MySQL 8.4/9.7 | 統合 49 + CI | **A**（本番 DB への適用は B） |
 | R24 | SQLite → MySQL のデータ移行ツール（F16、`DATA_MIGRATION_DESIGN`） | `tools/migrate/`（未作成） | 旧 SQLite のコピー | — | **C**（実データの投入は B。ツールは合成 SQLite で検証） |
 | R25 | 運用モード（NORMAL/STOPPED）の読取りと全アプリでの遵守、ビーコン | `:cloud-gcp`、各アプリ | GCS | 単体 + 統合 | **A**（実 GCS は B: G-OPS-*） |

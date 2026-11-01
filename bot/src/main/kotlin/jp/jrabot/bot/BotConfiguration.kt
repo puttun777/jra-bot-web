@@ -67,12 +67,22 @@ class BotConfiguration {
     ): SchemaVersionVerifier = SchemaVersionVerifier(dataSource, info.requiredSchemaVersion)
 
     /**
-     * 起動基盤の**本番の配線は未設定（fail closed）**: [UnconfiguredJobLauncher] は起動できたことにしない。GCP の実装（Cloud Run Jobs）は T5 系で置き換える。
+     * 起動基盤: `RUN_JOBS_*` があれば Cloud Run Jobs の起動（`:cloud-gcp` の `CloudRunJobLauncher`。本番の calendar-check では必須）、無ければ [UnconfiguredJobLauncher]（起動できたことにしない = fail closed）。
      * テスト用の Fake はテストコードにだけある。
      */
     @Bean
     @ConditionalOnMissingBean(JobLauncher::class)
-    fun jobLauncher(): JobLauncher = UnconfiguredJobLauncher()
+    fun jobLauncher(runtime: BotRuntime): JobLauncher {
+        val rj = runtime.settings.runJobs ?: return UnconfiguredJobLauncher()
+        return jp.jrabot.cloudgcp.run
+            .CloudRunJobLauncher(
+                rj.projectId,
+                rj.region,
+                rj.jobNames(),
+                jp.jrabot.cloudgcp.run.CloudRunJobLauncher
+                    .adcTokenProvider(),
+            )
+    }
 
     // 取得の事実（ScheduleFetchFactReader）は :persistence の `scheduleFetchFactReader`（DB の ingest_fetch。T3.4）。
     // DB に事実が無い日は null（= 行の無い日は「不明」のまま。開催なしを確認したことにしない）。
@@ -133,8 +143,8 @@ class BotConfiguration {
     ): ErrorReporter = ErrorReporter(notifier, clock)
 
     /**
-     * タスクごとの実装。**calendar-check（T3.3）・export-dataset（T3.6-B）・bot-run（T3.8）・reconcile（T3.9）が実装済み**で、残り（retention）は未実装のスタブ
-     * （[StubTaskHandler]。T3.8 以降で差し替える）。
+     * タスクごとの実装。**calendar-check（T3.3）・export-dataset（T3.6-B）・bot-run（T3.8）・reconcile・retention（T3.9）が実装済み**。
+     * [StubTaskHandler] は `when` の網羅用に残るだけ（全タスクが実装済み）。
      */
     @Bean
     fun botTaskHandler(
@@ -162,6 +172,7 @@ class BotConfiguration {
         leaseProbe: jp.jrabot.domain.botrun.LeaseProbe,
         resultStore: jp.jrabot.domain.ingest.ResultStore,
         payoutStore: jp.jrabot.domain.ingest.PayoutStore,
+        retentionStore: jp.jrabot.domain.retention.RetentionStore,
     ): BotTaskHandler =
         when (runtime.command.task) {
             BotTask.CALENDAR_CHECK -> {
@@ -236,8 +247,17 @@ class BotConfiguration {
                 )
             }
 
-            else -> {
-                StubTaskHandler(runtime.settings.appEnv)
+            BotTask.RETENTION -> {
+                val rs = checkNotNull(runtime.settings.retention) { "retention の設定が無い（BotSettings が検証しているはず）" }
+                RetentionTaskHandler(
+                    rs,
+                    { shouldStop ->
+                        jp.jrabot.domain.retention
+                            .RetentionService(clock, retentionStore, rs.policy, shouldStop)
+                    },
+                    stop,
+                    SignalInstaller.SIGTERM,
+                )
             }
         }
 

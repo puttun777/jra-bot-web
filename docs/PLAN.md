@@ -1,5 +1,7 @@
 # PLAN（段階・タスク・依存）
 
+> **2026-11-01 注記**: 完了判定の正本は `docs/COMPLETION.md`（R1〜R32 の A/B/C）。この表のチェックボックスは履歴で、実装済みでも『実機・本番で未確認』のものは B として COMPLETION に残る。『ユーザーの『次へ』を待つ』という旧記述は `CLAUDE.md` の『開発の委任（2026-11-01）』で置き換わった。
+
 凡例: `[ ]`未着手 `[x]`完了 / `←` は依存。リポジトリ: **W**=jra-bot-web **I**=jra-bot-infra。セッションはリポジトリ単位で継続可能。
 
 ## 第0段階 ― リポジトリ確認・要件・計画（今回）
@@ -60,29 +62,29 @@
   - [x] **T3.6-B（Stage 3-F2。実装完了 2026-10-24、claude/stage3-ml-training。PR は PROGRESS を参照。マージはユーザー。自動では T3.7 へ進まない）**: `ml/`（Python の学習 Job: データセット検証・v2 学習・評価・品質ゲート〔fail closed〕・署名つきモデル JSON・保管・レジストリ登録 CANDIDATE/REJECTED のみ）、`bot --task=export-dataset` の配線、`FeatureSource`/`DatasetSource` の MySQL 実装、馬マスタの時点履歴（V4）、GCS の `ModelStore`/`DatasetStore`、旧 pkl→JSON 変換ツール（許可リスト式。実 pkl の変換は未実施）、ml-train イメージ（5 つ目）、release-manifest v2（`feature_schemas`）、CI `ml-train` ジョブ。D-165〜D-179。**合成データのみ。実データでの学習・精度・品質閾値（D-13）・実 pkl 変換・実 GCS は未検証で、ML は本番利用可能ではない。**
 - [x] T3.7 Discord 通知（分割・Retry-After・リトライ） — **実装完了（2026-10-27、claude/stage3-discord-notification。合成データ・Fake サーバのみ。実 Discord への送信は未検証。実データ由来の通知は COMP-4 まで送らない）**。`:domain` の `notify`（本文・分割・Retry-After・メンション・`SignalNotificationDispatcher`・`ErrorReporter`・理由文 G-17 ⑥）、`:bot` の `discord`（URL 検証・JDK HttpClient・`DiscordNotifier`・Bean 配線）、`listClaimedBefore`、ゴールデン G8（旧 `discord.py` と全一致）。D-181〜D-189、PROGRESS の Stage 3-G。**bot-run からの呼出し・出どころ判定・エラー通知のイベントは T3.8**
 - [x] T3.8 bot-run オーケストレーション（監視ウィンドウ、結果反映後終了）← T3.1–T3.7 — **実装完了（2026-10-27、claude/stage3-bot-orchestration。合成データ・Fake HTTP サーバ・メモリ上の偽物・ローカル MySQL 8.0.46 のみ。CI〈JDK 25・MySQL 8.4/9.7〉・実 Discord・Cloud Run は未検証。PR は未作成〈Actions の無料枠不足〉）**。`:domain` の `jp.jrabot.domain.botrun`（`BotRunOrchestrator`・`LeaseKeeper`・`ModeGate`・`RaceMonitorPlanner`・`RaceCycleProcessor`・`RaceEvaluator`・`MlRunStarter`・`RunCheckpoint`）、`:persistence`（`race_evaluations` の冪等追記・馬名の読取り）、`:bot`（`BotRunSettingsParser`・`BotRunTaskHandler`・SIGTERM・`BotRunWiring`）。D-190〜D-203、CONTRACTS 0.4.12、PROGRESS の Stage 3-H。**範囲は発走まで**（評価・記録・通知）。**結果・払戻・決済・race_schedule/race_day の状態更新・reconcile は T3.9**（UNRESOLVED G-25）。通知方式〈各タイミング 1 回〉・hit_rate schedule・5 分前の強化の修正を反映済み（D-204〜D-207）。運用値は暫定サンプルのみで本番は未確定（G-23）、adaptive_relaxation は T3.9 の後に再判断（G-24）。レビュー修正後も CI は未実施
-- [ ] T3.9 結果反映・払戻・決済・成績集計・recovery（reconcile）・バックテスト ← T3.8（詳細は下の「T3.8 後の道筋」と **docs/T39_DESIGN.md**〈2026-10-29 の詳細設計。本体は未着手〉）。**T3.8 のレビューとユーザーの承認の後に着手する。自動では進まない**
+- [ ] T3.9 結果反映・払戻・決済・成績集計・recovery（reconcile）・バックテスト ← T3.8（詳細は下の「T3.8 後の道筋」と **docs/T39_DESIGN.md**〈2026-10-29 の詳細設計。本体は未着手〉）。**T3.8 のレビューとユーザーの承認の後に着手する。自動では進まない**  【2026-11-01 状況】結果待ち・開催日の進行・reconcile・retention・単勝/ワイド/三連複の紙上決済・バックテスト（計算）を実装。実データでの検証と JV-Data の実パーサは B。詳細は COMPLETION.md R7〜R17
 
 ## 第4段階 ― dashboard（W）
-- [ ] T4.1 認証/認可（IAP JWT 検証、許可リスト、ロール、deny by default）← T2.4
-- [ ] T4.2 API（DTO、Entity 非公開）← T4.1
-- [ ] T4.3 UI（日本語、レスポンシブ、最終更新、bot状態、次回予定、未更新表示）← T1.5,T4.2
-- [ ] T4.4 管理者操作（手動補正等）、モード表示
-- [ ] T4.5 セキュリティテスト（認可マトリクス）
+- [ ] T4.1 認証/認可（IAP JWT 検証、許可リスト、ロール、deny by default）← T2.4  【実装済み: IAP JWT・許可リスト・ロール・deny by default。PR #31】
+- [ ] T4.2 API（DTO、Entity 非公開）← T4.1  【実装済み: /api/v1/status・runs・races・signals・performance・admin/overrides。DTO のみ】
+- [ ] T4.3 UI（日本語、レスポンシブ、最終更新、bot状態、次回予定、未更新表示）← T1.5,T4.2  【実装済み: 静的 HTML/CSS/JS（D-243）。ブラウザでの目視は B】
+- [ ] T4.4 管理者操作（手動補正等）、モード表示  【一部: 手動補正の作成/取消/一覧 + CSRF + 監査ログ。エージェント失効は未実装、ML の有効化は B】
+- [ ] T4.5 セキュリティテスト（認可マトリクス）  【一部: 実コンテキストの認可・CSRF 試験。認可マトリクスの網羅表は TEST_RESULTS.md】
 
 ## 第5段階 ― インフラ（I、一部 W）
 - [x] **T5.0（完了 2026-11-01: infra PR #3 マージ済み〔CONTRACTS 0.4.15 に同期〕）** ~~infra の文書を web CONTRACTS 0.4.0 に追従させる（PROGRESS の I-H1〜I-H7）。解消するまで第5段階の実装に着手しない。web が古い infra 文書に合わせて 0.4.0 を戻すことはしない**
-- [ ] T5.1 Terraform 基盤（state、WIF、ネットワーク、Secret、Registry）← T1.7
-- [ ] T5.2 Web/Job/DB/Scheduler リソース、IAP、スケールゼロ
-- [ ] T5.3 deploy workflow（release-manifest 入力、migrate→更新）
-- [ ] T5.4 start/stop/status workflow_dispatch、排他（concurrency）、部分失敗表示、安全な再実行
-- [ ] T5.5 Terraform が mode/DB 起動状態を変更しないことの検証（plan 差分テスト）
-- [ ] T5.6 監視/アラート/予算、ロールバック手順
+- [ ] T5.1 Terraform 基盤（state、WIF、ネットワーク、Secret、Registry）← T1.7  【infra PR #4 でコード化。実 GCP の plan/apply は未実施（B）】
+- [ ] T5.2 Web/Job/DB/Scheduler リソース、IAP、スケールゼロ  【同上】
+- [ ] T5.3 deploy workflow（release-manifest 入力、migrate→更新）  【infra PR #4: deploy.yml + ops deploy】
+- [ ] T5.4 start/stop/status workflow_dispatch、排他（concurrency）、部分失敗表示、安全な再実行  【infra PR #4: ops-start/stop/status】
+- [ ] T5.5 Terraform が mode/DB 起動状態を変更しないことの検証（plan 差分テスト）  【infra PR #4: plan_guard + terraform-plan/apply】
+- [ ] T5.6 監視/アラート/予算、ロールバック手順  【infra PR #4: 定期 status + Discord + OPERATIONS.md。予算は本人設定】
 - [ ] ※ apply・課金リソース作成は **ユーザー承認後**
 
 ## 第6段階 ― 統合・レビュー
-- [ ] T6.1 旧新比較の総合結果 → `TEST_RESULTS.md`
-- [ ] T6.2 セキュリティレビュー
-- [ ] T6.3 `OPERATIONS.md`、ドキュメント整理
+- [ ] T6.1 旧新比較の総合結果 → `TEST_RESULTS.md`  【TEST_RESULTS.md（作成済み）。旧新比較の総合】
+- [ ] T6.2 セキュリティレビュー  【独立レビュー（Opus）を各増分で実施。D-230/D-236/D-237/D-246・infra I-024〜】
+- [ ] T6.3 `OPERATIONS.md`、ドキュメント整理  【OPERATIONS.md（web・infra）作成済み】
 - [ ] T6.4 PR 整理（W,I）
 
 ## 第1段階の完了状況（2026-10-22 Stage 1-D②）

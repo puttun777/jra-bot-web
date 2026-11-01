@@ -127,9 +127,15 @@ class Http(
         rawPath: String,
         bearer: String? = null,
         headers: Map<String, String> = emptyMap(),
+        csrf: Boolean = true,
     ): Resp {
         val b = HttpRequest.newBuilder(URI.create("http://127.0.0.1:$port$rawPath")).timeout(Duration.ofSeconds(30))
         if (bearer != null) b.header("X-Goog-IAP-JWT-Assertion", bearer)
+        // /api の書込みは CSRF 対策（CsrfGuardFilter）の条件を満たす既定のヘッダを付ける（個別の試験は headers で上書きできる。CSRF 自体の試験は AdminApiTest）
+        if (csrf && method !in setOf("GET", "HEAD", "OPTIONS") && rawPath.startsWith("/api")) {
+            b.header("X-Requested-With", "jrabot-dashboard")
+            b.header("Content-Type", "application/json")
+        }
         headers.forEach { (k, v) -> b.header(k, v) }
         b.method(method, if (method in setOf("POST", "PUT", "PATCH")) HttpRequest.BodyPublishers.ofString("{}") else HttpRequest.BodyPublishers.noBody())
         val r = client.send(b.build(), HttpResponse.BodyHandlers.ofString())

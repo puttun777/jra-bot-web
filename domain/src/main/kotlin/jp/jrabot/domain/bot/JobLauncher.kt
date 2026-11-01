@@ -25,11 +25,13 @@ data class JobLaunchRequest(
 ) {
     init {
         require(params.keys.all { KEY.matches(it) }) { "params のキーが不正: ${params.keys}" }
-        require(params.values.all { '\n' !in it && '\r' !in it && it.length <= 256 }) { "params の値が不正（改行なし・256 文字以下）" }
+        require(params.values.all { it.isNotEmpty() && '\n' !in it && '\r' !in it && it.length <= 256 }) { "params の値が不正（空でない・改行なし・256 文字以下）" }
+        require(params.keys.none { it in RESERVED }) { "params に予約済みのキー（task・tenant-id）は使えない（起動側が必ず付ける）" }
     }
 
     private companion object {
         val KEY = Regex("[a-z][a-z0-9-]{0,31}")
+        val RESERVED = setOf("task", "tenant-id")
     }
 }
 
