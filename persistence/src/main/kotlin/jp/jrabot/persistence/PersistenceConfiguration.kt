@@ -56,6 +56,7 @@ import jp.jrabot.persistence.dao.RaceHorseNameDaoImpl
 import jp.jrabot.persistence.dao.RaceScheduleDaoImpl
 import jp.jrabot.persistence.dao.RaceTimingNoticeDaoImpl
 import jp.jrabot.persistence.dao.ResultDaoImpl
+import jp.jrabot.persistence.dao.RetentionDaoImpl
 import jp.jrabot.persistence.dao.ScheduleEventDaoImpl
 import jp.jrabot.persistence.dao.SignalDaoImpl
 import jp.jrabot.persistence.doma.jrabotMysqlDialect
@@ -87,6 +88,7 @@ import jp.jrabot.persistence.repository.RaceRepositoryImpl
 import jp.jrabot.persistence.repository.RaceScheduleRepositoryImpl
 import jp.jrabot.persistence.repository.RawRecordStoreImpl
 import jp.jrabot.persistence.repository.ResultStoreImpl
+import jp.jrabot.persistence.repository.RetentionStoreImpl
 import jp.jrabot.persistence.repository.ScheduleEventRepositoryImpl
 import jp.jrabot.persistence.repository.SignalRepositoryImpl
 import jp.jrabot.persistence.repository.SpringUnitOfWork
@@ -272,6 +274,13 @@ class PersistenceConfiguration {
         tx: TransactionOperations,
         clock: Clock,
     ): ResultStore = ResultStoreImpl(ResultDaoImpl(config), tx, clock)
+
+    /** 保持期間を過ぎた行の件数と削除（retention。ドライランが既定）。 */
+    @Bean
+    fun retentionStore(
+        config: Config,
+        tx: TransactionOperations,
+    ): jp.jrabot.domain.retention.RetentionStore = RetentionStoreImpl(RetentionDaoImpl(config), tx)
 
     @Bean
     fun payoutStore(

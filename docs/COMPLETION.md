@@ -29,7 +29,7 @@
 | R14 | ワイド・三連複の紙上決済（通知スナップショットの買い目 × 払戻） | — | — | — | **C** |
 | R15 | 成績・シグナル・買い目・結果の読取り API（DTO・絞り込み・ページング） | `:dashboard`（`/api/v1/me` のみ） | MySQL（`app` ユーザー） | — | **C** |
 | R16 | バックテスト（F20）: 保存済みデータ・未来情報の遮断・除外件数/率 | — | — | — | **C** |
-| R17 | retention（F14/F16: 保持期間の削除。既定はドライラン、削除は明示設定） | `StubTaskHandler`（スタブ）→ 実装予定 | `bot --task=retention`（DELETE 権限は V5 の GRANT で付与済み） | — | **C**（実装する。実データの削除は本人の承認事項なので既定はドライラン） |
+| R17 | retention（F14/F16: 保持期間の削除。**既定はドライラン**、削除は `RETENTION_EXECUTE=true` の明示） | `domain/retention`、`persistence/RetentionDao`、`bot/RetentionTaskHandler` | `bot --task=retention`（DELETE 権限は V5 で付与済み） | 単体 + MySQL 通し試験（ドライラン・削除・テナント分離・冪等） | **A**（実データの削除の実行は本人の承認事項。単勝オッズの間引きは未実装 = 別の判断） |
 | R18 | 人の認証・認可（IAP JWT・許可リスト・ロール・deny by default） | `HumanAuthorizer`、`ApiAuthFilter` | dashboard `/api/**` | 単体 + Tomcat 統合 | **A**（実 IAP の `aud` は B: G-OPS-7） |
 | R19 | ダッシュボード UI（日本語・レスポンシブ・bot 状態・次回予定・最終更新・未更新表示・シグナル/買い目/結果/成績/バックテスト画面） | `:dashboard`（UI なし） | — | — | **C** |
 | R20 | 管理操作（手動補正・エージェント失効・モデル有効化）+ CSRF + 監査ログ | `AdminWriteGuardFilter`（ガードのみ） | — | — | **C** |

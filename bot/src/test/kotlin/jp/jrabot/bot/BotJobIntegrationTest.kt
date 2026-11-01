@@ -42,14 +42,8 @@ class BotJobIntegrationTest {
     }
 
     @Test
-    fun `NORMAL かつスキーマ版 OK なら、スタブのタスクはローカルでは終了コード 0（calendar-check・export-dataset・bot-run・reconcile は実装済みで別のテスト）`() {
-        for (t in BotTask.entries.filter { it != BotTask.CALENDAR_CHECK && it != BotTask.EXPORT_DATASET && it != BotTask.BOT_RUN && it != BotTask.RECONCILE }) {
-            assertEquals(
-                0,
-                exit(t.cliName, env("NORMAL")),
-                t.cliName,
-            )
-        }
+    fun `NORMAL かつスキーマ版 OK なら retention は既定でドライランとして終了コード 0（全タスクが実装済みでスタブは残っていない）`() {
+        assertEquals(0, exit("retention", env("NORMAL")))
     }
 
     @Test
@@ -71,15 +65,10 @@ class BotJobIntegrationTest {
     }
 
     @Test
-    fun `本番(APP_ENV=prod)ではスタブは成功にならず終了コード 1 TASK_NOT_IMPLEMENTED`() {
-        // 本番はローカルファイルのモードを使えないので、モードだけフェイクにして、それ以外（Spring・DB・スキーマ確認）は本物で通す
+    fun `本番(APP_ENV=prod)でも retention は RETENTION_EXECUTE を明示しない限りドライラン（削除しない）で終了コード 0`() {
         val launcher = BotLauncher(modeProviderFactory = { FixedMode(OpsMode.NORMAL) })
         val prodEnv = env("NORMAL") + mapOf("APP_ENV" to "prod", "OPS_MODE_SOURCE" to "gs://synthetic/ops.json")
-        for (t in BotTask.entries.filter {
-            it != BotTask.CALENDAR_CHECK && it != BotTask.EXPORT_DATASET && it != BotTask.BOT_RUN && it != BotTask.RECONCILE
-        }) {
-            assertEquals(1, launcher.run(args(t.cliName), prodEnv), t.cliName)
-        }
+        assertEquals(0, launcher.run(args("retention"), prodEnv))
     }
 
     @Test
