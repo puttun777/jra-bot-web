@@ -276,7 +276,7 @@ class Smoke:
         bad_db = {"DB_URL": "jdbc:mysql://127.0.0.1:1/jrabot", "DB_USER": "bot", "DB_PASSWORD": pw}
         rc, out, _ = self.run("bot", args=["--task=calendar-check", "--tenant-id=1"], env={"APP_ENV": "local", "OPS_MODE_SOURCE": "/nonexistent/ops-state.json", **CALENDAR_ENV, **bad_db}, desc="bot UNKNOWN")
         self.r.check("[bot] ModeProvider UNKNOWN (unreadable source) -> exit 75", rc == 75, f"rc={rc}")
-        rc, out, _ = self.run("bot", args=["--task=calendar-check", "--tenant-id=1"], env={"APP_ENV": "prod", "OPS_MODE_SOURCE": "/nonexistent/ops-state.json", **CALENDAR_ENV, **bad_db}, desc="bot prod local file")
+        rc, out, _ = self.run("bot", args=["--task=calendar-check", "--tenant-id=1"], env={"APP_ENV": "prod", "OPS_MODE_SOURCE": "/nonexistent/ops-state.json", "RUN_JOBS_PROJECT_ID": "synthetic-proj1", "RUN_JOBS_REGION": "asia-northeast1", **CALENDAR_ENV, **bad_db}, desc="bot prod local file")
         self.r.check("[bot] prod refuses a local-file mode source -> exit 2 (never 0)", rc == 2, f"rc={rc}")
         rc, out, _ = self.run("bot", args=["--task=bot-run", "--tenant-id=1"], env={"APP_ENV": "prod", "OPS_MODE_SOURCE": "gs://synthetic-bucket/state/ops-state.json", **CALENDAR_ENV, **BOT_RUN_ENV, **bad_db}, desc="bot prod gcs unreachable")
         self.r.check("[bot] prod, mode source unreachable (no network) -> exit 75, never 0", rc == 75, f"rc={rc}")
