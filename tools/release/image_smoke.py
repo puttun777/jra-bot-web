@@ -63,6 +63,25 @@ CALENDAR_ENV = {
 }
 
 
+# bot-run の環境変数（運用値の既定は無い: CONTRACTS §2 / BotRunSettingsParser）。スモーク用の**合成値**（運用値ではない。T1.20 の確認前）。
+BOT_RUN_ENV = {
+    "BOT_RUN_LEASE_SECONDS": "300",
+    "BOT_RUN_HEARTBEAT_SECONDS": "60",
+    "BOT_RUN_POLL_FAR_SECONDS": "300",
+    "BOT_RUN_POLL_MID_SECONDS": "60",
+    "BOT_RUN_POLL_NEAR_SECONDS": "30",
+    "BOT_RUN_MAX_ODDS_AGE_SECONDS": "180",
+    "BOT_RUN_MAX_RUNTIME_MINUTES": "120",
+    "BOT_RUN_STALE_CLAIM_SECONDS": "600",
+    "BOT_RUN_MAX_CYCLE_FAILURES": "5",
+    "BOT_RUN_SNAPSHOT_MINUTES": "30,5",
+    "BOT_RUN_TIGHTEN_NEAR": "false",
+    "BOT_RUN_SNAPSHOT_HISTORY_LIMIT": "3",
+    "BOT_RUN_ML_MODEL_TYPE": "off",
+    "BOT_RUN_DECISION_PROFILE": "legacy_function_defaults",
+}
+
+
 class Report:
     def __init__(self) -> None:
         self.results: list[dict] = []
@@ -257,9 +276,9 @@ class Smoke:
         self.r.check("[bot] ModeProvider UNKNOWN (unreadable source) -> exit 75", rc == 75, f"rc={rc}")
         rc, out, _ = self.run("bot", args=["--task=calendar-check", "--tenant-id=1"], env={"APP_ENV": "prod", "OPS_MODE_SOURCE": "/nonexistent/ops-state.json", **CALENDAR_ENV, **bad_db}, desc="bot prod local file")
         self.r.check("[bot] prod refuses a local-file mode source -> exit 2 (never 0)", rc == 2, f"rc={rc}")
-        rc, out, _ = self.run("bot", args=["--task=bot-run", "--tenant-id=1"], env={"APP_ENV": "prod", "OPS_MODE_SOURCE": "gs://synthetic-bucket/state/ops-state.json", **bad_db}, desc="bot prod gcs unreachable")
+        rc, out, _ = self.run("bot", args=["--task=bot-run", "--tenant-id=1"], env={"APP_ENV": "prod", "OPS_MODE_SOURCE": "gs://synthetic-bucket/state/ops-state.json", **CALENDAR_ENV, **BOT_RUN_ENV, **bad_db}, desc="bot prod gcs unreachable")
         self.r.check("[bot] prod, mode source unreachable (no network) -> exit 75, never 0", rc == 75, f"rc={rc}")
-        rc, out, _ = self.run("bot", args=["--task=bot-run", "--tenant-id=1"], env={"APP_ENV": "prod", "OPS_MODE_SOURCE": "gs://synthetic-bucket/state/ops-state.json", **{**bad_db, "DB_USER": "migrate"}}, desc="bot prod migrate user")
+        rc, out, _ = self.run("bot", args=["--task=bot-run", "--tenant-id=1"], env={"APP_ENV": "prod", "OPS_MODE_SOURCE": "gs://synthetic-bucket/state/ops-state.json", **CALENDAR_ENV, **BOT_RUN_ENV, **{**bad_db, "DB_USER": "migrate"}}, desc="bot prod migrate user")
         self.r.check("[bot] prod with a non-bot DB user -> exit 2", rc == 2, f"rc={rc}")
 
     def dbm_checks_no_db(self) -> None:
@@ -341,7 +360,7 @@ class Smoke:
                 })
             )
             f.chmod(0o644)
-        base = {"APP_ENV": "local", "DB_URL": self.jdbc(), "DB_USER": "bot", "DB_PASSWORD": self.passwords["bot"], "MODEL_STORE_URI": "file:///tmp/store", **CALENDAR_ENV}
+        base = {"APP_ENV": "local", "DB_URL": self.jdbc(), "DB_USER": "bot", "DB_PASSWORD": self.passwords["bot"], "MODEL_STORE_URI": "file:///tmp/store", **CALENDAR_ENV, **BOT_RUN_ENV}
         mounts = [f"{d}:/ops:ro"]
         tasks = ["bot-run", "calendar-check", "reconcile", "retention", "export-dataset"]
         extra_args = {"export-dataset": ["--dataset-id=smoke", "--from=2026-01-01", "--to=2026-01-31", "--feature-schema=calibration"]}
