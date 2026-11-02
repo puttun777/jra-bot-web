@@ -9,6 +9,8 @@ doma-spring-boot = "3.0.0"
 google-cloud-storage = "2.75.0"
 # 内部 API の署名付きトークン検証（TokenVerifier）。google-cloud-storage 2.75.0 が引く版（解決結果）に合わせて固定する（D-082）
 google-auth-library = "1.54.0"
+# :ml-train だけが使う（D-257）。線形代数（Cholesky）・順位・分位点。Apache-2.0、2026-02 公開の 4.0.3（VERSIONS §16）
+hipparchus = "4.0.3"
 
 [libraries]
 # Boot の BOM（JUnit・Spring 系・mysql-connector-j などの版をここに従わせる）
@@ -32,6 +34,8 @@ google-cloud-storage = { module = "com.google.cloud:google-cloud-storage", versi
 google-auth-oauth2-http = { module = "com.google.auth:google-auth-library-oauth2-http", version.ref = "google-auth-library" }
 jackson-databind = { module = "tools.jackson.core:jackson-databind" }
 slf4j-api = { module = "org.slf4j:slf4j-api" }
+hipparchus-core = { module = "org.hipparchus:hipparchus-core", version.ref = "hipparchus" }
+hipparchus-stat = { module = "org.hipparchus:hipparchus-stat", version.ref = "hipparchus" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 kotlin-test-junit5 = { module = "org.jetbrains.kotlin:kotlin-test-junit5" }

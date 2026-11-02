@@ -24,7 +24,7 @@ class DependencyRulesTest {
 
     @Test
     fun `実行アプリどうしの依存はすべて禁止`() {
-        val apps = listOf(":bot", ":ingest", ":dashboard")
+        val apps = listOf(":bot", ":ingest", ":dashboard", ":ml-train")
         for (from in apps) {
             for (to in apps.filter { it != from }) {
                 val graph = ok + (from to (ok.getValue(from) + to))

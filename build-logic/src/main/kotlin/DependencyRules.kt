@@ -12,9 +12,10 @@ object DependencyRules {
 
     /** ゴールデンテストの Kotlin 側ランナー（検証専用。JSON の読み書きを持ち、:domain の計算を実行する。アプリのイメージには含めない）。 */
     const val GOLDEN_RUNNER = ":golden-runner"
+    const val ML_TRAIN = ":ml-train"
 
-    val modules = listOf(DOMAIN, PERSISTENCE, DB_MIGRATION, CLOUD_GCP, BOT, INGEST, DASHBOARD, GOLDEN_RUNNER)
-    val apps = setOf(BOT, INGEST, DASHBOARD)
+    val modules = listOf(DOMAIN, PERSISTENCE, DB_MIGRATION, CLOUD_GCP, BOT, INGEST, DASHBOARD, GOLDEN_RUNNER, ML_TRAIN)
+    val apps = setOf(BOT, INGEST, DASHBOARD, ML_TRAIN)
 
     /** 各モジュールが依存してよいプロジェクト。表にないものはすべて禁止。 */
     val allowedProjectDependencies: Map<String, Set<String>> =
@@ -27,6 +28,8 @@ object DependencyRules {
             INGEST to setOf(DOMAIN, PERSISTENCE, CLOUD_GCP),
             DASHBOARD to setOf(DOMAIN, PERSISTENCE, CLOUD_GCP),
             GOLDEN_RUNNER to setOf(DOMAIN),
+            // 学習 Job（D-257）。bot とは独立した実行単位。学習ライブラリ（Hipparchus）はここだけ（:domain に入れない）
+            ML_TRAIN to setOf(DOMAIN, PERSISTENCE, CLOUD_GCP),
         )
 
     /** `:domain` に入れてはいけない外部ライブラリ（group の前方一致）。 */
