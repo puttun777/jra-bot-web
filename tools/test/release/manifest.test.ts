@@ -463,6 +463,18 @@ describe("schema files", () => {
       assert.throws(() => validateProduction(syntheticProduction(), root));
     });
   });
+  it("keywords Ajv would silently ignore (format, content*) are refused", () => {
+    withTempDir((t) => {
+      const root = makeRoot(t);
+      const p = join(root, SCHEMA_DIR, PRODUCTION_SCHEMA);
+      const s = load(PRODUCTION_SCHEMA);
+      const props = s["properties"];
+      assert.ok(isRecord(props) && isRecord(props["built_at"]));
+      props["built_at"]["format"] = "date-time";
+      writeFileSync(p, JSON.stringify(s));
+      assert.throws(() => validateProduction(syntheticProduction(), root), /検証されないキーワード/);
+    });
+  });
   it("contract example shape: CONTRACTS §10 example keys == production schema required", () => {
     const text = readFileSync(join(ROOT, "docs", "CONTRACTS.md"), "utf8");
     const block = (text.split("## 10.")[1] ?? "").split("```json")[1]?.split("```")[0] ?? "";

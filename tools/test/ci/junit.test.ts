@@ -57,6 +57,14 @@ describe("junit", () => {
     assert.throws(() => parseSuites('<testsuite name="x" tests="3"><testcase name="a"/></testsuite>', "c.xml"), /一致しない/);
     assert.throws(() => parseSuites('<testsuite name="x" tests="1" skipped="1"><testcase name="a"/></testsuite>', "c.xml"), /一致しない/);
     assert.throws(() => parseSuites("<other/>", "d.xml"), /testsuite/);
+    // 子要素を出さずに属性だけで失敗を報告する形式も失敗にする（レビュー指摘: 属性との照合）
+    assert.throws(
+      () => parseSuites('<testsuite name="x" tests="2" failures="1"><testcase name="a"/><testcase name="b"/></testsuite>', "c.xml"),
+      /failures/,
+    );
+    assert.throws(() => parseSuites('<testsuite name="x" tests="1" errors="1"><testcase name="a"/></testsuite>', "c.xml"), /errors/);
+    // 不正な XML（閉じタグ欠落）は数えない
+    assert.throws(() => parseSuites('<testsuite name="x" tests="1"><testcase name="a">', "c.xml"), /不正な XML/);
   });
   it("cdata content that looks like a testsuite is not counted", () => assert.deepEqual(total(suite("A", 1)), [1, 0, 0, 0]));
   it("passes only when counts, classes, skips and failures are all satisfied", () => {

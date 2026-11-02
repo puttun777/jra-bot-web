@@ -60,6 +60,8 @@ describe("scenario", () => {
       "tools/src/ci/classify.ts",
       "tools/test/ci/classify.test.ts",
       "tools/src/lib/proc.ts",
+      "tools/src/main.ts",
+      "tools/test/lib/helpers.ts",
       "tools/tsconfig.json",
       "tools/run-tests.mjs",
       "package.json",

@@ -48,6 +48,13 @@ describe("archive", () => {
         const lib = members.find((m) => m.name === "app/lib");
         assert.ok(lib?.isDir === true, `${fmt}: ディレクトリ名の末尾の / を落とす`);
       }
+      // 途中で切れた tar は例外（旧 tarfile と同じ）
+      const whole = readFileSync(join(t, "a-pax.tar"));
+      await assert.rejects(async () => {
+        for await (const _ of readTar(Readable.from([whole.subarray(0, 1300)]))) {
+          // 読み捨て
+        }
+      }, /途中で切れている/);
       run("rm", ["-rf", t]);
     })();
   });

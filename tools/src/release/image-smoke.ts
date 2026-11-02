@@ -310,6 +310,7 @@ export class Smoke {
     const c = dockerChecked(["create", this.image(name)]).trim();
     this.created.push(c);
     const proc = spawn("docker", ["export", c], { stdio: ["ignore", "pipe", "ignore"] });
+    const exited = new Promise<number>((resolve) => proc.on("close", (code) => resolve(code ?? 1)));
     const names: string[] = [];
     const modes = new Map<string, number>();
     for await (const m of readTar(proc.stdout)) {
@@ -317,6 +318,7 @@ export class Smoke {
       if (m.name.startsWith("app/") && m.isDir) continue; // ディレクトリは「ファイルの一覧」に含めない
       names.push(m.name);
     }
+    if (!this.r.check(`[${name}] docker export succeeded (filesystem fully scanned)`, (await exited) === 0)) return;
     const userAreas = names.filter((n) => /^(app|home|root|tmp|srv|opt\/(?!java|venv))/.test(n) || /^etc\/[^/]*\.env/.test(n));
     const bad = userAreas.filter((n) => FORBIDDEN_FILE.test(n));
     this.r.check(
@@ -480,11 +482,16 @@ export class Smoke {
     );
   }
 
+  /** アプリが起動に失敗した（非 0）ことの確認。docker 自体の失敗（125〜127）・タイムアウト（124）は該当しない */
+  private appFailed(rc: number): boolean {
+    return rc !== 0 && rc !== 124 && !(rc >= 125 && rc <= 127);
+  }
+
   webChecksNoDb(name: "ingest" | "dashboard", extra: Readonly<Record<string, string>>): void {
     let [rc] = this.runIn(name, { env: { APP_ENV: "prod" }, desc: `${name} prod no settings`, timeout: 120 });
-    this.r.check(`[${name}] APP_ENV=prod without required settings fails to start (nonzero, no hang)`, rc !== 0 && rc !== 124, `rc=${rc}`);
+    this.r.check(`[${name}] APP_ENV=prod without required settings fails to start (nonzero, no hang)`, this.appFailed(rc), `rc=${rc}`);
     [rc] = this.runIn(name, { desc: `${name} no env`, timeout: 120 });
-    this.r.check(`[${name}] no environment at all fails to start (nonzero)`, rc !== 0 && rc !== 124, `rc=${rc}`);
+    this.r.check(`[${name}] no environment at all fails to start (nonzero)`, this.appFailed(rc), `rc=${rc}`);
     const env = {
       APP_ENV: "prod",
       OPS_MODE_SOURCE: "/nonexistent/ops-state.json",
@@ -494,7 +501,7 @@ export class Smoke {
       ...extra,
     };
     [rc] = this.runIn(name, { env, desc: `${name} prod with local mode file`, timeout: 120 });
-    this.r.check(`[${name}] prod with a local-file mode source fails to start (nonzero)`, rc !== 0 && rc !== 124, `rc=${rc}`);
+    this.r.check(`[${name}] prod with a local-file mode source fails to start (nonzero)`, this.appFailed(rc), `rc=${rc}`);
   }
 
   // ------------------------------------------------------------------ 動作検査（CI 専用 MySQL）

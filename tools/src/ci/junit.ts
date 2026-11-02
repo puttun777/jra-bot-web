@@ -7,7 +7,7 @@
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { XMLParser } from "fast-xml-parser";
+import { XMLParser, XMLValidator } from "fast-xml-parser";
 import { isRecord } from "../lib/json.js";
 
 export interface SuiteCounts {
@@ -43,6 +43,9 @@ function arr(v: unknown): Record<string, unknown>[] {
  * 返す name はクラス（Gradle の testsuite 名 / testcase の classname）の一覧の検査に使う。
  */
 export function parseSuites(xml: string, file: string): SuiteCounts[] {
+  // 閉じタグの欠落など不正な XML は数えずに失敗にする（旧 ElementTree と同じ）
+  const valid = XMLValidator.validate(xml);
+  if (valid !== true) throw new Error(`${file}: 不正な XML（${valid.err.msg} 行 ${valid.err.line}）`);
   const doc: unknown = parser.parse(xml);
   if (!isRecord(doc)) throw new Error(`${file}: XML を解析できない`);
   const roots: Record<string, unknown>[] = [];
@@ -73,7 +76,15 @@ export function parseSuites(xml: string, file: string): SuiteCounts[] {
       const declaredSkipped = intAttr(s, "skipped", file);
       if (declaredSkipped !== undefined && declaredSkipped !== c.skipped)
         throw new Error(`${file}: testsuite ${name} の skipped=${declaredSkipped} と一致しない`);
-      for (const k of ["failures", "errors"] as const) intAttr(s, k, file);
+      // failures・errors も、属性があれば数えた値と一致しなければ失敗（子要素を出さない形式で失敗を見落とさない）
+      for (const [k, counted] of [
+        ["failures", c.failures],
+        ["errors", c.errors],
+      ] as const) {
+        const declaredK = intAttr(s, k, file);
+        if (declaredK !== undefined && declaredK !== counted)
+          throw new Error(`${file}: testsuite ${name} の ${k}=${declaredK} と testcase の数 ${counted} が一致しない`);
+      }
       out.push({ name, tests: 0, skipped: 0, failures: 0, errors: 0 });
       tests += c.tests;
       skipped += c.skipped;

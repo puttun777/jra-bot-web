@@ -67,7 +67,6 @@ export const RULES: ReadonlyArray<readonly [RegExp, readonly Tag[]]> = [
   [/^\.github\/workflows\/compat-connectorj26\.yml$/, ["ci", "connectorj"]],
   [/^\.github\/(workflows|scripts|actions)\//, ["ci"]],
   [/^tools\/(ci|release)\//, ["ci"]], // 旧 Python 版の置き場所（削除・誤って復活した場合も安全側）
-  [/^tools\/(src|test)\/(ci|lib)\//, ["ci"]],
   [/^tools\/(tsconfig\.json|run-tests\.mjs)$/, ["ci"]],
   [/^(package\.json|package-lock\.json|biome\.json)$/, ["ci"]],
   [/^tools\/__init__\.py$/, ["ci"]],
@@ -76,6 +75,7 @@ export const RULES: ReadonlyArray<readonly [RegExp, readonly Tag[]]> = [
   // --- Docker・リリース
   [/^(Dockerfile|\.dockerignore)$/, ["docker", "release"]],
   [/^tools\/(src|test)\/release\//, ["docker", "release"]],
+  [/^tools\/(src|test)\//, ["ci"]], // release 以外の TypeScript（ci・lib・main.ts・試験の共通部）は CI 自体
   [/^docs\/(schemas|release)\//, ["release"]],
   [/^docs\/CONTRACTS\.md$/, ["docs", "release"]],
   [/^db-migration\/src\/main\/resources\/db\/migration\//, ["kotlin_db", "release", "docker"]],

@@ -113,6 +113,7 @@ export async function* readTar(stream: AsyncIterable<Buffer>): AsyncGenerator<Ta
   let skip = 0; // 内容として読み飛ばすバイト数（512 の倍数に切り上げ済み）
   let longName: string | undefined;
   let collect: { kind: "L" | "x"; size: number; padded: number } | undefined;
+  let sawEnd = false;
   for await (const chunk of stream) {
     pending = pending.length === 0 ? chunk : Buffer.concat([pending, chunk]);
     for (;;) {
@@ -134,7 +135,10 @@ export async function* readTar(stream: AsyncIterable<Buffer>): AsyncGenerator<Ta
       if (pending.length < 512) break;
       const h = pending.subarray(0, 512);
       pending = pending.subarray(512);
-      if (h.every((x) => x === 0)) continue; // 終端ブロック
+      if (h.every((x) => x === 0)) {
+        sawEnd = true; // 終端ブロック
+        continue;
+      }
       const size = octal(h.subarray(124, 136));
       const type = String.fromCharCode(h[156] ?? 0);
       const padded = Math.ceil(size / 512) * 512;
@@ -156,4 +160,6 @@ export async function* readTar(stream: AsyncIterable<Buffer>): AsyncGenerator<Ta
       skip = padded;
     }
   }
+  // 途中で切れた tar（内容・見出し・長い名前の途中で終わった）を、走査の完了として扱わない
+  if (skip > 0 || collect !== undefined || pending.length > 0 || !sawEnd) throw new Error("tar が途中で切れている（終端ブロックが無い）");
 }

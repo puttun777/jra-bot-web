@@ -46,11 +46,31 @@ function schemaValidator(root: string, name: string): (v: unknown) => readonly s
   if (cached !== undefined) return cached;
   const schema: unknown = JSON.parse(readFileSync(key, "utf8"));
   if (!isRecord(schema)) throw new Error(`${name}: スキーマがオブジェクトではない`);
+  rejectIgnoredKeywords(schema, name);
   const ajv = new Ajv2020({ strict: true, allErrors: true, validateFormats: false });
   const fn = ajv.compile(schema);
   const v = (doc: unknown): readonly string[] => (fn(doc) ? [] : (fn.errors ?? []).map(formatError));
   validators.set(key, v);
   return v;
+}
+
+/**
+ * Ajv が strict でも**黙って検査しない**キーワード（format は validateFormats=false、content* は注釈扱い）がスキーマにあれば拒否する
+ * （旧 jsonschema_lite と同じく、検査されない条件を書けないようにする = fail closed）。
+ */
+const IGNORED_KEYWORDS: ReadonlySet<string> = new Set(["format", "contentEncoding", "contentMediaType", "contentSchema"]);
+
+export function rejectIgnoredKeywords(schema: unknown, what: string, path = "#"): void {
+  if (Array.isArray(schema)) {
+    schema.forEach((x, i) => rejectIgnoredKeywords(x, what, `${path}/${i}`));
+    return;
+  }
+  if (!isRecord(schema)) return;
+  for (const [k, v] of Object.entries(schema)) {
+    if (IGNORED_KEYWORDS.has(k) && path !== "#/properties" && !path.endsWith("/properties"))
+      throw new Error(`${what}: ${path} の ${k} は検証されないキーワード（使わない）`);
+    rejectIgnoredKeywords(v, what, `${path}/${k}`);
+  }
 }
 
 function formatError(e: ErrorObject): string {
