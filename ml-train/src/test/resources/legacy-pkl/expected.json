@@ -1,0 +1,251 @@
+{
+ "cases": {
+  "refused_2d_weights": {
+   "outcome": "REFUSED",
+   "reason": "INVALID_WEIGHTS",
+   "sha256": "1ff78953248766638ef0dc4728bc3535644ef55cdcf64907f20071cb0168ef3a"
+  },
+  "refused_alpha35_p2_codecs": {
+   "outcome": "REFUSED",
+   "reason": "PICKLE_UNKNOWN_CLASS",
+   "sha256": "14f45ecd6d0541bdcec652e778423bc2fc65ae476a27d62db67b929742cd64dd"
+  },
+  "refused_blend_out_of_range": {
+   "outcome": "REFUSED",
+   "reason": "INVALID_NUMBER",
+   "sha256": "9ce1cae90a7f7fe3d6e67cbbb262f730d29df6f49fb0f4cfd190d02ec79ed8c5"
+  },
+  "refused_bool_bias": {
+   "outcome": "REFUSED",
+   "reason": "INVALID_NUMBER",
+   "sha256": "ede923aae8de7927076137ff1d119dcc6288b29c66c9bbb014dbb61d6c29610e"
+  },
+  "refused_calibration40_p2_codecs": {
+   "outcome": "REFUSED",
+   "reason": "PICKLE_UNKNOWN_CLASS",
+   "sha256": "b431112b10b534c8d95b38ecf87eaa2417da35914ee1063579b48e9bc40a7750"
+  },
+  "refused_dimension_mismatch": {
+   "outcome": "REFUSED",
+   "reason": "DIMENSION_MISMATCH",
+   "sha256": "2aff371fcb46e491c90feb9eb44d56c0f8d9cf59260dbc54ff95876ae3567b19"
+  },
+  "refused_duplicate_names": {
+   "outcome": "REFUSED",
+   "reason": "INVALID_FEATURE_NAMES",
+   "sha256": "460a0a5b2d1dfa620a8800603314f4e4927d1cce7f4dfc712ad2249163913dfa"
+  },
+  "refused_empty": {
+   "outcome": "REFUSED",
+   "reason": "PICKLE_SIZE",
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "refused_eval": {
+   "outcome": "REFUSED",
+   "reason": "PICKLE_UNKNOWN_CLASS",
+   "sha256": "a903259f1e579cdf7231a52874794f6336bc276c096544b5e15e93c057fdd4f3"
+  },
+  "refused_ext_opcode": {
+   "outcome": "REFUSED",
+   "reason": "PICKLE_FORBIDDEN_OPCODE",
+   "sha256": "c595bc8497a523c324585ada0204e2c53f192d8ef4af8d56fc761d13bd7b88d8"
+  },
+  "refused_half_calibration": {
+   "outcome": "REFUSED",
+   "reason": "INVALID_CALIBRATION",
+   "sha256": "8210a6895660ce810c8a35272b5e42246106568d0b7f65a6f9fbef8d7208fcd5"
+  },
+  "refused_inf_bias": {
+   "outcome": "REFUSED",
+   "reason": "INVALID_NUMBER",
+   "sha256": "5b85678a30660edd27bd4f129daaa51cddd7af3c13244c4f541713cd078fb586"
+  },
+  "refused_int_weights": {
+   "outcome": "REFUSED",
+   "reason": "INVALID_WEIGHTS",
+   "sha256": "65cb4dd5156c4ef6a7c3af5553b5eeaff430495584fb66c81a5225bcf79635fb"
+  },
+  "refused_list_weights": {
+   "outcome": "REFUSED",
+   "reason": "INVALID_WEIGHTS",
+   "sha256": "a54445aa1cb4c4746bd23383148c1d235ead1d06276eddd9fb13e15aedca29ae"
+  },
+  "refused_market5_p2_codecs": {
+   "outcome": "REFUSED",
+   "reason": "PICKLE_UNKNOWN_CLASS",
+   "sha256": "06441024fc73015a0cea35b1c145ce71559fd5987d4a22c8c3b1e211191d5d28"
+  },
+  "refused_missing_weights": {
+   "outcome": "REFUSED",
+   "reason": "MISSING_ATTRIBUTES",
+   "sha256": "7d5e553bb586138648407982809dfc8846711c5aaea18026d9b9f309cab41dfc"
+  },
+  "refused_nan_weight": {
+   "outcome": "REFUSED",
+   "reason": "INVALID_NUMBER",
+   "sha256": "a8e6012da034fc987e8c4202df484c6f9d006da2bf153da0306c4c5e07566ac5"
+  },
+  "refused_object_weights": {
+   "outcome": "REFUSED",
+   "reason": "INVALID_WEIGHTS",
+   "sha256": "8e38903af3405c753f8e5f1deb07c18f1f1a1da94fafefa31398db2af7296658"
+  },
+  "refused_os_system": {
+   "outcome": "REFUSED",
+   "reason": "PICKLE_UNKNOWN_CLASS",
+   "sha256": "a15a022b17547d03d948aa4723cd6138bf1bbf95eb708f337f688d068e381078"
+  },
+  "refused_os_system_inside_model": {
+   "outcome": "REFUSED",
+   "reason": "PICKLE_UNKNOWN_CLASS",
+   "sha256": "78f78cafadb2f909370df2ea3dab38abc3f893e7ff76fb69ee986704ad380096"
+  },
+  "refused_other_module_same_name": {
+   "outcome": "REFUSED",
+   "reason": "PICKLE_UNKNOWN_CLASS",
+   "sha256": "b1606c6b77da673664aeb0ab81c3d9964ddab4082b47a76825ce127fc4ba9b3d"
+  },
+  "refused_persid": {
+   "outcome": "REFUSED",
+   "reason": "PICKLE_FORBIDDEN_OPCODE",
+   "sha256": "a7d4e8a7e112ae4131a1a7d7739168d034823837023cc04dc130f64664f30a65"
+  },
+  "refused_plain_dict": {
+   "outcome": "REFUSED",
+   "reason": "PICKLE_NOT_A_MODEL",
+   "sha256": "12be5f8c33a8561755d0772e91410bb9b505b46c92fef7cdef57a17308db35f6"
+  },
+  "refused_string_bias": {
+   "outcome": "REFUSED",
+   "reason": "INVALID_NUMBER",
+   "sha256": "69de30593451566494aafa364a5d16889f75b51b3238ac0c8b5f741c93a5a65b"
+  },
+  "refused_truncated": {
+   "outcome": "REFUSED",
+   "reason": "PICKLE_MALFORMED",
+   "sha256": "9c71ada5971e7101719b9a0c4dd09ee471dfb2554b19c93e79b7c28add22b0a5"
+  },
+  "refused_unknown_attribute": {
+   "outcome": "REFUSED",
+   "reason": "UNKNOWN_ATTRIBUTES",
+   "sha256": "36be32a2f61a6ea6c0035e3586ade462e06dc5661617cd9b396bcdcda441dbab"
+  },
+  "refused_unknown_schema": {
+   "outcome": "REFUSED",
+   "reason": "UNKNOWN_FEATURE_SCHEMA",
+   "sha256": "c42dae258d44e48006e45482be71b0731c265a45700abf3b4f37033f91b38a3f"
+  },
+  "valid_alpha35_p3": {
+   "model_json": "{\"algorithm\":\"logistic_regression\",\"bias\":-1.25,\"calibration\":{\"a\":1.1,\"b\":-0.2,\"type\":\"platt\"},\"created_at\":\"2026-11-02T00:00:00Z\",\"ensemble\":null,\"feature_schema\":{\"hash\":\"sha256:adc23ffbba14075c9626a26f51cffbe6f9e3fb16702449121260e013d611e87a\",\"hash_algo\":\"md5-le32-mod16\",\"missing_policy\":\"zero_with_flags\",\"names\":[\"has_horse_master\",\"has_past_runs\",\"age_years\",\"past_n\",\"past_win_rate\",\"past_place_rate\",\"past_avg_finish\",\"style_hint_code\",\"distance_place_rate\",\"surface_place_rate\",\"condition_place_rate\",\"days_since_last_run\",\"distance_km\",\"is_turf\",\"is_dirt\",\"is_obstacle\",\"tenko_cd\",\"baba_cd\",\"course_kubun_cd\",\"pedigree_hash_0\",\"pedigree_hash_1\",\"pedigree_hash_2\",\"pedigree_hash_3\",\"pedigree_hash_4\",\"pedigree_hash_5\",\"pedigree_hash_6\",\"pedigree_hash_7\",\"pedigree_hash_8\",\"pedigree_hash_9\",\"pedigree_hash_10\",\"pedigree_hash_11\",\"pedigree_hash_12\",\"pedigree_hash_13\",\"pedigree_hash_14\",\"pedigree_hash_15\"],\"pedigree_dim\":16,\"version\":1},\"kind\":\"alpha\",\"market_blend\":{\"alpha_default\":0.25},\"metrics\":{},\"model_id\":\"legacy-001\",\"model_schema_version\":1,\"preprocessing\":null,\"producer\":\"ml-train/0.1.0/convert-pkl\",\"sha256\":\"8b646970c7e44e134264cbe2ed0d470393f99d047b5b74bca6ec182f22288ffe\",\"tenant_id\":1,\"training\":{\"conversion\":\"convert-pkl\",\"converted_from\":\"legacy_pkl\",\"lr\":null,\"source_sha256\":\"f8111ef8fb79fce98d5b06c5a334405b8b55bfc2617778f05a33154be4d5ecb8\",\"synthetic\":false},\"weights\":[-0.25,0.1,-0.1,0.25,0.05,-0.15,0.2,0.0,-0.2,0.15,-0.05,-0.25,0.1,-0.1,0.25,0.05,-0.15,0.2,0.0,-0.2,0.15,-0.05,-0.25,0.1,-0.1,0.25,0.05,-0.15,0.2,0.0,-0.2,0.15,-0.05,-0.25,0.1]}",
+   "outcome": "CONVERTED",
+   "sha256": "f8111ef8fb79fce98d5b06c5a334405b8b55bfc2617778f05a33154be4d5ecb8",
+   "warnings": [
+    "alpha(35 次元) のモデルに Platt が付いている（旧 train.py 経路では通常付かない）。そのまま変換する"
+   ]
+  },
+  "valid_alpha35_p4": {
+   "model_json": "{\"algorithm\":\"logistic_regression\",\"bias\":-1.25,\"calibration\":{\"a\":1.1,\"b\":-0.2,\"type\":\"platt\"},\"created_at\":\"2026-11-02T00:00:00Z\",\"ensemble\":null,\"feature_schema\":{\"hash\":\"sha256:adc23ffbba14075c9626a26f51cffbe6f9e3fb16702449121260e013d611e87a\",\"hash_algo\":\"md5-le32-mod16\",\"missing_policy\":\"zero_with_flags\",\"names\":[\"has_horse_master\",\"has_past_runs\",\"age_years\",\"past_n\",\"past_win_rate\",\"past_place_rate\",\"past_avg_finish\",\"style_hint_code\",\"distance_place_rate\",\"surface_place_rate\",\"condition_place_rate\",\"days_since_last_run\",\"distance_km\",\"is_turf\",\"is_dirt\",\"is_obstacle\",\"tenko_cd\",\"baba_cd\",\"course_kubun_cd\",\"pedigree_hash_0\",\"pedigree_hash_1\",\"pedigree_hash_2\",\"pedigree_hash_3\",\"pedigree_hash_4\",\"pedigree_hash_5\",\"pedigree_hash_6\",\"pedigree_hash_7\",\"pedigree_hash_8\",\"pedigree_hash_9\",\"pedigree_hash_10\",\"pedigree_hash_11\",\"pedigree_hash_12\",\"pedigree_hash_13\",\"pedigree_hash_14\",\"pedigree_hash_15\"],\"pedigree_dim\":16,\"version\":1},\"kind\":\"alpha\",\"market_blend\":{\"alpha_default\":0.25},\"metrics\":{},\"model_id\":\"legacy-001\",\"model_schema_version\":1,\"preprocessing\":null,\"producer\":\"ml-train/0.1.0/convert-pkl\",\"sha256\":\"278346c552d789d5b8bf2e69b01c162e5132ec22ee8c6e22881ae7f631af04a6\",\"tenant_id\":1,\"training\":{\"conversion\":\"convert-pkl\",\"converted_from\":\"legacy_pkl\",\"lr\":null,\"source_sha256\":\"2e03e19ccd0ad4577b7cfd37237aac0b874d9f7d6d26f067b68f2dc2a2e086a1\",\"synthetic\":false},\"weights\":[-0.25,0.1,-0.1,0.25,0.05,-0.15,0.2,0.0,-0.2,0.15,-0.05,-0.25,0.1,-0.1,0.25,0.05,-0.15,0.2,0.0,-0.2,0.15,-0.05,-0.25,0.1,-0.1,0.25,0.05,-0.15,0.2,0.0,-0.2,0.15,-0.05,-0.25,0.1]}",
+   "outcome": "CONVERTED",
+   "sha256": "2e03e19ccd0ad4577b7cfd37237aac0b874d9f7d6d26f067b68f2dc2a2e086a1",
+   "warnings": [
+    "alpha(35 次元) のモデルに Platt が付いている（旧 train.py 経路では通常付かない）。そのまま変換する"
+   ]
+  },
+  "valid_alpha35_p5": {
+   "model_json": "{\"algorithm\":\"logistic_regression\",\"bias\":-1.25,\"calibration\":{\"a\":1.1,\"b\":-0.2,\"type\":\"platt\"},\"created_at\":\"2026-11-02T00:00:00Z\",\"ensemble\":null,\"feature_schema\":{\"hash\":\"sha256:adc23ffbba14075c9626a26f51cffbe6f9e3fb16702449121260e013d611e87a\",\"hash_algo\":\"md5-le32-mod16\",\"missing_policy\":\"zero_with_flags\",\"names\":[\"has_horse_master\",\"has_past_runs\",\"age_years\",\"past_n\",\"past_win_rate\",\"past_place_rate\",\"past_avg_finish\",\"style_hint_code\",\"distance_place_rate\",\"surface_place_rate\",\"condition_place_rate\",\"days_since_last_run\",\"distance_km\",\"is_turf\",\"is_dirt\",\"is_obstacle\",\"tenko_cd\",\"baba_cd\",\"course_kubun_cd\",\"pedigree_hash_0\",\"pedigree_hash_1\",\"pedigree_hash_2\",\"pedigree_hash_3\",\"pedigree_hash_4\",\"pedigree_hash_5\",\"pedigree_hash_6\",\"pedigree_hash_7\",\"pedigree_hash_8\",\"pedigree_hash_9\",\"pedigree_hash_10\",\"pedigree_hash_11\",\"pedigree_hash_12\",\"pedigree_hash_13\",\"pedigree_hash_14\",\"pedigree_hash_15\"],\"pedigree_dim\":16,\"version\":1},\"kind\":\"alpha\",\"market_blend\":{\"alpha_default\":0.25},\"metrics\":{},\"model_id\":\"legacy-001\",\"model_schema_version\":1,\"preprocessing\":null,\"producer\":\"ml-train/0.1.0/convert-pkl\",\"sha256\":\"3fa75d83cab0f9f7668c3789bde0d627b1486b47664c25fc0fae45ec7831bd5a\",\"tenant_id\":1,\"training\":{\"conversion\":\"convert-pkl\",\"converted_from\":\"legacy_pkl\",\"lr\":null,\"source_sha256\":\"5f91b533bf870be93300560bdd7daa858b5fdcaa0d770adc9a206777a6012de2\",\"synthetic\":false},\"weights\":[-0.25,0.1,-0.1,0.25,0.05,-0.15,0.2,0.0,-0.2,0.15,-0.05,-0.25,0.1,-0.1,0.25,0.05,-0.15,0.2,0.0,-0.2,0.15,-0.05,-0.25,0.1,-0.1,0.25,0.05,-0.15,0.2,0.0,-0.2,0.15,-0.05,-0.25,0.1]}",
+   "outcome": "CONVERTED",
+   "sha256": "5f91b533bf870be93300560bdd7daa858b5fdcaa0d770adc9a206777a6012de2",
+   "warnings": [
+    "alpha(35 次元) のモデルに Platt が付いている（旧 train.py 経路では通常付かない）。そのまま変換する"
+   ]
+  },
+  "valid_big_endian_weights": {
+   "model_json": "{\"algorithm\":\"logistic_regression\",\"bias\":-1.25,\"calibration\":{\"a\":1.1,\"b\":-0.2,\"type\":\"platt\"},\"created_at\":\"2026-11-02T00:00:00Z\",\"ensemble\":null,\"feature_schema\":{\"hash\":\"sha256:b86195e2bda484d3e724ea355c946ddb0855f61815165177f7686e64bfcb8959\",\"hash_algo\":\"none\",\"missing_policy\":\"zero_with_flags\",\"names\":[\"odds\",\"popularity\",\"log_odds\",\"inv_popularity\",\"odds_popularity_interaction\"],\"pedigree_dim\":0,\"version\":1},\"kind\":\"legacy_compat\",\"market_blend\":{\"alpha_default\":0.25},\"metrics\":{},\"model_id\":\"legacy-001\",\"model_schema_version\":1,\"preprocessing\":null,\"producer\":\"ml-train/0.1.0/convert-pkl\",\"sha256\":\"914d90a3c16c0df05c7f939fd20bced768b56c07281e44920f2d5bea51793279\",\"tenant_id\":1,\"training\":{\"conversion\":\"convert-pkl\",\"converted_from\":\"legacy_pkl\",\"lr\":null,\"source_sha256\":\"07716883b3cb18e9c83ffa9cb0e11394a2155f1b70aa6ade10b483d62a4ed789\",\"synthetic\":false},\"weights\":[0.5,-0.25,1.0,2.0,-3.5]}",
+   "outcome": "CONVERTED",
+   "sha256": "07716883b3cb18e9c83ffa9cb0e11394a2155f1b70aa6ade10b483d62a4ed789",
+   "warnings": []
+  },
+  "valid_calibration40_p3": {
+   "model_json": "{\"algorithm\":\"logistic_regression\",\"bias\":-1.25,\"calibration\":{\"a\":1.1,\"b\":-0.2,\"type\":\"platt\"},\"created_at\":\"2026-11-02T00:00:00Z\",\"ensemble\":null,\"feature_schema\":{\"hash\":\"sha256:66e188f1d6a74a2807a5ce5a126d0da33785386d01c8229496f4272d8276e418\",\"hash_algo\":\"md5-le32-mod16\",\"missing_policy\":\"zero_with_flags\",\"names\":[\"odds\",\"popularity\",\"log_odds\",\"inv_popularity\",\"odds_popularity_interaction\",\"has_horse_master\",\"has_past_runs\",\"age_years\",\"past_n\",\"past_win_rate\",\"past_place_rate\",\"past_avg_finish\",\"style_hint_code\",\"distance_place_rate\",\"surface_place_rate\",\"condition_place_rate\",\"days_since_last_run\",\"distance_km\",\"is_turf\",\"is_dirt\",\"is_obstacle\",\"tenko_cd\",\"baba_cd\",\"course_kubun_cd\",\"pedigree_hash_0\",\"pedigree_hash_1\",\"pedigree_hash_2\",\"pedigree_hash_3\",\"pedigree_hash_4\",\"pedigree_hash_5\",\"pedigree_hash_6\",\"pedigree_hash_7\",\"pedigree_hash_8\",\"pedigree_hash_9\",\"pedigree_hash_10\",\"pedigree_hash_11\",\"pedigree_hash_12\",\"pedigree_hash_13\",\"pedigree_hash_14\",\"pedigree_hash_15\"],\"pedigree_dim\":16,\"version\":1},\"kind\":\"legacy_compat\",\"market_blend\":{\"alpha_default\":0.25},\"metrics\":{},\"model_id\":\"legacy-001\",\"model_schema_version\":1,\"preprocessing\":null,\"producer\":\"ml-train/0.1.0/convert-pkl\",\"sha256\":\"c513b4b61a8027238e3b7c75e460464048d4f29cd390bbb5b59727ad6b8332e1\",\"tenant_id\":1,\"training\":{\"conversion\":\"convert-pkl\",\"converted_from\":\"legacy_pkl\",\"lr\":null,\"source_sha256\":\"e1535622182a7496e68807daa9f78e15b15dcb9251a4ee88255feacaa6cadefa\",\"synthetic\":false},\"weights\":[-0.25,0.1,-0.1,0.25,0.05,-0.15,0.2,0.0,-0.2,0.15,-0.05,-0.25,0.1,-0.1,0.25,0.05,-0.15,0.2,0.0,-0.2,0.15,-0.05,-0.25,0.1,-0.1,0.25,0.05,-0.15,0.2,0.0,-0.2,0.15,-0.05,-0.25,0.1,-0.1,0.25,0.05,-0.15,0.2]}",
+   "outcome": "CONVERTED",
+   "sha256": "e1535622182a7496e68807daa9f78e15b15dcb9251a4ee88255feacaa6cadefa",
+   "warnings": [
+    "旧 40 次元モデルを legacy_compat として変換（v2 の calibration とは別物。学習方式は旧 GD・標準化なし）"
+   ]
+  },
+  "valid_calibration40_p4": {
+   "model_json": "{\"algorithm\":\"logistic_regression\",\"bias\":-1.25,\"calibration\":{\"a\":1.1,\"b\":-0.2,\"type\":\"platt\"},\"created_at\":\"2026-11-02T00:00:00Z\",\"ensemble\":null,\"feature_schema\":{\"hash\":\"sha256:66e188f1d6a74a2807a5ce5a126d0da33785386d01c8229496f4272d8276e418\",\"hash_algo\":\"md5-le32-mod16\",\"missing_policy\":\"zero_with_flags\",\"names\":[\"odds\",\"popularity\",\"log_odds\",\"inv_popularity\",\"odds_popularity_interaction\",\"has_horse_master\",\"has_past_runs\",\"age_years\",\"past_n\",\"past_win_rate\",\"past_place_rate\",\"past_avg_finish\",\"style_hint_code\",\"distance_place_rate\",\"surface_place_rate\",\"condition_place_rate\",\"days_since_last_run\",\"distance_km\",\"is_turf\",\"is_dirt\",\"is_obstacle\",\"tenko_cd\",\"baba_cd\",\"course_kubun_cd\",\"pedigree_hash_0\",\"pedigree_hash_1\",\"pedigree_hash_2\",\"pedigree_hash_3\",\"pedigree_hash_4\",\"pedigree_hash_5\",\"pedigree_hash_6\",\"pedigree_hash_7\",\"pedigree_hash_8\",\"pedigree_hash_9\",\"pedigree_hash_10\",\"pedigree_hash_11\",\"pedigree_hash_12\",\"pedigree_hash_13\",\"pedigree_hash_14\",\"pedigree_hash_15\"],\"pedigree_dim\":16,\"version\":1},\"kind\":\"legacy_compat\",\"market_blend\":{\"alpha_default\":0.25},\"metrics\":{},\"model_id\":\"legacy-001\",\"model_schema_version\":1,\"preprocessing\":null,\"producer\":\"ml-train/0.1.0/convert-pkl\",\"sha256\":\"ce522e23ee4911f244fc6a54861408b9271dbb7a774ecb25ee44511c22a2a7b6\",\"tenant_id\":1,\"training\":{\"conversion\":\"convert-pkl\",\"converted_from\":\"legacy_pkl\",\"lr\":null,\"source_sha256\":\"fbf982ab436349f0efd1337c27e57f147478518fc4257a999dce936722f64b12\",\"synthetic\":false},\"weights\":[-0.25,0.1,-0.1,0.25,0.05,-0.15,0.2,0.0,-0.2,0.15,-0.05,-0.25,0.1,-0.1,0.25,0.05,-0.15,0.2,0.0,-0.2,0.15,-0.05,-0.25,0.1,-0.1,0.25,0.05,-0.15,0.2,0.0,-0.2,0.15,-0.05,-0.25,0.1,-0.1,0.25,0.05,-0.15,0.2]}",
+   "outcome": "CONVERTED",
+   "sha256": "fbf982ab436349f0efd1337c27e57f147478518fc4257a999dce936722f64b12",
+   "warnings": [
+    "旧 40 次元モデルを legacy_compat として変換（v2 の calibration とは別物。学習方式は旧 GD・標準化なし）"
+   ]
+  },
+  "valid_calibration40_p5": {
+   "model_json": "{\"algorithm\":\"logistic_regression\",\"bias\":-1.25,\"calibration\":{\"a\":1.1,\"b\":-0.2,\"type\":\"platt\"},\"created_at\":\"2026-11-02T00:00:00Z\",\"ensemble\":null,\"feature_schema\":{\"hash\":\"sha256:66e188f1d6a74a2807a5ce5a126d0da33785386d01c8229496f4272d8276e418\",\"hash_algo\":\"md5-le32-mod16\",\"missing_policy\":\"zero_with_flags\",\"names\":[\"odds\",\"popularity\",\"log_odds\",\"inv_popularity\",\"odds_popularity_interaction\",\"has_horse_master\",\"has_past_runs\",\"age_years\",\"past_n\",\"past_win_rate\",\"past_place_rate\",\"past_avg_finish\",\"style_hint_code\",\"distance_place_rate\",\"surface_place_rate\",\"condition_place_rate\",\"days_since_last_run\",\"distance_km\",\"is_turf\",\"is_dirt\",\"is_obstacle\",\"tenko_cd\",\"baba_cd\",\"course_kubun_cd\",\"pedigree_hash_0\",\"pedigree_hash_1\",\"pedigree_hash_2\",\"pedigree_hash_3\",\"pedigree_hash_4\",\"pedigree_hash_5\",\"pedigree_hash_6\",\"pedigree_hash_7\",\"pedigree_hash_8\",\"pedigree_hash_9\",\"pedigree_hash_10\",\"pedigree_hash_11\",\"pedigree_hash_12\",\"pedigree_hash_13\",\"pedigree_hash_14\",\"pedigree_hash_15\"],\"pedigree_dim\":16,\"version\":1},\"kind\":\"legacy_compat\",\"market_blend\":{\"alpha_default\":0.25},\"metrics\":{},\"model_id\":\"legacy-001\",\"model_schema_version\":1,\"preprocessing\":null,\"producer\":\"ml-train/0.1.0/convert-pkl\",\"sha256\":\"4e25204819a0450eb2f4e4040d34ef70366c81e2c12ec82020a74d86d8b18be7\",\"tenant_id\":1,\"training\":{\"conversion\":\"convert-pkl\",\"converted_from\":\"legacy_pkl\",\"lr\":null,\"source_sha256\":\"1159ee6064ce4d84e84fb556356e87ddb065fb68dc7107dd0f4cde1b344a51a2\",\"synthetic\":false},\"weights\":[-0.25,0.1,-0.1,0.25,0.05,-0.15,0.2,0.0,-0.2,0.15,-0.05,-0.25,0.1,-0.1,0.25,0.05,-0.15,0.2,0.0,-0.2,0.15,-0.05,-0.25,0.1,-0.1,0.25,0.05,-0.15,0.2,0.0,-0.2,0.15,-0.05,-0.25,0.1,-0.1,0.25,0.05,-0.15,0.2]}",
+   "outcome": "CONVERTED",
+   "sha256": "1159ee6064ce4d84e84fb556356e87ddb065fb68dc7107dd0f4cde1b344a51a2",
+   "warnings": [
+    "旧 40 次元モデルを legacy_compat として変換（v2 の calibration とは別物。学習方式は旧 GD・標準化なし）"
+   ]
+  },
+  "valid_float32_weights": {
+   "model_json": "{\"algorithm\":\"logistic_regression\",\"bias\":-1.25,\"calibration\":{\"a\":1.1,\"b\":-0.2,\"type\":\"platt\"},\"created_at\":\"2026-11-02T00:00:00Z\",\"ensemble\":null,\"feature_schema\":{\"hash\":\"sha256:66e188f1d6a74a2807a5ce5a126d0da33785386d01c8229496f4272d8276e418\",\"hash_algo\":\"md5-le32-mod16\",\"missing_policy\":\"zero_with_flags\",\"names\":[\"odds\",\"popularity\",\"log_odds\",\"inv_popularity\",\"odds_popularity_interaction\",\"has_horse_master\",\"has_past_runs\",\"age_years\",\"past_n\",\"past_win_rate\",\"past_place_rate\",\"past_avg_finish\",\"style_hint_code\",\"distance_place_rate\",\"surface_place_rate\",\"condition_place_rate\",\"days_since_last_run\",\"distance_km\",\"is_turf\",\"is_dirt\",\"is_obstacle\",\"tenko_cd\",\"baba_cd\",\"course_kubun_cd\",\"pedigree_hash_0\",\"pedigree_hash_1\",\"pedigree_hash_2\",\"pedigree_hash_3\",\"pedigree_hash_4\",\"pedigree_hash_5\",\"pedigree_hash_6\",\"pedigree_hash_7\",\"pedigree_hash_8\",\"pedigree_hash_9\",\"pedigree_hash_10\",\"pedigree_hash_11\",\"pedigree_hash_12\",\"pedigree_hash_13\",\"pedigree_hash_14\",\"pedigree_hash_15\"],\"pedigree_dim\":16,\"version\":1},\"kind\":\"legacy_compat\",\"market_blend\":{\"alpha_default\":0.25},\"metrics\":{},\"model_id\":\"legacy-001\",\"model_schema_version\":1,\"preprocessing\":null,\"producer\":\"ml-train/0.1.0/convert-pkl\",\"sha256\":\"98c39db7af5d8dc2afb133a6aca9286e649d533bdc5a428ec3548adf5999e5ba\",\"tenant_id\":1,\"training\":{\"conversion\":\"convert-pkl\",\"converted_from\":\"legacy_pkl\",\"lr\":null,\"source_sha256\":\"02531e6c98d4e5e89dd75dcfe76ab327e1fd8d6fb9a4612d2021b4b956c4489f\",\"synthetic\":false},\"weights\":[0.5,-0.25,0.5,-0.25,0.5,-0.25,0.5,-0.25,0.5,-0.25,0.5,-0.25,0.5,-0.25,0.5,-0.25,0.5,-0.25,0.5,-0.25,0.5,-0.25,0.5,-0.25,0.5,-0.25,0.5,-0.25,0.5,-0.25,0.5,-0.25,0.5,-0.25,0.5,-0.25,0.5,-0.25,0.5,-0.25]}",
+   "outcome": "CONVERTED",
+   "sha256": "02531e6c98d4e5e89dd75dcfe76ab327e1fd8d6fb9a4612d2021b4b956c4489f",
+   "warnings": [
+    "旧 40 次元モデルを legacy_compat として変換（v2 の calibration とは別物。学習方式は旧 GD・標準化なし）"
+   ]
+  },
+  "valid_int_bias": {
+   "model_json": "{\"algorithm\":\"logistic_regression\",\"bias\":2.0,\"calibration\":{\"a\":1.1,\"b\":-0.2,\"type\":\"platt\"},\"created_at\":\"2026-11-02T00:00:00Z\",\"ensemble\":null,\"feature_schema\":{\"hash\":\"sha256:b86195e2bda484d3e724ea355c946ddb0855f61815165177f7686e64bfcb8959\",\"hash_algo\":\"none\",\"missing_policy\":\"zero_with_flags\",\"names\":[\"odds\",\"popularity\",\"log_odds\",\"inv_popularity\",\"odds_popularity_interaction\"],\"pedigree_dim\":0,\"version\":1},\"kind\":\"legacy_compat\",\"market_blend\":{\"alpha_default\":1.0},\"metrics\":{},\"model_id\":\"legacy-001\",\"model_schema_version\":1,\"preprocessing\":null,\"producer\":\"ml-train/0.1.0/convert-pkl\",\"sha256\":\"a38e80fc593f17c961b1d7c2dc95772824072f4d9deeef4800dda001ad1120ad\",\"tenant_id\":1,\"training\":{\"conversion\":\"convert-pkl\",\"converted_from\":\"legacy_pkl\",\"lr\":null,\"source_sha256\":\"aa8246957985757d6f6d1ea837e45181ba92c101bc6dca2e4615def22df675b0\",\"synthetic\":false},\"weights\":[-0.25,0.1,-0.1,0.25,0.05]}",
+   "outcome": "CONVERTED",
+   "sha256": "aa8246957985757d6f6d1ea837e45181ba92c101bc6dca2e4615def22df675b0",
+   "warnings": []
+  },
+  "valid_market5_p3": {
+   "model_json": "{\"algorithm\":\"logistic_regression\",\"bias\":-1.25,\"calibration\":{\"a\":1.1,\"b\":-0.2,\"type\":\"platt\"},\"created_at\":\"2026-11-02T00:00:00Z\",\"ensemble\":null,\"feature_schema\":{\"hash\":\"sha256:b86195e2bda484d3e724ea355c946ddb0855f61815165177f7686e64bfcb8959\",\"hash_algo\":\"none\",\"missing_policy\":\"zero_with_flags\",\"names\":[\"odds\",\"popularity\",\"log_odds\",\"inv_popularity\",\"odds_popularity_interaction\"],\"pedigree_dim\":0,\"version\":1},\"kind\":\"legacy_compat\",\"market_blend\":{\"alpha_default\":0.25},\"metrics\":{},\"model_id\":\"legacy-001\",\"model_schema_version\":1,\"preprocessing\":null,\"producer\":\"ml-train/0.1.0/convert-pkl\",\"sha256\":\"92ac484ee52dcce1579e1edb3a27f1b3ec7eae4c69947c1ed6456ab541b83c02\",\"tenant_id\":1,\"training\":{\"conversion\":\"convert-pkl\",\"converted_from\":\"legacy_pkl\",\"lr\":null,\"source_sha256\":\"aef36189f0a880c10073cbcaa008ef9bb4cf100333b1f370a6913585a587c2f0\",\"synthetic\":false},\"weights\":[-0.25,0.1,-0.1,0.25,0.05]}",
+   "outcome": "CONVERTED",
+   "sha256": "aef36189f0a880c10073cbcaa008ef9bb4cf100333b1f370a6913585a587c2f0",
+   "warnings": []
+  },
+  "valid_market5_p4": {
+   "model_json": "{\"algorithm\":\"logistic_regression\",\"bias\":-1.25,\"calibration\":{\"a\":1.1,\"b\":-0.2,\"type\":\"platt\"},\"created_at\":\"2026-11-02T00:00:00Z\",\"ensemble\":null,\"feature_schema\":{\"hash\":\"sha256:b86195e2bda484d3e724ea355c946ddb0855f61815165177f7686e64bfcb8959\",\"hash_algo\":\"none\",\"missing_policy\":\"zero_with_flags\",\"names\":[\"odds\",\"popularity\",\"log_odds\",\"inv_popularity\",\"odds_popularity_interaction\"],\"pedigree_dim\":0,\"version\":1},\"kind\":\"legacy_compat\",\"market_blend\":{\"alpha_default\":0.25},\"metrics\":{},\"model_id\":\"legacy-001\",\"model_schema_version\":1,\"preprocessing\":null,\"producer\":\"ml-train/0.1.0/convert-pkl\",\"sha256\":\"afe784d2fd2e34d643847ea85d4b8c4ff627c7ef9cf8b287f3ef6731b96dc972\",\"tenant_id\":1,\"training\":{\"conversion\":\"convert-pkl\",\"converted_from\":\"legacy_pkl\",\"lr\":null,\"source_sha256\":\"b26bd5591c7055c3652d2ce5bbebfe9dfbbd1b382f1c66bb0d003718e1470532\",\"synthetic\":false},\"weights\":[-0.25,0.1,-0.1,0.25,0.05]}",
+   "outcome": "CONVERTED",
+   "sha256": "b26bd5591c7055c3652d2ce5bbebfe9dfbbd1b382f1c66bb0d003718e1470532",
+   "warnings": []
+  },
+  "valid_market5_p5": {
+   "model_json": "{\"algorithm\":\"logistic_regression\",\"bias\":-1.25,\"calibration\":{\"a\":1.1,\"b\":-0.2,\"type\":\"platt\"},\"created_at\":\"2026-11-02T00:00:00Z\",\"ensemble\":null,\"feature_schema\":{\"hash\":\"sha256:b86195e2bda484d3e724ea355c946ddb0855f61815165177f7686e64bfcb8959\",\"hash_algo\":\"none\",\"missing_policy\":\"zero_with_flags\",\"names\":[\"odds\",\"popularity\",\"log_odds\",\"inv_popularity\",\"odds_popularity_interaction\"],\"pedigree_dim\":0,\"version\":1},\"kind\":\"legacy_compat\",\"market_blend\":{\"alpha_default\":0.25},\"metrics\":{},\"model_id\":\"legacy-001\",\"model_schema_version\":1,\"preprocessing\":null,\"producer\":\"ml-train/0.1.0/convert-pkl\",\"sha256\":\"dc3c37a2dd0e93d8484a5708e3953ca27a4e9b565a12fa1ee920f0db8d7f2ee9\",\"tenant_id\":1,\"training\":{\"conversion\":\"convert-pkl\",\"converted_from\":\"legacy_pkl\",\"lr\":null,\"source_sha256\":\"03e05c29eb19f5bbf3cd4e689a9ecd90a6f3f60c98331eb90191c846730e749b\",\"synthetic\":false},\"weights\":[-0.25,0.1,-0.1,0.25,0.05]}",
+   "outcome": "CONVERTED",
+   "sha256": "03e05c29eb19f5bbf3cd4e689a9ecd90a6f3f60c98331eb90191c846730e749b",
+   "warnings": []
+  },
+  "valid_minimal_attributes": {
+   "model_json": "{\"algorithm\":\"logistic_regression\",\"bias\":-1.0,\"calibration\":null,\"created_at\":\"2026-11-02T00:00:00Z\",\"ensemble\":null,\"feature_schema\":{\"hash\":\"sha256:b86195e2bda484d3e724ea355c946ddb0855f61815165177f7686e64bfcb8959\",\"hash_algo\":\"none\",\"missing_policy\":\"zero_with_flags\",\"names\":[\"odds\",\"popularity\",\"log_odds\",\"inv_popularity\",\"odds_popularity_interaction\"],\"pedigree_dim\":0,\"version\":1},\"kind\":\"legacy_compat\",\"market_blend\":{\"alpha_default\":1.0},\"metrics\":{},\"model_id\":\"legacy-001\",\"model_schema_version\":1,\"preprocessing\":null,\"producer\":\"ml-train/0.1.0/convert-pkl\",\"sha256\":\"58569e68602548133a7d5ccd2f3cc43f9cc22a21ead578bae3c293a09e883280\",\"tenant_id\":1,\"training\":{\"conversion\":\"convert-pkl\",\"converted_from\":\"legacy_pkl\",\"lr\":null,\"source_sha256\":\"7265fa839b648224c4285d3aa34a9f1401cbda6eca31b9180c42ae9dc9362f53\",\"synthetic\":false},\"weights\":[0.1,0.1,0.1,0.1,0.1]}",
+   "outcome": "CONVERTED",
+   "sha256": "7265fa839b648224c4285d3aa34a9f1401cbda6eca31b9180c42ae9dc9362f53",
+   "warnings": []
+  },
+  "valid_no_calibration": {
+   "model_json": "{\"algorithm\":\"logistic_regression\",\"bias\":-1.25,\"calibration\":null,\"created_at\":\"2026-11-02T00:00:00Z\",\"ensemble\":null,\"feature_schema\":{\"hash\":\"sha256:b86195e2bda484d3e724ea355c946ddb0855f61815165177f7686e64bfcb8959\",\"hash_algo\":\"none\",\"missing_policy\":\"zero_with_flags\",\"names\":[\"odds\",\"popularity\",\"log_odds\",\"inv_popularity\",\"odds_popularity_interaction\"],\"pedigree_dim\":0,\"version\":1},\"kind\":\"legacy_compat\",\"market_blend\":{\"alpha_default\":0.25},\"metrics\":{},\"model_id\":\"legacy-001\",\"model_schema_version\":1,\"preprocessing\":null,\"producer\":\"ml-train/0.1.0/convert-pkl\",\"sha256\":\"412cb26a88daed1a87dc43d43d18fd99863268c6375a433ae895fde463d5c471\",\"tenant_id\":1,\"training\":{\"conversion\":\"convert-pkl\",\"converted_from\":\"legacy_pkl\",\"lr\":null,\"source_sha256\":\"a32805bdcfffe2db8dfadc1637aef9cbd4583d92bd8b6fe46560c474140b81bd\",\"synthetic\":false},\"weights\":[-0.25,0.1,-0.1,0.25,0.05]}",
+   "outcome": "CONVERTED",
+   "sha256": "a32805bdcfffe2db8dfadc1637aef9cbd4583d92bd8b6fe46560c474140b81bd",
+   "warnings": []
+  },
+  "valid_numpy_scalars": {
+   "model_json": "{\"algorithm\":\"logistic_regression\",\"bias\":-0.5,\"calibration\":{\"a\":1.5,\"b\":-0.2,\"type\":\"platt\"},\"created_at\":\"2026-11-02T00:00:00Z\",\"ensemble\":null,\"feature_schema\":{\"hash\":\"sha256:b86195e2bda484d3e724ea355c946ddb0855f61815165177f7686e64bfcb8959\",\"hash_algo\":\"none\",\"missing_policy\":\"zero_with_flags\",\"names\":[\"odds\",\"popularity\",\"log_odds\",\"inv_popularity\",\"odds_popularity_interaction\"],\"pedigree_dim\":0,\"version\":1},\"kind\":\"legacy_compat\",\"market_blend\":{\"alpha_default\":0.75},\"metrics\":{},\"model_id\":\"legacy-001\",\"model_schema_version\":1,\"preprocessing\":null,\"producer\":\"ml-train/0.1.0/convert-pkl\",\"sha256\":\"afb2ca317bdd6599670324f75f96459c31f2bb912b55c197a24b45713f878f7a\",\"tenant_id\":1,\"training\":{\"conversion\":\"convert-pkl\",\"converted_from\":\"legacy_pkl\",\"lr\":null,\"source_sha256\":\"a83ac404be5dfdf57237bb3f3afd41510b706cc18eaa3babf957c9b944191b38\",\"synthetic\":false},\"weights\":[-0.25,0.1,-0.1,0.25,0.05]}",
+   "outcome": "CONVERTED",
+   "sha256": "a83ac404be5dfdf57237bb3f3afd41510b706cc18eaa3babf957c9b944191b38",
+   "warnings": []
+  }
+ },
+ "meta": {
+  "generator": "gen_pkl_fixtures.py (L3, 1 回限り)",
+  "note": "合成の旧モデル pickle（実 pkl ではない）と、削除前の Python 版 convert-pkl の判定・出力。Kotlin 版はこの判定と出力（producer を除く）に一致させる",
+  "numpy": "2.5.3",
+  "python": "3.13.18",
+  "script": "\"\"\"L3 用（1 回限り）: 削除前の Python の convert-pkl（ml/src/ml_train/legacy_pkl）と試験の生成器（ml/tests/legacy_support.py）で、\n合成の旧モデル pickle と、Python 版の判定・変換結果を固定する。実 pkl ではない（旧 jraev を import せず、同名の空クラスで作る）。\n生成物: <out>/cases/*.pkl と <out>/expected.json（生成元コミット・版・本スクリプトの全文を含む）。\"\"\"\nimport hashlib, json, os, pickle, platform, subprocess, sys\nfrom pathlib import Path\nimport numpy as np\nREPO = Path(sys.argv[1]); OUT = Path(sys.argv[2])\nsys.path[:0] = [str(REPO / \"ml\" / \"src\"), str(REPO / \"ml\"), str(REPO)]\nfrom tests.legacy_support import legacy_pickle, _fake_module\nfrom ml_train.legacy_pkl.unpickle import load_legacy_model, UnpickleRefused\nfrom ml_train.legacy_pkl.convert import convert, KnownSchemas, ConversionRefused, sha256_of\nfrom tools.ml import canonical\n\nschemas = KnownSchemas.load(REPO / \"domain\" / \"src\" / \"test\" / \"resources\" / \"ml\")\ncases = {}\nfor kind in (\"market5\", \"calibration40\", \"alpha35\"):\n    for proto in (2, 3, 4, 5):\n        cases[(f\"refused_{kind}_p2_codecs\" if proto == 2 else f\"valid_{kind}_p{proto}\")] = legacy_pickle(kind=kind, protocol=proto)\ncases[\"valid_float32_weights\"] = legacy_pickle(kind=\"calibration40\", weights=np.array([0.5, -0.25] * 20, dtype=np.float32))\ncases[\"valid_big_endian_weights\"] = legacy_pickle(kind=\"market5\", weights=np.array([0.5, -0.25, 1.0, 2.0, -3.5], dtype=\">f8\"))\ncases[\"valid_no_calibration\"] = legacy_pickle(kind=\"market5\", calib_a=None, calib_b=None)\no = _fake_module()(); o.__dict__.update({\"weights\": np.array([0.1]*5), \"bias\": -1.0, \"feature_names\": [\"odds\",\"popularity\",\"log_odds\",\"inv_popularity\",\"odds_popularity_interaction\"]})\ncases[\"valid_minimal_attributes\"] = pickle.dumps(o, protocol=4)\ncases[\"valid_numpy_scalars\"] = legacy_pickle(kind=\"market5\", bias=np.float64(-0.5), calib_a=np.float32(1.5), market_blend_alpha=np.float64(0.75))\ncases[\"valid_int_bias\"] = legacy_pickle(kind=\"market5\", bias=2, market_blend_alpha=1)\ncases[\"refused_half_calibration\"] = legacy_pickle(kind=\"market5\", calib_b=None)\ncases[\"refused_dimension_mismatch\"] = legacy_pickle(kind=\"calibration40\", dim=35)\ncases[\"refused_unknown_schema\"] = legacy_pickle(kind=\"market5\", feature_names=[\"a\",\"b\",\"c\",\"d\",\"e\"])\ncases[\"refused_duplicate_names\"] = legacy_pickle(kind=\"market5\", feature_names=[\"odds\"]*5)\ncases[\"refused_nan_weight\"] = legacy_pickle(kind=\"market5\", weights=np.array([0.1, float(\"nan\"), 0.1, 0.1, 0.1]))\ncases[\"refused_inf_bias\"] = legacy_pickle(kind=\"market5\", bias=float(\"inf\"))\ncases[\"refused_string_bias\"] = legacy_pickle(kind=\"market5\", bias=\"1.0\")\ncases[\"refused_bool_bias\"] = legacy_pickle(kind=\"market5\", bias=True)\ncases[\"refused_blend_out_of_range\"] = legacy_pickle(kind=\"market5\", market_blend_alpha=1.5)\ncases[\"refused_2d_weights\"] = legacy_pickle(kind=\"market5\", weights=np.zeros((5, 1)))\ncases[\"refused_int_weights\"] = legacy_pickle(kind=\"market5\", weights=np.arange(5, dtype=np.int64))\ncases[\"refused_object_weights\"] = legacy_pickle(kind=\"market5\", weights=np.array([0.1]*5, dtype=object))\ncases[\"refused_list_weights\"] = legacy_pickle(kind=\"market5\", weights=[0.1]*5)\ncases[\"refused_unknown_attribute\"] = legacy_pickle(kind=\"market5\", extra_attr=1)\no = _fake_module()(); o.__dict__.update({\"bias\": -1.0, \"feature_names\": [\"odds\"]})\ncases[\"refused_missing_weights\"] = pickle.dumps(o, protocol=4)\nclass Evil:\n    def __reduce__(self): return (os.system, (\"echo PWNED\",))\ncases[\"refused_os_system\"] = pickle.dumps(Evil(), protocol=4)\ncases[\"refused_os_system_inside_model\"] = legacy_pickle(kind=\"market5\", feature_names=Evil())\ncases[\"refused_eval\"] = pickle.dumps(type(\"E\", (), {\"__reduce__\": lambda s: (eval, (\"1+1\",))})(), protocol=2)\ncases[\"refused_plain_dict\"] = pickle.dumps({\"weights\": [0.1]}, protocol=4)\nimport types\nsys.modules[\"other\"] = types.ModuleType(\"other\"); m = types.ModuleType(\"other.model\"); sys.modules[\"other.model\"] = m\nclass WinProbabilityModel: pass\nWinProbabilityModel.__module__ = \"other.model\"; m.WinProbabilityModel = WinProbabilityModel\no = WinProbabilityModel(); o.__dict__.update({\"weights\": np.array([0.1]*5), \"bias\": 0.0, \"feature_names\": [\"odds\"]})\ncases[\"refused_other_module_same_name\"] = pickle.dumps(o, protocol=4)\ncases[\"refused_ext_opcode\"] = b\"\\x80\\x02\\x82\\x01.\"\ncases[\"refused_persid\"] = b\"\\x80\\x02Pabc\\n.\"\ncases[\"refused_truncated\"] = legacy_pickle(kind=\"market5\")[:-20]\ncases[\"refused_empty\"] = b\"\"\n\nout_cases = OUT / \"cases\"; out_cases.mkdir(parents=True, exist_ok=True)\nexpected = {}\nfor name, data in sorted(cases.items()):\n    (out_cases / f\"{name}.pkl\").write_bytes(data)\n    e = {\"sha256\": hashlib.sha256(data).hexdigest()}\n    try:\n        shell = load_legacy_model(data)\n        c = convert(shell, schemas=schemas, model_id=\"legacy-001\", tenant_id=1, created_at=\"2026-11-02T00:00:00Z\", source_sha256=sha256_of(data))\n        e[\"outcome\"] = \"CONVERTED\"; e[\"model_json\"] = canonical.dumps(c.model).decode(); e[\"warnings\"] = c.warnings\n    except UnpickleRefused as x:\n        e[\"outcome\"] = \"REFUSED\"; e[\"reason\"] = \"PICKLE_\" + x.reason\n    except ConversionRefused as x:\n        e[\"outcome\"] = \"REFUSED\"; e[\"reason\"] = x.reason\n    expected[name] = e\nsha = subprocess.run([\"git\", \"-C\", str(REPO), \"rev-parse\", \"HEAD\"], capture_output=True, text=True).stdout.strip()\nmeta = {\"generator\": \"gen_pkl_fixtures.py (L3, 1 回限り)\", \"source_commit\": sha, \"python\": platform.python_version(), \"numpy\": np.__version__,\n        \"note\": \"合成の旧モデル pickle（実 pkl ではない）と、削除前の Python 版 convert-pkl の判定・出力。Kotlin 版はこの判定と出力（producer を除く）に一致させる\",\n        \"script\": Path(__file__).read_text()}\n(OUT / \"expected.json\").write_text(json.dumps({\"meta\": meta, \"cases\": expected}, ensure_ascii=False, indent=1, sort_keys=True) + \"\\n\")\nprint({k: (v[\"outcome\"], v.get(\"reason\")) for k, v in expected.items()})\n",
+  "source_commit": "a6ebcad7969b3aea775d4591134433814a1f8843"
+ }
+}

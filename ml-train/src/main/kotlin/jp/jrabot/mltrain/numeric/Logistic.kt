@@ -115,8 +115,9 @@ object Logistic {
                 if (fNext <= f - 1e-4 * t * (-slope) || t < 1e-12) break
                 t *= 0.5
             }
-            if (fNext > f) {
-                // 倍精度の限界でこれ以上下がらない。勾配が十分小さければ最適解とみなす（そうでなければ収束失敗）
+            if (fNext >= f || t < 1e-12) {
+                // 直線探索で目的関数が測れるほど下がらない = 倍精度の丸めの限界（C が大きいと f が大きく、最適解の近くの減少が丸めに埋もれる）。
+                // 何も進まない一歩を受け入れて反復を使い切らない。勾配が十分小さければ最適解とみなす（そうでなければ収束失敗）
                 if (gmax <= ROUNDOFF_GRADIENT) return Fit(beta, b, iter, gmax, f)
                 break
             }

@@ -63,3 +63,64 @@ interface ModelRegistryReader {
         kind: ModelKind,
     ): ModelRecord?
 }
+
+/**
+ * 学習 Job（ml-train）が登録する 1 行。**status は CANDIDATE か REJECTED だけ**（ACTIVE への昇格は管理者の操作。CONTRACTS §5.1・§8.2）。
+ * [metricsJson] は `ml_model.metrics_json`（正準 JSON の文字列。値・資格情報を含まない指標だけ）。
+ */
+data class NewModelRecord(
+    val tenantId: TenantId,
+    val modelId: ModelId,
+    val kind: ModelKind,
+    val schemaVersion: Int,
+    val featureSchemaHash: String,
+    val artifactUri: String,
+    val sha256: String,
+    val signatureSha256: String,
+    val status: ModelStatus,
+    val trainedFrom: LocalDate?,
+    val trainedTo: LocalDate?,
+    val nTrain: Long,
+    val metricsJson: String,
+    val createdAt: Instant,
+) {
+    init {
+        require(status == ModelStatus.CANDIDATE || status == ModelStatus.REJECTED) { "学習 Job が登録できるのは CANDIDATE / REJECTED だけ" }
+        require(schemaVersion >= 1)
+        require(Regex("sha256:[0-9a-f]{64}").matches(featureSchemaHash)) { "feature_schema_hash は sha256: + 64 桁" }
+        require(Regex("[0-9a-f]{64}").matches(sha256) && Regex("[0-9a-f]{64}").matches(signatureSha256)) { "sha256 は 64 桁の小文字 16 進" }
+        require(nTrain >= 0)
+    }
+}
+
+/** ACTIVE のモデルの ID と `metrics_json`（NULL のこともある）。 */
+data class ActiveModelMetrics(
+    val modelId: ModelId,
+    val metricsJson: String?,
+)
+
+/** 同じ (tenant_id, model_id) が既に登録されている（並行して同じモデルが登録された）。 */
+class DuplicateModelException(
+    message: String,
+) : RuntimeException(message)
+
+/**
+ * 学習 Job が使うレジストリ（DB ユーザー mltrain は `ml_model` の SELECT / INSERT だけ）。既存行の更新・削除・昇格の操作は無い。
+ * [ModelRegistryReader] を継承しない（bot 等の Spring の配線で同じ型の Bean が 2 つにならないように）。
+ */
+interface TrainingRegistry {
+    /** 同じ model_id が登録済みか（冪等な再実行の判定）。 */
+    fun find(
+        tenantId: TenantId,
+        modelId: ModelId,
+    ): ModelRecord?
+
+    /** その種別の ACTIVE のモデル（無ければ null）。品質ゲートの『直前の ACTIVE との比較』とレポートに使う。 */
+    fun activeMetrics(
+        tenantId: TenantId,
+        kind: ModelKind,
+    ): ActiveModelMetrics?
+
+    /** 主キーの重複は [DuplicateModelException]。 */
+    fun insert(row: NewModelRecord)
+}
