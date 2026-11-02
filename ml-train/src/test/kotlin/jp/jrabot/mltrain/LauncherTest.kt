@@ -114,6 +114,12 @@ class LauncherTest {
         assertEquals("DB_UNAVAILABLE" to ExitCode.TEMPFAIL, transient.reason to transient.exitCode)
         val auth = Launcher.classifyDbError(RuntimeException(SQLException("denied", "42000", 1142)))
         assertEquals("DB_AUTH_FAILED" to ExitCode.FAILURE, auth.reason to auth.exitCode)
+        // HikariCP が認証失敗（1045）を一時的な例外で包んでも、再試行で直らないので 1（75 にしない）
+        val wrapped =
+            Launcher.classifyDbError(
+                RuntimeException(SQLTransientConnectionException("pool", "08001", 0, SQLException("Access denied", "28000", 1045))),
+            )
+        assertEquals("DB_AUTH_FAILED" to ExitCode.FAILURE, wrapped.reason to wrapped.exitCode)
         val lock = Launcher.classifyDbError(RuntimeException(SQLException("deadlock", "40001", 1213)))
         assertEquals(ExitCode.TEMPFAIL, lock.exitCode)
         val other = Launcher.classifyDbError(IllegalStateException("bug"))

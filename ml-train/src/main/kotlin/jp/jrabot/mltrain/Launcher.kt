@@ -27,10 +27,6 @@ import jp.jrabot.mltrain.job.UsageError
 import jp.jrabot.persistence.jdbc.DataSourceFactory
 import jp.jrabot.persistence.jdbc.DbSettings
 import jp.jrabot.persistence.repository.TrainingPersistence
-import jp.jrabot.persistence.schema.AppBuildInfo
-import jp.jrabot.persistence.schema.SchemaCheck
-import jp.jrabot.persistence.schema.SchemaFailure
-import jp.jrabot.persistence.schema.SchemaVersionVerifier
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.InvalidPathException
@@ -61,8 +57,8 @@ data class TrainArgs(
  * 終了コード: 0 正常（REJECTED の登録・登録済み・非 NORMAL のスキップを含む）／1 失敗／2 引数・設定の誤り／75 一時的な失敗。
  * 標準出力に構造化ログ（JSON 1 行）と最後に `JOB_RESULT`。秘密・成果物の内容は出さない。
  *
- * 順序（旧版と同じ）: 引数 → 設定ファイル → 鍵 → 保存先 → DB の環境変数 → **運用モード（DB に接続する前）** → スキーマ版 → 学習。
- * 旧版との違い: OPS_MODE_SOURCE・MODEL_STORE_URI は `gs://` も直接扱う（旧版は `file://` のみ。bot と同じ実装を使う）、スキーマ版を確認する（他アプリと同じ）。
+ * 順序（旧版と同じ）: 引数 → 設定ファイル → 鍵 → 保存先 → DB の環境変数 → **運用モード（DB に接続する前）** → DB への接続の確認 → 学習。
+ * 旧版との違い: OPS_MODE_SOURCE・MODEL_STORE_URI は `gs://` も直接扱う（旧版は `file://` のみ。bot と同じ実装を使う）。スキーマ版は確認しない（mltrain は flyway_schema_history を読めない。旧版と同じ）。
  */
 class Launcher(
     private val log: JobLog = JobLog(),
@@ -142,21 +138,16 @@ class Launcher(
 
         val dataSource = dataSourceFactory(db)
         try {
-            when (val check = SchemaVersionVerifier(dataSource, AppBuildInfo.load(env["RELEASE_ID"]).requiredSchemaVersion).check()) {
-                is SchemaCheck.Satisfied -> {}
-
-                SchemaCheck.Unreachable -> {
-                    return result(ExitCode.TEMPFAIL, "DB_UNAVAILABLE")
-                }
-
-                is SchemaCheck.Insufficient -> {
-                    return result(ExitCode.FAILURE, "SCHEMA_VERSION_INSUFFICIENT")
-                }
-
-                // 理由の語彙は旧版と同じ（認証・権限 = DB_AUTH_FAILED、それ以外 = DB_ERROR）
-                is SchemaCheck.Failed -> {
-                    return result(ExitCode.FAILURE, if (check.reason == SchemaFailure.UNEXPECTED) "DB_ERROR" else "DB_AUTH_FAILED")
-                }
+            // 旧版と同じく、学習の前に DB に接続できることを確かめる（接続できない = 75、認証・権限 = 1）。
+            // スキーマ版の確認はしない: mltrain は flyway_schema_history を読めない（CONTRACTS §8.2。権限を足すのは本番 DB の変更で本人承認が要る）
+            try {
+                dataSource.connection.use { c -> if (!c.isValid(10)) throw SQLException("接続が有効でない", "08000") }
+            } catch (e: SQLException) {
+                val err = classifyDbError(RuntimeException(e))
+                return result(err.exitCode, err.reason)
+            } catch (e: RuntimeException) {
+                val err = classifyDbError(e)
+                return result(err.exitCode, err.reason)
             }
             val deps =
                 JobDeps(
@@ -196,9 +187,11 @@ class Launcher(
                         it is SQLRecoverableException ||
                         (it is SQLException && (it.sqlState?.startsWith("08") == true || it.errorCode in TRANSIENT_CODES))
                 }
-            if (transient) return RegistryUnavailable(e)
+            // 認証・権限のエラー番号を先に見る（HikariCP は 1045 を一時的な例外で包むことがあるので、順序を逆にすると 75 になってしまう）
             val auth = chain.any { it is SQLException && it.errorCode in AUTH_CODES }
-            return MlTrainError(if (auth) "DB_AUTH_FAILED" else "DB_ERROR", "レジストリの操作に失敗(${e.javaClass.simpleName})", cause = e)
+            if (auth) return MlTrainError("DB_AUTH_FAILED", "レジストリの操作に失敗(${e.javaClass.simpleName})", cause = e)
+            if (transient) return RegistryUnavailable(e)
+            return MlTrainError("DB_ERROR", "レジストリの操作に失敗(${e.javaClass.simpleName})", cause = e)
         }
 
         fun parseTrain(args: List<String>): TrainArgs {
