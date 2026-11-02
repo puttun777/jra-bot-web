@@ -211,3 +211,18 @@ GitHub Actions（`db-integration` 8.4 / 9.7、ubuntu-24.04、Temurin 25、PR #8�
 | PyMySQL | 1.2.3 | 純 Python の MySQL クライアント（ml_model の SELECT/INSERT だけ）。MySQL 8 の既定認証 `caching_sha2_password` は cryptography で処理。**Cloud SQL 接続（TLS・コネクタ）は未検証** |
 | pytest / ruff / mypy（開発） | 9.1.1 / 0.17.2 / 2.4.0 | agent と同系 |
 | Docker ベース | `python:3.13.17-slim-bookworm`（digest 固定） | 更新は Dependabot（docker・pip）で digest/版の PR を出す想定（`.github/dependabot.yml` への pip `/ml` の追加は未実施: UNRESOLVED G-19） |
+
+## 16. 言語移行（2026-11-02。D-250〜D-254）
+調査日 2026-11-02。版は公式の配布元（nodejs.org の `dist/index.json`、npm レジストリの公開日、Ubuntu 24.04 の公式パッケージ）で確認した。**公開から 2 週間未満の版は採らない**（例: Biome 2.6 系は 2026-10-21 以降の公開のため 2.5.15 を採用）。
+| 項目 | 版 | 理由・確認元 |
+|---|---|---|
+| Node.js | **24.22.2**（LTS "Krypton"。2026-10-27 公開。CI は `actions/setup-node` v7.1.0 = SHA 949feb24…） | nodejs.org/dist/index.json。26 系は 2026-10 に LTS 化した直後で、Pulumi の対応表明を確認できないため採らない。24 系の保守期限は 2028-04 |
+| TypeScript | **6.0.3**（2026-04-16） | 7.0 系（ネイティブ版）は JS API が無く、`@pulumi/pulumi` 3.273.0 の peerDependency が `typescript >=3.8.3 <7`。web と infra で同じ版に揃える |
+| @types/node | 24.19.2 | 実行する Node のメジャー（24）に合わせる |
+| Ajv | 8.20.0 | JSON Schema 2020-12 の検証（release-manifest）。strict モードで未知のキーワードを拒否（旧 jsonschema_lite の fail closed を維持） |
+| yaml | 2.9.1 | ci.yml を YAML として読む（preflight・ワークフロー規則の試験） |
+| fast-xml-parser | 5.11.2 | JUnit XML の件数検査 |
+| @biomejs/biome | 2.5.15 | lint + format（1 パッケージ。`noExplicitAny`・`noNonNullAssertion` は error） |
+| .NET SDK | 10.0（LTS。Ubuntu 24.04 の `dotnet-sdk-10.0` 10.0.114 でローカル検証） | C# エージェント（L5）。.NET 11 は STS のため採らない |
+| JDK | 25（既存。ローカルは Ubuntu の `openjdk-25-jdk-headless` 25.0.4.1） | CI は Temurin 25 |
+**ローカル検証環境の記録（2026-11-02 のクラウドセッション）**: Node 24.22.2（nodejs.org の tar.xz を SHASUMS256 で検証して /opt/node24 に展開）、JDK 25.0.4.1、.NET SDK 10.0.114、Docker 29.9.2。Pulumi CLI・gcloud の認証・jra-van.jp は**このセッションのネットワークから到達できない**（L6 の preview・JV-Link 資料は未確認として扱う）。

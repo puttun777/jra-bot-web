@@ -42,14 +42,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
       - name: Persistence integration tests (Connector/J ${{ env.CONNECTOR_J_VERSION }}, ${{ env.MYSQL_IMAGE }})
         run: ./gradlew :persistence:integrationTest -PconnectorJVersion="$CONNECTOR_J_VERSION" --stacktrace
+      - uses: ./.github/actions/setup-tools
+        if: always()
+      # 非ゲートの互換性確認なので件数を表示するだけ（成否は上の Gradle の結果と continue-on-error で扱う）
       - name: Summary
         if: always()
-        run: |
-          python3 - persistence/build/test-results/integrationTest <<'PY'
-          import glob, sys, xml.etree.ElementTree as ET
-          tests = skipped = failures = errors = 0
-          for f in glob.glob(sys.argv[1] + "/*.xml"):
-              r = ET.parse(f).getroot()
-              tests += int(r.get("tests")); skipped += int(r.get("skipped")); failures += int(r.get("failures")); errors += int(r.get("errors"))
-          print(f"connector/j 26.x: tests={tests} skipped={skipped} failures={failures} errors={errors}")
-          PY
+        run: node build/tools/src/main.js verify-junit --label "connector/j 26.x" --dir persistence/build/test-results/integrationTest --min 0 || true

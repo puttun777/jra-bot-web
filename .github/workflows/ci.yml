@@ -1,6 +1,6 @@
 name: ci
 
-# 変更内容に応じて重いジョブだけを実行する（GitHub Free の月 2,000 分枠の節約。tools/ci/classify.py）。
+# 変更内容に応じて重いジョブだけを実行する（GitHub Free の月 2,000 分枠の節約。tools/src/ci/classify.ts）。
 # - `changes` が変更ファイルを分類する（fail closed: 分類・差分取得に失敗したら全部実行）。docs だけの変更は `changes` と `ci gate` だけ。
 # - **分岐保護の required check は `ci gate` だけにする**。ワークフロー全体を paths で止めると required check が Pending のまま残るため使わない。
 #   `ci gate` は常に実行され、実行が必要なジョブが success でなければ失敗する。skipped を『テストした』とは数えない（要約に『未実施』と出す）。
@@ -48,18 +48,19 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0 # 差分（PR の merge コミットの第 1 親、push の before）を取るため
+      - uses: ./.github/actions/setup-tools
       - name: Classify changed files (fail closed)
         id: classify
         env:
           EVENT_NAME: ${{ github.event_name }}
           BEFORE_SHA: ${{ github.event.before }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: python3 -m tools.ci.classify
+        run: node build/tools/src/main.js classify
       - name: Check tracked files (secrets / real data)
         run: bash .github/scripts/check-repo-hygiene.sh
       # 設定・契約の整合（Flyway 版 = requiredSchemaVersion、bot-run の必須環境変数 = スモーク設定、DAO の表 = Flyway + GRANT）。push 前の preflight と同じ検査
       - name: Consistency checks (schema version, required env vars, grants)
-        run: python3 -m tools.ci.consistency
+        run: node build/tools/src/main.js consistency
 
   build:
     name: build (Temurin 25)
@@ -79,6 +80,7 @@ jobs:
           java-version: "25"
       # Wrapper jar の検証もここで行われる（既定で有効）。Gradle のキャッシュは main 以外では書かない（PR が main 用のキャッシュを汚染しない）。
       - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - uses: ./.github/actions/setup-tools
       - name: Show toolchain
         run: |
           java -version
@@ -103,48 +105,28 @@ jobs:
       # :cloud-gcp の単体テスト（T2.7。ModeProvider）。実 GCP には接続しない（フェイクとローカルの HTTP サーバだけ）。0 件・スキップ・失敗を許さない。
       - name: Verify that the cloud-gcp unit tests actually ran
         run: |
-          dir=cloud-gcp/build/test-results/test
-          test -d "$dir" || { echo "::error::no cloud-gcp test results"; exit 1; }
-          python3 - "$dir" <<'PY'
-          import glob, sys, xml.etree.ElementTree as ET
-          expected = {
-              "OpsStateParserTest", "CachingModeProviderTest", "CachingModeProviderConcurrencyTest",
-              "GcsOpsStateSourceTest", "LocalFileModeProviderTest",
-              "ModeSnapshotTest", "GoogleSignedTokenVerifierTest", "RequestPathsTest",
-              "GcsStoresTest", "GoogleObjectClientHttpTest",
-          }
-          seen = set()
-          tests = skipped = failures = errors = 0
-          for f in glob.glob(sys.argv[1] + "/*.xml"):
-              r = ET.parse(f).getroot()
-              seen.add(r.get("name").rsplit(".", 1)[-1])
-              tests += int(r.get("tests")); skipped += int(r.get("skipped")); failures += int(r.get("failures")); errors += int(r.get("errors"))
-          print(f"tests={tests} skipped={skipped} failures={failures} errors={errors} classes={len(seen)}")
-          missing = expected - seen
-          if missing:
-              sys.exit(f"cloud-gcp test classes missing from the results: {sorted(missing)}")
-          if tests < 102 or skipped or failures or errors:
-              sys.exit("cloud-gcp unit tests did not all run and pass")
-          PY
+          node build/tools/src/main.js verify-junit --label "cloud-gcp unit" --dir cloud-gcp/build/test-results/test --min 102 \
+            --classes "OpsStateParserTest,CachingModeProviderTest,CachingModeProviderConcurrencyTest,GcsOpsStateSourceTest,LocalFileModeProviderTest,ModeSnapshotTest,GoogleSignedTokenVerifierTest,RequestPathsTest,GcsStoresTest,GoogleObjectClientHttpTest"
       # 実行アプリと :persistence の起動・単体テスト（T2.8）。Docker を使わない: 実際の Tomcat（ランダムポート）・実プロセスの終了コード・
       # 偽の JWKS（ループバック）による署名検証。実 GCP・実 DB には接続しない。0 件・スキップ・失敗・期待クラスの欠落を許さない。
       - name: Verify that the app and persistence unit tests actually ran
         run: |
-          python3 .github/scripts/verify_test_results.py "persistence unit" persistence/build/test-results/test 33 \
-            "SchemaVersionTest,SchemaCheckClassificationTest,DbSettingsTest,MappingTest,PersistenceModuleTest,SqlTemplateTenantGuardTest,DeadlockRetryTest,BotRunAcquireContentionTest"
-          python3 .github/scripts/verify_test_results.py "domain unit (incl. decision logic T3.1/T3.2, calendar T3.3, ingest T3.4, ML T3.6-A)" domain/build/test-results/test 822 \
-            "EvMathTest,KellyMathTest,PythonCompatTest,MarketProbabilityTest,SnapshotFiltersTest,MarketBlendTest,WinStakeTest,WinDecisionEvaluatorTest,PlackettLuceTest,ComboOddsTest,ComboStrategyTest,WinDecisionComboTest,SourceVersionTest,TransitionsTest,ScheduleEventTest,CalendarOverrideTest,WatchWindowTest,EffectiveCalendarTest,ScheduleUpdaterTest,CalendarCheckPolicyTest,CalendarCheckServiceTest,CalendarSourceGuardTest,LeaseAndDayModelTest,EnvelopeValidatorTest,AgentAuthTest,FetchPolicyTest,HeartbeatAndBackfillTest,PedigreeHashTest,CanonicalJsonTest,StrictJsonTest,FeatureSchemaTest,FeatureSchemaFixtureTest,FeatureBuilderTest,ModelLoaderTest,ProbabilityPipelineTest,MlEndToEndTest,DatasetExporterTest,HorseMasterAtTimeTest,DatasetPublisherTest,TenantBoundaryContractTest"
-          python3 .github/scripts/verify_test_results.py "golden-runner unit" golden-runner/build/test-results/test 20 "GoldenRunnerTest,GoldenMlTest"
-          python3 .github/scripts/verify_test_results.py "bot unit" bot/build/test-results/test 75 \
-            "BotArgsParserTest,BotLauncherTest,BotJobExecutorTest,BotProcessTest,BotSpringWiringTest,JobGateTest,CycleGateTest,CalendarCheckTaskHandlerTest,CalendarSettingsParserTest,ExportDatasetTaskHandlerTest"
-          python3 .github/scripts/verify_test_results.py "ingest unit" ingest/build/test-results/test 35 \
-            "IngestInternalApiTest,AgentApiOpsGuardTest,IngestStartupConfigTest,AgentSigningVectorsTest,PlanProviderTest"
-          python3 .github/scripts/verify_test_results.py "dashboard unit" dashboard/build/test-results/test 30 \
-            "DashboardInternalApiTest,AdminWriteGuardTest,DashboardStartupConfigTest"
+          node build/tools/src/main.js verify-junit --label "persistence unit" --dir persistence/build/test-results/test --min 33 \
+            --classes "SchemaVersionTest,SchemaCheckClassificationTest,DbSettingsTest,MappingTest,PersistenceModuleTest,SqlTemplateTenantGuardTest,DeadlockRetryTest,BotRunAcquireContentionTest"
+          node build/tools/src/main.js verify-junit --label "domain unit (incl. decision logic T3.1/T3.2, calendar T3.3, ingest T3.4, ML T3.6-A)" --dir domain/build/test-results/test --min 822 \
+            --classes "EvMathTest,KellyMathTest,PythonCompatTest,MarketProbabilityTest,SnapshotFiltersTest,MarketBlendTest,WinStakeTest,WinDecisionEvaluatorTest,PlackettLuceTest,ComboOddsTest,ComboStrategyTest,WinDecisionComboTest,SourceVersionTest,TransitionsTest,ScheduleEventTest,CalendarOverrideTest,WatchWindowTest,EffectiveCalendarTest,ScheduleUpdaterTest,CalendarCheckPolicyTest,CalendarCheckServiceTest,CalendarSourceGuardTest,LeaseAndDayModelTest,EnvelopeValidatorTest,AgentAuthTest,FetchPolicyTest,HeartbeatAndBackfillTest,PedigreeHashTest,CanonicalJsonTest,StrictJsonTest,FeatureSchemaTest,FeatureSchemaFixtureTest,FeatureBuilderTest,ModelLoaderTest,ProbabilityPipelineTest,MlEndToEndTest,DatasetExporterTest,HorseMasterAtTimeTest,DatasetPublisherTest,TenantBoundaryContractTest"
+          node build/tools/src/main.js verify-junit --label "golden-runner unit" --dir golden-runner/build/test-results/test --min 20 --classes "GoldenRunnerTest,GoldenMlTest"
+          node build/tools/src/main.js verify-junit --label "bot unit" --dir bot/build/test-results/test --min 75 \
+            --classes "BotArgsParserTest,BotLauncherTest,BotJobExecutorTest,BotProcessTest,BotSpringWiringTest,JobGateTest,CycleGateTest,CalendarCheckTaskHandlerTest,CalendarSettingsParserTest,ExportDatasetTaskHandlerTest"
+          node build/tools/src/main.js verify-junit --label "ingest unit" --dir ingest/build/test-results/test --min 35 \
+            --classes "IngestInternalApiTest,AgentApiOpsGuardTest,IngestStartupConfigTest,AgentSigningVectorsTest,PlanProviderTest"
+          node build/tools/src/main.js verify-junit --label "dashboard unit" --dir dashboard/build/test-results/test --min 30 \
+            --classes "DashboardInternalApiTest,AdminWriteGuardTest,DashboardStartupConfigTest"
 
-  # tools/release（release-manifest の生成・検証、Dockerfile の静的検査）と tools/ci（変更判定・ゲート）の Python 単体テスト。Docker 不要
+  # TypeScript のツール（tools/: 変更判定・ゲート・整合検査・JUnit 件数検査・preflight・release-manifest・イメージスモーク）の
+  # lint（Biome）・strict の型検査（tsc）・単体試験（node:test）。0 件・スキップ・todo・失敗を成功にしない（tools/run-tests.mjs が JUnit XML で検査）。Docker 不要
   release-tools:
-    name: release tools and ci scripts (Python)
+    name: release tools and ci scripts (TypeScript)
     needs: changes
     if: needs.changes.outputs.run_release == 'true'
     runs-on: ubuntu-24.04
@@ -153,8 +135,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0 # preflight の試験が origin/main とのマージベースを使う
+      - uses: ./.github/actions/setup-tools
+      - name: Lint and format (Biome)
+        run: npm run --silent lint
       - name: Unit tests (none skipped)
-        run: python3 -m tools.ci.run_tests --min-tests 100
+        run: node tools/run-tests.mjs
 
   # ゴールデンテスト基盤（T2.6）。Python は ubuntu-24.04 標準の 3.12 系を使い、minor を検証する。
   # 旧実装は公開リポジトリを固定コミットで取得する（認証・Secrets 不要）。生成結果は書き込まず、コミット済みフィクスチャとの一致を検証する
@@ -210,7 +196,7 @@ jobs:
 
   # DB 統合テスト（T2.3 + T2.4 + T2.8）: Flyway V1/V2/R__grants と CLI（:db-migration）、Doma の Repository（:persistence）、実行アプリの起動・Job を、
   # 使い捨ての MySQL コンテナ（Testcontainers）に対して検証する。MySQL 8.4 LTS（本番の暫定基準: D-046）と 9.7 LTS（互換性の確認: G-DB-0）。
-  # 実行範囲は変更内容で決まる（tools/ci/classify.py）: マトリクス（8.4 だけ / 8.4 + 9.7）とスイート（migration, persistence, apps）。
+  # 実行範囲は変更内容で決まる（tools/src/ci/classify.ts）: マトリクス（8.4 だけ / 8.4 + 9.7）とスイート（migration, persistence, apps）。
   # Docker が使えない・イメージを取得できない場合は**失敗する**（スキップして成功扱いにしない）。使うのは CI 専用の一時的なテスト値だけ。
   db-integration:
     name: db integration (MySQL ${{ matrix.mysql }})
@@ -234,6 +220,7 @@ jobs:
           distribution: temurin
           java-version: "25"
       - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - uses: ./.github/actions/setup-tools
       # Kotlin ingest と Windows エージェント（Python）の結合テスト用（AgentInteropIntegrationTest）。実行時の依存は cryptography だけ
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         if: contains(env.DB_SUITES, 'apps')
@@ -264,18 +251,7 @@ jobs:
       - name: Verify that the integration tests actually ran
         if: always() && contains(env.DB_SUITES, 'migration')
         run: |
-          dir=db-migration/build/test-results/integrationTest
-          test -d "$dir" || { echo "::error::no integrationTest results"; exit 1; }
-          python3 - "$dir" <<'PY'
-          import glob, sys, xml.etree.ElementTree as ET
-          tests = skipped = failures = errors = 0
-          for f in glob.glob(sys.argv[1] + "/*.xml"):
-              r = ET.parse(f).getroot()
-              tests += int(r.get("tests")); skipped += int(r.get("skipped")); failures += int(r.get("failures")); errors += int(r.get("errors"))
-          print(f"tests={tests} skipped={skipped} failures={failures} errors={errors}")
-          if tests < 44 or skipped or failures or errors:
-              sys.exit("integration tests did not all run and pass")
-          PY
+          node build/tools/src/main.js verify-junit --label "db-migration integration" --dir db-migration/build/test-results/integrationTest --min 44
       # :persistence の統合テスト（T2.4）。8.4 / 9.7 の両ジョブで必ず実行する（db-migration のテストが失敗しても実行して結果を両方残す）。
       - name: Persistence integration tests (Testcontainers, ${{ env.MYSQL_IMAGE }})
         if: always() && contains(env.DB_SUITES, 'persistence')
@@ -283,32 +259,8 @@ jobs:
       - name: Verify that the persistence integration tests actually ran
         if: always() && contains(env.DB_SUITES, 'persistence')
         run: |
-          dir=persistence/build/test-results/integrationTest
-          test -d "$dir" || { echo "::error::no persistence integrationTest results"; exit 1; }
-          python3 - "$dir" <<'PY'
-          import glob, os, sys, xml.etree.ElementTree as ET
-          expected = {
-              "WiringIntegrationTest", "RaceRepositoryIntegrationTest", "OddsSnapshotRepositoryIntegrationTest",
-              "BotRunRepositoryIntegrationTest", "SignalRepositoryIntegrationTest", "RaceScheduleRepositoryIntegrationTest",
-              "AppUserRepositoryIntegrationTest", "TenantIsolationIntegrationTest", "TimeConversionIntegrationTest",
-              "EnumContractIntegrationTest", "PermissionsIntegrationTest", "SchemaVersionVerifierIntegrationTest",
-              "RaceDayRepositoryIntegrationTest", "ScheduleEventRepositoryIntegrationTest", "CalendarOverrideRepositoryIntegrationTest",
-              "BotRunLeaseConcurrencyIntegrationTest", "DeadlockRetryIntegrationTest", "IngestStoresIntegrationTest",
-              "MlModelRegistryIntegrationTest", "MlSourceIntegrationTest",
-          }
-          seen = set()
-          tests = skipped = failures = errors = 0
-          for f in glob.glob(sys.argv[1] + "/*.xml"):
-              r = ET.parse(f).getroot()
-              seen.add(r.get("name").rsplit(".", 1)[-1])
-              tests += int(r.get("tests")); skipped += int(r.get("skipped")); failures += int(r.get("failures")); errors += int(r.get("errors"))
-          print(f"tests={tests} skipped={skipped} failures={failures} errors={errors} classes={len(seen)}")
-          missing = expected - seen
-          if missing:
-              sys.exit(f"integration test classes missing from the results: {sorted(missing)}")
-          if tests < 175 or skipped or failures or errors:
-              sys.exit("persistence integration tests did not all run and pass")
-          PY
+          node build/tools/src/main.js verify-junit --label "persistence integration" --dir persistence/build/test-results/integrationTest --min 175 \
+            --classes "WiringIntegrationTest,RaceRepositoryIntegrationTest,OddsSnapshotRepositoryIntegrationTest,BotRunRepositoryIntegrationTest,SignalRepositoryIntegrationTest,RaceScheduleRepositoryIntegrationTest,AppUserRepositoryIntegrationTest,TenantIsolationIntegrationTest,TimeConversionIntegrationTest,EnumContractIntegrationTest,PermissionsIntegrationTest,SchemaVersionVerifierIntegrationTest,RaceDayRepositoryIntegrationTest,ScheduleEventRepositoryIntegrationTest,CalendarOverrideRepositoryIntegrationTest,BotRunLeaseConcurrencyIntegrationTest,DeadlockRetryIntegrationTest,IngestStoresIntegrationTest,MlModelRegistryIntegrationTest,MlSourceIntegrationTest"
       # 実行アプリの統合テスト（T2.8）: /internal/ready のスキーマ版・DB 停止/復旧、Job の終了コード（DB 不達 75 とスキーマ不足 1 の区別）、
       # 非 NORMAL のモードで DB に接続しないこと（サーバの接続数）。8.4 / 9.7 の両ジョブで必ず実行する。
       - name: App integration tests (Testcontainers, ${{ env.MYSQL_IMAGE }})
@@ -317,9 +269,9 @@ jobs:
       - name: Verify that the app integration tests actually ran
         if: always() && contains(env.DB_SUITES, 'apps')
         run: |
-          python3 .github/scripts/verify_test_results.py "bot integration" bot/build/test-results/integrationTest 42 "BotJobIntegrationTest,CalendarCheckIntegrationTest,MlTrainInteropIntegrationTest,ReconcileIntegrationTest,RetentionIntegrationTest"
-          python3 .github/scripts/verify_test_results.py "ingest integration" ingest/build/test-results/integrationTest 50 "IngestReadyIntegrationTest,AgentAuthIntegrationTest,IngestIdempotencyIntegrationTest,IngestPipelineIntegrationTest,AgentInteropIntegrationTest"
-          python3 .github/scripts/verify_test_results.py "dashboard integration" dashboard/build/test-results/integrationTest 13 "DashboardReadyIntegrationTest,ReadAdminApiMySqlIntegrationTest"
+          node build/tools/src/main.js verify-junit --label "bot integration" --dir bot/build/test-results/integrationTest --min 42 --classes "BotJobIntegrationTest,CalendarCheckIntegrationTest,MlTrainInteropIntegrationTest,ReconcileIntegrationTest,RetentionIntegrationTest"
+          node build/tools/src/main.js verify-junit --label "ingest integration" --dir ingest/build/test-results/integrationTest --min 50 --classes "IngestReadyIntegrationTest,AgentAuthIntegrationTest,IngestIdempotencyIntegrationTest,IngestPipelineIntegrationTest,AgentInteropIntegrationTest"
+          node build/tools/src/main.js verify-junit --label "dashboard integration" --dir dashboard/build/test-results/integrationTest --min 13 --classes "DashboardReadyIntegrationTest,ReadAdminApiMySqlIntegrationTest"
 
   # Windows 取得エージェント（agent/。Python。T3.5）。Gradle に組み込まない独立プロジェクト。Linux の 2 つの Python minor（最小 3.12 と目標 3.13）で
   # lint・型・単体・SQLite WAL・Mock HTTP・Mock COM（子プロセスのワーカー）・署名・ビーコン・再送と復旧を検査する。実 JV-Link・SDK・実トークンは使わない。
@@ -503,9 +455,13 @@ jobs:
         with:
           persist-credentials: false
           sparse-checkout: |
-            tools/__init__.py
-            tools/ci
+            .github/actions
+            tools/src
+            tools/tsconfig.json
+            package.json
+            package-lock.json
+      - uses: ./.github/actions/setup-tools
       - name: Evaluate (a skipped job is reported as not tested, never as passed)
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
-        run: python3 -m tools.ci.gate
+        run: node build/tools/src/main.js gate

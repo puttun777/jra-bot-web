@@ -1,0 +1,16 @@
+name: setup-tools
+description: >-
+  TypeScript の CI・リリース補助（tools/）を使えるようにする: Node.js（版は package.json の engines と一致）、
+  npm ci（lockfile どおり・install スクリプトを実行しない）、tsc による型検査つきビルド（build/tools）。
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version: "24.22.2"
+    - name: Install pinned dependencies and build (strict type check)
+      shell: bash
+      run: |
+        node --version
+        npm ci --ignore-scripts --no-audit --no-fund
+        npm run --silent build

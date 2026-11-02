@@ -1,6 +1,6 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-11-01 夜（web PR #30〜#33・infra PR #3/#4/#6 はマージ済み。残りは wip/final の TEST_RESULTS.md・D-247・R15 の MySQL 通し試験〈ReadAdminApiMySqlIntegrationTest〉。検証: ktlintCheck 成功、当該 4 試験は MySQL 8.4 で成功（ローカル）。それ以外の統合試験は CI で確認。再開手順: 本ブランチの PR の CI 結果を確認→失敗ジョブのログだけ読む→マージ条件を満たせばマージ→COMPLETION.md の C/B 項目を最終報告。判定の正本は COMPLETION.md）
+最終更新: 2026-11-02（言語移行 L1。下の新しい節）。旧: 2026-11-01 夜（web PR #30〜#33・infra PR #3/#4/#6 はマージ済み。残りは wip/final の TEST_RESULTS.md・D-247・R15 の MySQL 通し試験〈ReadAdminApiMySqlIntegrationTest〉。検証: ktlintCheck 成功、当該 4 試験は MySQL 8.4 で成功（ローカル）。それ以外の統合試験は CI で確認。再開手順: 本ブランチの PR の CI 結果を確認→失敗ジョブのログだけ読む→マージ条件を満たせばマージ→COMPLETION.md の C/B 項目を最終報告。判定の正本は COMPLETION.md）
 旧: 2026-11-01（T3.9③・reconcile・preflight・infra PR #4）
 旧: 2026-10-30（保留の再適用のレビュー・公開準備。D-229。CI 未実施）
 旧: 2026-10-29（追加レビュー 2: リース継続・保留の再適用・G-31 の null・T3.9 設計の訂正〈D-224〜D-228〉。同ブランチ。CI 未実施。PR なし）
@@ -12,6 +12,15 @@
 旧: 2026-10-27（Stage 3-G: T3.7 Discord 通知）
 旧: 2026-10-26（Public 化の準備）／2026-10-24（Stage 3-F2・3-F1・3-E）
 
+
+## 2026-11-02 言語移行の開始（L1: CI・リリース補助を TypeScript へ。ブランチ claude/lang-l1-ci-tools-ts。D-250〜D-256）
+**要件変更**: 自分たちで保守する Python を必須経路から外す（`LANGUAGE_MIGRATION.md`）。完成条件は `COMPLETION.md` の L1〜L9。
+**環境（このセッション）**: JDK 25.0.4.1（Ubuntu の openjdk-25）、Node 24.22.2（nodejs.org・SHASUMS256 検証）、.NET SDK 10.0.114、Docker 29.9.2。Maven Central と Docker Hub が 429 を返すため、**ローカル専用**に Gradle の init script（`~/.gradle/init.d`。Google の Maven Central ミラー）と dockerd の registry-mirrors（mirror.gcr.io）を設定した（リポジトリは変更していない）。コンテナ内からの HTTPS はプロキシの CA で失敗するため、イメージスモークは『実行ステージは本物の Dockerfile のまま、ビルドステージだけホストの成果物に差し替えた一時 Dockerfile』で実行した（CI は本物の Dockerfile で実行）。registry.terraform.io・jra-van.jp・Pulumi の配布元は到達不可。
+**L1 の内容**: `tools/src`（classify・gate・consistency・preflight・verify-junit・release manifest〔Ajv strict〕・image-smoke）、旧 Python（tools/ci・tools/release・verify_test_results.py・ci.yml 内の集計）を削除、workflow を `.github/actions/setup-tools` 経由へ。Dependabot に npm・composite action。
+**検証（ローカル）**: biome・tsc（strict）成功、TS 単体 **163 件**（旧 Python の全ケース + 追加）、変異試験で主要な判定が効くことを確認、`./gradlew build`（JDK 25）成功と build ジョブの件数検査（実 Gradle の XML）成功、kotlin-golden 成功、**MySQL 8.4 の統合試験（全スイート）+ 件数検査 成功（624 秒）**、9.7 は下記、**イメージスモーク 179 件成功**・プレビュー manifest の生成（再現性）・検証・本番としての拒否を確認。
+**不安定な既存試験の修正**: `SignalNotificationDispatcherTest` の並行試験（約 4 割失敗）を設計どおりの不変条件に（D-255）。
+**独立レビュー（Sonnet・読取り専用）**: 高 0・中 1・低 4 → 全件修正、再確認で解消（低 2 のうち fail-open 側も修正）（D-256）。
+**未実施**: agent-windows（Windows ランナー）、connectorj26（非ゲート）、本物の Dockerfile でのイメージビルド（CI）。
 
 ## 現在の状態と次の作業（2026-11-01 夜 時点。main = f9c61af + 作業ブランチ）
 **判定の正本は `docs/COMPLETION.md`（R1〜R32 の A/B/C）。この節はその要約と、再開手順。開発全体は『完了』ではない。**
