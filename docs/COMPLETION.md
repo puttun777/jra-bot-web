@@ -1,6 +1,6 @@
 # COMPLETION（完成条件一覧と現在の状態）
 
-最終更新: 2026-11-01（web main = f35c167、infra main = e21e9e4）。**この表が『開発全体が終わったか』の判定の正本。** 他の文書（PROGRESS の履歴・PLAN のチェック項目）と食い違ったら、コード・PR・検証結果と突合してこちらを直す。
+最終更新: 2026-11-02（言語移行 L1〜L9 を追加。web main = 37b043e、infra main = e21e9e4）。旧: 2026-11-01。**この表が『開発全体が終わったか』の判定の正本。** 他の文書（PROGRESS の履歴・PLAN のチェック項目）と食い違ったら、コード・PR・検証結果と突合してこちらを直す。
 要件の出典: `REQUIREMENTS.md` §3〜§5、`MIGRATION_MATRIX.md` §1（F01〜F26）、`PLAN.md`、`UNRESOLVED.md`。
 
 ## 区分
@@ -45,6 +45,20 @@
 | R30 | 合成データの全体統合試験（取得側→ingest→DB→判定→Fake通知→結果→成績） | `BotRunOrchestratorIntegrationTest` の通し + ingest 統合 + agent 相互運用 | MySQL | `TEST_RESULTS.md` §2 | **A（段ごと）/ C（HTTP から bot までを 1 本にした試験は未作成。モジュール間依存の禁止による）** |
 | R31 | 旧新比較の総合（意図した差異・旧欠陥の整理）`TEST_RESULTS.md` | `docs/TEST_RESULTS.md`、MIGRATION_MATRIX E1〜E17 | — | ゴールデン + 差異表 | **A** |
 | R32 | `OPERATIONS.md`・初期導入・移行手順・本人の最終確認チェックリスト | web `OPERATIONS.md`・`USER_ACTIONS.md`、infra `OPERATIONS.md` | — | — | **A（文書）**。移行手順は R24 の実装後に具体化 |
+
+## 言語移行（2026-11-02 要件変更。D-250。正本は `LANGUAGE_MIGRATION.md`）
+完成の条件: 自分たちで保守する Python が通常開発・CI・運用の必須経路に無い。区分は上と同じ（A = コード + 合成データ検証まで、B = 本人・実機・本番待ち、C = 未実装）。
+| ID | 対象 | 移行先 | 状態 | 区分 |
+|---|---|---|---|---|
+| L1 | CI・リリース補助（tools/ci・tools/release・JUnit 件数検査） | TypeScript（`tools/src`） | 実装・試験 163 件・ローカルのイメージスモーク 179 件成功（ブランチ claude/lang-l1-ci-tools-ts）。CI で確認中 | **A（PR 待ち）** |
+| L2 | infra の運用 CLI（ops） | TypeScript（infra `ops/src`） | 実装・試験 104 件・既知問題 5 件の修正（infra ブランチ claude/lang-l2-ops-ts）。実 GCP は未検証 | **A（コード）/ B（実 GCP）** |
+| L3 | ML 学習・評価・品質ゲート・成果物（ml/・tools/ml） | Kotlin（`:ml-train`） | 数値部分を実装し、Python 由来フィクスチャと一致（重み差 ≤ 2.4e-6）。Job・保存・登録・イメージは実装中 | **C** |
+| L4 | ゴールデン（tools/golden） | Kotlin + TypeScript | 未着手 | **C** |
+| L5 | Windows 取得エージェント（agent/） | C#/.NET 10 | 未着手 | **C**（実機 COM は B） |
+| L6 | GCP 資源定義（terraform/） | Pulumi + TypeScript | 未着手 | **C**（up/import は B） |
+| L7 | フロントエンド（app.js） | TypeScript | 未着手 | **C** |
+| L8 | 残機能（上表の C） | Kotlin/TS | 未着手 | **C** |
+| L9 | リリース経路（AR 公開・本番 manifest・deploy 受渡し） | GitHub Actions + TS | 未着手 | **C**（実公開は B） |
 
 ## 本人の判断・操作が必要なもの（B のまとめ。包括委任の対象外）
 | 項目 | 不足している情報・必要な操作 | 準備状況 |
