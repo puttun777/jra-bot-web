@@ -13,6 +13,7 @@ import {
   type LocalImage,
   PREVIEW_SCHEMA,
   PRODUCTION_SCHEMA,
+  rejectIgnoredKeywords,
   SCHEMA_DIR,
   validatePreview,
   validateProduction,
@@ -474,6 +475,12 @@ describe("schema files", () => {
       writeFileSync(p, JSON.stringify(s));
       assert.throws(() => validateProduction(syntheticProduction(), root), /検証されないキーワード/);
     });
+    // properties の中のプロパティ名 format / properties は名前なので許可、その中のスキーマの format キーワードは拒否（文脈で判定）
+    assert.doesNotThrow(() =>
+      rejectIgnoredKeywords({ type: "object", properties: { format: { type: "string" }, properties: { type: "object" } } }, "t"),
+    );
+    assert.throws(() => rejectIgnoredKeywords({ properties: { properties: { type: "string", format: "date-time" } } }, "t"), /format/);
+    assert.doesNotThrow(() => rejectIgnoredKeywords({ const: { format: 1 }, enum: [{ format: 2 }] }, "t"));
   });
   it("contract example shape: CONTRACTS §10 example keys == production schema required", () => {
     const text = readFileSync(join(ROOT, "docs", "CONTRACTS.md"), "utf8");

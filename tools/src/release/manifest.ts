@@ -60,6 +60,11 @@ function schemaValidator(root: string, name: string): (v: unknown) => readonly s
  */
 const IGNORED_KEYWORDS: ReadonlySet<string> = new Set(["format", "contentEncoding", "contentMediaType", "contentSchema"]);
 
+/** 値がスキーマではない（データ）キーワード。中身は走査しない */
+const DATA_KEYWORDS: ReadonlySet<string> = new Set(["const", "enum", "default", "examples"]);
+/** 値が『名前 → スキーマ』の対応表のキーワード。キー名は名前で、キーワードではない */
+const MAP_KEYWORDS: ReadonlySet<string> = new Set(["properties", "patternProperties", "$defs", "definitions", "dependentSchemas"]);
+
 export function rejectIgnoredKeywords(schema: unknown, what: string, path = "#"): void {
   if (Array.isArray(schema)) {
     schema.forEach((x, i) => rejectIgnoredKeywords(x, what, `${path}/${i}`));
@@ -67,8 +72,12 @@ export function rejectIgnoredKeywords(schema: unknown, what: string, path = "#")
   }
   if (!isRecord(schema)) return;
   for (const [k, v] of Object.entries(schema)) {
-    if (IGNORED_KEYWORDS.has(k) && path !== "#/properties" && !path.endsWith("/properties"))
-      throw new Error(`${what}: ${path} の ${k} は検証されないキーワード（使わない）`);
+    if (IGNORED_KEYWORDS.has(k)) throw new Error(`${what}: ${path} の ${k} は検証されないキーワード（使わない）`);
+    if (DATA_KEYWORDS.has(k)) continue;
+    if (MAP_KEYWORDS.has(k) && isRecord(v)) {
+      for (const [name, sub] of Object.entries(v)) rejectIgnoredKeywords(sub, what, `${path}/${k}/${name}`);
+      continue;
+    }
     rejectIgnoredKeywords(v, what, `${path}/${k}`);
   }
 }
