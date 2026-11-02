@@ -20,6 +20,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: ./.github/actions/setup-tools
       - name: Docker
         run: docker version --format 'client={{.Client.Version}} server={{.Server.Version}}'
       - name: Build the 5 images (JVM 4 share one Gradle build stage; ml-train is Python; local only, no push)
@@ -36,21 +37,21 @@ jobs:
       - name: Pull the CI-only MySQL image
         run: docker pull mysql:8.4
       - name: Security and startup smoke (non-root, ENTRYPOINT, exit codes, secrets, JDK 25, SIGTERM; CI-only MySQL with synthetic data)
-        run: python3 -m tools.release.image_smoke --git-sha "$(git rev-parse HEAD)" --report-dir out
+        run: node build/tools/src/main.js image-smoke --git-sha "$(git rev-parse HEAD)" --report-dir out
       - name: Dry-run manifest (preview; not deployable) - generate, validate, reproducibility
         run: |
           set -eu
           GIT_SHA="$(git rev-parse HEAD)"
           BUILT_AT="$(date -u -d "@$(git show -s --format=%ct HEAD)" +%Y-%m-%dT%H:%M:%SZ)"
           for i in 1 2; do
-            python3 -m tools.release.cli preview --git-sha "$GIT_SHA" --built-at "$BUILT_AT" --local-images out/images-local.json --out "out/preview-$i.json"
+            node build/tools/src/main.js release preview --git-sha "$GIT_SHA" --built-at "$BUILT_AT" --local-images out/images-local.json --out "out/preview-$i.json"
           done
           cmp out/preview-1.json out/preview-2.json
           mv out/preview-1.json out/manifest-preview.json
           rm out/preview-2.json
-          python3 -m tools.release.cli validate --kind preview --expect-git-sha "$GIT_SHA" out/manifest-preview.json
+          node build/tools/src/main.js release validate --kind preview --expect-git-sha "$GIT_SHA" out/manifest-preview.json
           # プレビューは本番用としては必ず拒否される（拒否されなければ失敗）
-          rc=0; python3 -m tools.release.cli validate --kind production out/manifest-preview.json || rc=$?
+          rc=0; node build/tools/src/main.js release validate --kind production out/manifest-preview.json || rc=$?
           test "$rc" = 1
           {
             echo "## images (dry run)"

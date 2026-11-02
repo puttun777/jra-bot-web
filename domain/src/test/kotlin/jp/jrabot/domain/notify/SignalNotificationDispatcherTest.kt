@@ -240,9 +240,17 @@ class SignalNotificationDispatcherTest {
         go.countDown()
         val results = reports.map { it.get() }
         pool.shutdown()
-        assertEquals(1, results.count { it.status == DispatchStatus.DELIVERED }, "勝者は 1 つ")
-        assertEquals(1, sends.get(), "二重通知なし")
-        assertEquals(7, results.count { it.status == DispatchStatus.NOTHING_TO_SEND })
+        // claim は Signal ごと（D-255）。同時に動くと a と b を別々の Bot が取り、通知が 2 通に分かれることがある。
+        // 保証するのは『1 つの Signal は 1 回だけ送られる』こと（Signal ごとの勝者は 1 つ）で、通知の通数ではない
+        val sentIds = results.flatMap { it.sent }
+        assertEquals(2, sentIds.size, "各 Signal はちょうど 1 回だけ送られる（重複なし）: $sentIds")
+        assertEquals(setOf(a.first, b.first), sentIds.toSet(), "欠落なし")
+        val delivered = results.count { it.status == DispatchStatus.DELIVERED }
+        assertTrue(delivered in 1..2, "勝者は Signal ごとに 1 つ（通知は 1〜2 通）: $delivered")
+        assertEquals(delivered, sends.get(), "送信は勝った Bot の分だけ")
+        assertEquals(8 - delivered, results.count { it.status == DispatchStatus.NOTHING_TO_SEND })
+        assertEquals(NotificationState.SENT, repo.stateOf(tenant, a.first))
+        assertEquals(NotificationState.SENT, repo.stateOf(tenant, b.first))
     }
 
     @Test

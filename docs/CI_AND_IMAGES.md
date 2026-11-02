@@ -5,10 +5,10 @@ CI の実行範囲の決め方、分岐保護の設定、イメージのビル�
 ## 1. CI の構成（`.github/workflows/ci.yml`）
 | ジョブ | 内容 | いつ実行するか |
 |---|---|---|
-| `changes and repo hygiene` | 変更ファイルの分類（`tools/ci/classify.py`）+ 秘密/実データの混入検査 | **常に** |
+| `changes and repo hygiene` | 変更ファイルの分類（`tools/src/ci/classify.ts`）+ 秘密/実データの混入検査 + 整合検査（`consistency`） | **常に** |
 | `build (Temurin 25)` | `./gradlew build`（コンパイル・単体・ktlint・依存方向）、JDK 25 の確認、domain/golden-runner/cloud-gcp/アプリ/persistence の単体テスト件数の検証、**Kotlin と旧 Python のゴールデン比較**（`:golden-runner:run` → `tools.golden.kotlin_compare`。T3.1、D-107） | Kotlin・Gradle・ビルド定義・CI・**`tools/golden`（`.md` 以外）・`golden-runner`** の変更 |
 | `db integration (MySQL x)` | Testcontainers の MySQL。スイート: `migration`（:db-migration）/ `persistence`（:persistence）/ `apps`（:bot :ingest :dashboard） | 下表のとおり範囲が変わる |
-| `release tools and ci scripts (Python)` | `tools/release`（manifest・Dockerfile 静的検査）と `tools/ci`（判定・ゲート・ワークフロー規則）の単体テスト（Docker 不要） | リリース関連・Dockerfile・Dependabot 設定・マイグレーション・CI の変更 |
+| `release tools and ci scripts (TypeScript)` | `tools/`（TypeScript。D-254）の Biome（lint・format）・tsc（strict）・単体試験（node:test。件数下限 150・skip/todo/失敗 0 を JUnit XML で検査）。release-manifest・Dockerfile 静的検査・判定・ゲート・ワークフロー規則・JUnit 件数検査・preflight（Docker 不要） | リリース関連・Dockerfile・Dependabot 設定・マイグレーション・CI・`tools/` の変更 |
 | `golden tests (Python 3.12)` | T2.6 のゴールデンテスト | `tools/golden`・CI の変更 |
 | `ml tools (Python 3.12)` | T3.6-A: `tools/ml`（正準 JSON・feature_schema の hash・Ed25519 署名・学習用データセットの契約）の単体テスト、合成成果物（`domain/src/test/resources/ml`）の決定的な再生成の一致、合成データセットの契約検証。cryptography 50.0.2 のみ。本番の鍵・Secrets は使わない | `tools/ml`・`domain/src/test/resources/ml`（後者は Kotlin の build も走る。DB 統合は不要）・CI の変更 |
 | `ml-train (Python 3.13)` | T3.6-B: `ml/` の ruff・mypy(strict)・pytest（128 件。0 件・スキップ・失敗を許さない）。独立した依存環境（`ml/requirements-dev.txt`）。Kotlin⇄Python の結合テストは `db integration` の `apps` スイート（MySQL 8.4/9.7）が実行 | `ml/`・`tools/ml` の契約・データセットのフィクスチャの変更 |
@@ -17,7 +17,7 @@ CI の実行範囲の決め方、分岐保護の設定、イメージのビル�
 | `ci gate` | 最終集約。**常に実行**。実行が必要なジョブが success でなければ失敗 | 常に |
 
 ### 1.1 分類（ファイル → 実行するジョブ）
-`tools/ci/classify.py` の `RULES` が正本（上から最初に当たった規則）。要点:
+`tools/src/ci/classify.ts` の `RULES` が正本（上から最初に当たった規則）。要点:
 | 変更したもの | build | DB 統合 | golden | release-tools | images | connector/j 26.x |
 |---|---|---|---|---|---|---|
 | docs / `*.md` のみ | - | - | - | - | - | - |
@@ -30,12 +30,12 @@ CI の実行範囲の決め方、分岐保護の設定、イメージのビル�
 | `persistence/build.gradle.kts` `db-migration/build.gradle.kts` | ○ | 8.4 + 9.7 × 全 | - | - | ○ | ○ |
 | `bot|ingest|dashboard/build.gradle.kts`（requiredSchemaVersion） | ○ | 8.4 × apps | - | ○ | ○ | - |
 | `Dockerfile` `.dockerignore` | - | - | - | ○ | ○ | - |
-| `tools/release/` `docs/schemas/` `docs/release/` `docs/CONTRACTS.md` | - | - | - | ○ | `tools/release` のみ ○ | - |
+| `tools/src/release/`・`tools/test/release/` `docs/schemas/` `docs/release/` `docs/CONTRACTS.md` | - | - | - | ○ | `tools/*/release` のみ ○ | - |
 | `tools/golden/`（`*.md` 以外） | ○（Kotlin との比較が build ジョブの中にあるため。DB 統合は不要） | - | ○ | - | - | - |
 | `tools/ml/`（`*.md` 以外） | - | - | - | - | - | - |（`ml tools` ジョブだけ）
 | `golden-runner`（Kotlin ランナー） | ○ | -（`:domain` に依存するだけで、persistence/アプリは使わない） | - | - | -（イメージの jar には入らない。Dockerfile は COPY のみ） | - |
 | `.github/dependabot.yml` | - | - | - | ○ | - | - |
-| `.github/workflows/`・`.github/scripts/`・`tools/ci/` | ○ | 8.4 + 9.7 × 全 | ○ | ○ | ○ | 本ワークフローのみ ○ |
+| `.github/workflows/`・`.github/scripts/`・`.github/actions/`・`tools/src/{ci,lib}/`・`tools/test/{ci,lib}/`・`tools/tsconfig.json`・`package.json`・`package-lock.json`・`biome.json` | ○ | 8.4 + 9.7 × 全 | ○ | ○ | ○ | 本ワークフローのみ ○ |
 | 分類できないファイル・差分が空・取得失敗・想定外のイベント | **全部（fail closed）** | 全 | ○ | ○ | ○ | - |
 | `workflow_dispatch`・月次 `schedule`（フル検証） | ○ | 全 | ○ | ○ | ○ | ○ |
 - 差分の取り方: PR は merge コミット（HEAD）とその第 1 親の差分、push は `before..HEAD`。いずれも `git diff --no-renames -z`（ファイル名の空白・日本語に対応）。
@@ -43,7 +43,7 @@ CI の実行範囲の決め方、分岐保護の設定、イメージのビル�
 ### 1.2 最終ゲート（`ci gate`）と分岐保護
 - **分岐保護の required checks は `ci gate` だけにする（ユーザー作業）**。旧名のジョブ（`build (Temurin 25)`、`repo hygiene (secrets / real data)`、`db integration (MySQL 8.4)`、`db integration (MySQL 9.7)`、`golden tests (Python 3.12)`）を required に残すと、ジョブが走らない PR で名前が出ず Pending のまま残る（`repo hygiene` は `changes and repo hygiene` に統合）。`connector/j 26.x check` は元から非 required のまま。
 - ワークフロー全体の `paths` フィルタは使っていない。`ci gate` が常に実行されるので、docs だけの PR も最終チェックが正常に終わる。
-- 判定規則（`tools/ci/gate.py`）: 必要なジョブ = success でなければ失敗（skipped・cancelled・failure すべて失敗）／不要なジョブ = skipped か success、実行して失敗していれば失敗／`changes` が失敗していれば失敗（skipped を信用できない）／出力が欠けていれば失敗／docs 以外なのに必要なジョブが 0 件でも失敗。Job summary に『未実施（変更内容から不要と判定。テストされていない）』と出し、skipped を成功として表示しない。
+- 判定規則（`tools/src/ci/gate.ts`）: 必要なジョブ = success でなければ失敗（skipped・cancelled・failure すべて失敗）／不要なジョブ = skipped か success、実行して失敗していれば失敗／`changes` が失敗していれば失敗（skipped を信用できない）／出力が欠けていれば失敗／docs 以外なのに必要なジョブが 0 件でも失敗。Job summary に『未実施（変更内容から不要と判定。テストされていない）』と出し、skipped を成功として表示しない。
 - 注意: GitHub は `if` で skipped になったジョブを required check として成功扱いにする。だから個々のジョブを required にせず、ゲートが『本当に必要だったか』を判定する。
 
 ### 1.3 14 ケースで実行されるジョブ
@@ -67,7 +67,8 @@ CI の実行範囲の決め方、分岐保護の設定、イメージのビル�
 ## 2. キャッシュ
 - **Gradle**: `gradle/actions/setup-gradle` の既定。キャッシュを書くのは default ブランチ（main / schedule / dispatch）のジョブだけ。PR は読取りのみで、main 用のキャッシュを汚染できない。キャッシュが無くても動く。キャッシュには依存とビルドの中間物だけが入り、秘密は入らない（Secrets を使っていない）。
 - **Docker**: Dockerfile の Gradle 取得層（Wrapper の配布物）は層キャッシュ、依存のダウンロードは BuildKit のキャッシュマウント（イメージの層に残らない）。4 ターゲットは同じ `build` ステージを共有するので Gradle は 1 回だけ。ジョブをまたいだ Docker レイヤーキャッシュ（`actions/cache` 等）は導入していない（外部アクションの追加と汚染対策が必要で、images の実行頻度が低いため）。
-- **Python**: `tools/ci`・`tools/release` は標準ライブラリだけ（インストール不要）。golden の `numpy` は小さいのでキャッシュしない。
+- **npm**: `tools/` の依存は `package-lock.json` で推移的依存まで固定。`npm ci --ignore-scripts`（install スクリプトを実行しない）。依存が少ない（直接 6 件）ので npm のキャッシュは使わない（`.github/actions/setup-tools`）。
+- **Python**: golden の `numpy` は小さいのでキャッシュしない（golden・agent・ml の Python は言語移行で順に廃止: `LANGUAGE_MIGRATION.md`）。
 - GCP などクラウドのリソースは一切使わない。
 
 ## 3. 無料枠の見積り
@@ -98,7 +99,7 @@ run 39921807006（T2.6、head 6f24519。全ジョブが毎回実行）。壁時�
 ## 4. イメージの手順
 ### 4.1 ビルド（ローカルのみ・push しない）
 `docs/DEVELOPER_GUIDE.md` の「Docker イメージ」のコマンド。ビルド引数は `GIT_SHA`（40 桁のコミット SHA。jar の `releaseId` と OCI ラベルに入る）。レジストリのタグは使わない（デプロイは digest 指定: CONTRACTS §1）。クラウドセッションの注意: Docker Hub・Maven Central が 429 を返すことがある（時間を空けて再実行。依存はキャッシュマウントに溜まる）。企業プロキシ配下ではビルドに CA の注入が必要（リポジトリの Dockerfile は変更しない）。
-### 4.2 スモークが確認すること（`tools/release/image_smoke.py`、D-096）
+### 4.2 スモークが確認すること（`tools/src/release/image-smoke.ts`、D-096。2026-11-02 に Python から移植: D-254）
 | 区分 | 内容 |
 |---|---|
 | 静的（5 イメージ） | ENTRYPOINT が設計どおりの exec 形式で CMD なし／USER=10001:10001／OCI ラベル revision・version=Git SHA／ENV に秘密らしい名前がない・履歴に秘密の代入がない・TZ=Asia/Tokyo・HEALTHCHECK なし／JDK 25／実効 uid 10001／javac・gradle・mvn・git・curl・wget・gcc・make・unzip がない／`/app` に書けない／ファイルシステムに秘密・実データらしい名前（.env・鍵・sqlite・pkl・PDF 等）がない／`/app` の構成（jar だけ、db-migration は lib/ だけ）が想定どおり・書込み不可 |
@@ -111,18 +112,19 @@ run 39921807006（T2.6、head 6f24519。全ジョブが毎回実行）。壁時�
 - **限界（未検証・誤って成功扱いしない）**: ① 本番(`APP_ENV=prod`)で NORMAL のとき bot のスタブが exit 1 になる経路はイメージでは再現できない（本番は GCS からしかモードを読めない。`BotJobIntegrationTest` が根拠）。イメージでは『prod は 0 にならない』ことだけ確認。② 実 GCP の ADC・実 IAP/ID トークンでの `/internal` 認可は未検証（G-AUTH-1、G-APP-1）。③ `/internal/health` は無トークンだと 401 なので、Cloud Run の通常の HTTP プローブは通らない（TCP プローブか認証付きプローブが必要。infra の T5.2 で決める: I-H9）。④ bot-run のループ・SIGTERM の checkpoint は未実装・未検証（G-JOB-1）。⑤ Bot のスタブが動いたことは業務機能の完成を意味しない。⑥ イメージサイズは bot 586MB / ingest・dashboard 601MB / db-migration 440MB（ローカル測定、非圧縮。ベースの Ubuntu + JRE で約 430MB）。サイズ削減（jlink・Alpine）は動作保証を優先して行っていない。
 
 ## 5. release-manifest の生成手順
-1. （CI の `images`）`image_smoke` が `images-local.json`（ローカルの image ID）を出す。2. `python3 -m tools.release.cli preview …` が `manifest-preview.json` を生成（`built_at` はコミット時刻。同じ入力から同じバイト列）。3. `validate --kind preview` で適合を、`validate --kind production` で**拒否される**ことを確認（CI で自動）。成果物は Actions のアーティファクト `images-dry-run`（14 日）。
-- 本番 `release-manifest.json`（`python3 -m tools.release.cli production …`）は、**以下がすべて揃うまで生成できない**（生成コマンドは検証に通らなければ何も書かない）: ① レジストリへ push した後の実 digest 5 件（push は第5段階でユーザーが承認）、② ml-train イメージ（Stage 3）、③ `feature_schema_hash`（Stage 3。ML_DESIGN §4）、④ 検証済みのロールバック範囲（初回は release 自身）、⑤ ml-train の Python 版。ローカルの image ID を digest として扱わない。
-- 検証項目: `tools/release/tests/test_manifest.py`（正常、必須欠落、未知フィールド、不正 SHA、タグのみ/短い/大文字/他レジストリ/他名前/仮値の digest、不正スキーマ版、未対応 contract_version、CONTRACTS との不一致、焼き込み値との不一致、flyway 不一致、アプリ間の食い違い、不正・未検証のロールバック範囲、プレビューの本番利用拒否、プレビューへの digest 混入、ブロッカー隠し、生成の再現性、CLI の終了コード）。
+1. （CI の `images`）`image-smoke` が `images-local.json`（ローカルの image ID）を出す。2. `node build/tools/src/main.js release preview …` が `manifest-preview.json` を生成（`built_at` はコミット時刻。同じ入力から同じバイト列）。3. `validate --kind preview` で適合を、`validate --kind production` で**拒否される**ことを確認（CI で自動）。成果物は Actions のアーティファクト `images-dry-run`（14 日）。
+- 本番 `release-manifest.json`（`node build/tools/src/main.js release production …`）は、**以下がすべて揃うまで生成できない**（生成コマンドは検証に通らなければ何も書かない）: ① レジストリへ push した後の実 digest 5 件（push は第5段階でユーザーが承認）、② ml-train イメージ（Stage 3）、③ `feature_schema_hash`（Stage 3。ML_DESIGN §4）、④ 検証済みのロールバック範囲（初回は release 自身）、⑤ ml-train の Python 版。ローカルの image ID を digest として扱わない。
+- 検証項目: `tools/test/release/manifest.test.ts`（正常、必須欠落、未知フィールド、不正 SHA、タグのみ/短い/大文字/他レジストリ/他名前/仮値の digest、不正スキーマ版、未対応 contract_version、CONTRACTS との不一致、焼き込み値との不一致、flyway 不一致、アプリ間の食い違い、不正・未検証のロールバック範囲、プレビューの本番利用拒否、プレビューへの digest 混入、ブロッカー隠し、生成の再現性、CLI の終了コード）。
 
 ## 6. Dependabot（`.github/dependabot.yml`、D-100）
-gradle / github-actions / docker（`Dockerfile`）/ pip（`tools/golden`）/ pip（`ml`。numpy は除外。D-178）。週次（月・火・水・木）、minor/patch は 1 グループ、PR 上限 3/2/2/1、自動マージなし。Spring Boot の minor/major、Connector/J の major、eclipse-temurin の major は提案しない。pip（`tools/golden`）の numpy は 2.5.3 固定のため全版を提案しない（D-103。セキュリティ更新と手動更新は妨げない設計）。設定とディレクトリ構成の整合は `tools/ci/tests/test_workflows.py` が検査。**未検証**: Dependabot の実 PR（有効化後の最初の PR で、ignore・グループ化・build-logic の検出を確認）。Dependabot version updates / security updates の有効化はリポジトリ設定（ユーザー作業）。
+gradle / github-actions（`/` と `/.github/actions/*`）/ npm（`/`。typescript・@types/node のメジャーは提案しない: D-254）/ docker（`Dockerfile`）/ pip（`tools/golden`）/ pip（`ml`。numpy は除外。D-178）。週次（月・火・金・水・木）、minor/patch は 1 グループ、PR 上限 3/2/2/2/1/1、自動マージなし。Spring Boot の minor/major、Connector/J の major、eclipse-temurin の major は提案しない。pip（`tools/golden`）の numpy は 2.5.3 固定のため全版を提案しない（D-103。セキュリティ更新と手動更新は妨げない設計）。設定とディレクトリ構成の整合は `tools/test/ci/workflows.test.ts` が検査。**未検証**: Dependabot の実 PR（有効化後の最初の PR で、ignore・グループ化・build-logic の検出を確認）。Dependabot version updates / security updates の有効化はリポジトリ設定（ユーザー作業）。
 
 ## 7. ローカルでの確認
 ```bash
-python3 -m tools.ci.run_tests --min-tests 100                       # tools/ci と tools/release の単体テスト（Docker 不要）
-python3 -c "from tools.ci import classify; print(classify.classify(['docs/a.md']).outputs())"   # 変更判定の確認
-PYTHONPATH=. python3 -m tools.ci.classify                            # EVENT_NAME=push BEFORE_SHA=<sha> など。git 履歴が必要
+npm ci --ignore-scripts                     # 初回だけ（Node.js 24.22.2。依存は package-lock.json どおり）
+npm run lint && npm test                    # Biome・tsc（strict）・単体試験（件数・skip を JUnit XML で検査。Docker 不要）
+npm run preflight -- --list                 # push 前検証で選ばれる検査（変更分類は CI と同じ classify.ts）
+EVENT_NAME=push BEFORE_SHA=<sha> node build/tools/src/main.js classify   # 変更判定の確認（git 履歴が必要）
 ```
 
 ## 8. T3.6-B の追加（ml-train イメージと release-manifest v2）
@@ -131,7 +133,7 @@ PYTHONPATH=. python3 -m tools.ci.classify                            # EVENT_NAM
 
 ## 9. Public 化した場合の運用（D-180。Visibility の変更はユーザーの最終操作）
 **コード上の確認済み**（2026-10-26）: `pull_request_target`・`workflow_run`・self-hosted ランナー・`secrets.*`・`vars.*`・`id-token` は使っていない。全ワークフローは `permissions: contents: read`。`ci.yml` の `pull_request` はフォークからでも Secrets を受け取らない。Artifact は `images-dry-run`（保持 14 日）のみで、manifest のプレビューとスモークの結果。実 JRA-VAN データ・クラウド認証情報は CI に存在しない。クラウドのデプロイは Private の `jra-bot-infra` から行う（web 側の CI に GCP 認証を足さない）。ランナーは標準の `ubuntu-24.04` と `windows-2025` だけ（Public では標準ランナーは無料の見込み。**課金構成は追加しない**。公開後の実測は未確認）。
-**品質ゲートは変更しない**: `ci gate`（必須）、変更内容の分類（`tools/ci/classify.py`）、`repo-hygiene`、Dependabot を維持する。
+**品質ゲートは変更しない**: `ci gate`（必須）、変更内容の分類（`tools/src/ci/classify.ts`）、`repo-hygiene`、Dependabot を維持する。
 
 **ユーザーが手動で設定する推奨項目**（Claude は設定しない。GitHub 側の状態は未確認）:
 1. Settings → Actions → General: **Fork pull request workflows → 「Require approval for all outside collaborators」**（外部の実行は承認制）。**Workflow permissions: Read repository contents**（既定を読み取りのみ）。「Allow GitHub Actions to create and approve pull requests」はオフ。

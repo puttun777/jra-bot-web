@@ -31,8 +31,9 @@ updates:
         update-types: ["version-update:semver-major"]
 
   # GitHub Actions（SHA ピン留めの行と『# vX.Y.Z』のコメントを更新する）
+  # .github/actions/*（composite action。setup-tools の actions/setup-node）も対象にする
   - package-ecosystem: "github-actions"
-    directory: "/"
+    directories: ["/", "/.github/actions/*"]
     schedule:
       interval: "weekly"
       day: "tuesday"
@@ -46,6 +47,30 @@ updates:
       actions-minor-patch:
         patterns: ["*"]
         update-types: ["minor", "patch"]
+
+  # npm（TypeScript のツール: package.json / package-lock.json。D-254）。lockfile に推移的依存まで固定される
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "friday"
+      time: "06:00"
+      timezone: "Asia/Tokyo"
+    open-pull-requests-limit: 2
+    labels: ["dependencies"]
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      npm-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      # TypeScript 7 は JS API が無く、@pulumi/pulumi の peerDependency（typescript < 7）と非互換（VERSIONS §16）。メジャーは手動で判断する
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # @types/node のメジャーは実行する Node.js のメジャー（24 LTS）に合わせる
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   # Docker のベースイメージ（Dockerfile の eclipse-temurin。タグ + digest 固定の digest を更新する）
   - package-ecosystem: "docker"
