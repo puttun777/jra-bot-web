@@ -104,13 +104,13 @@ ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75.0", "-XX:+ExitOnOutOfMemoryError", 
 #   合成成果物の生成器、テストは入れない）。DB は `mltrain`（ml_model の SELECT/INSERT のみ）。実データ・学習済みモデル・秘密鍵はイメージに入れない（MODEL_SIGNING_KEY は実行時の Secret）。
 # - ENTRYPOINT は exec 形式の python（PID 1）。SIGTERM は ml_train が受け、確定（レジストリ登録）の前なら成果物を片付けて 75 で終わる。終了コードは CONTRACTS §9.1。
 # - BLAS のスレッド数は 1 に固定（再現性）。ログは標準出力の JSON 1 行。
-FROM python:3.13.17-slim-bookworm@sha256:e32be0e55814a08977501ca863271d9bd02443710db8f2afaf8372e2c4508530 AS ml-train-deps
+FROM python:3.15.0-slim-bookworm@sha256:0e019bbdfb5d9874cb2389f1c2884b64aa2ac97c99960b5bc521cef978c0617d AS ml-train-deps
 ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 COPY ml/requirements.txt /tmp/requirements.txt
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-deps --only-binary=:all: -r /tmp/requirements.txt
 
-FROM python:3.13.17-slim-bookworm@sha256:e32be0e55814a08977501ca863271d9bd02443710db8f2afaf8372e2c4508530 AS ml-train
+FROM python:3.15.0-slim-bookworm@sha256:0e019bbdfb5d9874cb2389f1c2884b64aa2ac97c99960b5bc521cef978c0617d AS ml-train
 RUN groupadd --system --gid 10001 app \
     && useradd --system --uid 10001 --gid 10001 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin app
 ENV TZ=Asia/Tokyo PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/app/src:/app \
