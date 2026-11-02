@@ -256,68 +256,40 @@ describe("agent", () => {
   });
 });
 
-describe("ml tools", () => {
-  it("ml docs only is docs", () => {
-    const p = classify(["tools/ml/README.md"]);
-    assert.equal(p.mode, "docs");
-    assert.equal(p.runMlTools, false);
-  });
-  it("ml python runs only the python job", () => {
-    const p = classify(["tools/ml/make_test_artifacts.py", "tools/ml/tests/test_artifacts.py"]);
-    assert.equal(p.runMlTools, true);
-    assert.ok(!(p.runBuild || p.runGolden || p.dbMatrix.length > 0 || p.runMlTrain));
-  });
-  it("contract reference used by the training job also runs it", () => {
-    const p = classify(["tools/ml/canonical.py"]);
-    assert.ok(p.runMlTools && p.runMlTrain && p.runImages && p.runBuild);
-  });
-  it("synthetic artifacts run python and kotlin build without db, plus release checks (feature schemas feed the manifest)", () => {
-    const p = classify(["domain/src/test/resources/ml/models/cal_test_001.json"]);
-    assert.ok(p.runMlTools && p.runBuild && p.runMlTrain && p.runRelease);
-    assert.deepEqual(p.dbMatrix, []);
-  });
-  it("full runs ml tools", () => {
-    assert.equal(planForEvent("workflow_dispatch").runMlTools, true);
-    assert.equal(classify([".github/workflows/ci.yml"]).runMlTools, true);
-    assert.equal(classify(["bot/src/main/kotlin/A.kt"]).runMlTools, false);
-  });
-});
-
-describe("ml train", () => {
-  it("ml docs only is docs", () => {
-    const p = classify(["ml/README.md"]);
-    assert.equal(p.mode, "docs");
-    assert.ok(!(p.runMlTrain || p.runImages));
-  });
-  it("ml tests only run the python job and the kotlin interop without images", () => {
-    const p = classify(["ml/tests/test_job.py"]);
-    assert.ok(p.runMlTrain && p.runBuild);
-    assert.ok(!(p.runImages || p.runRelease));
+describe("ml train (Kotlin, D-257)", () => {
+  it("ml-train source runs build, the app DB suite (the bot interop test launches the jar) and the image", () => {
+    const p = classify(["ml-train/src/main/kotlin/jp/jrabot/mltrain/job/TrainJob.kt"]);
+    assert.ok(p.runBuild && p.runImages);
     assert.deepEqual(p.dbMatrix, ["8.4"]);
     assert.deepEqual(p.dbSuites, ["apps"]);
+    assert.equal(p.runRelease, false);
   });
-  it("ml source and requirements also rebuild the image", () => {
-    for (const f of [
-      "ml/src/ml_train/job.py",
-      "ml/requirements.txt",
-      "ml/pyproject.toml",
-      "tools/ml/canonical.py",
-      "tools/ml/dataset_contract.py",
-    ]) {
-      const p = classify([f]);
-      assert.ok(p.runMlTrain && p.runImages, f);
+  it("ml-train tests run build and the app DB suite without images", () => {
+    const p = classify([
+      "ml-train/src/test/kotlin/jp/jrabot/mltrain/job/TrainJobTest.kt",
+      "ml-train/src/test/resources/legacy-pkl/expected.json",
+    ]);
+    assert.ok(p.runBuild && !p.runImages && !p.runRelease);
+    assert.deepEqual(p.dbSuites, ["apps"]);
+  });
+  it("ml-train build definition also runs release checks (requiredSchemaVersion feeds the manifest)", () => {
+    const p = classify(["ml-train/build.gradle.kts"]);
+    assert.ok(p.runBuild && p.runImages && p.runRelease);
+  });
+  it("synthetic ML artifacts run build with the domain DB suites, golden comparison and release checks", () => {
+    const p = classify(["domain/src/test/resources/ml/models/cal_test_001.json"]);
+    assert.ok(p.runBuild && p.runRelease);
+    assert.deepEqual(p.dbSuites, ["persistence", "apps"]);
+  });
+  it("the removed Python locations are not silently classified (unknown = full run), docs stay docs", () => {
+    for (const f of ["ml/src/ml_train/job.py", "ml/requirements.txt", "tools/ml/canonical.py", "tools/ml/signing.py"]) {
+      assert.equal(classify([f]).mode, "full", f);
     }
+    assert.equal(classify(["ml/README.md"]).mode, "docs");
   });
-  it("unrelated changes do not run ml train", () => {
-    for (const f of ["docs/PROGRESS.md", "agent/src/jra_agent/sender.py", "tools/golden/catalog.py", "dashboard/src/main/kotlin/A.kt"]) {
-      assert.equal(classify([f]).runMlTrain, false, f);
-    }
-    assert.equal(classify(["tools/ml/signing.py"]).runImages, false);
-    assert.equal(classify(["tools/ml/signing.py"]).runMlTrain, false);
-  });
-  it("full runs ml train", () => {
-    assert.equal(planForEvent("workflow_dispatch").runMlTrain, true);
-    assert.equal(classify([".github/workflows/ci.yml"]).runMlTrain, true);
+  it("outputs have no Python ML switches any more", () => {
+    const o = outputs(planForEvent("workflow_dispatch"));
+    assert.ok(!("run_ml_tools" in o) && !("run_ml_train" in o));
   });
 });
 

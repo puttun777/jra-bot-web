@@ -79,8 +79,18 @@ Python 実装（sklearn 1.9.1, tol=1e-4）で生成した固定フィクスチ�
 | 予測確率 | 絶対 1e-3 | 重みの差 × 特徴量（標準化済み）の上界 |
 | logloss・Brier・AUC 等の指標 | 絶対 1e-4 | 予測確率の差の平均 |
 | 品質ゲートの判定 | **完全一致** | 閾値付近のケースはフィクスチャに含めない（作為的に境界へ寄せない） |
-### 4.3 旧 pickle
+
+**実測（2026-11-02。D-257）**: ソルバ単体の 6 ケースで重みの差 ≤ 2.4e-6、Platt（500 行）の a・b の差 ≤ 2.8e-10。学習 Job の計算部分（合成データセット 60 行 × 4 ケース）で目的関数の相対差 ≤ 2.6e-11（いずれも Kotlin ≤ Python）、校正後の確率の差 ≤ 8.2e-5（分離に近い校正データで Platt の a が −78 になるケースを含む）、指標・判定・分割・model_id（旧 producer を渡したとき）は一致。
+### 4.3 旧 pickle（**実装済み**: `RestrictedPickle`。ML_DESIGN §16）
 Python を呼ばない方法として、Kotlin で **pickle の opcode を構造として読むだけのパーサ**（任意の global を呼び出さない。許可した numpy 配列・旧クラスの形だけを組み立てる）を実装する。実ファイルでの確認・旧モデルを引き継ぐかは本人判断（B）。再学習する場合の影響は ML_DESIGN §11.9。
+
+### 4.4 L3 で失われる検証と代替（D-257）
+| 失われるもの | 代替 |
+|---|---|
+| CI ごとの sklearn（lbfgs）との比較（Python の ml-train の pytest） | 削除前に生成した固定フィクスチャ（`python-reference/ml_reference_v1.json`）との許容差比較（§4.2）。ソルバの不具合は目的関数値と勾配で検出する |
+| Kotlin と独立な Python 実装による相互検証（`tools/ml`: 正準 JSON・feature_schema の hash・Ed25519・データセット契約の単体と、合成成果物の再生成の一致 `--check`） | 合成成果物（`domain/src/test/resources/ml`。削除前の Python が生成）はそのまま固定。Kotlin の `CanonicalJsonTest`・`FeatureSchemaFixtureTest`・`ModelLoaderTest` が検証し、ml-train の `Dataset` が Kotlin の書いたデータセットを読む。**再生成の一致の確認は無くなった**: 成果物を作り直す必要が出たら、Kotlin の生成器を書いても『旧 Python 由来』とは呼ばず、差分をレビューする |
+| Python の convert-pkl の pytest | 削除前に固定した合成 pickle 42 件の判定・出力との一致（`legacy-pkl/expected.json`。pickle は Base64 で埋め込み、`.gitignore` の `*.pkl` を緩めない） |
+| Kotlin → Python → Kotlin の結合試験 | Kotlin（export-dataset）→ Kotlin（ml-train の jar を別プロセス）→ Kotlin（ModelLoader）。言語の境界ではなくプロセスの境界の結合試験になった |
 
 ## 5. ゴールデン（L4）で失われる検証と代替
 - 失われる: CI ごとの『旧実装（Python, f7dbf69）から再生成してフィクスチャと完全一致』の確認。

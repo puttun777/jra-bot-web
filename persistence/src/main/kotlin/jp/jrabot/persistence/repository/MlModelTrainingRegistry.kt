@@ -11,8 +11,8 @@ import jp.jrabot.domain.tenant.TenantId
 import jp.jrabot.persistence.dao.MlModelDao
 import jp.jrabot.persistence.dao.MlModelDaoImpl
 import jp.jrabot.persistence.dao.MlModelInsertEntity
-import jp.jrabot.persistence.mapping.toDbTime
 import jp.jrabot.persistence.doma.jrabotMysqlDialect
+import jp.jrabot.persistence.mapping.toDbTime
 import org.seasar.doma.jdbc.Config
 import org.seasar.doma.jdbc.dialect.Dialect
 import javax.sql.DataSource

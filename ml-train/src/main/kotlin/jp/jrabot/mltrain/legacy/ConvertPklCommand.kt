@@ -90,10 +90,23 @@ class ConvertPklCommand(
         val raw = CanonicalJson.encodeBytes(conv.model)
         val sig = ModelJson.sign(seed, raw)
         // 変換結果の検証: 推論側と同じ ModelLoader で読み戻す
-        ModelJson.verify(raw, sig, listOf(ModelJson.publicKeyOf(seed)), tenant.value, modelId, (conv.model["kind"] as jp.jrabot.domain.ml.json.JsonString).value, null, null)
+        ModelJson.verify(
+            raw,
+            sig,
+            listOf(ModelJson.publicKeyOf(seed)),
+            tenant.value,
+            modelId,
+            (conv.model["kind"] as jp.jrabot.domain.ml.json.JsonString).value,
+            null,
+            null,
+        )
         val out = Path.of(values.getValue("--out-dir"))
         Files.createDirectories(out)
-        for ((name, content) in listOf("$modelId.json" to raw, "$modelId.sig" to sig, "$modelId.conversion.json" to (LegacyConverter.reportJson(conv) + "\n").toByteArray())) {
+        for ((name, content) in listOf(
+            "$modelId.json" to raw,
+            "$modelId.sig" to sig,
+            "$modelId.conversion.json" to (LegacyConverter.reportJson(conv) + "\n").toByteArray(),
+        )) {
             try {
                 Files.write(out.resolve(name), content, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE) // 上書きしない
             } catch (_: FileAlreadyExistsException) {

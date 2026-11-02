@@ -1,9 +1,9 @@
 /**
  * release-manifest（CONTRACTS §10）の検証と生成。旧 tools/release/manifest.py の移植。
  *
- * - 本番用 `release-manifest.json`（スキーマ `docs/schemas/release-manifest.v2.json`）: registry の digest 付き参照だけを受け付ける。
+ * - 本番用 `release-manifest.json`（スキーマ `docs/schemas/release-manifest.v3.json`）: registry の digest 付き参照だけを受け付ける。
  *   タグだけ・ローカル image ID・仮値・未生成のイメージ・未検証のロールバック範囲は拒否する。
- * - ドライラン成果物 `manifest-preview.json`（スキーマ `release-manifest-preview.v2.json`）: push していないので digest が無い。
+ * - ドライラン成果物 `manifest-preview.json`（スキーマ `release-manifest-preview.v3.json`）: push していないので digest が無い。
  *   `deployable: false` と `blockers` を必ず持ち、本番スキーマには適合しない。
  * 生成は決定的（同じ入力から同じバイト列）。built_at は入力（コミット時刻）で、実行時刻を使わない。
  *
@@ -27,10 +27,10 @@ import {
 } from "./repo-facts.js";
 
 export const SCHEMA_DIR = join("docs", "schemas");
-export const PRODUCTION_SCHEMA = "release-manifest.v2.json";
-export const PREVIEW_SCHEMA = "release-manifest-preview.v2.json";
+export const PRODUCTION_SCHEMA = "release-manifest.v3.json";
+export const PREVIEW_SCHEMA = "release-manifest-preview.v3.json";
 export const ROLLBACK_REGISTRY = join("docs", "release", "rollback-verified.json");
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 export const AGENT_PROTOCOL = 1;
 export const MODEL_SCHEMA_VERSIONS: readonly number[] = [1];
 export const SUPPORTED_CONTRACT_PREFIX = "0.4.";
@@ -244,7 +244,6 @@ export function buildPreview(
   release: string,
   builtAt: string,
   localImages: Readonly<Partial<Record<ImageName, LocalImage>>>,
-  pythonVersion: string | null = null,
 ): Record<string, unknown> {
   const versions = flywayVersions(root);
   const schemas = featureSchemas(root);
@@ -275,7 +274,7 @@ export function buildPreview(
     model_schema_versions: [...MODEL_SCHEMA_VERSIONS],
     feature_schemas: schemas,
     feature_schema_hash: combinedFeatureSchemaHash(schemas),
-    runtime: { jdk: "25", python: pythonVersion },
+    runtime: { jdk: "25" },
     notes: PREVIEW_NOTES,
   };
 }
@@ -288,7 +287,6 @@ export function buildProduction(
   builtAt: string,
   registryImages: Readonly<Record<string, unknown>>,
   minAppRelease: string,
-  pythonVersion: string,
   notes = "",
 ): Record<string, unknown> {
   const versions = flywayVersions(root);
@@ -309,7 +307,7 @@ export function buildProduction(
     model_schema_versions: [...MODEL_SCHEMA_VERSIONS],
     feature_schemas: schemas,
     feature_schema_hash: combinedFeatureSchemaHash(schemas),
-    runtime: { jdk: "25", python: pythonVersion },
+    runtime: { jdk: "25" },
     notes,
   };
   const errors = validateProduction(doc, root, gitSha);

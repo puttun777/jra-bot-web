@@ -59,12 +59,16 @@ class PythonReferencePipelineTest {
             assertEquals(c["train_idx"].ints(), out.trainIdx.toList(), "$tag train")
             assertEquals(c["calib_idx"].ints(), out.calibIdx.toList(), "$tag calib")
             assertEquals(c["eval_idx"].ints(), out.evalIdx.toList(), "$tag eval")
-            val w = jp.jrabot.mltrain.numeric.Trainer.sampleWeights(out.trainIdx.map { ds.raceDate[it] }, cfg.recencyHalflifeDays)
+            val w =
+                jp.jrabot.mltrain.numeric.Trainer
+                    .sampleWeights(out.trainIdx.map { ds.raceDate[it] }, cfg.recencyHalflifeDays)
             c["sample_weights"].doubles().forEachIndexed { k, v -> close(v, w[k], 1e-12, "$tag w[$k]") }
             c["mean"].doubles().forEachIndexed { k, v -> close(v, out.base.standardizer.mean[k], 1e-12, "$tag mean[$k]") }
             c["std"].doubles().forEachIndexed { k, v -> close(v, out.base.standardizer.std[k], 1e-12, "$tag std[$k]") }
             val xs = out.base.standardizer.apply(ds.rows(out.trainIdx))
-            val objK = jp.jrabot.mltrain.numeric.Logistic.objective(xs, ds.labels(out.trainIdx), w, out.base.weights, out.base.bias, cfg.l2C)
+            val objK =
+                jp.jrabot.mltrain.numeric.Logistic
+                    .objective(xs, ds.labels(out.trainIdx), w, out.base.weights, out.base.bias, cfg.l2C)
             val objP = c["objective"].asDouble()
             assertTrue(objK <= objP * (1 + 1e-12) + 1e-12 && (objP - objK) / objP <= 1e-6, "$tag 目的関数 K=$objK P=$objP")
             c["weights"].doubles().forEachIndexed { k, v -> close(v, out.base.weights[k], 1e-4, "$tag weight[$k]") }
@@ -72,7 +76,11 @@ class PythonReferencePipelineTest {
             val uncal = out.base.predict(ds.rows(out.evalIdx))
             c["eval_pred_uncalibrated"].doubles().forEachIndexed { k, v -> close(v, uncal[k], 1e-4, "$tag uncal[$k]") }
             val pred = out.model.predict(ds.rows(out.evalIdx))
-            println("MEASURED $tag: objective rel=${(objP - objK) / objP} platt K=${out.platt} P=${c["platt"]} |dpred|max=${c["eval_pred"].doubles().indices.maxOf { abs(c["eval_pred"][it].asDouble() - pred[it]) }}")
+            println(
+                "MEASURED $tag: objective rel=${(objP - objK) / objP} platt K=${out.platt} P=${c["platt"]} |dpred|max=${c["eval_pred"].doubles().indices.maxOf {
+                    abs(c["eval_pred"][it].asDouble() - pred[it])
+                }}",
+            )
             // Platt は分離に近いので、校正後の確率は 1e-3 で比べる（実測 ≤ 8.1e-5）（実測は下の MEASURED。判定・指標は完全一致を要求）
             c["eval_pred"].doubles().forEachIndexed { k, v -> close(v, pred[k], 1e-3, "$tag pred[$k]") }
             val m = out.eval.metrics

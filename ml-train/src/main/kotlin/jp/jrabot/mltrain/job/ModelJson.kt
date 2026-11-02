@@ -95,7 +95,13 @@ object ModelJson {
                 "algorithm" to JsonString("logistic_regression"),
                 "feature_schema" to featureSchema,
                 "preprocessing" to
-                    if (mean == null || std == null) JsonNull else JsonObject.of("type" to JsonString("standardize"), "mean" to floats(mean), "std" to floats(std)),
+                    if (mean == null ||
+                        std == null
+                    ) {
+                        JsonNull
+                    } else {
+                        JsonObject.of("type" to JsonString("standardize"), "mean" to floats(mean), "std" to floats(std))
+                    },
                 "weights" to floats(weights),
                 "bias" to f(bias),
                 "calibration" to if (platt == null) JsonNull else JsonObject.of("type" to JsonString("platt"), "a" to f(platt.first), "b" to f(platt.second)),

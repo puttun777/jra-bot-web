@@ -10,8 +10,7 @@ CI の実行範囲の決め方、分岐保護の設定、イメージのビル�
 | `db integration (MySQL x)` | Testcontainers の MySQL。スイート: `migration`（:db-migration）/ `persistence`（:persistence）/ `apps`（:bot :ingest :dashboard） | 下表のとおり範囲が変わる |
 | `release tools and ci scripts (TypeScript)` | `tools/`（TypeScript。D-254）の Biome（lint・format）・tsc（strict）・単体試験（node:test。件数下限 150・skip/todo/失敗 0 を JUnit XML で検査）。release-manifest・Dockerfile 静的検査・判定・ゲート・ワークフロー規則・JUnit 件数検査・preflight（Docker 不要） | リリース関連・Dockerfile・Dependabot 設定・マイグレーション・CI・`tools/` の変更 |
 | `golden tests (Python 3.12)` | T2.6 のゴールデンテスト | `tools/golden`・CI の変更 |
-| `ml tools (Python 3.12)` | T3.6-A: `tools/ml`（正準 JSON・feature_schema の hash・Ed25519 署名・学習用データセットの契約）の単体テスト、合成成果物（`domain/src/test/resources/ml`）の決定的な再生成の一致、合成データセットの契約検証。cryptography 50.0.2 のみ。本番の鍵・Secrets は使わない | `tools/ml`・`domain/src/test/resources/ml`（後者は Kotlin の build も走る。DB 統合は不要）・CI の変更 |
-| `ml-train (Python 3.13)` | T3.6-B: `ml/` の ruff・mypy(strict)・pytest（128 件。0 件・スキップ・失敗を許さない）。独立した依存環境（`ml/requirements-dev.txt`）。Kotlin⇄Python の結合テストは `db integration` の `apps` スイート（MySQL 8.4/9.7）が実行 | `ml/`・`tools/ml` の契約・データセットのフィクスチャの変更 |
+| （削除: `ml tools (Python 3.12)`・`ml-train (Python 3.13)`） | 2026-11-02（D-257）。ML 学習は Kotlin の `:ml-train` になり、単体試験は `build` ジョブ（件数を verify-junit で検査）、export-dataset → ml-train（jar を別プロセス）→ ModelLoader の結合試験は `db integration` の `apps` スイート（MySQL 8.4/9.7） | - |
 | `images / images (build + smoke, no push)` | 5 イメージ（JVM 4 + ml-train）のビルド、スモーク、ドライラン manifest（`images.yml`） | Dockerfile・リリース・ビルド定義・マイグレーション・アプリの build 定義/リソース・CI の変更、フル検証 |
 | `connectorj26 / connector/j 26.x check (MySQL x)` | Connector/J 26.x の互換性確認（**非ゲート**、`compat-connectorj26.yml`） | Connector/J・DB 関連の依存設定の変更、手動、月次 |
 | `ci gate` | 最終集約。**常に実行**。実行が必要なジョブが success でなければ失敗 | 常に |
@@ -32,7 +31,7 @@ CI の実行範囲の決め方、分岐保護の設定、イメージのビル�
 | `Dockerfile` `.dockerignore` | - | - | - | ○ | ○ | - |
 | `tools/src/release/`・`tools/test/release/` `docs/schemas/` `docs/release/` `docs/CONTRACTS.md` | - | - | - | ○ | `tools/*/release` のみ ○ | - |
 | `tools/golden/`（`*.md` 以外） | ○（Kotlin との比較が build ジョブの中にあるため。DB 統合は不要） | - | ○ | - | - | - |
-| `tools/ml/`（`*.md` 以外） | - | - | - | - | - | - |（`ml tools` ジョブだけ）
+| `ml-train/`（Kotlin。D-257） | ○ | ○（`apps` スイート。:bot の結合試験が ml-train の jar を起動するため） | - | `build.gradle.kts` のみ ○ | `src/main` と `build.gradle.kts` は ○ | - |
 | `golden-runner`（Kotlin ランナー） | ○ | -（`:domain` に依存するだけで、persistence/アプリは使わない） | - | - | -（イメージの jar には入らない。Dockerfile は COPY のみ） | - |
 | `.github/dependabot.yml` | - | - | - | ○ | - | - |
 | `.github/workflows/`・`.github/scripts/`・`.github/actions/`・`tools/src/{ci,lib}/`・`tools/test/{ci,lib}/`・`tools/tsconfig.json`・`package.json`・`package-lock.json`・`biome.json` | ○ | 8.4 + 9.7 × 全 | ○ | ○ | ○ | 本ワークフローのみ ○ |
@@ -128,7 +127,7 @@ EVENT_NAME=push BEFORE_SHA=<sha> node build/tools/src/main.js classify   # 変�
 ```
 
 ## 8. T3.6-B の追加（ml-train イメージと release-manifest v2）
-- **ml-train イメージ**（`--target ml-train`。D-176）: `python:3.13.17-slim-bookworm`（digest 固定）、`ml/requirements.txt` を `--no-deps --only-binary` で入れた venv、non-root 10001、ENTRYPOINT は exec 形式の python。スモーク（`image_smoke`）は合成データセットで学習・署名・登録（CI 専用 MySQL）を実行する。**push しない・本番 GCP に接続しない**。
+- **ml-train イメージ**（`--target ml-train`。D-257 で Kotlin へ）: 他の 4 つと同じ `build` ステージの `:ml-train:bootJar` と JRE の `runtime-base`（non-root 10001）、ENTRYPOINT は exec 形式の java。スモーク（`image-smoke`）は jar の焼込み（requiredSchemaVersion・releaseId）・試験資源が入っていないこと・合成データセットで学習・署名・登録（CI 専用 MySQL）・冪等・REJECTED・モード・認証失敗・改ざんを確認する。**push しない・本番 GCP に接続しない**。
 - **release-manifest v2**（D-177）: `feature_schemas`（calibration / alpha / market の hash）と、その正準 JSON の sha256 である `feature_schema_hash`。スキーマは `docs/schemas/release-manifest(.preview).v2.json`。本番 manifest の生成は第 5 段階のゲートが揃うまで禁止のまま（プレビューのみ）。
 
 ## 9. Public 化した場合の運用（D-180。Visibility の変更はユーザーの最終操作）

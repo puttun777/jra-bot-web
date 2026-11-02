@@ -374,3 +374,13 @@ H6・H7・H9 は学習側/データ側（F2・T1.20）。
 **将来の表の案（承認が先。今は作らない）**: `race_condition_observations(tenant_id, race_id, observed_at NOT NULL, source_ts, kind ENUM('weather','going_turf','going_dirt'), value_cd, provenance ENUM('LIVE','BACKFILL'), batch_id, created_at)`。追記専用・UNIQUE `(tenant_id, race_id, kind, observed_at)`。**LIVE は取込時刻ではなく、JV-Link のレコードが示す発表時刻**（WE レコードの発表日時。仕様の確認が前提: T1.17）か、速報を受け取った時刻で、後者は『受け取った時刻 = 観測時刻の上限』として `LIVE` にだけ使う（それより前の観測は主張しない）。BACKFILL の行を入れる場合は `observed_at` を持たせず別の列で区別する。bot は SELECT、ingest が INSERT、`R__grants.sql` の追加が要る（V6 以降の別の承認）。
 **未解決（UNRESOLVED G-31）**: ①WE レコードの発表時刻の意味と粒度（T1.17）②LIVE 行の取得が運用開始後に限られるので、運用開始前のレースの履歴は永久に無い（その分は常に除外）③別スキーマ（天候・馬場なし。T39 §8.1）との比較は、実データの除外率を見てから。
 **今回の実装（安全側の除外）**: `races.updated_at` が as-of より後、または**不明（null）**なら天候・馬場を使わず `RACE_CONDITIONS_NEWER_THAN_AS_OF` を付け、データセットから除外する（null の扱いは D-226）。
+
+## 16. 学習 Job の Kotlin 移行（2026-11-02。D-257。言語移行 L3）
+**合成データのみで検証。実データでの学習・精度・品質閾値の妥当性は未検証。ML は本番利用可能ではない（変わらず）。**
+- **構成**: `:ml-train`（Kotlin。bot と独立した実行単位・イメージ）。依存は `:domain`（特徴量スキーマ・正準 JSON・`ModelLoader`）・`:persistence`（`TrainingRegistry`。DB ユーザー `mltrain`）・`:cloud-gcp`（`OpsModeProviders`・`GcsBlobStore`）。数値は Hipparchus（§VERSIONS 17）。
+- **目的関数は旧版と同じ**（sklearn の `LogisticRegression(penalty="l2", solver="lbfgs")`: `C·Σwᵢ·logloss + ½‖β‖²`、切片は罰則なし）。解き方は Newton 法（IRLS）+ Armijo の直線探索。収束判定は勾配を `C·Σw` で割った最大成分 ≤ tol（sklearn ≥1.1 の尺度）。直線探索が倍精度の丸めで進まないときは、勾配 ≤ 1e-8 なら最適解とみなし、そうでなければ収束失敗（反復を使い切らない。Platt の C=1e6 で起きた）。
+- **旧版との一致**（削除前の Python で生成した固定フィクスチャ `ml-train/src/test/resources/python-reference/ml_reference_v1.json`。生成元コミット・版・生成スクリプトの全文を含む）: 目的関数（Kotlin ≤ Python、相対差 ≤ 2.6e-11）・重み（≤ 2.4e-6）・分割・直近重み・標準化（≤ 1e-12）・指標・品質ゲートの判定（完全一致）。校正後の確率は分離に近い 60 行のデータで ≤ 8.2e-5（許容 1e-3）。許容差の根拠は LANGUAGE_MIGRATION §4.2。
+- **成果物と検証**: モデル JSON の生成は旧版と同じ形（producer は `ml-train/1.0.0`。ソルバが変わったので版を上げ、同じ入力でも旧版と別の model_id になる = 旧版の登録と衝突しない）。**自分が作ったモデルの検証は推論側と同じ `ModelLoader`**（学習側だけの検証器を持たない）。保存は `.sig` → レポート → `.json`（確定の印）、読み戻して再検証してから登録。失敗時はこの実行が作ったものだけを消す。
+- **SIGTERM**: 入口で JVM の既定（即終了）を置き換え、確定（登録）前の各段階で確認して 75 で終わる（片付け込み）。
+- **convert-pkl**: Kotlin の **データだけを解釈する pickle 読取り器**（`RestrictedPickle`。関数・クラスを呼び出す仕組みが無い。許可リストの numpy の配列・dtype・スカラ・旧クラスの決まった形だけを組み立てる）。削除前の Python 版で固定した合成 pickle 42 件（`legacy-pkl/expected.json`。protocol 2〜5・float32/big-endian・拒否すべき 27 件〔os.system・eval・EXT・PERSID・object 配列・次元不一致ほか〕）と、判定・理由コード・モデル JSON（producer を除きバイト単位）が一致。利用者のローカル専用（クラウドの環境では拒否）は不変。`--schema-dir` は廃止（既知のスキーマは Kotlin の定義から取る）。**実 pkl での確認は本人の PC で**（B。実 pkl・実モデルをリポジトリ・クラウドに置かない）。
+- **結合試験**: `:bot` の `MlTrainInteropIntegrationTest` は export-dataset → **ml-train の実行 jar を別プロセスで起動** → 推論側の `ModelLoader` で読込み（MySQL 8.4/9.7。DB ユーザーは本番と同じ `mltrain`）。イメージのスモークは JVM の ml-train で学習・登録・冪等・REJECTED・モード・認証失敗・改ざんを確認。

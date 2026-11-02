@@ -36,7 +36,7 @@ class JobDeps(
     val shouldTerminate: () -> Boolean = { false },
     val log: JobLog = JobLog(),
     /** DB の例外を Job の失敗に分類する（接続できない・一時的 = [RegistryUnavailable]、それ以外 = 失敗）。 */
-    val classifyDbError: (RuntimeException) -> MlTrainError = { MlTrainError("REGISTRY_ERROR", "レジストリの操作に失敗(${it.javaClass.simpleName})", cause = it) },
+    val classifyDbError: (RuntimeException) -> MlTrainError = { MlTrainError("DB_ERROR", "レジストリの操作に失敗(${it.javaClass.simpleName})", cause = it) },
 )
 
 data class JobOutcome(
@@ -176,7 +176,10 @@ object TrainJob {
         check(deps)
         val verdict = out.gate
         val status = out.status
-        deps.log.log("gate_evaluated", fields = mapOf("verdict" to verdict.verdict, "status" to status, "reasons" to verdict.reasons, "purpose" to gate.purpose))
+        deps.log.log(
+            "gate_evaluated",
+            fields = mapOf("verdict" to verdict.verdict, "status" to status, "reasons" to verdict.reasons, "purpose" to gate.purpose),
+        )
 
         // --- 5. モデル JSON・署名・レポート
         val now = deps.clock()

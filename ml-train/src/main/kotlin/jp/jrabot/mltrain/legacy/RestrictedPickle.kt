@@ -190,41 +190,97 @@ object RestrictedPickle {
         val c = r.u8()
         val arg: Any? =
             when (c.toChar()) {
-                '\u0080' -> r.u8() // PROTO
-                '\u0095' -> r.le(8) // FRAME（中身は続く opcode）
+                '\u0080' -> r.u8()
+
+                // PROTO
+                '\u0095' -> r.le(8)
+
+                // FRAME（中身は続く opcode）
                 '.', '(', '0', '1', '2', 'N', '\u0088', '\u0089', ')', 't', '\u0085', '\u0086', '\u0087', ']', 'l', 'a', 'e', '}', 'd', 's', 'u',
                 '\u008f', '\u0090', '\u0091', '\u0093', 'R', 'b', '\u0081', '\u0092', 'o', '\u0094', '\u0097', '\u0098',
                 -> null
 
                 'I' -> r.line()
+
                 'J' -> r.i32()
+
                 'K' -> r.u8()
+
                 'M' -> r.le(2).toInt()
+
                 'L' -> r.line()
-                '\u008a' -> r.take(r.u8().toLong()) // LONG1
-                '\u008b' -> r.take(r.i32().toLong()) // LONG4
-                'G' -> ByteBuffer.wrap(r.take(8)).order(ByteOrder.BIG_ENDIAN).double // BINFLOAT
+
+                '\u008a' -> r.take(r.u8().toLong())
+
+                // LONG1
+                '\u008b' -> r.take(r.i32().toLong())
+
+                // LONG4
+                'G' -> ByteBuffer.wrap(r.take(8)).order(ByteOrder.BIG_ENDIAN).double
+
+                // BINFLOAT
                 'F' -> r.line()
-                'X' -> r.take(r.le(4)) // BINUNICODE
-                '\u008c' -> r.take(r.u8().toLong()) // SHORT_BINUNICODE
-                '\u008d' -> r.take(r.u64Length()) // BINUNICODE8
-                'V' -> r.line() // UNICODE（raw-unicode-escape）
-                'S' -> r.line() // STRING
-                'T' -> r.take(r.le(4)) // BINSTRING
-                'U' -> r.take(r.u8().toLong()) // SHORT_BINSTRING
-                'B' -> r.take(r.le(4)) // BINBYTES
-                'C' -> r.take(r.u8().toLong()) // SHORT_BINBYTES
-                '\u008e' -> r.take(r.u64Length()) // BINBYTES8
-                '\u0096' -> r.take(r.u64Length()) // BYTEARRAY8
-                'c' -> r.line() to r.line() // GLOBAL
-                'i' -> r.line() to r.line() // INST
-                'p' -> r.line() // PUT
-                'q' -> r.u8() // BINPUT
-                'r' -> r.le(4) // LONG_BINPUT
-                'g' -> r.line() // GET
-                'h' -> r.u8() // BINGET
-                'j' -> r.le(4) // LONG_BINGET
-                '\u0082', '\u0083', '\u0084', 'P', 'Q' -> throw UnpickleRefused("FORBIDDEN_OPCODE", "許可しない opcode") // EXT1/2/4・PERSID・BINPERSID
+
+                'X' -> r.take(r.le(4))
+
+                // BINUNICODE
+                '\u008c' -> r.take(r.u8().toLong())
+
+                // SHORT_BINUNICODE
+                '\u008d' -> r.take(r.u64Length())
+
+                // BINUNICODE8
+                'V' -> r.line()
+
+                // UNICODE（raw-unicode-escape）
+                'S' -> r.line()
+
+                // STRING
+                'T' -> r.take(r.le(4))
+
+                // BINSTRING
+                'U' -> r.take(r.u8().toLong())
+
+                // SHORT_BINSTRING
+                'B' -> r.take(r.le(4))
+
+                // BINBYTES
+                'C' -> r.take(r.u8().toLong())
+
+                // SHORT_BINBYTES
+                '\u008e' -> r.take(r.u64Length())
+
+                // BINBYTES8
+                '\u0096' -> r.take(r.u64Length())
+
+                // BYTEARRAY8
+                'c' -> r.line() to r.line()
+
+                // GLOBAL
+                'i' -> r.line() to r.line()
+
+                // INST
+                'p' -> r.line()
+
+                // PUT
+                'q' -> r.u8()
+
+                // BINPUT
+                'r' -> r.le(4)
+
+                // LONG_BINPUT
+                'g' -> r.line()
+
+                // GET
+                'h' -> r.u8()
+
+                // BINGET
+                'j' -> r.le(4)
+
+                // LONG_BINGET
+                '\u0082', '\u0083', '\u0084', 'P', 'Q' -> throw UnpickleRefused("FORBIDDEN_OPCODE", "許可しない opcode")
+
+                // EXT1/2/4・PERSID・BINPERSID
                 else -> malformed("未知の opcode")
             }
         return Op(c, arg)
@@ -257,7 +313,14 @@ object RestrictedPickle {
             stack.add(v)
         }
 
-        private fun pop(): PValue = if (stack.isEmpty() || (marks.isNotEmpty() && stack.size <= marks.last())) malformed("スタックが空") else stack.removeAt(stack.size - 1)
+        private fun pop(): PValue =
+            if (stack.isEmpty() ||
+                (marks.isNotEmpty() && stack.size <= marks.last())
+            ) {
+                malformed("スタックが空")
+            } else {
+                stack.removeAt(stack.size - 1)
+            }
 
         private fun top(): PValue = if (stack.isEmpty()) malformed("スタックが空") else stack.last()
 
@@ -301,13 +364,34 @@ object RestrictedPickle {
                         return v
                     }
 
-                    '(' -> marks.add(stack.size)
-                    '0' -> pop()
-                    '1' -> popMark()
-                    '2' -> push(top())
-                    'N' -> push(PNone)
-                    '\u0088' -> push(PBool(true))
-                    '\u0089' -> push(PBool(false))
+                    '(' -> {
+                        marks.add(stack.size)
+                    }
+
+                    '0' -> {
+                        pop()
+                    }
+
+                    '1' -> {
+                        popMark()
+                    }
+
+                    '2' -> {
+                        push(top())
+                    }
+
+                    'N' -> {
+                        push(PNone)
+                    }
+
+                    '\u0088' -> {
+                        push(PBool(true))
+                    }
+
+                    '\u0089' -> {
+                        push(PBool(false))
+                    }
+
                     'I' -> {
                         val s = op.arg as String
                         push(
@@ -319,20 +403,62 @@ object RestrictedPickle {
                         )
                     }
 
-                    'J' -> push(PInt(BigInteger.valueOf((op.arg as Int).toLong())))
-                    'K', 'M' -> push(PInt(BigInteger.valueOf((op.arg as Int).toLong())))
-                    'L' -> push(parseLong(op.arg as String))
-                    '\u008a', '\u008b' -> push(leSigned(op.arg as ByteArray))
-                    'G' -> push(PFloat(op.arg as Double))
-                    'F' -> push(PFloat((op.arg as String).trim().toDoubleOrNull() ?: malformed("浮動小数が不正")))
-                    'X', '\u008c', '\u008d' -> push(str(op.arg as ByteArray))
-                    'V' -> malformed("UNICODE（protocol 0）は読まない")
-                    'S' -> malformed("STRING（protocol 0）は読まない")
-                    'T', 'U' -> push(ascii(op.arg as ByteArray))
-                    'B', 'C', '\u008e', '\u0096' -> push(PBytes(op.arg as ByteArray))
-                    ')' -> push(PTuple(emptyList()))
-                    't' -> push(PTuple(popMark()))
-                    '\u0085' -> push(PTuple(listOf(pop())))
+                    'J' -> {
+                        push(PInt(BigInteger.valueOf((op.arg as Int).toLong())))
+                    }
+
+                    'K', 'M' -> {
+                        push(PInt(BigInteger.valueOf((op.arg as Int).toLong())))
+                    }
+
+                    'L' -> {
+                        push(parseLong(op.arg as String))
+                    }
+
+                    '\u008a', '\u008b' -> {
+                        push(leSigned(op.arg as ByteArray))
+                    }
+
+                    'G' -> {
+                        push(PFloat(op.arg as Double))
+                    }
+
+                    'F' -> {
+                        push(PFloat((op.arg as String).trim().toDoubleOrNull() ?: malformed("浮動小数が不正")))
+                    }
+
+                    'X', '\u008c', '\u008d' -> {
+                        push(str(op.arg as ByteArray))
+                    }
+
+                    'V' -> {
+                        malformed("UNICODE（protocol 0）は読まない")
+                    }
+
+                    'S' -> {
+                        malformed("STRING（protocol 0）は読まない")
+                    }
+
+                    'T', 'U' -> {
+                        push(ascii(op.arg as ByteArray))
+                    }
+
+                    'B', 'C', '\u008e', '\u0096' -> {
+                        push(PBytes(op.arg as ByteArray))
+                    }
+
+                    ')' -> {
+                        push(PTuple(emptyList()))
+                    }
+
+                    't' -> {
+                        push(PTuple(popMark()))
+                    }
+
+                    '\u0085' -> {
+                        push(PTuple(listOf(pop())))
+                    }
+
                     '\u0086' -> {
                         val b = pop()
                         push(PTuple(listOf(pop(), b)))
@@ -344,8 +470,14 @@ object RestrictedPickle {
                         push(PTuple(listOf(pop(), b, c)))
                     }
 
-                    ']' -> push(PList())
-                    'l' -> push(PList(popMark().toMutableList()))
+                    ']' -> {
+                        push(PList())
+                    }
+
+                    'l' -> {
+                        push(PList(popMark().toMutableList()))
+                    }
+
                     'a' -> {
                         val v = pop()
                         (top() as? PList ?: malformed("APPEND の対象がリストでない")).items.add(v)
@@ -358,8 +490,14 @@ object RestrictedPickle {
                         target.items.addAll(items)
                     }
 
-                    '}' -> push(PDict())
-                    'd' -> push(PDict().also { putAll(it, popMark()) })
+                    '}' -> {
+                        push(PDict())
+                    }
+
+                    'd' -> {
+                        push(PDict().also { putAll(it, popMark()) })
+                    }
+
                     's' -> {
                         val v = pop()
                         val k = pop()
@@ -371,17 +509,23 @@ object RestrictedPickle {
                         putAll(top() as? PDict ?: malformed("SETITEMS の対象が dict でない"), items)
                     }
 
-                    '\u008f' -> push(PSet())
+                    '\u008f' -> {
+                        push(PSet())
+                    }
+
                     '\u0090' -> {
                         val items = popMark()
                         val target = top() as? PSet ?: malformed("ADDITEMS の対象が set でない")
                         for (i in items) target.items.add(hashable(i))
                     }
 
-                    '\u0091' -> push(PSet(popMark().map(::hashable).toMutableSet()))
+                    '\u0091' -> {
+                        push(PSet(popMark().map(::hashable).toMutableSet()))
+                    }
+
                     'c' -> {
                         @Suppress("UNCHECKED_CAST")
-                        val (m, n) = op.arg as Pair<String, String>
+                            val (m, n) = op.arg as Pair<String, String>
                         push(global(m, n))
                     }
 
@@ -401,7 +545,10 @@ object RestrictedPickle {
                         push(instantiate(pop(), args.items))
                     }
 
-                    '\u0092' -> malformed("NEWOBJ_EX は読まない")
+                    '\u0092' -> {
+                        malformed("NEWOBJ_EX は読まない")
+                    }
+
                     'o' -> {
                         val items = popMark()
                         if (items.isEmpty()) malformed("OBJ にクラスが無い")
@@ -410,7 +557,7 @@ object RestrictedPickle {
 
                     'i' -> {
                         @Suppress("UNCHECKED_CAST")
-                        val (m, n) = op.arg as Pair<String, String>
+                            val (m, n) = op.arg as Pair<String, String>
                         push(instantiate(global(m, n), popMark()))
                     }
 
@@ -419,15 +566,41 @@ object RestrictedPickle {
                         build(top(), state)
                     }
 
-                    'p' -> memo[(op.arg as String).trim().toLongOrNull() ?: malformed("PUT の番号")] = top()
-                    'q' -> memo[(op.arg as Int).toLong()] = top()
-                    'r' -> memo[op.arg as Long] = top()
-                    '\u0094' -> memo[memo.size.toLong()] = top()
-                    'g' -> push(memo[(op.arg as String).trim().toLongOrNull() ?: malformed("GET の番号")] ?: malformed("memo に無い"))
-                    'h' -> push(memo[(op.arg as Int).toLong()] ?: malformed("memo に無い"))
-                    'j' -> push(memo[op.arg as Long] ?: malformed("memo に無い"))
-                    '\u0097', '\u0098' -> malformed("帯域外のバッファは読まない")
-                    else -> malformed("未対応の opcode")
+                    'p' -> {
+                        memo[(op.arg as String).trim().toLongOrNull() ?: malformed("PUT の番号")] = top()
+                    }
+
+                    'q' -> {
+                        memo[(op.arg as Int).toLong()] = top()
+                    }
+
+                    'r' -> {
+                        memo[op.arg as Long] = top()
+                    }
+
+                    '\u0094' -> {
+                        memo[memo.size.toLong()] = top()
+                    }
+
+                    'g' -> {
+                        push(memo[(op.arg as String).trim().toLongOrNull() ?: malformed("GET の番号")] ?: malformed("memo に無い"))
+                    }
+
+                    'h' -> {
+                        push(memo[(op.arg as Int).toLong()] ?: malformed("memo に無い"))
+                    }
+
+                    'j' -> {
+                        push(memo[op.arg as Long] ?: malformed("memo に無い"))
+                    }
+
+                    '\u0097', '\u0098' -> {
+                        malformed("帯域外のバッファは読まない")
+                    }
+
+                    else -> {
+                        malformed("未対応の opcode")
+                    }
                 }
             }
         }
@@ -471,7 +644,9 @@ object RestrictedPickle {
         ): PValue {
             val g = f as? PGlobal ?: malformed("REDUCE の対象が関数でない")
             return when {
-                isModelClass(g) -> instantiate(g, args)
+                isModelClass(g) -> {
+                    instantiate(g, args)
+                }
 
                 g.module == "numpy" && g.name == "dtype" -> {
                     // dtype(code, align=False, copy=True)
@@ -511,7 +686,9 @@ object RestrictedPickle {
                     }
                 }
 
-                else -> malformed("この関数は REDUCE で読まない")
+                else -> {
+                    malformed("この関数は REDUCE で読まない")
+                }
             }
         }
 
@@ -527,7 +704,10 @@ object RestrictedPickle {
         private fun order(dtype: PDtype): ByteOrder =
             when (dtype.byteOrder) {
                 '>' -> ByteOrder.BIG_ENDIAN
-                '<', '=', '|' -> ByteOrder.LITTLE_ENDIAN // 旧モデルは x86 の Windows で作られた（native = little）
+
+                '<', '=', '|' -> ByteOrder.LITTLE_ENDIAN
+
+                // 旧モデルは x86 の Windows で作られた（native = little）
                 else -> malformed("byte order")
             }
 
@@ -555,10 +735,23 @@ object RestrictedPickle {
             val values =
                 DoubleArray(count.toInt()) {
                     when (dtype.itemSize) {
-                        8 -> bb.double
-                        4 -> bb.float.toDouble()
-                        2 -> java.lang.Float.float16ToFloat(bb.short).toDouble()
-                        else -> malformed("未対応の浮動小数の幅")
+                        8 -> {
+                            bb.double
+                        }
+
+                        4 -> {
+                            bb.float.toDouble()
+                        }
+
+                        2 -> {
+                            java.lang.Float
+                                .float16ToFloat(bb.short)
+                                .toDouble()
+                        }
+
+                        else -> {
+                            malformed("未対応の浮動小数の幅")
+                        }
                     }
                 }
             return PArray(dtype, shape, values, null)
@@ -590,14 +783,18 @@ object RestrictedPickle {
                     if (t.items[3] !is PBool) malformed("配列の is_fortran")
                     target.array =
                         when (val data = t.items[4]) {
-                            is PBytes -> numeric(dtype, shape, data.value)
+                            is PBytes -> {
+                                numeric(dtype, shape, data.value)
+                            }
 
                             is PList -> {
                                 if (dtype.kind != 'O' || data.items.size.toLong() != shape.fold(1L) { a, b -> a * b }) malformed("object 配列の中身")
                                 PArray(dtype, shape, null, data.items.toList())
                             }
 
-                            else -> malformed("配列の中身")
+                            else -> {
+                                malformed("配列の中身")
+                            }
                         }
                 }
 
@@ -606,7 +803,9 @@ object RestrictedPickle {
                     for ((k, v) in d.items) target.state[(k as? PStr)?.value ?: malformed("属性名が文字列でない")] = v
                 }
 
-                else -> malformed("BUILD の対象")
+                else -> {
+                    malformed("BUILD の対象")
+                }
             }
         }
     }

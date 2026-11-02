@@ -30,7 +30,7 @@
 settings.gradle.kts / build.gradle.kts / gradle/libs.versions.toml   # Version Catalog
 domain/  persistence/  db-migration/  cloud-gcp/  bot/  ingest/  dashboard/   # Gradle (Kotlin)
 agent/            # Windows JV-Link 取得エージェント（Python, Windows 専用。CI では Linux で単体テストだけ）
-ml/               # ml-train（Python 学習 Job。独立イメージ）
+ml-train/         # ml-train（Kotlin の学習 Job。独立イメージ。D-257）
 tools/migrate/    # SQLite→MySQL 移行ツール（Python。デプロイしない）
 tools/golden/     # 参照元から合成フィクスチャを作るスクリプト（Python。JSON だけをコミット）
 docs/             # 設計・進捗・判断（正本）
@@ -161,4 +161,4 @@ dashboard ─読取（DTO）─▶ MySQL        export-dataset ─▶ GCS datase
 - `:persistence`: `MlModelRegistryRepository`（`ml_model` の SELECT のみ。bot の権限で足りる）。`FeatureSource`・`DatasetSource` の実装は T3.6-B。
 - `:golden-runner`: 旧 `WinProbabilityModel` の互換モジュール `GoldenMl`（次元の切詰め/ゼロ埋め = 旧 H2 をここにだけ置く。本番の 3 アプリは `:golden-runner` に依存しない）。
 - 流れ（bot-run。T3.8 で配線）: `ModelRunPin.capture`（ACTIVE を固定）→ `ModelSession`（`ModelStore` から読み、sha256・署名・スキーマ・次元を検証）→ `MlInference`（そのモデルのスキーマで特徴量を作り、検証済みモデルで確率）→ `ProbabilityPipeline`（正規化・ensemble・判定側ブレンド）→ `WinDecisionEvaluator`（`MlProbabilityInput` で確率を受け取る。EV・Kelly・買い目の計算は T3.1/T3.2 のまま）。
-- Python: `tools/ml`（正準 JSON・feature_schema の hash・Ed25519・データセット契約の参照実装と合成成果物。Gradle の外）。学習 Job（`ml-train`）は T3.6-B。
+- ML 学習: `:ml-train`（Kotlin。`:domain`・`:persistence`・`:cloud-gcp` に依存。数値は Hipparchus）。旧 Python の `tools/ml`・`ml/` は 2026-11-02 に削除（D-257）。合成成果物（`domain/src/test/resources/ml`）は削除前の Python が生成したもので固定。

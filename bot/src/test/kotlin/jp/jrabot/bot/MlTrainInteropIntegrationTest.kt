@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
-import java.security.SecureRandom
+import java.security.KeyPairGenerator
 import java.sql.Connection
 import java.time.LocalDate
 import java.time.LocalTime
@@ -37,12 +37,12 @@ import kotlin.test.assertTrue
 import kotlin.test.fail
 
 /**
- * **Kotlin → Python → Kotlin の結合**（T3.6-B）。合成の馬・レース・過去走・オッズ・結果を MySQL に入れ、
- * ① Kotlin の `export-dataset`（本物の Job: モード → Spring → スキーマ版 → DB → ローカル保管）で gzip CSV + manifest を作り、
- * ② Python の `ml-train`（本物の CLI。DB ユーザーは本番と同じ `mltrain`）がデータセットを検証して学習し、署名つきモデルと `ml_model` の CANDIDATE / REJECTED を作り、
- * ③ Kotlin の `ModelLoader` がそのモデルを署名・sha256・スキーマ・次元込みで読めることを確かめる。ACTIVE への昇格は起きない。
- * 旧 pkl 変換ツールの出力（合成の旧モデル）も Kotlin が読めることを確かめる。実データ・実 pkl・本番鍵・実 GCP は使わない（署名鍵は実行時に生成）。
- * 環境変数 `ML_TRAIN_PYTHON`（`ml/requirements.txt` を入れた Python 3.12+ の実行ファイル）が必要。無ければ**失敗**する（スキップしない）。
+ * **export-dataset → ml-train → 推論側の読込みの結合**（T3.6-B。D-257 で ml-train を Kotlin へ移した後も、別プロセスの結合のまま）。合成の馬・レース・過去走・オッズ・結果を MySQL に入れ、
+ * ① bot の `export-dataset`（本物の Job: モード → Spring → スキーマ版 → DB → ローカル保管）で gzip CSV + manifest を作り、
+ * ② ml-train の実行 jar（本物の CLI を**別プロセス**で起動。DB ユーザーは本番と同じ `mltrain`）がデータセットを検証して学習し、署名つきモデルと `ml_model` の CANDIDATE / REJECTED を作り、
+ * ③ 推論側の `ModelLoader` がそのモデルを署名・sha256・スキーマ・次元込みで読めることを確かめる。ACTIVE への昇格は起きない。
+ * 旧 pkl 変換ツールの出力（削除前の Python で作った合成の旧モデル。ml-train の試験資源）も読めることを確かめる。実データ・実 pkl・本番鍵・実 GCP は使わない（署名鍵は実行時に生成）。
+ * ml-train の jar はシステムプロパティ `mltrain.jar`（Gradle の integrationTest が :ml-train:bootJar を作って渡す）。無ければ**失敗**する（スキップしない）。
  */
 @Tag("integration")
 class MlTrainInteropIntegrationTest {
@@ -51,11 +51,17 @@ class MlTrainInteropIntegrationTest {
         private val work: Path = Files.createTempDirectory("ml-interop")
         private val storeDir: Path = Files.createDirectories(work.resolve("store"))
         private val t1 = TenantId.of(1)
-        private val mlDir = File("../ml").canonicalFile
         private val repoRoot = File("..").canonicalFile
-        private val python: String =
-            System.getenv("ML_TRAIN_PYTHON")?.takeIf { it.isNotBlank() } ?: fail("ML_TRAIN_PYTHON が未設定（ml/requirements.txt を入れた Python の実行ファイル）")
-        private val seed: ByteArray = ByteArray(32).also { SecureRandom().nextBytes(it) } // 実行時に生成するテスト鍵（秘密でも本番鍵でもない）
+        private val mltrainJar: String =
+            System.getProperty("mltrain.jar")?.takeIf { File(it).isFile } ?: fail("システムプロパティ mltrain.jar が無い（./gradlew :bot:integrationTest で実行する）")
+        private val javaBin: String = Path.of(System.getProperty("java.home"), "bin", "java").toString()
+
+        // 実行時に生成するテスト鍵（秘密でも本番鍵でもない）。PKCS#8 / X.509 の末尾 32 バイトが生の鍵
+        private val keyPair = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+        private val seed: ByteArray =
+            keyPair.private.encoded
+                .takeLast(32)
+                .toByteArray()
         private val seedB64: String = Base64.getEncoder().encodeToString(seed)
         private val ops: String = writeOpsState(Files.createTempDirectory(work, "ops")).toString()
 
@@ -65,26 +71,24 @@ class MlTrainInteropIntegrationTest {
             work.toFile().deleteRecursively()
         }
 
-        // ---------------------------------------------------------------- Python の起動
+        // ---------------------------------------------------------------- ml-train の起動（別プロセス）
         class PyResult(
             val exit: Int,
             val out: String,
         ) {
             val result: String get() = out.lines().last { "JOB_RESULT" in it }
-            val reason: String get() = Regex("\"reason\": \"([A-Z_]+)\"").find(result)!!.groupValues[1]
-            val modelId: String get() = Regex("\"model_id\": \"([A-Za-z0-9_-]+)\"").find(result)!!.groupValues[1]
+            val reason: String get() = Regex("\"reason\":\\s*\"([A-Z_]+)\"").find(result)!!.groupValues[1]
+            val modelId: String get() = Regex("\"model_id\":\\s*\"([A-Za-z0-9_-]+)\"").find(result)!!.groupValues[1]
         }
 
-        fun py(
+        fun ml(
             vararg args: String,
             env: Map<String, String> = emptyMap(),
         ): PyResult {
-            val pb = ProcessBuilder(python, *args).directory(mlDir).redirectErrorStream(true)
+            val pb = ProcessBuilder(javaBin, "-jar", mltrainJar, *args).directory(work.toFile()).redirectErrorStream(true)
             pb.environment().apply {
                 clear()
                 put("PATH", System.getenv("PATH") ?: "")
-                put("PYTHONPATH", listOf("$mlDir/src", repoRoot.path, mlDir.path).joinToString(File.pathSeparator))
-                put("PYTHONDONTWRITEBYTECODE", "1")
                 put("LC_ALL", "C.UTF-8")
                 putAll(env)
             }
@@ -92,7 +96,7 @@ class MlTrainInteropIntegrationTest {
             val out = p.inputStream.bufferedReader().readText()
             if (!p.waitFor(300, TimeUnit.SECONDS)) {
                 p.destroyForcibly()
-                fail("Python が 300 秒で終わらない")
+                fail("ml-train が 300 秒で終わらない")
             }
             return PyResult(p.exitValue(), out)
         }
@@ -102,6 +106,7 @@ class MlTrainInteropIntegrationTest {
                 "APP_ENV" to "local",
                 "OPS_MODE_SOURCE" to "file://$ops",
                 "MODEL_STORE_URI" to storeUri,
+                "MODEL_VERIFY_PUBKEY" to publicKeyB64,
                 "MODEL_SIGNING_KEY" to seedB64,
                 "DB_URL" to MySqlSupport.jdbcUrl(db.name),
                 "DB_USER" to "mltrain",
@@ -109,19 +114,12 @@ class MlTrainInteropIntegrationTest {
                 "GIT_SHA" to "interop-test",
             )
 
-        val publicKeyB64: String by lazy {
-            val r =
-                py(
-                    "-c",
-                    "import base64,sys;from ml_train import modeljson as m;print(base64.b64encode(m.public_key_of(base64.b64decode(sys.argv[1]))).decode())",
-                    seedB64,
-                )
-            check(r.exit == 0) { "公開鍵を導出できない" }
-            r.out
-                .trim()
-                .lines()
-                .last()
-        }
+        val publicKeyB64: String =
+            Base64.getEncoder().encodeToString(
+                keyPair.public.encoded
+                    .takeLast(32)
+                    .toByteArray(),
+            )
 
         // ---------------------------------------------------------------- 合成データ（DB）
         private val strengths = doubleArrayOf(-1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0)
@@ -271,9 +269,9 @@ class MlTrainInteropIntegrationTest {
         kind: String = "calibration",
     ): PyResult {
         val cfg = writeJson("cfg-${System.nanoTime()}.json", configJson.replace("%KIND%", kind))
-        val args = mutableListOf("-m", "ml_train", "train", "--tenant-id", "1", "--dataset-id", dataset, "--config", cfg)
+        val args = mutableListOf("train", "--tenant-id", "1", "--dataset-id", dataset, "--config", cfg)
         if (gateJson != null) args += listOf("--gate", writeJson("gate-${System.nanoTime()}.json", gateJson))
-        return py(*args.toTypedArray(), env = trainEnv())
+        return ml(*args.toTypedArray(), env = trainEnv())
     }
 
     private fun statusOf(modelId: String) = db.scalar("SELECT status FROM ml_model WHERE tenant_id = 1 AND model_id = '$modelId'")
@@ -326,7 +324,7 @@ class MlTrainInteropIntegrationTest {
         assertEquals("CANDIDATE_REGISTERED", ok.reason)
         assertEquals("CANDIDATE", statusOf(ok.modelId))
         val loaded = loadVerified(ok.modelId, ModelKind.CALIBRATION)
-        assertIs<ModelLoadResult.Loaded>(loaded, "Python が作った署名つきモデルを Kotlin が読める: $loaded")
+        assertIs<ModelLoadResult.Loaded>(loaded, "ml-train が作った署名つきモデルを推論側が読める: $loaded")
         assertEquals("0", db.scalar("SELECT COUNT(*) FROM ml_model WHERE kind = 'calibration' AND (status = 'ACTIVE' OR active_flag IS NOT NULL)"), "自動昇格しない")
 
         // 再実行は冪等（新しい行を作らない）
@@ -410,9 +408,7 @@ class MlTrainInteropIntegrationTest {
         // 別テナントとして実行（テナント 2 にそのデータセットは無い）
         val cfg = writeJson("cfg-t2.json", """{"kind":"calibration"}""")
         val t2 =
-            py(
-                "-m",
-                "ml_train",
+            ml(
                 "train",
                 "--tenant-id",
                 "2",
@@ -428,9 +424,7 @@ class MlTrainInteropIntegrationTest {
         // STOPPED は DB に触れず exit 0
         val stopped = writeOpsState(Files.createTempDirectory(work, "ops-stopped"), "STOPPED").toString()
         val s =
-            py(
-                "-m",
-                "ml_train",
+            ml(
                 "train",
                 "--tenant-id",
                 "1",
@@ -476,64 +470,55 @@ class MlTrainInteropIntegrationTest {
         assertTrue(models.all { f -> registered.any { f.startsWith(it) } }, "登録されていない成果物が残っている: $models / $registered")
     }
 
+    /** 削除前の Python で作った合成の旧モデル pickle（ml-train の試験資源。.gitignore の *.pkl を緩めないよう Base64 で入っている）。 */
+    private fun legacyPickle(name: String): String {
+        val tree =
+            jp.jrabot.domain.ml.json.StrictJson.parse(
+                Files.readAllBytes(File(repoRoot, "ml-train/src/test/resources/legacy-pkl/expected.json").toPath()),
+            )
+        val case = ((tree as jp.jrabot.domain.ml.json.JsonObject)["cases"] as jp.jrabot.domain.ml.json.JsonObject)[name] as jp.jrabot.domain.ml.json.JsonObject
+        val b64 = (case["pickle_b64"] as jp.jrabot.domain.ml.json.JsonString).value
+        return work.resolve("$name.pkl").also { Files.write(it, Base64.getDecoder().decode(b64)) }.toString()
+    }
+
+    private fun convert(
+        pkl: String,
+        out: Path,
+        id: String,
+    ): PyResult =
+        ml(
+            "convert-pkl",
+            "--pkl",
+            pkl,
+            "--out-dir",
+            out.toString(),
+            "--tenant-id",
+            "1",
+            "--model-id",
+            id,
+            "--confirm-own-local-file",
+            env = mapOf("MODEL_SIGNING_KEY" to seedB64, "APP_ENV" to "local"),
+        )
+
     @Test
-    fun `旧 pkl 変換ツールの出力（合成の旧モデル 5・35・40 次元）を Kotlin が読める`() {
-        val schemaDir = File(repoRoot, "domain/src/test/resources/ml").path
+    fun `旧 pkl 変換ツールの出力（合成の旧モデル 5・35・40 次元）を推論側が読める`() {
         for ((kind, dims, modelKind) in listOf(
             Triple("market5", 5, ModelKind.LEGACY_COMPAT),
             Triple("alpha35", 35, ModelKind.ALPHA),
             Triple("calibration40", 40, ModelKind.LEGACY_COMPAT),
         )) {
-            val pkl = work.resolve("old-$kind.pkl").toString()
-            assertEquals(0, py("-m", "tests.make_legacy_pkl", pkl, kind).exit)
             val out = work.resolve("conv-$kind")
             val id = "legacy-it-$kind"
-            val r =
-                py(
-                    "-m",
-                    "ml_train",
-                    "convert-pkl",
-                    "--pkl",
-                    pkl,
-                    "--out-dir",
-                    out.toString(),
-                    "--tenant-id",
-                    "1",
-                    "--model-id",
-                    id,
-                    "--schema-dir",
-                    schemaDir,
-                    "--confirm-own-local-file",
-                    env = mapOf("MODEL_SIGNING_KEY" to seedB64),
-                )
+            val r = convert(legacyPickle("valid_${kind}_p4"), out, id)
             assertEquals(0, r.exit, r.out)
             val artifact = ModelArtifact(ModelId.of(id), Files.readAllBytes(out.resolve("$id.json")), Files.readAllBytes(out.resolve("$id.sig")))
             val loaded = ModelLoader(ModelTrust.fromBase64(publicKeyB64)).load(t1, ModelId.of(id), artifact, ExpectedModel(kind = modelKind))
             assertIs<ModelLoadResult.Loaded>(loaded, "$kind ($dims 次元): $loaded")
         }
         // 次元不一致（feature_names は 40、重みは 35）は変換されない
-        val bad = work.resolve("old-bad.pkl").toString()
-        assertEquals(0, py("-m", "tests.make_legacy_pkl", bad, "calibration40", "--dim", "35").exit)
-        val r =
-            py(
-                "-m",
-                "ml_train",
-                "convert-pkl",
-                "--pkl",
-                bad,
-                "--out-dir",
-                work.resolve("conv-bad").toString(),
-                "--tenant-id",
-                "1",
-                "--model-id",
-                "legacy-it-bad",
-                "--schema-dir",
-                schemaDir,
-                "--confirm-own-local-file",
-                env =
-                    mapOf("MODEL_SIGNING_KEY" to seedB64),
-            )
+        val r = convert(legacyPickle("refused_dimension_mismatch"), work.resolve("conv-bad"), "legacy-it-bad")
         assertEquals(1, r.exit, r.out)
+        assertEquals("DIMENSION_MISMATCH", r.reason)
         assertFalse(work.resolve("conv-bad").toFile().exists())
     }
 }

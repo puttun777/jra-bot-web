@@ -78,7 +78,10 @@ object TrainingRun {
         activeLogloss: Double?,
         checkTerminate: () -> Unit = {},
     ): Outcome {
-        val tr = ds.isTrain.indices.filter { ds.isTrain[it] }.toIntArray()
+        val tr =
+            ds.isTrain.indices
+                .filter { ds.isTrain[it] }
+                .toIntArray()
         val (calib, ev) = splitValid(ds, cfg.calibrationFraction)
         val w = Trainer.sampleWeights(tr.map { ds.raceDate[it] }, cfg.recencyHalflifeDays)
         val base = Trainer.trainLinear(ds.rows(tr), ds.labels(tr), w, cfg.l2C, cfg.maxIter, cfg.tol)

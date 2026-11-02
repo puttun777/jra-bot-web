@@ -56,7 +56,7 @@ function syntheticProduction(over: Doc = {}): Doc {
   IMAGE_NAMES.forEach((n, i) => {
     images[n] = `${REG}/${n}@${digest(i + 1)}`;
   });
-  const doc = buildProduction(ROOT, SHA, "2026.11.0", "2026-11-01T00:00:00Z", images, "2026.11.0", "3.13.17", "synthetic test manifest");
+  const doc = buildProduction(ROOT, SHA, "2026.11.0", "2026-11-01T00:00:00Z", images, "2026.11.0", "synthetic test manifest");
   return { ...doc, ...over };
 }
 
@@ -149,7 +149,7 @@ describe("production manifest", () => {
     assert.ok(anyErr(errors(doc), "images.ml-train"));
   });
   it("unsupported schema version", () => {
-    for (const bad of [1, 3, 0, "2", true, null])
+    for (const bad of [1, 2, 4, 0, "3", true, null])
       assert.ok(anyErr(errors(syntheticProduction({ schema_version: bad })), "schema_version"), JSON.stringify(bad));
   });
   it("unsupported contract version", () => {
@@ -218,10 +218,12 @@ describe("production manifest", () => {
       ["model_schema_versions", [1, 1]],
       ["feature_schema_hash", "sha256:abc"],
       ["feature_schema_hash", null],
-      ["runtime", { jdk: "21", python: "3.12.3" }],
+      ["runtime", { jdk: "21" }],
+      ["runtime", {}],
       ["feature_schemas", {}],
       ["feature_schemas", { calibration: `sha256:${"1".repeat(64)}` }],
-      ["runtime", { jdk: "25", python: null }],
+      ["runtime", { jdk: "25", python: "3.13.17" }], // schema_version 3 で python は削除（D-257）。残っていたら不適合
+      ["schema_version", 2],
       ["notes", "x".repeat(2001)],
     ];
     for (const [field, bad] of cases)
@@ -237,13 +239,13 @@ describe("production manifest", () => {
     for (const bad of [withoutMl, { ...images, bot: `${REG}/bot:${SHA}` }, {}]) {
       assert.throws(() => buildProduction(ROOT, SHA, "2026.11.0", "2026-11-01T00:00:00Z", bad, "2026.11.0", "3.13.17"), /生成できない/);
     }
-    assert.throws(() => buildProduction(ROOT, SHA, "2026.11.0", "2026-11-01T00:00:00Z", images, "2026.10.0", "3.13.17"), /生成できない/); // 検証されていないロールバック範囲
+    assert.throws(() => buildProduction(ROOT, SHA, "2026.11.0", "2026-11-01T00:00:00Z", images, "2026.10.0"), /生成できない/); // 検証されていないロールバック範囲
   });
 });
 
 describe("preview manifest", () => {
   const preview = (imgs: Partial<Record<ImageName, LocalImage>> = localImages()): Doc =>
-    buildPreview(ROOT, SHA, "preview-0123456789ab", "2026-11-01T00:00:00Z", imgs, null);
+    buildPreview(ROOT, SHA, "preview-0123456789ab", "2026-11-01T00:00:00Z", imgs);
 
   it("preview is valid and not deployable", () => {
     const doc = preview();
@@ -398,6 +400,26 @@ describe("cli", () => {
       assert.equal(pv("f".repeat(40), "2026-11-01T00:00:00Z"), 2);
       assert.equal(pv(SHA, "yesterday"), 1);
       assert.equal(existsSync(o), false);
+      // schema_version 3 で廃止した引数は誤り（黙って無視しない）
+      assert.equal(
+        quiet(() =>
+          cli([
+            "preview",
+            "--git-sha",
+            SHA,
+            "--built-at",
+            "2026-11-01T00:00:00Z",
+            "--local-images",
+            join(t, "local.json"),
+            "--python-version",
+            "3.13.17",
+            "--out",
+            o,
+          ]),
+        ),
+        2,
+      );
+      assert.equal(existsSync(o), false);
       assert.equal(
         quiet(() => cli(["validate", "--kind", "production", join(t, "missing.json")])),
         2,
@@ -433,8 +455,6 @@ describe("cli", () => {
           join(t, "reg.json"),
           "--min-app-release",
           "2026.11.0",
-          "--python-version",
-          "3.13.17",
           "--out",
           out,
         ]),
@@ -508,7 +528,7 @@ describe("schema files", () => {
 describe("repo facts", () => {
   it("facts", () => {
     assert.match(contractVersion(ROOT), /^\d+\.\d+\.\d+$/);
-    assert.deepEqual(Object.keys(requiredSchemaVersions(ROOT)).sort(), ["bot", "dashboard", "ingest"]);
+    assert.deepEqual(Object.keys(requiredSchemaVersions(ROOT)).sort(), ["bot", "dashboard", "ingest", "ml-train"]);
     assert.deepEqual(flywayVersions(ROOT), ["1", "2", "3", "4", "5"]);
     assert.ok(compareVersions("10", "9") > 0);
     assert.ok(compareVersions("1.10", "1.9") > 0);

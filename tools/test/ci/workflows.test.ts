@@ -114,8 +114,6 @@ describe("workflow rules", () => {
         "db-integration",
         "golden",
         "images",
-        "ml-tools",
-        "ml-train",
         "release-tools",
       ].sort(),
     );
@@ -181,7 +179,7 @@ describe("workflow rules", () => {
       ":persistence:integrationTest",
       ":bot:integrationTest :ingest:integrationTest :dashboard:integrationTest",
       "--min 44",
-      "--min 175",
+      "--min 179",
     ]) {
       assert.ok(d.includes(needle), needle);
     }
@@ -198,28 +196,15 @@ describe("workflow rules", () => {
     assert.match(runner, /const MIN = \d{3};/);
     assert.match(runner, /verify-junit/);
   });
-  it("ml-train job runs lint, types and tests and rejects zero or skipped", () => {
-    const m = jobText("ml-train");
-    assert.match(String(job("ml-train")["if"]), /run_ml_train == 'true'/);
-    for (const needle of ["ruff check", "mypy", "pytest", "requirements-dev.txt", "skipped"]) assert.ok(m.includes(needle), needle);
-    assert.ok(!/secrets\./i.test(m));
-    assert.ok("ml-train" in REQUIRED);
-  });
-  it("ml-tools job checks signatures, schema and datasets without secrets", () => {
-    const m = jobText("ml-tools");
-    for (const needle of [
-      "tools/ml/requirements.txt",
-      "tools.ml.run_tests --min-tests 20 --max-skipped 0",
-      "tools.ml.make_test_artifacts",
-      "--check",
-      "tools.ml.dataset_contract",
-    ]) {
-      assert.ok(m.includes(needle), needle);
-    }
-    assert.ok(!m.includes("secrets."));
+  it("no Python ML job remains and the Kotlin ML tests are counted by the build job", () => {
+    assert.ok(!("ml-train" in REQUIRED) && !("ml-tools" in REQUIRED));
+    assert.ok(!/ml\/requirements|tools\.ml\.|ML_TRAIN_PYTHON/.test(CI));
     const b = jobText("build");
     for (const needle of [
       "domain/build/test-results/test --min 822",
+      "ml-train/build/test-results/test --min 44",
+      "TrainJobTest",
+      "LegacyPickleTest",
       "ModelLoaderTest",
       "ProbabilityPipelineTest",
       "FeatureBuilderTest",
@@ -265,7 +250,6 @@ describe("dependabot", () => {
       ["npm", "/"],
       ["docker", "/"],
       ["pip", "/tools/golden"],
-      ["pip", "/ml"],
     ]);
   });
   it("updates are grouped and limited", () => {

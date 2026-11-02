@@ -17,18 +17,7 @@
  * 記録: `build/preflight/last.json`（検証したコミット・ツリー・版・結果）と `build/preflight/<id>.log`（詳細ログ。Git には入れない）。
  */
 import { spawn, spawnSync } from "node:child_process";
-import {
-  closeSync,
-  existsSync,
-  mkdirSync,
-  openSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { parse as parseYaml } from "yaml";
@@ -47,7 +36,7 @@ export interface Step {
   readonly commands: readonly (readonly string[])[];
   readonly env?: Readonly<Record<string, string>>;
   /** 専用の手順（commands の代わり） */
-  readonly special?: "golden" | "agent" | "ml-train" | "ml-tools" | "images";
+  readonly special?: "golden" | "agent" | "images";
   readonly needsDocker?: boolean;
   readonly needsJdk25?: boolean;
   readonly caveat?: string;
@@ -266,18 +255,13 @@ export function stepsFor(plan: Plan, files: readonly string[], root: string, out
         needsDocker: true,
         needsJdk25: true,
         verify,
-        caveat:
-          "AGENT_PYTHON/ML_TRAIN_PYTHON は preflight が venv を用意して渡す（CI と同じ。Python のエージェント・学習 Job が移行されるまでの経過措置）",
+        caveat: "AGENT_PYTHON は preflight が venv を用意して渡す（CI と同じ。Python のエージェントが C# へ移行されるまでの経過措置）",
       });
     }
   }
   if (plan.runGolden)
     s.push({ id: "golden-py", title: "golden（Python）: 検証・旧実装からの再生成の一致・単体", commands: [], special: "golden" });
   if (plan.runAgent) s.push({ id: "agent", title: "agent（Python）: ruff・format・mypy・pytest", commands: [], special: "agent" });
-  if (plan.runMlTrain)
-    s.push({ id: "ml-train", title: "ml-train（Python）: ruff・format・mypy・pytest・pip check", commands: [], special: "ml-train" });
-  if (plan.runMlTools)
-    s.push({ id: "ml-tools", title: "ml tools（Python）: 単体・合成成果物の再生成の一致", commands: [], special: "ml-tools" });
   const appRuntimeChanged = files.some((f) => /^(bot|ingest|dashboard|cloud-gcp|persistence|domain)\/src\/main\//.test(f));
   if (plan.runImages || appRuntimeChanged) {
     // CI は kotlin のアプリ/ドメイン変更だけでは images を実行しない（節約）。起動設定の食い違いを push 前に捕まえるため、ローカルでは実行する
@@ -349,30 +333,6 @@ function runSpecial(step: Step, root: string, out: string, env: NodeJS.ProcessEn
         for (const n of ["ok.json", "bad.json", "miss.json"]) if (!leftovers.has(n)) rmSync(join(root, n), { force: true });
       }
     }
-    case "ml-tools": {
-      const py = venv(root, out, "ml-tools", ["tools/ml/requirements.txt"]);
-      const rc = steps(
-        [
-          [py, "-B", "-m", "tools.ml.run_tests", "--min-tests", "20", "--max-skipped", "0"],
-          [py, "-B", "-m", "tools.ml.make_test_artifacts", "--out", "domain/src/test/resources/ml", "--check"],
-        ],
-        root,
-        env,
-      );
-      if (rc !== 0) return rc;
-      const rt = join(out, "rt-ml-tools");
-      mkdirSync(rt, { recursive: true });
-      const link = join(rt, "venv");
-      rmSync(link, { force: true, recursive: false });
-      symlinkSync(resolve(py, "..", ".."), link);
-      return bash(
-        ciRunBlock(root, "ml-tools", "Verify the synthetic datasets (contract used by the Stage 3-F2 training job)"),
-        root,
-        { ...env, RUNNER_TEMP: rt },
-        log,
-        "synthetic datasets",
-      );
-    }
     case "agent": {
       const py = venv(
         root,
@@ -392,25 +352,6 @@ function runSpecial(step: Step, root: string, out: string, env: NodeJS.ProcessEn
       );
       if (rc !== 0) return rc;
       return bash(ciRunBlock(root, "agent", "Verify that the tests actually ran"), d, aenv, log, "agent tests actually ran");
-    }
-    case "ml-train": {
-      const req = existsSync(join(root, "ml/requirements-dev.txt")) ? "ml/requirements-dev.txt" : "ml/requirements.txt";
-      const py = venv(root, out, "ml", [req]);
-      const menv = { ...env, PATH: `${resolve(py, "..")}:${env["PATH"] ?? ""}` };
-      const d = junit("ml");
-      const rc = steps(
-        [
-          ["pip", "check"],
-          ["ruff", "check", "."],
-          ["ruff", "format", "--check", "."],
-          ["mypy"],
-          [py, "-m", "pytest", "-q", `--junitxml=${d}/pytest.xml`],
-        ],
-        join(root, "ml"),
-        menv,
-      );
-      if (rc !== 0) return rc;
-      return bash(ciRunBlock(root, "ml-train", "Verify that the tests actually ran"), d, menv, log, "ml-train tests actually ran");
     }
     case "images": {
       const sha = sh(root, "git", "rev-parse", "HEAD");
@@ -499,7 +440,6 @@ export async function main(argv: readonly string[]): Promise<number> {
     try {
       if (st.id.startsWith("db-it-")) {
         env["AGENT_PYTHON"] = venv(root, out, "agent-rt", ["agent/requirements.txt"]);
-        env["ML_TRAIN_PYTHON"] = venv(root, out, "ml", ["ml/requirements.txt"]);
       }
       if (st.special !== undefined) rc = runSpecial(st, root, out, env, log);
       else {

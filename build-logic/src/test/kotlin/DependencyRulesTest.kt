@@ -15,6 +15,7 @@ class DependencyRulesTest {
             ":ingest" to setOf(":domain", ":persistence", ":cloud-gcp"),
             ":dashboard" to setOf(":domain", ":persistence", ":cloud-gcp"),
             ":golden-runner" to setOf(":domain"),
+            ":ml-train" to setOf(":domain", ":persistence", ":cloud-gcp"),
         )
 
     @Test

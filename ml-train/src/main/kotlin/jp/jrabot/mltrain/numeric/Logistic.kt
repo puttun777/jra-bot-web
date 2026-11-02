@@ -1,8 +1,8 @@
 package jp.jrabot.mltrain.numeric
 
+import org.hipparchus.exception.MathIllegalArgumentException
 import org.hipparchus.linear.CholeskyDecomposition
 import org.hipparchus.linear.MatrixUtils
-import org.hipparchus.exception.MathIllegalArgumentException
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.ln

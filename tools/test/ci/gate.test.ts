@@ -22,8 +22,6 @@ function needsFor(p: Plan, results: Record<string, string> = {}, changesResult =
     connectorj26: p.runConnectorj26,
     agent: p.runAgent,
     "agent-windows": p.runAgentWindows,
-    "ml-tools": p.runMlTools,
-    "ml-train": p.runMlTrain,
   };
   const needs: Needs = { changes: { result: changesResult, outputs: o } };
   for (const [job, ran] of Object.entries(expected)) needs[job] = { result: ran ? "success" : "skipped", outputs: {} };

@@ -105,7 +105,13 @@ class Dataset(
                     throw DatasetInvalid("manifest が JSON として不正: ${e.message}")
                 }
             require(manifest["dataset_schema_version"] == JsonInt(1)) { "未対応の dataset_schema_version" }
-            require(manifestRaw.toString(Charsets.UTF_8).trimEnd('\n').toByteArray(Charsets.UTF_8).contentEquals(CanonicalJson.encodeBytes(manifest))) {
+            require(
+                manifestRaw
+                    .toString(Charsets.UTF_8)
+                    .trimEnd('\n')
+                    .toByteArray(Charsets.UTF_8)
+                    .contentEquals(CanonicalJson.encodeBytes(manifest)),
+            ) {
                 "manifest が正準 JSON でない"
             }
             val manifestSha = manifest.str("sha256")
@@ -115,8 +121,9 @@ class Dataset(
             val schema = manifest.obj("feature_schema")
             val schemaHash = schema.str("hash")
             require("sha256:" + CanonicalJson.sha256Hex(schema.without("hash")) == schemaHash) { "feature_schema の hash が内容と一致しない" }
-            val names = (schema["names"] as? JsonArray)?.items?.map { (it as? JsonString)?.value ?: throw DatasetInvalid("feature_schema.names が文字列の配列でない") }
-                ?: throw DatasetInvalid("feature_schema.names が無い")
+            val names =
+                (schema["names"] as? JsonArray)?.items?.map { (it as? JsonString)?.value ?: throw DatasetInvalid("feature_schema.names が文字列の配列でない") }
+                    ?: throw DatasetInvalid("feature_schema.names が無い")
             val kind = kindForSchema(names)
             val columns = META_COLUMNS + names + TAIL_COLUMNS
             val manifestColumns = (manifest["columns"] as? JsonArray)?.items?.map { (it as? JsonString)?.value }
@@ -173,7 +180,11 @@ class Dataset(
                     val v = r[f0 + j].toDoubleOrNull() ?: throw DatasetInvalid("$line 行目: ${names[j]} が数値でない")
                     require(v.isFinite()) { "$line 行目: ${names[j]} が有限でない" }
                     x[k][j] = v
-                    if (k == 0) first[j] = v else if (v != first[j]) constant[j] = false
+                    if (k == 0) {
+                        first[j] = v
+                    } else if (v != first[j]) {
+                        constant[j] = false
+                    }
                 }
                 val label = r[r.size - 2]
                 require(label == "0" || label == "1") { "$line 行目: label が 0/1 でない" }
@@ -216,7 +227,12 @@ class Dataset(
                 val pos = idx.sumOf { ds.y[it] }
                 if (pos == 0 || pos == idx.size) throw DatasetInsufficient("$name が片方のクラスしか含まない（positives=$pos, rows=${idx.size}）")
             }
-            if (ds.raceDate.indices.filter { !ds.isTrain[it] }.map { ds.raceDate[it] }.toSet().size < 2) {
+            if (ds.raceDate.indices
+                    .filter { !ds.isTrain[it] }
+                    .map { ds.raceDate[it] }
+                    .toSet()
+                    .size < 2
+            ) {
                 throw DatasetInsufficient("valid の日数が 2 日未満（校正用と評価用に分けられない）")
             }
         }

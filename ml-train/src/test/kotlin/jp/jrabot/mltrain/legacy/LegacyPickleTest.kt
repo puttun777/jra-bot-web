@@ -30,6 +30,11 @@ class LegacyPickleTest {
     private val dir: Path = Path.of(requireNotNull(javaClass.getResource("/legacy-pkl/expected.json")).toURI()).parent
     private val expected: JsonNode = ObjectMapper().readTree(dir.resolve("expected.json").toFile())
 
+    /** 合成の pickle（.gitignore の *.pkl を緩めないよう expected.json に Base64 で入れてある）。 */
+    private fun pickle(name: String): ByteArray = Base64.getDecoder().decode(expected["cases"][name]["pickle_b64"].asString())
+
+    private fun file(name: String): Path = createTempDirectory("pkl").resolve("$name.pkl").also { Files.write(it, pickle(name)) }
+
     private fun outcome(data: ByteArray): Pair<String, Any> =
         try {
             val shell = RestrictedPickle.loadLegacyModel(data)
@@ -45,9 +50,10 @@ class LegacyPickleTest {
     fun `every synthetic pickle gets the same verdict and output as the Python implementation`() {
         val cases = expected["cases"]
         assertEquals(42, cases.size())
+        assertTrue(expected["meta"]["note"].asString().contains("実 pkl ではない"))
         var converted = 0
         for ((name, e) in cases.properties()) {
-            val data = Files.readAllBytes(dir.resolve("cases/$name.pkl"))
+            val data = Base64.getDecoder().decode(e["pickle_b64"].asString())
             assertEquals(e["sha256"].asString(), ModelJson.sha256Hex(data), "$name: フィクスチャが変わっている")
             val (kind, value) = outcome(data)
             assertEquals(e["outcome"].asString(), kind, name)
@@ -65,7 +71,7 @@ class LegacyPickleTest {
 
     @Test
     fun `nothing is executed - a reduce of os system is refused when the global is read`() {
-        val data = Files.readAllBytes(dir.resolve("cases/refused_os_system.pkl"))
+        val data = pickle("refused_os_system")
         val err = assertFailsWith<UnpickleRefused> { RestrictedPickle.loadLegacyModel(data) }
         assertEquals("UNKNOWN_CLASS", err.reason)
     }
@@ -78,7 +84,10 @@ class LegacyPickleTest {
         assertEquals("TOO_MANY_OPCODES", assertFailsWith<UnpickleRefused> { RestrictedPickle.loadLegacyModel(many) }.reason)
         assertEquals("MALFORMED", assertFailsWith<UnpickleRefused> { RestrictedPickle.loadLegacyModel(byteArrayOf(0x80.toByte(), 4, 0xff.toByte())) }.reason)
         // STOP の無い（途中で切れた）入力
-        assertEquals("MALFORMED", assertFailsWith<UnpickleRefused> { RestrictedPickle.loadLegacyModel(byteArrayOf(0x80.toByte(), 4, 'N'.code.toByte())) }.reason)
+        assertEquals(
+            "MALFORMED",
+            assertFailsWith<UnpickleRefused> { RestrictedPickle.loadLegacyModel(byteArrayOf(0x80.toByte(), 4, 'N'.code.toByte())) }.reason,
+        )
     }
 
     private fun cli(
@@ -96,7 +105,7 @@ class LegacyPickleTest {
     private fun args(
         out: Path,
         vararg extra: String,
-    ) = listOf("--pkl", dir.resolve("cases/valid_calibration40_p5.pkl").toString(), "--out-dir", out.toString(), "--tenant-id", "1", "--model-id", "legacy-001") + extra
+    ) = listOf("--pkl", file("valid_calibration40_p5").toString(), "--out-dir", out.toString(), "--tenant-id", "1", "--model-id", "legacy-001") + extra
 
     @Test
     fun `cli requires confirmation and refuses cloud environments`() {
@@ -128,7 +137,18 @@ class LegacyPickleTest {
         assertContentEquals(before, Files.readAllBytes(out.resolve("legacy-001.json")))
         // 拒否される pickle は何も書かない
         val out2 = createTempDirectory("convert")
-        val bad = listOf("--pkl", dir.resolve("cases/refused_os_system.pkl").toString(), "--out-dir", out2.toString(), "--tenant-id", "1", "--model-id", "x", "--confirm-own-local-file")
+        val bad =
+            listOf(
+                "--pkl",
+                file("refused_os_system").toString(),
+                "--out-dir",
+                out2.toString(),
+                "--tenant-id",
+                "1",
+                "--model-id",
+                "x",
+                "--confirm-own-local-file",
+            )
         assertEquals("PICKLE_UNKNOWN_CLASS", assertFailsWith<MlTrainError> { cli(bad, env) }.reason)
         assertEquals(0, Files.list(out2).count())
     }

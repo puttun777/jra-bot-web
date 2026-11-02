@@ -11,7 +11,7 @@ const DOCKERFILE = `${RAW.split("\n")
   .filter((l) => !l.trimStart().startsWith("#"))
   .join("\n")}\n`; // コメントは検査しない
 const STAGES = [...DOCKERFILE.matchAll(/^FROM (\S+)(?: AS (\S+))?$/gm)].map((m) => [m[1] ?? "", m[2] ?? ""] as const);
-const TARGETS = ["dashboard", "ingest", "bot", "db-migration"] as const; // JVM のターゲット。ml-train（Python）は別
+const TARGETS = ["dashboard", "ingest", "bot", "db-migration", "ml-train"] as const; // すべて JVM（ml-train も Kotlin: D-257）
 
 function stageBody(name: string): string {
   const re = new RegExp(`^FROM \\S+ AS ${name.replace(/[-]/g, "\\-")}$([\\s\\S]*?)(?=^FROM |(?![\\s\\S]))`, "m");
@@ -31,13 +31,9 @@ describe("dockerfile", () => {
     const aliases = new Set(STAGES.map(([, a]) => a).filter((a) => a !== ""));
     const externals = STAGES.map(([r]) => r).filter((r) => !aliases.has(r));
     const jvm = externals.filter((r) => r.startsWith("eclipse-temurin"));
-    const python = externals.filter((r) => r.startsWith("python:"));
     assert.equal(jvm.length, 2); // JDK（build）と JRE（runtime）
-    assert.equal(python.length, 2); // ml-train の依存ビルドと実行（同じ digest）
-    assert.equal(new Set(python).size, 1);
-    assert.equal(externals.length, jvm.length + python.length);
+    assert.equal(externals.length, jvm.length); // Python などの他のベースイメージは無い（D-250・D-257）
     for (const r of jvm) assert.match(r, /^eclipse-temurin:25-(jdk|jre)-noble@sha256:[0-9a-f]{64}$/);
-    for (const r of python) assert.match(r, /^python:3\.13\.\d+-slim-bookworm@sha256:[0-9a-f]{64}$/);
     for (const r of externals) assert.doesNotMatch(r, /latest|ea|rc|beta|alpha/i);
   });
   it("all targets exist with an exec form entrypoint and no CMD", () => {
@@ -51,20 +47,11 @@ describe("dockerfile", () => {
   it("entrypoints match what the smoke expects", () => {
     for (const t of TARGETS) assert.deepEqual(entrypoint(stageBody(t)), EXPECTED_ENTRYPOINT[t], t);
   });
-  it("ml-train target", () => {
+  it("ml-train target is the Kotlin jar built in the shared build stage", () => {
     const body = stageBody("ml-train");
-    assert.deepEqual(entrypoint(body), ["/opt/venv/bin/python", "-m", "ml_train"]);
-    assert.deepEqual(entrypoint(body), EXPECTED_ENTRYPOINT["ml-train"]);
-    assert.doesNotMatch(body, /^CMD /m);
-    assert.match(body, /^USER 10001:10001$/m);
-    assert.doesNotMatch(body, /apt-get|curl|wget|gcc|git |pip install/i); // 実行ステージでは何もインストールしない
-    assert.ok(stageBody("ml-train-deps").includes("--no-deps --only-binary=:all: -r /tmp/requirements.txt"));
-    assert.ok(body.includes('org.opencontainers.image.revision="${GIT_SHA}"'));
-    assert.ok(body.includes("TZ=Asia/Tokyo"));
-    assert.ok(body.includes("OMP_NUM_THREADS=1"));
-    const flat = [...body.matchAll(/^COPY (?!--from)(?:--\S+ )*(.+) \S+$/gm)].map((m) => m[1] ?? "").join(" ");
-    for (const forbidden of ["signing.py", "make_test_artifacts", "tests", ".pkl", ".env"]) assert.ok(!flat.includes(forbidden), forbidden);
-    assert.ok(flat.includes("ml/src/ml_train"));
+    assert.match(body, /COPY --from=build --chmod=0444 \/src\/ml-train\/build\/libs\/ml-train\.jar \/app\/app\.jar/);
+    assert.ok(stageBody("build").includes(":ml-train:bootJar"));
+    assert.ok(!/python|venv|pip /i.test(DOCKERFILE), "Dockerfile に Python が残っていない");
   });
   it("runtime is non-root and has no build tools", () => {
     const base = stageBody("runtime-base");
@@ -119,12 +106,7 @@ describe("dockerignore", () => {
         "/ingest/",
         "/dashboard/",
         "/golden-runner/",
-        "/ml/requirements.txt",
-        "/ml/src/",
-        "/tools/__init__.py",
-        "/tools/ml/__init__.py",
-        "/tools/ml/canonical.py",
-        "/tools/ml/dataset_contract.py",
+        "/ml-train/",
       ].sort(),
     );
     for (const f of [

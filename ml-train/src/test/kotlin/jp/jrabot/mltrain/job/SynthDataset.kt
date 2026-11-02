@@ -163,19 +163,33 @@ object SynthDataset {
             val split = if (r.raceDate in trainDates) "train" else "valid"
             sb.append(listOf(tenantId.toString(), r.raceId, r.umaban.toString(), r.raceDate.toString(), r.asOf).joinToString(","))
             for (v in r.values) sb.append(',').append(repr(v))
-            sb.append(',').append(r.label).append(',').append(split).append('\n')
+            sb
+                .append(',')
+                .append(r.label)
+                .append(',')
+                .append(split)
+                .append('\n')
         }
         val text = sb.toString().toByteArray()
         val n = rows.size
         val validRows = rows.filter { it.raceDate !in trainDates }
         val constant = if (n == 0) emptyList() else names.filterIndexed { j, _ -> rows.all { it.values[j] == rows[0].values[j] } }
+
         fun s(v: String) = JsonString(v)
+
         fun i(v: Long) = JsonInt(v)
         val zeroFlags = JsonObject.of("master_newer_than_as_of" to i(0), "odds_missing" to i(0), "source_returned_future_runs" to i(0))
         val skipped =
             JsonObject(
-                listOf("as_of_not_before_post_time", "no_odds_at_as_of", "no_result", "result_incomplete", "post_time_unknown", "race_date_unknown", "race_not_found")
-                    .associateWith { i(0) },
+                listOf(
+                    "as_of_not_before_post_time",
+                    "no_odds_at_as_of",
+                    "no_result",
+                    "result_incomplete",
+                    "post_time_unknown",
+                    "race_date_unknown",
+                    "race_not_found",
+                ).associateWith { i(0) },
             )
         val m = LinkedHashMap<String, JsonValue>()
         m["dataset_schema_version"] = i(1)
@@ -206,7 +220,8 @@ object SynthDataset {
                 "n_valid" to i(validRows.size.toLong()),
                 "valid_starts_at" to (validRows.minOfOrNull { it.raceDate }?.let { s(it.toString()) } ?: JsonNull),
             )
-        m["builder"] = JsonObject.of("mode" to s("point_in_time"), "master_timeline" to s("ZERO_CUMULATIVE_WHEN_NEWER"), "legacy_compat_used" to JsonBool(false))
+        m["builder"] =
+            JsonObject.of("mode" to s("point_in_time"), "master_timeline" to s("ZERO_CUMULATIVE_WHEN_NEWER"), "legacy_compat_used" to JsonBool(false))
         m["quality"] =
             JsonObject.of(
                 "has_horse_master_ratio" to JsonFloat(1.0),

@@ -38,7 +38,7 @@ describe("selection", () => {
   it("ci change or unknown file selects everything", () => {
     for (const files of [["tools/src/ci/classify.ts"], ["something/unknown.bin"]]) {
       const got = ids(classify(files));
-      for (const x of ["kotlin-build", "db-it-8.4", "db-it-9.7", "agent", "ml-train", "ml-tools", "images", "golden-py"])
+      for (const x of ["kotlin-build", "db-it-8.4", "db-it-9.7", "agent", "images", "golden-py"])
         assert.ok(got.includes(x), `${x} ${files[0]}`);
     }
   });
@@ -52,7 +52,8 @@ describe("selection", () => {
     const got = ids(classify(["agent/src/jra_agent/queue.py"]));
     assert.ok(got.includes("agent"));
     assert.ok(got.includes("kotlin-build")); // agent/src は kotlin_app も付く（AgentInteropIntegrationTest）
-    assert.ok(ids(classify(["tools/ml/run_tests.py"])).includes("ml-tools"));
+    const all = ids(classify(["tools/src/ci/classify.ts"]));
+    assert.ok(!all.includes("ml-train") && !all.includes("ml-tools"), "Python の ML の検査は無い（D-257）");
   });
 });
 

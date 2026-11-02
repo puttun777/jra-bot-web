@@ -72,7 +72,11 @@ class PythonReferenceTest {
             assertTrue((objP - objK) / objP <= 1e-6, "$name: 目的関数の相対差 ${(objP - objK) / objP} > 1e-6")
             val wDiff = c["weights"].doubles().zip(m.weights.toList()).maxOf { (a, b) -> abs(a - b) }
             val pDiff = DoubleArray(x.size) { abs(m.rawProbability(x[it]) - c["raw_probability"][it].asDouble()) }.max()
-            println("MEASURED $name: objective P=$objP K=$objK rel=${(objP - objK) / objP} |dw|max=$wDiff |db|=${abs(m.bias - c["bias"].asDouble())} |dp|max=$pDiff")
+            println(
+                "MEASURED $name: objective P=$objP K=$objK rel=${(objP - objK) / objP} |dw|max=$wDiff |db|=${abs(
+                    m.bias - c["bias"].asDouble(),
+                )} |dp|max=$pDiff",
+            )
             assertClose(c["weights"].doubles(), m.weights, 1e-4, "$name weights")
             assertClose(c["bias"].asDouble(), m.bias, 1e-4, "$name bias")
             assertClose(c["raw_probability"].doubles(), DoubleArray(x.size) { m.rawProbability(x[it]) }, 1e-4, "$name prob")
@@ -99,8 +103,18 @@ class PythonReferenceTest {
             val ev = Metrics.evaluate(y, p, race, c["odds"].doubles())
             val exp = c["metrics"]
             for (k in listOf(
-                "logloss", "brier", "auc", "accuracy_at_0_5", "logloss_race_normalized", "brier_race_normalized", "top1_hit_rate",
-                "positive_rate", "baseline_market_logloss", "baseline_market_brier", "baseline_market_auc", "baseline_market_top1_hit_rate",
+                "logloss",
+                "brier",
+                "auc",
+                "accuracy_at_0_5",
+                "logloss_race_normalized",
+                "brier_race_normalized",
+                "top1_hit_rate",
+                "positive_rate",
+                "baseline_market_logloss",
+                "baseline_market_brier",
+                "baseline_market_auc",
+                "baseline_market_top1_hit_rate",
                 "baseline_market_logloss_raw_overround",
             )) {
                 assertClose(exp[k].asDouble(), (ev.metrics[k] as Number).toDouble(), 1e-12, "$name $k")

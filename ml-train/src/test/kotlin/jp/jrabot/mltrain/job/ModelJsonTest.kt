@@ -36,7 +36,15 @@ class ModelJsonTest {
         assertEquals("MODEL_VERIFY_PUBKEY_INVALID", assertFailsWith<UsageError> { ModelJson.parsePubkeys("AAAA") }.reason)
         assertEquals(emptyList(), ModelJson.parsePubkeys(" , "))
         val k = ByteArray(32) { 1 }
-        assertContentEquals(k, ModelJson.parsePubkeys(java.util.Base64.getEncoder().encodeToString(k)).single())
+        assertContentEquals(
+            k,
+            ModelJson
+                .parsePubkeys(
+                    java.util.Base64
+                        .getEncoder()
+                        .encodeToString(k),
+                ).single(),
+        )
     }
 
     @Test
@@ -75,7 +83,9 @@ class LogisticRoundoffTest {
         val n = 4000
         val z = Array(n) { doubleArrayOf(rnd.nextGaussian() * 3.0) }
         val y = IntArray(n) { if (rnd.nextDouble() < 1.0 / (1.0 + kotlin.math.exp(-(1.7 * z[it][0] - 0.4)))) 1 else 0 }
-        val fit = jp.jrabot.mltrain.numeric.Logistic.fit(z, y, null, 1e6, 1e-10, 1000)
+        val fit =
+            jp.jrabot.mltrain.numeric.Logistic
+                .fit(z, y, null, 1e6, 1e-10, 1000)
         kotlin.test.assertTrue(fit.iterations < 100, "反復 ${fit.iterations}")
         kotlin.test.assertTrue(fit.gradientMax <= 1e-8, "勾配 ${fit.gradientMax}")
         kotlin.test.assertTrue(kotlin.math.abs(fit.weights[0] - 1.7) < 0.2 && kotlin.math.abs(fit.bias + 0.4) < 0.2, "a=${fit.weights[0]} b=${fit.bias}")

@@ -29,6 +29,7 @@ import jp.jrabot.persistence.jdbc.DbSettings
 import jp.jrabot.persistence.repository.TrainingPersistence
 import jp.jrabot.persistence.schema.AppBuildInfo
 import jp.jrabot.persistence.schema.SchemaCheck
+import jp.jrabot.persistence.schema.SchemaFailure
 import jp.jrabot.persistence.schema.SchemaVersionVerifier
 import java.net.URI
 import java.nio.file.Files
@@ -75,9 +76,19 @@ class Launcher(
     ): Int =
         try {
             when (args.firstOrNull()) {
-                "train" -> train(parseTrain(args.drop(1)), env)
-                "convert-pkl" -> jp.jrabot.mltrain.legacy.ConvertPklCommand(log).run(args.drop(1), env)
-                else -> throw UsageError("USAGE", "コマンドは train / convert-pkl")
+                "train" -> {
+                    train(parseTrain(args.drop(1)), env)
+                }
+
+                "convert-pkl" -> {
+                    jp.jrabot.mltrain.legacy
+                        .ConvertPklCommand(log)
+                        .run(args.drop(1), env)
+                }
+
+                else -> {
+                    throw UsageError("USAGE", "コマンドは train / convert-pkl")
+                }
             }
         } catch (e: MlTrainError) {
             result(e.exitCode, e.reason)
@@ -133,9 +144,19 @@ class Launcher(
         try {
             when (val check = SchemaVersionVerifier(dataSource, AppBuildInfo.load(env["RELEASE_ID"]).requiredSchemaVersion).check()) {
                 is SchemaCheck.Satisfied -> {}
-                SchemaCheck.Unreachable -> return result(ExitCode.TEMPFAIL, "DB_UNAVAILABLE")
-                is SchemaCheck.Insufficient -> return result(ExitCode.FAILURE, "SCHEMA_VERSION_INSUFFICIENT")
-                is SchemaCheck.Failed -> return result(ExitCode.FAILURE, "DB_${check.reason.name}")
+
+                SchemaCheck.Unreachable -> {
+                    return result(ExitCode.TEMPFAIL, "DB_UNAVAILABLE")
+                }
+
+                is SchemaCheck.Insufficient -> {
+                    return result(ExitCode.FAILURE, "SCHEMA_VERSION_INSUFFICIENT")
+                }
+
+                // 理由の語彙は旧版と同じ（認証・権限 = DB_AUTH_FAILED、それ以外 = DB_ERROR）
+                is SchemaCheck.Failed -> {
+                    return result(ExitCode.FAILURE, if (check.reason == SchemaFailure.UNEXPECTED) "DB_ERROR" else "DB_AUTH_FAILED")
+                }
             }
             val deps =
                 JobDeps(
@@ -159,7 +180,13 @@ class Launcher(
         // MySQL のエラー番号: 接続数超過・ロック待ち・デッドロック・接続不能/断（旧版の _TRANSIENT と同じ）
         private val TRANSIENT_CODES = setOf(1040, 1205, 1213, 2002, 2003, 2006, 2013, 2055)
 
-        /** DB の例外の分類: 接続できない・一時的 → [RegistryUnavailable]（75）、それ以外（認証・権限・不具合）→ 失敗（1）。 */
+        // 認証・権限・DB なし（再試行しても直らない。旧版の _AUTH と同じ）
+        private val AUTH_CODES = setOf(1044, 1045, 1142, 1143, 1049)
+
+        /**
+         * DB の例外の分類（理由の語彙は旧版と同じ）: 接続できない・一時的 → [RegistryUnavailable]（`DB_UNAVAILABLE`・75）、
+         * 認証・権限 → `DB_AUTH_FAILED`（1）、それ以外 → `DB_ERROR`（1）。主キーの重複は呼び出し側（Repository）が先に区別する。
+         */
         fun classifyDbError(e: RuntimeException): MlTrainError {
             val chain = generateSequence<Throwable>(e) { it.cause?.takeIf { c -> c !== it } }.take(10).toList()
             val transient =
@@ -169,7 +196,9 @@ class Launcher(
                         it is SQLRecoverableException ||
                         (it is SQLException && (it.sqlState?.startsWith("08") == true || it.errorCode in TRANSIENT_CODES))
                 }
-            return if (transient) RegistryUnavailable(e) else MlTrainError("REGISTRY_ERROR", "レジストリの操作に失敗(${e.javaClass.simpleName})", cause = e)
+            if (transient) return RegistryUnavailable(e)
+            val auth = chain.any { it is SQLException && it.errorCode in AUTH_CODES }
+            return MlTrainError(if (auth) "DB_AUTH_FAILED" else "DB_ERROR", "レジストリの操作に失敗(${e.javaClass.simpleName})", cause = e)
         }
 
         fun parseTrain(args: List<String>): TrainArgs {

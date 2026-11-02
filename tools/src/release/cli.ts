@@ -1,9 +1,10 @@
 /**
  * release-manifest の生成・検証 CLI（旧 tools/release/cli.py）。
  *
- *   release preview    --git-sha <40桁> --built-at 2026-11-01T00:00:00Z --local-images images-local.json --out manifest-preview.json [--release R] [--python-version V]
+ *   release preview    --git-sha <40桁> --built-at 2026-11-01T00:00:00Z --local-images images-local.json --out manifest-preview.json [--release R]
  *   release validate   --kind preview|production FILE [--expect-git-sha <40桁>]
- *   release production --git-sha … --release 2026.11.0 --built-at … --registry-images registry.json --min-app-release 2026.11.0 --python-version V --out release-manifest.json [--notes N]
+ *   release production --git-sha … --release 2026.11.0 --built-at … --registry-images registry.json --min-app-release 2026.11.0 --out release-manifest.json [--notes N]
+ * （schema_version 3 で --python-version は廃止。指定すると引数の誤り = 2）
  *
  * 終了コード: 0=適合 / 1=検証 NG（production の生成拒否を含む）/ 2=引数・入力の誤り
  */
@@ -62,7 +63,6 @@ export function main(argv: readonly string[]): number {
         "built-at": { type: "string" },
         "local-images": { type: "string" },
         "registry-images": { type: "string" },
-        "python-version": { type: "string" },
         "min-app-release": { type: "string" },
         notes: { type: "string" },
         out: { type: "string" },
@@ -74,14 +74,7 @@ export function main(argv: readonly string[]): number {
     if (cmd === "preview") {
       const sha = requireGitSha(need(a["git-sha"], "--git-sha"));
       const local = parseLocalImages(load(need(a["local-images"], "--local-images")), sha);
-      const doc = buildPreview(
-        root,
-        sha,
-        a.release ?? `preview-${sha.slice(0, 12)}`,
-        need(a["built-at"], "--built-at"),
-        local,
-        a["python-version"] ?? null,
-      );
+      const doc = buildPreview(root, sha, a.release ?? `preview-${sha.slice(0, 12)}`, need(a["built-at"], "--built-at"), local);
       const errors = validatePreview(doc, root, sha);
       if (errors.length > 0) {
         console.error(`プレビューの生成結果が検証に通らない:\n- ${errors.join("\n- ")}`);
@@ -117,7 +110,6 @@ export function main(argv: readonly string[]): number {
         need(a["built-at"], "--built-at"),
         reg,
         need(a["min-app-release"], "--min-app-release"),
-        need(a["python-version"], "--python-version"),
         a.notes ?? "",
       );
       writeFileSync(need(a.out, "--out"), dumps(doc), "utf8");

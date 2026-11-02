@@ -200,7 +200,7 @@ GitHub Actions（`db-integration` 8.4 / 9.7、ubuntu-24.04、Temurin 25、PR #8�
 | 開発ツール | pytest 9.1.1・pytest-timeout 2.4.0・ruff 0.17.2・mypy 2.4.0（固定） | 各 PyPI の最新安定版（pre-release なし） |
 | GitHub Actions | actions/setup-python v6.2.0（SHA 固定） | 既存の checkout/setup-java と同じ固定方式 |
 
-## 15. ml-train（Python）の版（2026-10-24, T3.6-B。D-165・D-176）
+## 15. ml-train（Python）の版（2026-10-24, T3.6-B。D-165・D-176）— **2026-11-02 に廃止（D-257。ml-train は Kotlin。下の §17）。記録として残す**
 調査日 2026-10-24（PyPI の公開日で『公開から 2 週間以上』を確認）。ml-train は独立した依存環境（`ml/requirements.txt`）で、`tools/golden`（numpy 2.5.3）・`agent`（cryptography 50.0.2）とは別に管理する。
 | 項目 | 版 | 理由 |
 |---|---|---|
@@ -226,3 +226,9 @@ GitHub Actions（`db-integration` 8.4 / 9.7、ubuntu-24.04、Temurin 25、PR #8�
 | .NET SDK | 10.0（LTS。Ubuntu 24.04 の `dotnet-sdk-10.0` 10.0.114 でローカル検証） | C# エージェント（L5）。.NET 11 は STS のため採らない |
 | JDK | 25（既存。ローカルは Ubuntu の `openjdk-25-jdk-headless` 25.0.4.1） | CI は Temurin 25 |
 **ローカル検証環境の記録（2026-11-02 のクラウドセッション）**: Node 24.22.2（nodejs.org の tar.xz を SHASUMS256 で検証して /opt/node24 に展開）、JDK 25.0.4.1、.NET SDK 10.0.114、Docker 29.9.2。Pulumi CLI・gcloud の認証・jra-van.jp は**このセッションのネットワークから到達できない**（L6 の preview・JV-Link 資料は未確認として扱う）。
+
+## 17. ml-train（Kotlin）の数値ライブラリ（2026-11-02。D-257）
+| ライブラリ | 版 | 確認 |
+|---|---|---|
+| Hipparchus（`hipparchus-core`・`hipparchus-stat`） | 4.0.3 | Maven Central の `hipparchus-core-4.0.3.pom` の公開日 2026-02-07（Last-Modified。公開から 2 週間以上）。安定版（Alpha/Beta/RC ではない）。用途は Cholesky 分解（`linear`）・順位（`NaturalRanking`）・分位点（`Percentile` R_7）だけ。ライセンスは Apache-2.0。**未確認**: これが最新の安定版か（このセッションから Maven Central のメタデータが 429・hipparchus.org は許可外で取得できなかった）。Dependabot（gradle）が新しい版を提案する |
+- 学習ライブラリ（Smile・Tribuo など）は採らない: 必要なのは L2 ロジスティック回帰と Platt だけで、目的関数・停止条件・数値を自分たちで読める形で持てる（Newton 法 + Cholesky）。依存は :ml-train だけ（:domain には入れない: DependencyRules）。

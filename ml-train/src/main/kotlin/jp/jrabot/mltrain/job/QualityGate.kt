@@ -22,7 +22,14 @@ object QualityGate {
     ) {
         val passed: Boolean get() = verdict == "PASS"
         val reasons: List<String>
-            get() = if (verdict == "NOT_CONFIGURED") listOf("QUALITY_GATE_NOT_CONFIGURED") else checks.filter { it.status != "PASS" }.map { "${it.name}:${it.status}" }
+            get() =
+                if (verdict ==
+                    "NOT_CONFIGURED"
+                ) {
+                    listOf("QUALITY_GATE_NOT_CONFIGURED")
+                } else {
+                    checks.filter { it.status != "PASS" }.map { "${it.name}:${it.status}" }
+                }
     }
 
     /** job が集めた観測値。metrics は評価用データの指標（[jp.jrabot.mltrain.numeric.Metrics.evaluate]）。 */
@@ -64,25 +71,66 @@ object QualityGate {
             val t = gate.threshold(name)
             out +=
                 when (name) {
-                    "min_train_rows" -> ge(name, f.nTrain.toDouble(), t, "train 行数")
-                    "min_train_positives" -> ge(name, f.nTrainPos.toDouble(), t, "train の正例数")
-                    "min_valid_rows" -> ge(name, f.nValid.toDouble(), t, "valid 行数")
-                    "min_valid_positives" -> ge(name, f.nValidPos.toDouble(), t, "valid の勝ち馬数")
-                    "max_valid_logloss" -> le(name, m.num("logloss"), t, "LogLoss")
-                    "max_valid_brier" -> le(name, m.num("brier"), t, "Brier")
-                    "min_valid_auc" -> ge(name, m.num("auc"), t, "AUC")
+                    "min_train_rows" -> {
+                        ge(name, f.nTrain.toDouble(), t, "train 行数")
+                    }
+
+                    "min_train_positives" -> {
+                        ge(name, f.nTrainPos.toDouble(), t, "train の正例数")
+                    }
+
+                    "min_valid_rows" -> {
+                        ge(name, f.nValid.toDouble(), t, "valid 行数")
+                    }
+
+                    "min_valid_positives" -> {
+                        ge(name, f.nValidPos.toDouble(), t, "valid の勝ち馬数")
+                    }
+
+                    "max_valid_logloss" -> {
+                        le(name, m.num("logloss"), t, "LogLoss")
+                    }
+
+                    "max_valid_brier" -> {
+                        le(name, m.num("brier"), t, "Brier")
+                    }
+
+                    "min_valid_auc" -> {
+                        ge(name, m.num("auc"), t, "AUC")
+                    }
+
                     "max_logloss_minus_market" -> {
                         val base = m.num("baseline_market_logloss")
                         le(name, base?.let { checkNotNull(m.num("logloss_race_normalized")) - it }, t, "市場ベースラインとの LogLoss 差")
                     }
-                    "calibration_slope_min" -> ge(name, m.num("calibration_slope"), t, "校正傾き")
-                    "calibration_slope_max" -> le(name, m.num("calibration_slope"), t, "校正傾き")
-                    "max_abs_calibration_intercept" -> le(name, m.num("calibration_intercept")?.let { kotlin.math.abs(it) }, t, "校正切片")
-                    "max_constant_feature_ratio" -> le(name, f.constantFeatureRatio, t, "定数特徴量の割合")
-                    "min_horse_master_coverage" -> ge(name, f.horseMasterCoverage, t, "馬マスタのカバレッジ")
-                    "max_logloss_regression_vs_active" ->
+
+                    "calibration_slope_min" -> {
+                        ge(name, m.num("calibration_slope"), t, "校正傾き")
+                    }
+
+                    "calibration_slope_max" -> {
+                        le(name, m.num("calibration_slope"), t, "校正傾き")
+                    }
+
+                    "max_abs_calibration_intercept" -> {
+                        le(name, m.num("calibration_intercept")?.let { kotlin.math.abs(it) }, t, "校正切片")
+                    }
+
+                    "max_constant_feature_ratio" -> {
+                        le(name, f.constantFeatureRatio, t, "定数特徴量の割合")
+                    }
+
+                    "min_horse_master_coverage" -> {
+                        ge(name, f.horseMasterCoverage, t, "馬マスタのカバレッジ")
+                    }
+
+                    "max_logloss_regression_vs_active" -> {
                         le(name, f.activeLogloss?.let { checkNotNull(m.num("logloss")) - it }, t, "直前の ACTIVE との LogLoss 差（ACTIVE が無い/指標が無い）")
-                    else -> Check(name, "UNAVAILABLE", null, t, "未対応の check") // 設定は検証済みなので到達しない。未知の check を黙って通さない
+                    }
+
+                    else -> {
+                        Check(name, "UNAVAILABLE", null, t, "未対応の check")
+                    } // 設定は検証済みなので到達しない。未知の check を黙って通さない
                 }
         }
         return Result(if (out.all { it.status == "PASS" }) "PASS" else "FAIL", gate.purpose, out)

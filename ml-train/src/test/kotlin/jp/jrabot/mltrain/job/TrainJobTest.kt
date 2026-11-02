@@ -53,7 +53,18 @@ class InMemoryTrainingRegistry : TrainingRegistry {
     ): ModelRecord? {
         failFindWith?.let { throw it }
         val r = rows[tenantId.value to modelId.value] ?: return null
-        return ModelRecord(r.tenantId, r.modelId, r.kind, r.schemaVersion, r.featureSchemaHash, r.artifactUri, r.sha256, r.signatureSha256, r.status, createdAt = r.createdAt)
+        return ModelRecord(
+            r.tenantId,
+            r.modelId,
+            r.kind,
+            r.schemaVersion,
+            r.featureSchemaHash,
+            r.artifactUri,
+            r.sha256,
+            r.signatureSha256,
+            r.status,
+            createdAt = r.createdAt,
+        )
     }
 
     override fun activeMetrics(
@@ -75,7 +86,9 @@ class TrainJobTest {
         val PUB: ByteArray = ModelJson.publicKeyOf(SEED)
         val NOW: Instant = Instant.parse("2026-10-24T01:02:03Z")
         val GOOD_GATE: GateConfig =
-            GateConfig.fromJson(StrictJson.parse("""{"purpose":"synthetic_test","checks":{"min_valid_rows":50,"min_valid_positives":5,"max_valid_logloss":2.0}}"""))
+            GateConfig.fromJson(
+                StrictJson.parse("""{"purpose":"synthetic_test","checks":{"min_valid_rows":50,"min_valid_positives":5,"max_valid_logloss":2.0}}"""),
+            )
         val CFG: TrainConfig = TrainConfig.fromJson(StrictJson.parse("""{"kind":"calibration","seed":42,"l2_c":1.0,"recency_halflife_days":90}"""))
 
         fun cfg(json: String): TrainConfig = TrainConfig.fromJson(StrictJson.parse(json))
@@ -175,7 +188,11 @@ class TrainJobTest {
         val report = e.json("1/reports/${out.modelId}.report.json")
         assertEquals("CANDIDATE", report.str("status"))
         assertEquals("PASS", report.obj("gate").str("verdict"))
-        assertEquals(jp.jrabot.domain.ml.json.JsonBool(true), report.obj("metrics_eval")["market_baseline_available"])
+        assertEquals(
+            jp.jrabot.domain.ml.json
+                .JsonBool(true),
+            report.obj("metrics_eval")["market_baseline_available"],
+        )
         // レジストリの metrics_json は正準 JSON（ゲートの理由・目的を含む）
         val metrics = StrictJson.parse(row.metricsJson) as JsonObject
         assertEquals(row.metricsJson, CanonicalJson.encode(metrics))
@@ -183,7 +200,11 @@ class TrainJobTest {
         // 構造化ログの最後は registered。鍵・署名の値はログに出ない
         val log = e.logOut.toString(Charsets.UTF_8)
         assertTrue(log.lines().any { "\"event\":\"registered\"" in it })
-        assertTrue(java.util.Base64.getEncoder().encodeToString(SEED) !in log)
+        assertTrue(
+            java.util.Base64
+                .getEncoder()
+                .encodeToString(SEED) !in log,
+        )
     }
 
     @Test
@@ -201,7 +222,12 @@ class TrainJobTest {
         val e = Env()
         val out = e.run(g = gate("""{"purpose":"synthetic_test","checks":{"max_valid_logloss":0.01}}"""))
         assertEquals(Triple("MODEL_REJECTED", "REJECTED", "FAIL"), Triple(out.reason, out.status, out.gateVerdict))
-        assertEquals(ModelStatus.REJECTED, e.registry.rows.getValue(1L to out.modelId).status)
+        assertEquals(
+            ModelStatus.REJECTED,
+            e.registry.rows
+                .getValue(1L to out.modelId)
+                .status,
+        )
         assertNotNull(e.store.readModel(1, out.modelId))
         val reasons = (e.json("1/reports/${out.modelId}.report.json").obj("gate")["reasons"] as JsonArray).items
         assertTrue(JsonString("max_valid_logloss:FAIL") in reasons)
@@ -212,7 +238,12 @@ class TrainJobTest {
         val e = Env()
         val out = e.run(g = GateConfig.unconfigured())
         assertEquals("REJECTED" to "NOT_CONFIGURED", out.status to out.gateVerdict)
-        val metrics = StrictJson.parse(e.registry.rows.getValue(1L to out.modelId).metricsJson) as JsonObject
+        val metrics =
+            StrictJson.parse(
+                e.registry.rows
+                    .getValue(1L to out.modelId)
+                    .metricsJson,
+            ) as JsonObject
         assertEquals(JsonArray(listOf(JsonString("QUALITY_GATE_NOT_CONFIGURED"))), metrics["gate_reasons"])
     }
 
@@ -303,7 +334,8 @@ class TrainJobTest {
         for ((exc, code) in listOf(transient to ExitCode.TEMPFAIL, IllegalStateException("boom") to ExitCode.FAILURE)) {
             e.registry.failInsertWith = exc
             val d = e.deps()
-            val classified = JobDeps(d.store, d.registry, d.signingSeed, d.verifyPubkeys, d.clock, d.gitSha, d.shouldTerminate, d.log, { Launcher.classifyDbError(it) })
+            val classified =
+                JobDeps(d.store, d.registry, d.signingSeed, d.verifyPubkeys, d.clock, d.gitSha, d.shouldTerminate, d.log, { Launcher.classifyDbError(it) })
             val err = assertFailsWith<MlTrainError> { TrainJob.run(1, "ds-synth-1", CFG, GOOD_GATE, classified) }
             assertEquals(code, err.exitCode, exc.toString())
             assertEquals(emptyList(), e.files()) // この実行が作った成果物は消える

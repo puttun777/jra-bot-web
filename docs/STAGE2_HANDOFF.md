@@ -260,12 +260,12 @@ Reader/Writer は分かれており、`XxxRepository` は両方を継承する�
 - **実行環境（クラウドセッション）**: JDK 21 + `LC_ALL=C.UTF-8`（日本語のテスト名でロケール未設定だとコンパイラが失敗する）。MySQL は apt の 8.0.46 を `--user=mysql --datadir=<mysql が書ける場所>` で起動し `JRABOT_TEST_MYSQL_EXTERNAL=127.0.0.1:3307`（D-163。8.4/9.7 の合否ではない）。`repo.maven.apache.org` の 429 は時間を空けて再実行。
 
 ### 14.13 T3.6-B の結果と T3.7 / T3.8 以降への引き継ぎ（ML の学習 Job。2026-10-24。判断 D-165〜D-179、詳細は ML_DESIGN §12、未解決は UNRESOLVED.md）
-- **実装済み**: `ml/`（Python 3.13。`python -m ml_train train|…`）、`bot --task=export-dataset`、`:persistence` の `FeatureSource`/`DatasetSource`、V4 `horse_master_history`、`:cloud-gcp` の `GcsModelStore`/`GcsDatasetStore`、旧 pkl 変換、ml-train イメージ、release-manifest v2、CI `ml-train` ジョブ。
+- **実装済み**（**2026-11-02 に ml-train は Kotlin の `:ml-train` へ移行: D-257。下の Python の記述は記録**）: `ml/`（Python 3.13。`python -m ml_train train|…`）、`bot --task=export-dataset`、`:persistence` の `FeatureSource`/`DatasetSource`、V4 `horse_master_history`、`:cloud-gcp` の `GcsModelStore`/`GcsDatasetStore`、旧 pkl 変換、ml-train イメージ、release-manifest v2、CI `ml-train` ジョブ。
 - **スキーマ版は 5**（V5: 通知タイミングの確定。`requiredSchemaVersion`。bot / ingest / dashboard）。infra の DB 移行・GRANT の同期は T5.0（G-9）。
 - **検証ゲート**: 実データでの G-ML-1〜3、品質閾値（D-13）は未実施・未承認。ML は `legacy` のまま。ACTIVE への昇格は人手（ml-train はしない）。
 - **（T3.7 は 2026-10-27 に実装済み。引き継ぎは UNRESOLVED G-21 と PROGRESS の Stage 3-G）** 元の記述: **T3.7（Discord）が最初にやること**: 通知文 `format_reason_from_features`（G-17 ⑥）。ML の通知は REJECTED の扱い（D-14）を決めてから。**T3.7 へは自動で進まない**。
 - **T3.8**: bot-run 統合（G-17 ①②）。履歴の追記（C-21）を取込側に入れる。
-- **再開手順（ローカル）**: `ml/README.md`。Kotlin ⇄ Python の結合テストは `ML_TRAIN_PYTHON=<ml の venv の python>`、MySQL は `JRABOT_TEST_MYSQL_EXTERNAL`。
+- **再開手順（ローカル）**: `./gradlew :ml-train:test`、結合は `./gradlew :bot:integrationTest`（ml-train の jar を自動で作る。MySQL は `JRABOT_TEST_MYSQL_EXTERNAL` も可）。旧 `ml/README.md`・`ML_TRAIN_PYTHON` は廃止（D-257）。
 
 ## 15. T3.8（Stage 3-H）以降の再開手順とローカルの検証コマンド（2026-10-27）
 順序: **T3.9（Stage 3-I）→ 第4段階 → 第5段階**。各段階の完了後はユーザーのレビューを挟む。**自動で次へ進まない**。全体の依存・ゲートは PLAN.md「T3.8 後の道筋」。

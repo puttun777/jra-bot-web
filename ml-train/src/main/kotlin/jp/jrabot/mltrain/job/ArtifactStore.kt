@@ -85,10 +85,20 @@ class ArtifactStore(
         written: Written,
     ) {
         val (jk, sk) = modelKeys(tenantId, modelId)
-        for ((key, data, type) in listOf(Triple(sk, sig, "application/octet-stream"), Triple(reportKey(tenantId, modelId), report, "application/json"), Triple(jk, raw, "application/json"))) {
+        for ((key, data, type) in listOf(
+            Triple(sk, sig, "application/octet-stream"),
+            Triple(reportKey(tenantId, modelId), report, "application/json"),
+            Triple(jk, raw, "application/json"),
+        )) {
             when (io { blob.putIfAbsent(key, data, type) }) {
-                ArtifactWriteOutcome.CONFLICT -> throw ArtifactConflict(key)
-                ArtifactWriteOutcome.CREATED -> written.created.add(key)
+                ArtifactWriteOutcome.CONFLICT -> {
+                    throw ArtifactConflict(key)
+                }
+
+                ArtifactWriteOutcome.CREATED -> {
+                    written.created.add(key)
+                }
+
                 ArtifactWriteOutcome.UNCHANGED -> {}
             }
         }

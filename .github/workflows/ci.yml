@@ -37,8 +37,6 @@ jobs:
       run_release: ${{ steps.classify.outputs.run_release }}
       run_images: ${{ steps.classify.outputs.run_images }}
       run_connectorj26: ${{ steps.classify.outputs.run_connectorj26 }}
-      run_ml_tools: ${{ steps.classify.outputs.run_ml_tools }}
-      run_ml_train: ${{ steps.classify.outputs.run_ml_train }}
       run_agent: ${{ steps.classify.outputs.run_agent }}
       run_agent_windows: ${{ steps.classify.outputs.run_agent_windows }}
       db_matrix: ${{ steps.classify.outputs.db_matrix }}
@@ -122,6 +120,8 @@ jobs:
             --classes "IngestInternalApiTest,AgentApiOpsGuardTest,IngestStartupConfigTest,AgentSigningVectorsTest,PlanProviderTest"
           node build/tools/src/main.js verify-junit --label "dashboard unit" --dir dashboard/build/test-results/test --min 30 \
             --classes "DashboardInternalApiTest,AdminWriteGuardTest,DashboardStartupConfigTest"
+          node build/tools/src/main.js verify-junit --label "ml-train unit (Kotlin. D-257)" --dir ml-train/build/test-results/test --min 44 \
+            --classes "PythonReferenceTest,PythonReferencePipelineTest,TrainJobTest,LegacyPickleTest,ModelJsonTest,LogisticRoundoffTest,LauncherTest"
 
   # TypeScript のツール（tools/: 変更判定・ゲート・整合検査・JUnit 件数検査・preflight・release-manifest・イメージスモーク）の
   # lint（Biome）・strict の型検査（tsc）・単体試験（node:test）。0 件・スキップ・todo・失敗を成功にしない（tools/run-tests.mjs が JUnit XML で検査）。Docker 不要
@@ -232,13 +232,6 @@ jobs:
           python -m venv "$RUNNER_TEMP/agent-venv"
           "$RUNNER_TEMP/agent-venv/bin/pip" install --no-input -r agent/requirements.txt
           echo "AGENT_PYTHON=$RUNNER_TEMP/agent-venv/bin/python" >> "$GITHUB_ENV"
-      # Kotlin⇄Python の結合テスト（MlTrainInteropIntegrationTest）用。ml-train の実行時の依存は ml/requirements.txt（固定）だけ
-      - name: ml-train runtime dependencies (for the interop test)
-        if: contains(env.DB_SUITES, 'apps')
-        run: |
-          python -m venv "$RUNNER_TEMP/ml-venv"
-          "$RUNNER_TEMP/ml-venv/bin/pip" install --no-input -r ml/requirements.txt
-          echo "ML_TRAIN_PYTHON=$RUNNER_TEMP/ml-venv/bin/python" >> "$GITHUB_ENV"
       - name: Docker and image
         run: |
           docker version --format 'client={{.Client.Version}} server={{.Server.Version}}'
@@ -259,8 +252,8 @@ jobs:
       - name: Verify that the persistence integration tests actually ran
         if: always() && contains(env.DB_SUITES, 'persistence')
         run: |
-          node build/tools/src/main.js verify-junit --label "persistence integration" --dir persistence/build/test-results/integrationTest --min 175 \
-            --classes "WiringIntegrationTest,RaceRepositoryIntegrationTest,OddsSnapshotRepositoryIntegrationTest,BotRunRepositoryIntegrationTest,SignalRepositoryIntegrationTest,RaceScheduleRepositoryIntegrationTest,AppUserRepositoryIntegrationTest,TenantIsolationIntegrationTest,TimeConversionIntegrationTest,EnumContractIntegrationTest,PermissionsIntegrationTest,SchemaVersionVerifierIntegrationTest,RaceDayRepositoryIntegrationTest,ScheduleEventRepositoryIntegrationTest,CalendarOverrideRepositoryIntegrationTest,BotRunLeaseConcurrencyIntegrationTest,DeadlockRetryIntegrationTest,IngestStoresIntegrationTest,MlModelRegistryIntegrationTest,MlSourceIntegrationTest"
+          node build/tools/src/main.js verify-junit --label "persistence integration" --dir persistence/build/test-results/integrationTest --min 179 \
+            --classes "WiringIntegrationTest,RaceRepositoryIntegrationTest,OddsSnapshotRepositoryIntegrationTest,BotRunRepositoryIntegrationTest,SignalRepositoryIntegrationTest,RaceScheduleRepositoryIntegrationTest,AppUserRepositoryIntegrationTest,TenantIsolationIntegrationTest,TimeConversionIntegrationTest,EnumContractIntegrationTest,PermissionsIntegrationTest,SchemaVersionVerifierIntegrationTest,RaceDayRepositoryIntegrationTest,ScheduleEventRepositoryIntegrationTest,CalendarOverrideRepositoryIntegrationTest,BotRunLeaseConcurrencyIntegrationTest,DeadlockRetryIntegrationTest,IngestStoresIntegrationTest,MlModelRegistryIntegrationTest,MlModelTrainingRegistryIntegrationTest,MlSourceIntegrationTest"
       # 実行アプリの統合テスト（T2.8）: /internal/ready のスキーマ版・DB 停止/復旧、Job の終了コード（DB 不達 75 とスキーマ不足 1 の区別）、
       # 非 NORMAL のモードで DB に接続しないこと（サーバの接続数）。8.4 / 9.7 の両ジョブで必ず実行する。
       - name: App integration tests (Testcontainers, ${{ env.MYSQL_IMAGE }})
@@ -369,85 +362,12 @@ jobs:
     if: needs.changes.outputs.run_connectorj26 == 'true'
     uses: ./.github/workflows/compat-connectorj26.yml
 
-  # ML ツール（T3.6-A。tools/ml）: 正準 JSON・feature_schema のハッシュ・Ed25519 署名・学習用データセットの契約を、Kotlin とは独立な Python で検証する。
-  # 合成成果物（domain/src/test/resources/ml）は決定的に再生成でき、コミット済みと一致しなければ失敗する（Ed25519 は決定的）。実データ・本番鍵は使わない。
-  ml-tools:
-    name: ml tools (Python 3.12)
-    needs: changes
-    if: needs.changes.outputs.run_ml_tools == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Python 3.12 and dependencies
-        run: |
-          python3 --version
-          python3 -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version'
-          python3 -m venv "$RUNNER_TEMP/venv"
-          "$RUNNER_TEMP/venv/bin/pip" install --no-input -r tools/ml/requirements.txt
-      - name: Unit tests (none skipped)
-        run: '"$RUNNER_TEMP/venv/bin/python" -m tools.ml.run_tests --min-tests 20 --max-skipped 0'
-      - name: Regenerate the synthetic model artifacts and require an exact match (no write)
-        run: '"$RUNNER_TEMP/venv/bin/python" -m tools.ml.make_test_artifacts --out domain/src/test/resources/ml --check'
-      - name: Verify the synthetic datasets (contract used by the Stage 3-F2 training job)
-        run: |
-          for n in synthetic-calibration synthetic-alpha; do
-            gzip -c "domain/src/test/resources/ml/dataset/$n.csv" > "$RUNNER_TEMP/$n.csv.gz"
-            "$RUNNER_TEMP/venv/bin/python" -m tools.ml.dataset_contract --csv-gz "$RUNNER_TEMP/$n.csv.gz" --manifest "domain/src/test/resources/ml/dataset/$n.manifest.json"
-          done
-
-  # ML 学習 Job（T3.6-B。ml/。Python 3.13 = ml-train イメージと同じ minor）。独立した依存環境（ml/requirements-dev.txt。固定）。
-  # ruff・mypy(strict)・pytest（合成データのみ。実データ・実 DB・本番鍵は使わない。署名鍵はテストが実行時に生成）。0 件・スキップ・失敗を許さない。
-  # Kotlin⇄Python の結合テスト（MySQL 8.4 上。:bot の MlTrainInteropIntegrationTest）は db-integration ジョブが実行する。
-  ml-train:
-    name: ml-train (Python 3.13)
-    needs: changes
-    if: needs.changes.outputs.run_ml_train == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: ml
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-        with:
-          python-version: "3.13"
-      - name: Install (pinned)
-        run: |
-          python -m pip install --no-input -r requirements-dev.txt
-          python --version
-          python -m pip check
-      - name: ruff and mypy
-        run: |
-          ruff check .
-          ruff format --check .
-          mypy
-      - name: Training, evaluation, quality gate, signing, registry and pkl conversion tests
-        run: python -m pytest -q --junitxml=pytest.xml
-      # 0 件・失敗・スキップを成功扱いにしない（MySQL が要るテストは Kotlin 側の結合テストが担当するので、ここにスキップは無い）
-      - name: Verify that the tests actually ran
-        run: |
-          python - <<'PY'
-          import xml.etree.ElementTree as ET
-          r = ET.parse("pytest.xml").getroot()
-          s = r if r.tag == "testsuite" else r.find("testsuite")
-          tests, skipped, failures, errors = (int(s.get(k)) for k in ("tests", "skipped", "failures", "errors"))
-          print(f"tests={tests} skipped={skipped} failures={failures} errors={errors}")
-          if tests < 128 or skipped or failures or errors:
-              raise SystemExit("ml-train tests did not all run and pass")
-          PY
-
   # 最終集約チェック。**分岐保護の required check はこれだけ**にする。常に実行され、docs だけの変更でも正常に終わる。
   # 実行が必要と判定されたジョブが success でなければ失敗（skipped・cancelled も失敗）。変更判定が失敗したら失敗（fail closed）。
   ci-gate:
     name: ci gate
     if: always()
-    needs: [changes, build, release-tools, golden, db-integration, images, connectorj26, agent, agent-windows, ml-tools, ml-train]
+    needs: [changes, build, release-tools, golden, db-integration, images, connectorj26, agent, agent-windows]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

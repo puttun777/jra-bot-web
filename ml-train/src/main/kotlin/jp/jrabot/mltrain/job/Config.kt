@@ -45,7 +45,8 @@ data class TrainConfig(
     companion object {
         val KINDS = setOf("calibration", "alpha")
         val HALFLIVES = setOf(90, 180, 240)
-        private val KEYS = setOf("kind", "mode", "seed", "l2_c", "max_iter", "tol", "recency_halflife_days", "calibration_fraction", "market_blend_alpha_default")
+        private val KEYS =
+            setOf("kind", "mode", "seed", "l2_c", "max_iter", "tol", "recency_halflife_days", "calibration_fraction", "market_blend_alpha_default")
 
         fun fromJson(v: JsonValue): TrainConfig {
             if (v !is JsonObject) throw UsageError("CONFIG_INVALID", "学習設定がオブジェクトでない")

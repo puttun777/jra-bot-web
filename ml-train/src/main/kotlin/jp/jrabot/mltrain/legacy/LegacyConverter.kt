@@ -51,7 +51,11 @@ object LegacyConverter {
     private fun featureNames(v: PValue?): List<String> {
         val list = (v as? PList)?.items
         if (list == null || list.isEmpty() || list.size > 4096) throw ConversionRefused("INVALID_FEATURE_NAMES", "feature_names が空でないリストでない")
-        val names = list.map { (it as? PStr)?.value?.takeIf { s -> s.isNotEmpty() && s.length <= 200 } ?: throw ConversionRefused("INVALID_FEATURE_NAMES", "feature_names に文字列以外/空/長すぎる要素") }
+        val names =
+            list.map {
+                (it as? PStr)?.value?.takeIf { s -> s.isNotEmpty() && s.length <= 200 }
+                    ?: throw ConversionRefused("INVALID_FEATURE_NAMES", "feature_names に文字列以外/空/長すぎる要素")
+            }
         if (names.toSet().size != names.size) throw ConversionRefused("INVALID_FEATURE_NAMES", "feature_names が重複している")
         return names
     }
