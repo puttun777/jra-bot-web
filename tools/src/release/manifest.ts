@@ -67,7 +67,7 @@ const MAP_KEYWORDS: ReadonlySet<string> = new Set(["properties", "patternPropert
 
 export function rejectIgnoredKeywords(schema: unknown, what: string, path = "#"): void {
   if (Array.isArray(schema)) {
-    schema.forEach((x, i) => rejectIgnoredKeywords(x, what, `${path}/${i}`));
+    for (const [i, x] of schema.entries()) rejectIgnoredKeywords(x, what, `${path}/${i}`);
     return;
   }
   if (!isRecord(schema)) return;
