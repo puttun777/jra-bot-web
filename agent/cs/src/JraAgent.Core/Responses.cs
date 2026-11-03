@@ -138,6 +138,8 @@ public static class WireNames
 
     public static string Of(AgentMode m) => Snake(m.ToString());
 
+    public static string Of(FetchResult r) => Snake(r.ToString());
+
     private static string Snake(string pascal)
     {
         var sb = new System.Text.StringBuilder();
