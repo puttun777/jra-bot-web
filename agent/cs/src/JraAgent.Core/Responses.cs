@@ -130,3 +130,22 @@ public static partial class Redact
         return Bytes().Replace(text, "$1***");
     }
 }
+
+/// <summary>列挙の値を旧版と同じ文字列（UPPER_SNAKE。ログ・キューの last_outcome・診断に出る）にする。</summary>
+public static class WireNames
+{
+    public static string Of(Outcome o) => Snake(o.ToString());
+
+    public static string Of(AgentMode m) => Snake(m.ToString());
+
+    private static string Snake(string pascal)
+    {
+        var sb = new System.Text.StringBuilder();
+        for (var i = 0; i < pascal.Length; i++)
+        {
+            if (i > 0 && char.IsUpper(pascal[i])) sb.Append('_');
+            sb.Append(char.ToUpperInvariant(pascal[i]));
+        }
+        return sb.ToString();
+    }
+}

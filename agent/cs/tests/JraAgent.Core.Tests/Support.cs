@@ -18,10 +18,14 @@ public sealed class FakeClock(DateTimeOffset? start = null) : IClock
 
     public List<double> Slept { get; } = [];
 
+    /// <summary>待機の後に呼ぶ処理（待機中に状態が変わる場面の再現）。</summary>
+    public Action<double>? AfterSleep { get; set; }
+
     public void Sleep(double seconds)
     {
         Slept.Add(seconds);
         Advance(seconds);
+        AfterSleep?.Invoke(seconds);
     }
 
     public void Advance(double seconds)
@@ -59,6 +63,14 @@ public sealed class ScriptedTransport : ITransport
 
     public static TransportResponse Resp(int status, byte[]? body = null, Dictionary<string, string>? headers = null) =>
         new(status, headers ?? [], body ?? []);
+
+    /// <summary>JSON の本文と（小文字の）ヘッダ。</summary>
+    public static TransportResponse Json(int status, string json, params (string Name, string Value)[] headers) =>
+        new(status, headers.ToDictionary(h => h.Name.ToLowerInvariant(), h => h.Value, StringComparer.Ordinal), Encoding.UTF8.GetBytes(json));
+
+    public static string AckBody(bool duplicate = false, string? fetch = null, string? cursor = null, int accepted = 1) =>
+        $"{{\"accepted\": {accepted}, \"duplicates\": 0, \"quarantined\": 0, \"unsupported\": 0, \"duplicate\": {(duplicate ? "true" : "false")}, "
+        + $"\"ackTs\": \"2026-11-01T00:00:00Z\", \"serverTime\": \"2026-11-01T00:00:00Z\", \"fetch\": {fetch ?? "null"}, \"cursor\": {cursor ?? "null"}}}";
 }
 
 /// <summary>試験用ビーコン: 実行時に生成した Ed25519 鍵で署名する（実 GCP のビーコン・実鍵は使わない）。</summary>
