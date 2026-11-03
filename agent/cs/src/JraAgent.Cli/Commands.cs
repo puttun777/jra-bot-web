@@ -137,6 +137,13 @@ internal static class Commands
             expires = t;
         }
         new CredentialStore(SecretStore(cfg)).Save(new Credential(cfg.AgentId, token, expires));
+        if (File.Exists(cfg.QueuePath))
+        {
+            // 資格情報を入れ直した = 認証の停止を解除して再開する（記録が壊れて指紋で判定できない場合も、ここで解除できる）
+            using var q = new OutboxQueue(cfg.QueuePath, new SystemClock(), cfg.Queue);
+            q.SetState(Sender.AuthHaltKey, "");
+            q.ClearAlert("AUTH_FAILED");
+        }
         Print(new JsonObject { ["ok"] = true, ["agent_id"] = cfg.AgentId });
         return 0;
     }
@@ -237,6 +244,8 @@ internal static class Commands
                 {
                     // ジョブに入れられないワーカーは孤児として残り得るので使わない
                     p.Kill(entireProcessTree: true);
+                    p.WaitForExit(10_000);
+                    p.Dispose();
                     log.Error("ワーカーをジョブオブジェクトに入れられない。起動を中止した");
                     throw new InvalidOperationException("JOB_ASSIGN_FAILED");
                 }

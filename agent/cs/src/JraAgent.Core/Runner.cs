@@ -248,7 +248,7 @@ public sealed class AgentRunner(
             {
                 wait = Math.Min(Tick().NextWake, 5.0);
             }
-            catch (Exception e) when (e is AgentException or IOException or System.Text.Json.JsonException or InvalidOperationException)
+            catch (Exception e) when (e is not (OutOfMemoryException or StackOverflowException or AccessViolationException))
             {
                 LastError = e.GetType().Name;
                 logError?.Invoke($"tick が失敗: {e.GetType().Name}"); // 例外のメッセージには値が入り得るので型名だけ

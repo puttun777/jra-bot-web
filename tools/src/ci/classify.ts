@@ -82,11 +82,11 @@ export const RULES: ReadonlyArray<readonly [RegExp, readonly Tag[]]> = [
   //     （Python は CI で実行しない: 言語方針 D-250）
   [/^agent\/.*\.md$/, ["docs"]],
   [
-    /^agent\/cs\/(global\.json|Directory\.(Build|Packages)\.props|JraAgent\.slnx|.*packages\.lock\.json)$|^agent\/cs\/src\/JraAgent\.Windows\/|^agent\/cs\/src\/JraAgent\.Core\/(Worker|InstanceLock|Secrets|Transport)\.cs$/,
+    /^agent\/cs\/(global\.json|Directory\.(Build|Packages)\.props|JraAgent\.slnx|.*packages\.lock\.json)$|^agent\/cs\/src\/JraAgent\.Windows\/|^agent\/cs\/src\/JraAgent\.Core\/(Worker|InstanceLock|Secrets|Transport|Update|OutboxQueue)\.cs$/,
     ["agent", "agent_windows", "kotlin_app"],
   ],
   [
-    /^agent\/cs\/src\/JraAgent\.Cli\/(Commands|WorkerCommand|Poc)\.cs$|^agent\/cs\/tests\/JraAgent\.Core\.Tests\/WindowsTests\.cs$|^agent\/scripts\//,
+    /^agent\/cs\/src\/JraAgent\.Cli\/(Commands|WorkerCommand|Poc|Program)\.cs$|^agent\/cs\/tests\/JraAgent\.Core\.Tests\/WindowsTests\.cs$|^agent\/scripts\//,
     ["agent", "agent_windows"],
   ],
   [/^agent\/cs\/src\/JraAgent\.Core\/|^agent\/cs\/tools\/|^agent\/tests\/vectors\//, ["agent", "kotlin_app"]],

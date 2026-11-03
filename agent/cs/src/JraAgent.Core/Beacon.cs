@@ -34,8 +34,17 @@ public static class BeaconVerifier
     public static bool VerifyEd25519(byte[] publicKey, byte[] message, byte[] signature)
     {
         if (publicKey.Length != 32 || signature.Length != 64) return false;
+        Ed25519PublicKeyParameters key;
+        try
+        {
+            key = new Ed25519PublicKeyParameters(publicKey, 0);
+        }
+        catch (ArgumentException)
+        {
+            return false; // Ed25519 の点として不正な公開鍵（設定の検証でも拒否する）
+        }
         var v = new Ed25519Signer();
-        v.Init(false, new Ed25519PublicKeyParameters(publicKey, 0));
+        v.Init(false, key);
         v.BlockUpdate(message, 0, message.Length);
         return v.VerifySignature(signature);
     }
@@ -52,6 +61,23 @@ public static class BeaconVerifier
 
     /// <summary>JSON の文書（UTF-8）を検証する。seq の単調性は <see cref="BeaconGuard"/> が永続した値と比べる。</summary>
     public static Beacon Verify(byte[] json, IReadOnlyList<BeaconKey> keys, DateTimeOffset now)
+    {
+        try
+        {
+            return VerifyCore(json, keys, now);
+        }
+        catch (InvalidOperationException)
+        {
+            // 孤立サロゲートなど、JSON の文字列を取り出せない値（署名の前に読む kid も含む）。例外を外へ漏らさず INVALID にする
+            throw new VerificationException("BAD_SHAPE");
+        }
+        catch (ArgumentException)
+        {
+            throw new VerificationException("BAD_SHAPE");
+        }
+    }
+
+    private static Beacon VerifyCore(byte[] json, IReadOnlyList<BeaconKey> keys, DateTimeOffset now)
     {
         JsonDocument doc;
         try

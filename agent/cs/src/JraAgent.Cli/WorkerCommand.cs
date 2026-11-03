@@ -64,6 +64,9 @@ internal static class WorkerCommand
 
     private static int Serve(IJvLink? api)
     {
+        // 端末の Ctrl+C は親（監視側）が受けて shutdown を送る。ワーカーは合図で直ちに終わらず、親の指示（または入力の終わり）で終わる
+        // （旧版は CREATE_NEW_PROCESS_GROUP で Ctrl+C を分けていた）
+        using var sigInt = System.Runtime.InteropServices.PosixSignalRegistration.Create(System.Runtime.InteropServices.PosixSignal.SIGINT, c => c.Cancel = true);
         var stdout = Console.OpenStandardOutput();
         Console.SetOut(Console.Error);
         try

@@ -85,6 +85,14 @@ public static class ConfigLoader
             throw new ConfigException($"{where}.public_key の Base64 が不正");
         }
         if (raw.Length != 32) throw new ConfigException($"{where}.public_key は Ed25519 の 32 バイト");
+        try
+        {
+            _ = new Org.BouncyCastle.Crypto.Parameters.Ed25519PublicKeyParameters(raw, 0);
+        }
+        catch (ArgumentException)
+        {
+            throw new ConfigException($"{where}.public_key は Ed25519 の公開鍵として不正"); // 点として不正な鍵を設定の検証で拒否する
+        }
         return new BeaconKey(kid, raw);
     }
 

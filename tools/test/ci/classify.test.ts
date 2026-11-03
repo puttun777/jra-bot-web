@@ -205,7 +205,7 @@ describe("agent", () => {
     assert.ok(!(p.runAgent || p.runAgentWindows));
   });
   it("agent cli and tests run the linux agent job only", () => {
-    for (const f of ["agent/cs/tests/JraAgent.Core.Tests/QueueTests.cs", "agent/cs/src/JraAgent.Cli/Program.cs", "agent/cs/.gitignore"]) {
+    for (const f of ["agent/cs/tests/JraAgent.Core.Tests/QueueTests.cs", "agent/cs/src/JraAgent.Cli/AgentLog.cs", "agent/cs/.gitignore"]) {
       const p = classify([f]);
       assert.equal(p.runAgent, true, f);
       assert.ok(!(p.runAgentWindows || p.runBuild || p.dbMatrix.length > 0), f);
@@ -229,6 +229,9 @@ describe("agent", () => {
       "agent/cs/src/JraAgent.Windows/ComJvLink.cs",
       "agent/cs/src/JraAgent.Core/Worker.cs",
       "agent/cs/src/JraAgent.Core/InstanceLock.cs",
+      "agent/cs/src/JraAgent.Core/Update.cs",
+      "agent/cs/src/JraAgent.Core/OutboxQueue.cs",
+      "agent/cs/src/JraAgent.Cli/Program.cs",
       "agent/cs/src/JraAgent.Cli/WorkerCommand.cs",
       "agent/cs/tests/JraAgent.Core.Tests/WindowsTests.cs",
       "agent/cs/Directory.Packages.props",

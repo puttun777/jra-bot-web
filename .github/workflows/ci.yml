@@ -242,8 +242,8 @@ jobs:
       - name: Verify that the tests actually ran
         if: always()
         run: |
-          node build/tools/src/main.js verify-junit --label "agent (linux)" --dir "$RUNNER_TEMP/agent-junit" --min 290 --max-skipped 4 \
-            --classes "SigningTests,BeaconAndModesTests,QueueTests,SenderTests,WorkerTests,FetcherTests,RunnerScenarioTests,PlanUpdateLockTests,ConfigAndSecretsTests,CliTests,WindowsTests"
+          node build/tools/src/main.js verify-junit --label "agent (linux)" --dir "$RUNNER_TEMP/agent-junit" --min 300 --max-skipped 4 \
+            --classes "SigningTests,BeaconAndModesTests,QueueTests,SenderTests,WorkerTests,FetcherTests,RunnerScenarioTests,PlanUpdateLockTests,ConfigAndSecretsTests,CliTests,WindowsTests,ReviewRegressionTests"
 
   # Windows 固有部分（DPAPI・ジョブオブジェクト・ファイルロック・ワーカーのハング回復・COM 登録の確認）と、全試験の Windows での実行。SDK・JV-Link は不要。
   # Windows ランナーは分単位の課金が 2 倍なので、Windows 固有のファイルが変わったときとフル検証のときだけ実行する（毎コミットは不要。classify の agent_windows）。
@@ -275,11 +275,11 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/agent-junit"
           tests/JraAgent.Core.Tests/bin/Release/net10.0/JraAgent.Core.Tests.exe -reporter quiet -result-junit "$RUNNER_TEMP/agent-junit/agent.xml"
-      # Windows では WindowsTests を含む全件が実行されること。スキップを許すのは Linux 専用の 3 件（sh を使う偽ワーカーと COM の拒否）だけ
+      # Windows では WindowsTests を含む全件が実行されること。スキップを許すのは Linux 専用の 5 件（sh を使う偽ワーカー 3・flock(1)・COM の拒否）だけ
       - name: Verify that the Windows tests actually ran
         if: always()
         run: |
-          node build/tools/src/main.js verify-junit --label "agent (windows)" --dir "$RUNNER_TEMP/agent-junit" --min 290 --max-skipped 3 --classes "WindowsTests,WorkerTests,CliTests,QueueTests"
+          node build/tools/src/main.js verify-junit --label "agent (windows)" --dir "$RUNNER_TEMP/agent-junit" --min 300 --max-skipped 5 --classes "WindowsTests,WorkerTests,CliTests,QueueTests,ReviewRegressionTests"
 
   # イメージのビルドとスモーク + ドライラン manifest（images.yml）。push も認証もしない。Dockerfile・リリース関連・ビルド定義が変わったときと、フル検証のときだけ
   images:

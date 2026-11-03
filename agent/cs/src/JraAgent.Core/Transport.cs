@@ -57,7 +57,8 @@ public sealed class HttpTransport : ITransport, IDisposable
             var buf = new byte[MaxResponseBytes + 1];
             var n = 0;
             int r;
-            while (n < buf.Length && (r = stream.Read(buf, n, buf.Length - n)) > 0) n += r;
+            // 本文の読み取りにもタイムアウトを効かせる（同期の Read にはキャンセルが届かず、ヘッダの後で止まる相手に無期限に待っていた: レビュー 中1）
+            while (n < buf.Length && (r = stream.ReadAsync(buf.AsMemory(n, buf.Length - n), cts.Token).AsTask().GetAwaiter().GetResult()) > 0) n += r;
             if (n > MaxResponseBytes) throw new TransportException("TOO_LARGE"); // 上限を超える応答は切り詰めずに失敗にする
             return new TransportResponse((int)resp.StatusCode, h, buf[..n]);
         }

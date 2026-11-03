@@ -50,6 +50,18 @@ public static partial class Updates
 
     public static UpdateManifest VerifyManifest(byte[] json, IReadOnlyList<BeaconKey> keys, string currentVersion, string platform = "win-x64")
     {
+        try
+        {
+            return VerifyManifestCore(json, keys, currentVersion, platform);
+        }
+        catch (Exception e) when (e is InvalidOperationException or ArgumentException)
+        {
+            throw new VerificationException("BAD_SHAPE"); // 取り出せない文字列（孤立サロゲートなど）を例外のまま漏らさない
+        }
+    }
+
+    private static UpdateManifest VerifyManifestCore(byte[] json, IReadOnlyList<BeaconKey> keys, string currentVersion, string platform)
+    {
         JsonDocument doc;
         try
         {
@@ -173,7 +185,9 @@ public sealed class UpdateInstaller(string root, UpdateLimits? limits = null)
                 // Windows の区切り（\）・ドライブ指定（C:）・絶対パス・`..`・NUL をすべて拒否する（OS ごとのパスの解釈の差に頼らない）
                 var name = e.FullName;
                 var parts = name.Replace('\\', '/').Split('/');
-                if (name.Length == 0 || name.StartsWith('/') || name.StartsWith('\\') || parts.Contains("..") || name.Contains(':', StringComparison.Ordinal) || name.Contains('\0', StringComparison.Ordinal))
+                if (name.Length == 0 || name.StartsWith('/') || name.StartsWith('\\') || parts.Contains("..") || parts.Contains(".")
+                    || parts.Any(p => p.Length > 0 && (p.EndsWith('.') || p.EndsWith(' '))) // Windows は末尾のドット・空白を落として同じ名前にする
+                    || name.Contains(':', StringComparison.Ordinal) || name.Contains('\0', StringComparison.Ordinal))
                     throw new VerificationException("UNSAFE_PATH");
                 var target = Path.GetFullPath(Path.Combine(tmp, name.Replace('\\', '/')));
                 if (!target.StartsWith(tmpFull, StringComparison.Ordinal) && target + Path.DirectorySeparatorChar != tmpFull) throw new VerificationException("UNSAFE_PATH");
@@ -216,6 +230,12 @@ public sealed class UpdateInstaller(string root, UpdateLimits? limits = null)
         {
             Directory.Delete(tmp, recursive: true);
             throw new VerificationException("BAD_ZIP");
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // ファイルとディレクトリの同名（`a` と `a/b`）、Windows の末尾のドット・空白による同名、ディスク不足など。残骸を残さず検証の失敗にする
+            Directory.Delete(tmp, recursive: true);
+            throw new VerificationException("EXTRACT_FAILED");
         }
         catch (VerificationException)
         {

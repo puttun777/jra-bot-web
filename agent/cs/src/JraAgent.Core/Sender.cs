@@ -60,8 +60,10 @@ public sealed class Sender(
         }
         catch (JsonException)
         {
-            // 壊れた記録は停止のまま扱う（安全側）。資格情報が差し替えられれば下で解除される
+            // 壊れた記録は停止のまま扱う（安全側。指紋で解除の判定ができない）。set-credential で資格情報を入れ直すと記録が消えて再開する
+            return "AUTH_STATE_CORRUPT";
         }
+        if (fp is null) return "AUTH_STATE_CORRUPT";
         if (fp != credentialFingerprint)
         {
             queue.SetState(AuthHaltKey, ""); // 資格情報が差し替えられた = 利用者が再発行したトークン。再開する
