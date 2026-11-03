@@ -13,5 +13,7 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <NuGetAudit>true</NuGetAudit>
+    <!-- CA1716 は Visual Basic の予約語（Call・Option・Step など）との衝突の規則。C# だけで使うので対象外にする -->
+    <NoWarn>$(NoWarn);CA1716</NoWarn>
   </PropertyGroup>
 </Project>

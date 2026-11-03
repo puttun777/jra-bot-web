@@ -11,6 +11,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/JraAgent.Core/JraAgent.Core.csproj" />
+    <ProjectReference Include="../../src/JraAgent.Cli/JraAgent.Cli.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />

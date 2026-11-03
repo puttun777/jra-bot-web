@@ -170,6 +170,12 @@
           "xunit.v3.runner.common": "[4.0.2]"
         }
       },
+      "jraagent": {
+        "type": "Project",
+        "dependencies": {
+          "JraAgent.Core": "[1.0.0, )"
+        }
+      },
       "jraagent.core": {
         "type": "Project",
         "dependencies": {
