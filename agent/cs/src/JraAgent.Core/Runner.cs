@@ -238,16 +238,19 @@ public sealed class AgentRunner(
     }
 
     /// <summary>
-    /// 失敗した tick の後始末: 警告を出し（heartbeat の lastError に名前が出る）、送信中のまま残ったバッチを QUEUED へ、取得中のまま残ったセッションを
-    /// INTERRUPTED へ戻す（tick は 1 本のスレッドで順に動くので、この時点で送信・取得は進行していない。再起動時の Recover と同じ処理）。
-    /// 戻さないと、SENDING が残って以後の送信が黙って止まる（再レビュー 低）。
+    /// 失敗した tick の後始末（tick は 1 本のスレッドで順に動くので、この時点で送信・取得は進行していない）:
+    /// 警告を出す（heartbeat の lastError に名前が出る）／送信中のまま残ったバッチは通常の再試行（バックオフ + 上限。上限で DEAD）へ／
+    /// 取得中のまま残ったセッションは INTERRUPTED へ（Recover）／ワーカー側の open を閉じる。
+    /// 何もしないと SENDING が残って送信が黙って止まり、QUEUED へ戻すだけだと同じ例外で上限なしの再送になる（再レビュー 低・中）。
     /// </summary>
-    private void RecoverAfterFailedTick(string kind)
+    internal void HandleFailedTick(string kind)
     {
         try
         {
-            queue.RaiseAlert("TICK_FAILED", $"tick が失敗した（{kind}）。送信中・取得中のものを戻して続ける");
+            queue.RaiseAlert("TICK_FAILED", $"tick が失敗した（{kind}）。送信中のバッチは再試行に回し、取得中のものは中断にして続ける");
+            sender.RecoverAfterFailedTick(kind);
             queue.Recover();
+            fetcher?.ResetAfterFailure();
         }
         catch (Exception e) when (e is AgentException or Microsoft.Data.Sqlite.SqliteException or InvalidOperationException)
         {
@@ -275,7 +278,7 @@ public sealed class AgentRunner(
             {
                 LastError = e.GetType().Name;
                 logError?.Invoke($"tick が失敗: {e.GetType().Name}"); // 例外のメッセージには値が入り得るので型名だけ
-                RecoverAfterFailedTick(e.GetType().Name);
+                HandleFailedTick(e.GetType().Name);
                 wait = 5.0;
             }
             stop.WaitHandle.WaitOne(TimeSpan.FromSeconds(wait));

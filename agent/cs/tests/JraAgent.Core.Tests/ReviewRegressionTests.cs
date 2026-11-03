@@ -253,9 +253,14 @@ public sealed class FailedTickTests : IDisposable
     {
         public bool Armed { get; set; } = true;
 
+        public bool Always { get; set; }
+
+        public int IngestCalls { get; private set; }
+
         public TransportResponse Request(string method, string url, IReadOnlyDictionary<string, string> headers, byte[]? body, double timeoutSeconds)
         {
-            if (Armed && url.EndsWith("/v1/agent/ingest", StringComparison.Ordinal))
+            if (url.EndsWith("/v1/agent/ingest", StringComparison.Ordinal)) IngestCalls++;
+            if ((Armed || Always) && url.EndsWith("/v1/agent/ingest", StringComparison.Ordinal))
             {
                 Armed = false;
                 throw new InvalidOperationException("boom");
@@ -276,15 +281,54 @@ public sealed class FailedTickTests : IDisposable
             fx.Queue, modes, new BeaconClient(FakeCloud.BeaconUrl, [cloud.Signer.Public], transport, clock, new BeaconGuard(fx.Queue.GetState, fx.Queue.SetState)),
             new AgentApi(client, modes), client, new Sender(fx.Queue, client, modes, new SenderConfig(), clock, "fp", rand: () => 0.5), null, clock, rand: () => 0.0);
         var b = fx.EnqueueRealtime(fx.Queue);
-        using var stop = new CancellationTokenSource();
-        var t = new Thread(() => runner.RunForever(stop.Token)) { IsBackground = true };
-        t.Start();
-        var deadline = DateTime.UtcNow.AddSeconds(30);
-        while (DateTime.UtcNow < deadline && fx.Queue.Batch(b.BatchId)?.Status != "ACKED") Thread.Sleep(50);
-        stop.Cancel();
-        Assert.True(t.Join(20_000));
+        var sawTickFailed = false;
+        for (var i = 0; i < 40 && fx.Queue.Batch(b.BatchId)?.Status != "ACKED"; i++)
+        {
+            try
+            {
+                runner.Tick();
+            }
+            catch (InvalidOperationException)
+            {
+                runner.HandleFailedTick("InvalidOperationException"); // RunForever の catch と同じ後始末
+                sawTickFailed = fx.Queue.Alerts().ContainsKey("TICK_FAILED");
+                Assert.Empty(fx.Queue.Batches("SENDING")); // 送信中のまま残らない
+            }
+            clock.Advance(1000);
+        }
+        Assert.True(sawTickFailed);
         Assert.Equal("ACKED", fx.Queue.Batch(b.BatchId)?.Status); // 例外の後に SENDING のまま止まらず、再送されて ACK された
         Assert.False(transport.Armed); // 例外は実際に起きた
-        Assert.DoesNotContain("TICK_FAILED", fx.Queue.Alerts().Keys); // 成功した tick で警告は消える
+    }
+
+    [Fact]
+    public void Repeated_failures_in_the_same_batch_are_bounded_and_end_dead()
+    {
+        // 毎回同じ例外になっても無限に再送しない（試行回数の上限で DEAD）
+        var clock = fx.Clock;
+        var cloud = new FakeCloud(clock, "jrat1_tick-token-0123456789", new BeaconSigner());
+        var transport = new ThrowingOnce(cloud) { Always = true };
+        var modes = new ModeMachine(clock);
+        var client = new SignedClient(FakeCloud.Base, new RequestSigner("ag_test", "jrat1_tick-token-0123456789"), transport, clock);
+        var runner = new AgentRunner(
+            fx.Queue, modes, new BeaconClient(FakeCloud.BeaconUrl, [cloud.Signer.Public], transport, clock, new BeaconGuard(fx.Queue.GetState, fx.Queue.SetState)),
+            new AgentApi(client, modes), client, new Sender(fx.Queue, client, modes, new SenderConfig(MaxAttempts: 3), clock, "fp", rand: () => 0.5), null, clock, rand: () => 0.0);
+        var b = fx.EnqueueRealtime(fx.Queue);
+        for (var i = 0; i < 40; i++)
+        {
+            try
+            {
+                runner.Tick();
+            }
+            catch (InvalidOperationException)
+            {
+                runner.HandleFailedTick("InvalidOperationException");
+            }
+            clock.Advance(1000);
+        }
+        Assert.Equal(("DEAD", "RETRY_EXHAUSTED"), (fx.Queue.Batch(b.BatchId)?.Status, fx.Queue.Batch(b.BatchId)?.DeadReason));
+        Assert.Equal(3, transport.IngestCalls);
+        Assert.Contains("TICK_FAILED", fx.Queue.Alerts().Keys);
+        Assert.Contains("RETRY_EXHAUSTED", fx.Queue.Alerts().Keys);
     }
 }

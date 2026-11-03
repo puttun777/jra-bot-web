@@ -86,6 +86,9 @@ public sealed partial class Fetcher(
         inited = true;
     }
 
+    /// <summary>失敗した tick の後始末: ワーカー側の open を閉じる（閉じられなければ次回は JVInit からやり直す）。</summary>
+    public void ResetAfterFailure() => CloseQuietly();
+
     private void CloseQuietly()
     {
         try

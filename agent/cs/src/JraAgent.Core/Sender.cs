@@ -171,6 +171,19 @@ public sealed class Sender(
         }
     }
 
+    /// <summary>
+    /// 失敗した tick の後始末: 送信中のまま残ったバッチを、通常の再試行（バックオフ + 試行回数の上限。上限で DEAD）に回す。
+    /// 単に QUEUED へ戻すと、毎回同じ例外になる場合に上限なしで再送が続く（再レビュー 中）。
+    /// </summary>
+    public void RecoverAfterFailedTick(string kind)
+    {
+        foreach (var b in queue.Batches("SENDING"))
+        {
+            if (queue.RetryLater(b.BatchId, Delay(b, null), $"TICK_FAILED:{kind}", cfg.MaxAttempts) == "DEAD")
+                queue.RaiseAlert("RETRY_EXHAUSTED", "再試行の上限に達したバッチを DEAD にした");
+        }
+    }
+
     private double Delay(BatchRow batch, double? retryAfter)
     {
         var d = backoff.Delay(Math.Max(batch.Attempts, 1), rand);
