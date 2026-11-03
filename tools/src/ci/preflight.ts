@@ -17,7 +17,7 @@
  * 記録: `build/preflight/last.json`（検証したコミット・ツリー・版・結果）と `build/preflight/<id>.log`（詳細ログ。Git には入れない）。
  */
 import { spawn, spawnSync } from "node:child_process";
-import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { parse as parseYaml } from "yaml";
@@ -28,7 +28,6 @@ import { classify, fullPlan, type Plan } from "./classify.js";
 
 export const CI_JDK = "25";
 export const CI_NODE = "24";
-export const LEGACY_COMMIT = "f7dbf69fd8940121782870de902e8c449e6ca149"; // tools/golden/constants.py の PINNED_COMMIT（テストで一致を検査）
 
 export interface Step {
   readonly id: string;
@@ -36,7 +35,7 @@ export interface Step {
   readonly commands: readonly (readonly string[])[];
   readonly env?: Readonly<Record<string, string>>;
   /** 専用の手順（commands の代わり） */
-  readonly special?: "golden" | "agent" | "images";
+  readonly special?: "agent" | "images";
   readonly needsDocker?: boolean;
   readonly needsJdk25?: boolean;
   readonly caveat?: string;
@@ -200,23 +199,13 @@ export function stepsFor(plan: Plan, files: readonly string[], root: string, out
     });
     s.push({
       id: "kotlin-golden",
-      title: "旧新ゴールデン: Kotlin ランナーと旧 Python の比較",
+      title: "旧新ゴールデン: フィクスチャの検証と Kotlin ランナーの比較（Kotlin だけ）",
       commands: [
-        ["python3", "-m", "tools.golden.verify"],
         [
           "./gradlew",
           ":golden-runner:run",
           "--stacktrace",
-          `--args=--fixtures ${root}/tools/golden/fixtures --out ${out}/kotlin_out.json --coverage ${out}/kotlin_coverage.json`,
-        ],
-        [
-          "python3",
-          "-m",
-          "tools.golden.kotlin_compare",
-          "--actual",
-          join(out, "kotlin_out.json"),
-          "--coverage",
-          join(out, "kotlin_coverage.json"),
+          `--args=check --fixtures ${root}/tools/golden/fixtures --catalog ${root}/tools/golden/catalog.json --report ${out}/golden-report.json`,
         ],
       ],
       env: UTF8,
@@ -259,8 +248,6 @@ export function stepsFor(plan: Plan, files: readonly string[], root: string, out
       });
     }
   }
-  if (plan.runGolden)
-    s.push({ id: "golden-py", title: "golden（Python）: 検証・旧実装からの再生成の一致・単体", commands: [], special: "golden" });
   if (plan.runAgent) s.push({ id: "agent", title: "agent（Python）: ruff・format・mypy・pytest", commands: [], special: "agent" });
   const appRuntimeChanged = files.some((f) => /^(bot|ingest|dashboard|cloud-gcp|persistence|domain)\/src\/main\//.test(f));
   if (plan.runImages || appRuntimeChanged) {
@@ -301,38 +288,6 @@ function runSpecial(step: Step, root: string, out: string, env: NodeJS.ProcessEn
     return d;
   };
   switch (step.special) {
-    case "golden": {
-      const legacy = process.env["PREFLIGHT_LEGACY_PATH"] ?? resolve(root, "..", "jra-bot");
-      const head = run("git", ["-C", legacy, "rev-parse", "HEAD"]).stdout.trim();
-      if (head !== LEGACY_COMMIT) {
-        writeFileSync(log, `旧実装 ${legacy} の HEAD=${head || "不明"} が固定コミット ${LEGACY_COMMIT} と違う\n`);
-        return 2;
-      }
-      const py = venv(root, out, "golden", ["tools/golden/requirements.txt"]);
-      const genv = { ...env, GOLDEN_LEGACY_PATH: legacy, PYTHONDONTWRITEBYTECODE: "1" }; // 参照元に .pyc を作らない（読み取り専用）
-      const rc = steps(
-        [
-          ["python3", "-B", "-m", "tools.golden.verify"],
-          [py, "-B", "-m", "tools.golden.run_tests", "--min-tests", "85", "--max-skipped", "0"],
-          [py, "-B", "-m", "tools.golden.generate", "--legacy-path", legacy, "--check"],
-        ],
-        root,
-        genv,
-      );
-      if (rc !== 0) return rc;
-      const leftovers = new Set(["ok.json", "bad.json", "miss.json"].filter((n) => existsSync(join(root, n)))); // 元からあるファイルは消さない
-      try {
-        return bash(
-          ciRunBlock(root, "golden", "Comparator smoke test (self-comparison passes, perturbed and missing results fail)"),
-          root,
-          genv,
-          log,
-          "Comparator smoke test",
-        );
-      } finally {
-        for (const n of ["ok.json", "bad.json", "miss.json"]) if (!leftovers.has(n)) rmSync(join(root, n), { force: true });
-      }
-    }
     case "agent": {
       const py = venv(
         root,

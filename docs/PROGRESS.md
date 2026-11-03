@@ -13,6 +13,15 @@
 旧: 2026-10-26（Public 化の準備）／2026-10-24（Stage 3-F2・3-F1・3-E）
 
 
+## 2026-11-03 言語移行 L4: ゴールデンの検証と比較を Kotlin へ（ブランチ claude/lang-l4-golden。D-258・D-260）
+**マージ済み（この日）**: web PR #40（L3）と infra PR #8（release-manifest v3）を同時にマージ（最新コミットで全ジョブ成功を個別に確認。images の本物のビルドとスモークも成功）。
+**L4 の内容**: `golden-runner verify`・`check`（PyJson = Python の json.dumps と同じ形式、GoldenVerify・Catalog〔catalog.json〕・GoldenCompare）。Python の tools/golden（生成器・検証器・比較器・試験）・CI の golden ジョブ・dependabot の pip を削除。旧 kotlin_compare と要約がバイト単位で一致することを確認。
+**独立レビュー（Sonnet・読取り専用）**: 高 1（`| tee` で検査の失敗が隠れる → pipefail と試験で強制）・低 4 → すべて対応（D-260）。
+**検証（ローカル）**: `./gradlew build checkModuleDependencies ktlintCheck` 成功、golden-runner 36 件、`check` は 34/34 一致・未対応 1、TS 159 件・lint・consistency 成功。**未実施**: GitHub Actions 上の実行（PR の CI で確認）。
+**CI（6febe76）**: 全ジョブ成功を個別に確認（ci gate・build・db integration 8.4/9.7・images・TS・agent python/windows・changes。connectorj26 は条件付きでスキップ＝対象外）。
+**修正後の再レビュー（Sonnet・読取り専用）**: 高 0・中 1（メールの正規表現が長い文字列で StackOverflowError）・低 2（pipefail 試験の抜け道）→ 0dfb843 で対応、その再確認で高・中なし。0dfb843 の検証: golden-runner 37 件・ktlintCheck・`check` 34/34 一致（exit 0）・TS 159 件・lint 成功（旧い正規表現に戻すと試験が 1 件失敗することを確認）。
+**次**: push → CI → マージ → L5（C# エージェント。claude/lang-l5-agent-cs で作業中: Core・キュー・設定・秘密・送信の C# 版と試験 178 件）。
+
 ## 2026-11-02 言語移行 L3: ML 学習を Kotlin へ（ブランチ claude/lang-l3-ml-kotlin。D-257。infra は claude/lang-l3-manifest-v3〔I-035〕）
 **マージ済み（この日）**: web PR #36（L1: CI・リリース補助の TS 化）、infra PR #7（L2: ops の TS 化。Opus レビュー 4 回、最終は高・中なし）。どちらも最新コミットで全ジョブ成功を個別に確認してからマージ。
 **L3 の内容**: `:ml-train`（数値: Newton 法 + Cholesky〔Hipparchus 4.0.3〕・Platt・指標・品質ゲート、Job: データセット検証・冪等・保存〔.sig → report → .json〕・読み戻し検証・登録〔CANDIDATE/REJECTED のみ〕・SIGTERM、CLI: モードは DB の前・DB への接続の確認（スキーマ版は確認しない: mltrain に権限が無い）、convert-pkl: データだけを解釈する pickle 読取り）。保管は domain の `ArtifactBlobStore`（LocalFileBlobStore）と cloud-gcp の `GcsBlobStore`。persistence に `TrainingRegistry`（mltrain）。Python の `ml/`・`tools/ml` を削除、CI の Python ML ジョブ 2 つを削除、Dockerfile の ml-train は JVM、image-smoke は JVM の検査、`MlTrainInteropIntegrationTest` は ml-train の jar を別プロセスで起動。**release-manifest schema_version 3**（runtime.python 削除。CONTRACTS 0.4.17。**infra の PR と同時にマージ**）。

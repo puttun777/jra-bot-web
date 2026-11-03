@@ -204,7 +204,7 @@ data class ProbabilityResult(val probs: List<Double>, val source: ProbSource, va
 | G5 | decision 側ブレンド+クリップ+再正規化 | 参照元 `evaluate_odds` の確率部分を抽出して比較 | 1e-9 |
 | G6 | 特徴量ベクトル | 合成の馬/過去走/レース条件（SQLite に合成データを入れ参照元の `build_feature_vector` で生成）→ Kotlin `FeatureBuilder`（**age は参照元が now 基準のため、固定時刻を注入して比較**。as-of 版は別テスト） | 1e-12 |
 | G7 | 失敗系 | 次元不一致、NaN、スキーマハッシュ不一致、署名不一致、モデル無し → ロード拒否/フォールバック理由が期待通り | — |
-- フィクスチャは**合成データのみ**（実データ・実 pkl 不使用）。生成スクリプト `tools/golden/gen_ml_fixtures.py` は参照元のパスを引数に取り、JSON のみをコミットする（参照元のコードを複製しない: D-004）。
+- フィクスチャは**合成データのみ**（実データ・実 pkl 不使用）。生成スクリプト `tools/golden/gen_ml_fixtures.py`（D-258 で削除。git の履歴にある）は参照元のパスを引数に取り、JSON のみをコミットする（参照元のコードを複製しない: D-004）。
 - 追加: 性質テスト（p∈[0,1]、正規化後の和=1、`α=1` でモデルのみ/`α=0` で市場のみ、単調性）。
 
 ### 7.4 学習と推論の独立デプロイ

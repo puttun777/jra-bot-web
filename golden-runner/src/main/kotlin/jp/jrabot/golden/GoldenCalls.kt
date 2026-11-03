@@ -33,7 +33,7 @@ import jp.jrabot.domain.decision.WinStake
 import tools.jackson.databind.JsonNode
 
 /**
- * ゴールデンのフィクスチャの `input.calls[]`（`tools/golden/adapter.py` の `CALLS` と同じ名前・同じ引数）を :domain の計算に対応させる。
+ * ゴールデンのフィクスチャの `input.calls[]`（旧 `tools/golden/adapter.py`（D-258 で削除。git の履歴にある）の `CALLS` と同じ名前・同じ引数）を :domain の計算に対応させる。
  * 対応していない関数・引数は [UnsupportedGoldenCall]（ケース全体が未対応になる）。
  */
 object GoldenCalls {
@@ -338,7 +338,7 @@ object GoldenCalls {
 
     /**
      * 実オッズの注入。JSON ではタプルのキーを表せないので、ワイドは `[[馬番, 馬番, 下限, 上限], …]`、三連複は `[[馬番, 馬番, 馬番, オッズ], …]`
-     * （`tools/golden/adapter.py` が旧実装の辞書 `{(a, b): (low, high)}` / `{(a, b, c): odds}` に直す）。キーは昇順で与える（旧実装は昇順のキーで検索する）。
+     * （旧 `tools/golden/adapter.py` が旧実装の辞書 `{(a, b): (low, high)}` / `{(a, b, c): odds}` に直す）。キーは昇順で与える（旧実装は昇順のキーで検索する）。
      */
     private fun comboOdds(k: JsonNode?): ComboOdds {
         val wide = LinkedHashMap<WideKey, WideOddsRange>()

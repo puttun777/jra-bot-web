@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
 
 /**
  * 単勝の判定。期待値の数値は旧 Python（固定コミット f7dbf69）の `evaluate_odds` を実際に実行した値（ゴールデン GD09-EVAL-001 ほか）。
- * ゴールデン全体との比較は :golden-runner と `tools.golden.kotlin_compare`（CI）が行う。ここは分岐と境界の単体テスト。
+ * ゴールデン全体との比較は :golden-runner と `golden-runner check`（CI。旧 `tools.golden.kotlin_compare`）が行う。ここは分岐と境界の単体テスト。
  */
 class WinDecisionEvaluatorTest {
     private val loose = WinDecisionConfig.legacyFunctionDefaults().copy(evThreshold = -0.5, evShrinkFactor = 1.0)

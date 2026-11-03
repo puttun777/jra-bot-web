@@ -10,8 +10,7 @@
  *   kotlin_core  :domain → build、DB 統合（persistence + アプリ・8.4）
  *   kotlin_db    :persistence :db-migration → build、DB 統合（全スイート・8.4 と 9.7）
  *   build_cfg    Gradle・版数・build-logic・ktlint 設定 → build、DB 統合（全・8.4 + 9.7）、images
- *   golden       tools/golden（Python）→ golden
- *   kotlin_golden tools/golden（.md 以外）・golden-runner → build（比較は build ジョブの中）
+ *   kotlin_golden tools/golden（fixtures・catalog.json。.md 以外）・golden-runner → build（検証と比較は build ジョブの中。D-258）
  *   release      リリース補助・スキーマ・契約・マイグレーション・アプリの build 定義 → release-tools（TypeScript 単体）
  *   docker       Dockerfile / .dockerignore → images
  *   connectorj   DB ドライバ関連の依存設定 → connector/j 26.x 互換性チェック（非ゲート）
@@ -29,7 +28,6 @@ export type Tag =
   | "kotlin_core"
   | "kotlin_db"
   | "build_cfg"
-  | "golden"
   | "kotlin_golden"
   | "release"
   | "docker"
@@ -45,7 +43,6 @@ export const KNOWN_TAGS: ReadonlySet<Tag> = new Set<Tag>([
   "kotlin_core",
   "kotlin_db",
   "build_cfg",
-  "golden",
   "kotlin_golden",
   "release",
   "docker",
@@ -109,7 +106,7 @@ export const RULES: ReadonlyArray<readonly [RegExp, readonly Tag[]]> = [
   // --- ゴールデン。フィクスチャやシナリオが変わったら Kotlin 側の比較も必要
   [/^golden-runner\//, ["kotlin_golden"]],
   [/^tools\/golden\/.*\.md$/, ["docs"]],
-  [/^tools\/golden\//, ["golden", "kotlin_golden"]],
+  [/^tools\/golden\/(fixtures\/|catalog\.json$)/, ["kotlin_golden"]], // 旧 Python（*.py）は削除済み。置き場所が復活したら unknown = 全部実行
 ];
 
 export const FULL_MATRIX: readonly string[] = ["8.4", "9.7"];
@@ -121,7 +118,6 @@ export interface Plan {
   mode: Mode;
   reason: string;
   runBuild: boolean;
-  runGolden: boolean;
   runRelease: boolean;
   runImages: boolean;
   runConnectorj26: boolean;
@@ -137,7 +133,6 @@ function emptyPlan(mode: Mode, reason: string, files: number): Plan {
     mode,
     reason,
     runBuild: false,
-    runGolden: false,
     runRelease: false,
     runImages: false,
     runConnectorj26: false,
@@ -160,7 +155,6 @@ export function outputs(p: Plan): Record<string, string> {
     reason,
     files: String(p.files),
     run_build: b(p.runBuild),
-    run_golden: b(p.runGolden),
     run_release: b(p.runRelease),
     run_images: b(p.runImages),
     run_connectorj26: b(p.runConnectorj26),
@@ -176,7 +170,6 @@ export function fullPlan(reason: string, files = 0, connectorj = false): Plan {
   return {
     ...emptyPlan("full", reason, files),
     runBuild: true,
-    runGolden: true,
     runRelease: true,
     runImages: true,
     runConnectorj26: connectorj,
@@ -218,7 +211,6 @@ export function classify(files: readonly string[]): Plan {
     p.dbMatrix = ["8.4"];
     p.dbSuites = ["apps"];
   }
-  p.runGolden = has("golden");
   p.runRelease = has("release");
   p.runImages = has("docker", "build_cfg");
   p.runConnectorj26 = has("connectorj");

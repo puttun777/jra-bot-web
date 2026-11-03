@@ -60,7 +60,7 @@ flowchart LR
 UI は未実装のため、**テストと検証ツールの実行**が確認手段です（画面例はありません）。前提: JDK 25（無い場合の簡易確認は `docs/DEVELOPER_GUIDE.md`）、統合テストは Docker。
 ```bash
 ./gradlew :domain:test                                   # 判定ロジック・PENDING 再適用の性質試験など（Docker 不要・合成データ）
-python3 -m tools.golden.verify                           # 旧 Python から作った合成フィクスチャの整合性
+./gradlew :golden-runner:run --args="check --fixtures $PWD/tools/golden/fixtures --catalog $PWD/tools/golden/catalog.json"  # 旧 Python から作った合成フィクスチャの検証と Kotlin との比較
 MYSQL_IMAGE=mysql:8.4 ./gradlew :ingest:integrationTest  # 使い捨て MySQL（Testcontainers）で取込パイプラインを検証
 ```
 詳細な手順・各モジュールの確認方法は `docs/DEVELOPER_GUIDE.md`。

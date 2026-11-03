@@ -10,7 +10,7 @@ import kotlin.system.exitProcess
 
 /**
  * ゴールデンテストの Kotlin 側ランナー。`tools/golden/fixtures` 配下の各ケース JSON の `input.calls` を :domain の計算で実行し、次の 2 つを書き出す。
- * - `--out`: `{"schema_version":1,"results":{<case_id>:{"results":[{call_id,outcome}…]}}}`（`python -m tools.golden.compare --actual` の入力）。
+ * - `--out`: `{"schema_version":1,"results":{<case_id>:{"results":[{call_id,outcome}…]}}}`（`check` の比較の入力。旧 Python の compare と同じ形）。
  *   **実行できたケースだけ**を含める（未対応のケースを空で埋めて成功に見せない）。
  * - `--coverage`: `{"schema_version":1,"supported":[{case_id,calls}],"unsupported":[{case_id,calls,reason}]}`。呼び出し数つき。
  *
@@ -61,8 +61,63 @@ object GoldenRunner {
     fun toJson(node: JsonNode): String = mapper.writeValueAsString(node)
 }
 
+/**
+ * サブコマンド（D-258。旧 Python の verify / kotlin_compare を Kotlin へ移した）:
+ * - `verify --fixtures DIR --catalog FILE`: フィクスチャの静的検証（来歴・sha256・合成データ・正準形式・カタログ）。0 = 適合 / 1 = 不適合
+ * - `check --fixtures DIR --catalog FILE [--report FILE] [--out FILE] [--coverage FILE]`: verify → 実行 → 比較。0 = 対応ケースがすべて一致 / 1 = 不適合・差分 / 2 = 形式不正
+ * - 引数がオプションで始まるときは従来の実行だけ（`--fixtures --out --coverage`）
+ */
 fun main(args: Array<String>) {
-    val opts = parseArgs(args)
+    when (args.firstOrNull()) {
+        "verify" -> exitProcess(verifyCommand(parseArgs(args.drop(1).toTypedArray(), setOf("--fixtures", "--catalog"), emptySet())))
+        "check" -> exitProcess(checkCommand(parseArgs(args.drop(1).toTypedArray(), setOf("--fixtures", "--catalog"), setOf("--report", "--out", "--coverage"))))
+        else -> runCommand(args)
+    }
+}
+
+private fun verifyAndPrint(opts: Map<String, String>): Pair<Int, GoldenVerify.Result?> {
+    val catalog =
+        try {
+            Catalog.load(Path.of(opts.getValue("--catalog")))
+        } catch (e: Exception) {
+            System.err.println("ERROR: カタログを読めない: ${e.message}")
+            return 1 to null
+        }
+    val r = GoldenVerify.verify(Path.of(opts.getValue("--fixtures")), catalog)
+    if (r.errors.isNotEmpty()) {
+        System.err.println("フィクスチャ検証に失敗しました:")
+        for (e in r.errors) System.err.println("  - $e")
+        return 1 to r
+    }
+    val calls = r.byCase.values.sumOf { it.get("input").get("calls").size() }
+    val st = catalog.statusCounts()
+    println("OK: ${r.byCase.size} ケース / $calls 呼び出し。カタログ ${catalog.entries.size} 項目: " + st.entries.joinToString(" ") { "${it.key}=${it.value}" })
+    return 0 to r
+}
+
+internal fun verifyCommand(opts: Map<String, String>): Int = verifyAndPrint(opts).first
+
+internal fun checkCommand(opts: Map<String, String>): Int {
+    val (rc, verified) = verifyAndPrint(opts)
+    if (rc != 0 || verified == null) return 1
+    val catalog = Catalog.load(Path.of(opts.getValue("--catalog")))
+    val output = GoldenRunner.run(Path.of(opts.getValue("--fixtures")))
+    opts["--out"]?.let { write(Path.of(it), output.results) }
+    opts["--coverage"]?.let { write(Path.of(it), output.coverage) }
+    val report =
+        try {
+            GoldenCompare.build(verified.byCase, output.results.get("results"), output.coverage, catalog)
+        } catch (e: GoldenCompare.Invalid) {
+            System.err.println("ERROR: ${e.message}")
+            return 2
+        }
+    println(GoldenCompare.format(report))
+    opts["--report"]?.let { write(Path.of(it), GoldenCompare.reportJson(report)) }
+    return if (report.failed > 0) 1 else 0
+}
+
+private fun runCommand(args: Array<String>) {
+    val opts = parseArgs(args, setOf("--fixtures", "--out", "--coverage"), emptySet())
     val out = Path.of(opts.getValue("--out"))
     val coveragePath = Path.of(opts.getValue("--coverage"))
     val output = GoldenRunner.run(Path.of(opts.getValue("--fixtures")))
@@ -96,13 +151,16 @@ private fun write(
     Files.writeString(path, GoldenRunner.toJson(node) + "\n")
 }
 
-private fun parseArgs(args: Array<String>): Map<String, String> {
-    val required = setOf("--fixtures", "--out", "--coverage")
+private fun parseArgs(
+    args: Array<String>,
+    required: Set<String>,
+    optional: Set<String>,
+): Map<String, String> {
     val m = HashMap<String, String>()
     var i = 0
     while (i < args.size) {
         val k = args[i]
-        if (k !in required || i + 1 >= args.size) usage("不明または値の無い引数: $k")
+        if ((k !in required && k !in optional) || i + 1 >= args.size || k in m) usage("不明・重複・値の無い引数: $k")
         m[k] = args[i + 1]
         i += 2
     }
@@ -112,6 +170,8 @@ private fun parseArgs(args: Array<String>): Map<String, String> {
 }
 
 private fun usage(msg: String): Nothing {
-    System.err.println("ERROR: $msg\n使い方: golden-runner --fixtures DIR --out FILE --coverage FILE")
+    System.err.println(
+        "ERROR: $msg\n使い方: golden-runner [verify|check] --fixtures DIR --catalog FILE … / golden-runner --fixtures DIR --out FILE --coverage FILE",
+    )
     exitProcess(2)
 }

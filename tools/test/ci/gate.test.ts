@@ -16,7 +16,6 @@ function needsFor(p: Plan, results: Record<string, string> = {}, changesResult =
   const expected: Record<string, boolean> = {
     build: p.runBuild,
     "release-tools": p.runRelease,
-    golden: p.runGolden,
     "db-integration": p.dbMatrix.length > 0,
     images: p.runImages,
     connectorj26: p.runConnectorj26,
@@ -68,7 +67,7 @@ describe("gate", () => {
   });
   it("unexpected job that ran and failed fails", () => {
     assert.equal(evaluate(needsFor(DOCS, { build: "failure" })).ok, false);
-    assert.equal(evaluate(needsFor(DOCS, { golden: "cancelled" })).ok, false);
+    assert.equal(evaluate(needsFor(DOCS, { images: "cancelled" })).ok, false);
   });
   it("unexpected job that ran and succeeded is fine", () => assert.equal(evaluate(needsFor(DOCS, { build: "success" })).ok, true));
   it("11 non required compat failure does not block", () => {
@@ -96,7 +95,7 @@ describe("gate", () => {
     assert.equal(evaluate(n).ok, false);
   });
   it("empty outputs are dropped by github and still pass", () => {
-    const goldenOnly = classify(["tools/golden/generate.py"]);
+    const goldenOnly = classify(["tools/golden/fixtures/GD01-EV-001.json"]); // build だけで DB ジョブが無い
     for (const p of [DOCS, goldenOnly]) {
       const n = needsFor(p);
       assert.ok(!("db_suites" in changesOutputs(n)));

@@ -16,7 +16,6 @@ type Outputs = Readonly<Record<string, string>>;
 export const REQUIRED: Readonly<Record<string, (o: Outputs) => boolean>> = {
   build: (o) => o["run_build"] === "true",
   "release-tools": (o) => o["run_release"] === "true",
-  golden: (o) => o["run_golden"] === "true",
   "db-integration": (o) => o["db_matrix"] !== "[]" && o["db_matrix"] !== "",
   images: (o) => o["run_images"] === "true",
   agent: (o) => o["run_agent"] === "true",
@@ -28,7 +27,6 @@ export const OUTPUT_KEYS: readonly string[] = [
   "mode",
   "reason",
   "run_build",
-  "run_golden",
   "run_release",
   "run_images",
   "run_connectorj26",
