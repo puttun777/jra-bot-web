@@ -200,18 +200,28 @@ object GoldenCompare {
         val both = (sup.keys intersect uns.keys).sorted()
         if (both.isNotEmpty()) throw Invalid("対応と未対応の両方に載っているケース: $both")
         val classified = sup.keys + uns.keys
-        if (classified != fixtures.keys) throw Invalid("フィクスチャとの分類が一致しない: 未分類=${(fixtures.keys - classified).sorted()} 不明=${(classified - fixtures.keys).sorted()}")
+        if (classified !=
+            fixtures.keys
+        ) {
+            throw Invalid("フィクスチャとの分類が一致しない: 未分類=${(fixtures.keys - classified).sorted()} 不明=${(classified - fixtures.keys).sorted()}")
+        }
         val out = results.propertyNames().toSet()
         if (out != sup.keys) throw Invalid("出力のケースが『対応』の申告と違う: 出力のみ=${(out - sup.keys).sorted()} 申告のみ=${(sup.keys - out).sorted()}")
         for ((cid, n) in sup + uns.mapValues { it.value.first }) {
-            val want = fixtures.getValue(cid).get("input").get("calls").size()
+            val want =
+                fixtures
+                    .getValue(cid)
+                    .get("input")
+                    .get("calls")
+                    .size()
             if (n != want) throw Invalid("$cid: 申告の呼び出し数 $n がフィクスチャの $want と違う")
         }
-        if (sup.keys != catalog.supported.toSet() || uns.keys != catalog.unsupported.keys) {
-            throw Invalid(
-                "Kotlin の申告が catalog.json の kotlin_port と違う: 対応の差=${((sup.keys - catalog.supported.toSet()) + (catalog.supported.toSet() - sup.keys)).sorted()} " +
-                    "未対応の差=${((uns.keys - catalog.unsupported.keys) + (catalog.unsupported.keys - uns.keys)).sorted()}",
-            )
+        val portSup = catalog.supported.toSet()
+        val portUns = catalog.unsupported.keys
+        if (sup.keys != portSup || uns.keys != portUns) {
+            val supDiff = ((sup.keys - portSup) + (portSup - sup.keys)).sorted()
+            val unsDiff = ((uns.keys - portUns) + (portUns - uns.keys)).sorted()
+            throw Invalid("Kotlin の申告が catalog.json の kotlin_port と違う: 対応の差=$supDiff 未対応の差=$unsDiff")
         }
         val cases =
             sup.keys.sorted().map { cid ->
@@ -227,7 +237,12 @@ object GoldenCompare {
                     errs.size,
                     worst.second,
                     worst.first,
-                    fx.get("comparison_rules").get("default").get("float").get("abs_tol").doubleValue(),
+                    fx
+                        .get("comparison_rules")
+                        .get("default")
+                        .get("float")
+                        .get("abs_tol")
+                        .doubleValue(),
                 )
             }
         return Report(
@@ -248,7 +263,12 @@ object GoldenCompare {
         val lines = ArrayList<String>()
         lines += "Kotlin と旧 Python（固定コミット）のゴールデン比較"
         for (c in r.cases) {
-            lines += "  [${c.status.uppercase().padEnd(6)}] ${c.caseId}  calls=${c.calls}  float=${c.floatsCompared}  最大絶対誤差=${sci(c.maxAbsError)}（許容 ${if (c.tolerance == 0.0) "0" else PyJson.repr(c.tolerance)}）"
+            lines +=
+                "  [${c.status.uppercase().padEnd(
+                    6,
+                )}] ${c.caseId}  calls=${c.calls}  float=${c.floatsCompared}  最大絶対誤差=${sci(
+                    c.maxAbsError,
+                )}（許容 ${if (c.tolerance == 0.0) "0" else PyJson.repr(c.tolerance)}）"
             for (d in c.diffs.take(limit)) {
                 lines += "      ${d.path}: ${d.kind} expected=${d.expected} actual=${d.actual}" + (d.absDiff?.let { " abs_diff=${sci(it)}" } ?: "")
             }
@@ -267,7 +287,8 @@ object GoldenCompare {
     fun reportJson(r: Report): JsonNode =
         obj(
             "schema_version" to 1,
-            "supported" to obj("cases" to r.cases.size, "calls" to r.supportedCalls, "passed" to r.passed, "failed" to r.failed, "passed_calls" to r.passedCalls),
+            "supported" to
+                obj("cases" to r.cases.size, "calls" to r.supportedCalls, "passed" to r.passed, "failed" to r.failed, "passed_calls" to r.passedCalls),
             "unsupported" to
                 obj(
                     "cases" to r.unsupported.size,
@@ -290,7 +311,14 @@ object GoldenCompare {
                         "tolerance" to c.tolerance,
                         "diffs" to
                             c.diffs.map { d ->
-                                obj("path" to d.path, "kind" to d.kind, "expected" to d.expected, "actual" to d.actual, "abs_diff" to d.absDiff, "rule" to d.rule)
+                                obj(
+                                    "path" to d.path,
+                                    "kind" to d.kind,
+                                    "expected" to d.expected,
+                                    "actual" to d.actual,
+                                    "abs_diff" to d.absDiff,
+                                    "rule" to d.rule,
+                                )
                             },
                     )
                 },

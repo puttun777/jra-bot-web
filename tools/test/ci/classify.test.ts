@@ -11,7 +11,6 @@ const plan = (...files: string[]): Plan => classify(files);
 const jobs = (p: Plan) => ({
   mode: p.mode,
   build: p.runBuild,
-  golden: p.runGolden,
   release: p.runRelease,
   images: p.runImages,
   c26: p.runConnectorj26,
@@ -22,13 +21,13 @@ const jobs = (p: Plan) => ({
 describe("scenario", () => {
   it("01 docs only", () => {
     const p = plan("docs/PROGRESS.md", "README.md", "docs/VERSIONS.md", "tools/golden/README.md", "bot/README.md");
-    assert.deepEqual(jobs(p), { mode: "docs", build: false, golden: false, release: false, images: false, c26: false, db: [], suites: [] });
+    assert.deepEqual(jobs(p), { mode: "docs", build: false, release: false, images: false, c26: false, db: [], suites: [] });
   });
   it("02 kotlin domain only", () => {
     assert.deepEqual(jobs(plan("domain/src/main/kotlin/jp/jrabot/domain/Odds.kt")), {
       mode: "code",
       build: true,
-      golden: false,
+
       release: false,
       images: false,
       c26: false,
@@ -49,7 +48,6 @@ describe("scenario", () => {
     assert.deepEqual(p.dbMatrix, ["8.4", "9.7"]);
     assert.equal(p.runRelease, true); // flyway.latest_version の整合
     assert.equal(p.runImages, true); // 焼き込まれる + スモークで実 migrate
-    assert.equal(p.runGolden, false);
   });
   it("05 ci config only (workflows, scripts, TS tooling and npm dependencies)", () => {
     for (const f of [
@@ -70,34 +68,25 @@ describe("scenario", () => {
     ]) {
       const p = plan(f);
       assert.equal(p.mode, "full", f);
-      assert.ok(p.runBuild && p.runGolden && p.runRelease && p.runImages, f);
+      assert.ok(p.runBuild && p.runRelease && p.runImages, f);
       assert.deepEqual(p.dbMatrix, ["8.4", "9.7"]);
       assert.equal(p.runConnectorj26, false, f); // 非ゲートの互換性確認は CI 設定の変更では走らせない
     }
   });
   it("06 dockerfile only", () => {
     for (const f of ["Dockerfile", ".dockerignore"]) {
-      assert.deepEqual(
-        jobs(plan(f)),
-        { mode: "code", build: false, golden: false, release: true, images: true, c26: false, db: [], suites: [] },
-        f,
-      );
+      assert.deepEqual(jobs(plan(f)), { mode: "code", build: false, release: true, images: true, c26: false, db: [], suites: [] }, f);
     }
   });
   it("06b release tooling (TypeScript) runs release tests and images", () => {
     for (const f of ["tools/src/release/manifest.ts", "tools/test/release/manifest.test.ts"]) {
-      assert.deepEqual(
-        jobs(plan(f)),
-        { mode: "code", build: false, golden: false, release: true, images: true, c26: false, db: [], suites: [] },
-        f,
-      );
+      assert.deepEqual(jobs(plan(f)), { mode: "code", build: false, release: true, images: true, c26: false, db: [], suites: [] }, f);
     }
   });
   it("07 golden fixture only", () => {
     assert.deepEqual(jobs(plan("tools/golden/fixtures/GD01-EV-001.json")), {
       mode: "code",
       build: true,
-      golden: true,
       release: false,
       images: false,
       c26: false,
@@ -107,26 +96,25 @@ describe("scenario", () => {
   });
   it("07b golden runner and domain always run the kotlin comparison", () => {
     for (const f of ["golden-runner/src/main/kotlin/jp/jrabot/golden/GoldenCalls.kt", "golden-runner/build.gradle.kts"]) {
-      assert.deepEqual(
-        jobs(plan(f)),
-        { mode: "code", build: true, golden: false, release: false, images: false, c26: false, db: [], suites: [] },
-        f,
-      );
+      assert.deepEqual(jobs(plan(f)), { mode: "code", build: true, release: false, images: false, c26: false, db: [], suites: [] }, f);
     }
     const p = plan("domain/src/main/kotlin/jp/jrabot/domain/decision/EvMath.kt");
     assert.equal(p.runBuild, true);
-    assert.equal(p.runGolden, false);
     assert.deepEqual([p.dbMatrix, p.dbSuites], [["8.4"], ["persistence", "apps"]]);
   });
   it("07c golden docs only does not build", () => {
     assert.equal(plan("tools/golden/README.md").mode, "docs");
   });
   it("08 multiple areas", () => {
-    let p = plan("docs/PLAN.md", "bot/src/main/kotlin/jp/jrabot/bot/BotLauncher.kt", "tools/golden/generate.py", "Dockerfile");
+    let p = plan(
+      "docs/PLAN.md",
+      "bot/src/main/kotlin/jp/jrabot/bot/BotLauncher.kt",
+      "tools/golden/fixtures/GD01-EV-001.json",
+      "Dockerfile",
+    );
     assert.deepEqual(jobs(p), {
       mode: "code",
       build: true,
-      golden: true,
       release: true,
       images: true,
       c26: false,
@@ -141,7 +129,7 @@ describe("scenario", () => {
     for (const files of [[], ["new-top-level/thing.bin"], ["docs/a.md", "unmapped/main.py"], ["tools/src/unknown-area/x.ts"]]) {
       const p = classify(files);
       assert.equal(p.mode, "full", JSON.stringify(files));
-      assert.ok(p.runBuild && p.runGolden && p.runRelease && p.runImages && JSON.stringify(p.dbMatrix) === '["8.4","9.7"]');
+      assert.ok(p.runBuild && p.runRelease && p.runImages && JSON.stringify(p.dbMatrix) === '["8.4","9.7"]');
     }
   });
   it("12 dependabot PRs", () => {
@@ -149,13 +137,12 @@ describe("scenario", () => {
     assert.ok(gradle.runBuild && gradle.runConnectorj26 && gradle.runImages);
     assert.deepEqual(gradle.dbMatrix, ["8.4", "9.7"]);
     assert.equal(plan(".github/workflows/ci.yml").mode, "full");
-    assert.equal(plan("tools/golden/requirements.txt").mode, "code");
-    assert.equal(plan("tools/golden/requirements.txt").runGolden, true);
+    assert.equal(plan("tools/golden/requirements.txt").mode, "full"); // 旧 Python の依存は削除済み（D-258）。復活したら全部実行
     assert.equal(plan("Dockerfile").runImages, true);
     assert.deepEqual(jobs(plan(".github/dependabot.yml")), {
       mode: "code",
       build: false,
-      golden: false,
+
       release: true,
       images: false,
       c26: false,
@@ -198,7 +185,7 @@ describe("scenario", () => {
     assert.deepEqual(jobs(plan("docs/CONTRACTS.md")), {
       mode: "code",
       build: false,
-      golden: false,
+
       release: true,
       images: false,
       c26: false,
@@ -298,7 +285,7 @@ describe("event", () => {
     for (const ev of ["workflow_dispatch", "schedule"]) {
       const p = planForEvent(ev);
       assert.equal(p.mode, "full");
-      assert.ok(p.runConnectorj26 && p.runBuild && p.runGolden && p.runRelease && p.runImages);
+      assert.ok(p.runConnectorj26 && p.runBuild && p.runRelease && p.runImages);
       assert.deepEqual(p.dbMatrix, ["8.4", "9.7"]);
     }
   });

@@ -104,18 +104,7 @@ describe("workflow rules", () => {
     const js = jobs();
     assert.deepEqual(
       Object.keys(js).sort(),
-      [
-        "agent",
-        "agent-windows",
-        "build",
-        "changes",
-        "ci-gate",
-        "connectorj26",
-        "db-integration",
-        "golden",
-        "images",
-        "release-tools",
-      ].sort(),
+      ["agent", "agent-windows", "build", "changes", "ci-gate", "connectorj26", "db-integration", "images", "release-tools"].sort(),
     );
     for (const [name, b] of Object.entries(js)) {
       if (name === "changes" || name === "ci-gate") continue;
@@ -168,8 +157,8 @@ describe("workflow rules", () => {
       "EXPECTED_JDK",
       "verify-junit",
       ":golden-runner:run",
-      "tools.golden.kotlin_compare",
-      "kotlin_coverage.json",
+      "check --fixtures",
+      "tools/golden/catalog.json",
     ]) {
       assert.ok(b.includes(needle), needle);
     }
@@ -184,8 +173,8 @@ describe("workflow rules", () => {
       assert.ok(d.includes(needle), needle);
     }
     assert.ok(jobText("changes").includes("check-repo-hygiene.sh"));
-    const g = jobText("golden");
-    for (const needle of ["--min-tests 85 --max-skipped 0", "--check", "tools.golden.verify"]) assert.ok(g.includes(needle), needle);
+    assert.ok(!("golden" in jobs()), "Python の golden ジョブは削除（D-258）");
+    assert.ok(!/tools\.golden\.|tools\/golden\/requirements/.test(CI));
   });
   it("tools job lints, type checks and requires the unit test count", () => {
     const r = jobText("release-tools");
@@ -249,7 +238,6 @@ describe("dependabot", () => {
       ["github-actions", "/.github/actions/*"],
       ["npm", "/"],
       ["docker", "/"],
-      ["pip", "/tools/golden"],
     ]);
   });
   it("updates are grouped and limited", () => {

@@ -138,9 +138,18 @@ object GoldenVerify {
             return Result(listOf("JSON として不正: ${e.javaClass.simpleName}"), emptyMap())
         }
         val pinned = catalog.pinned
-        if (manifest.get("schema_version")?.let { it.isIntegralNumber && it.intValue() in pinned.schemaVersions } != true) errs += "manifest: 未対応の schema_version"
+        if (manifest.get("schema_version")?.let { it.isIntegralNumber && it.intValue() in pinned.schemaVersions } !=
+            true
+        ) {
+            errs += "manifest: 未対応の schema_version"
+        }
         if (manifest.get("source_commit")?.stringValue() != pinned.sourceCommit) errs += "manifest: source_commit が固定値と異なる: ${manifest.get("source_commit")}"
-        val entries = manifest.get("fixtures")?.values()?.toList().orEmpty()
+        val entries =
+            manifest
+                .get("fixtures")
+                ?.values()
+                ?.toList()
+                .orEmpty()
         val mf = entries.associateBy { it.get("path")?.stringValue().orEmpty() }
         val files = loaded.map { it.file }.toSet()
         if (mf.keys != files) errs += "manifest と実ファイルが不一致: manifest のみ=${(mf.keys - files).sorted()} 実ファイルのみ=${(files - mf.keys).sorted()}"
@@ -192,7 +201,14 @@ object GoldenVerify {
             } else if (calls.values().map { it.get("call_id") } != results.values().map { it.get("call_id") }) {
                 errs += "$w: input.calls と expected_output.results の call_id が対応しない"
             } else {
-                if (calls.values().map { it.get("call_id") }.toSet().size != calls.size()) errs += "$w: call_id 重複"
+                if (calls
+                        .values()
+                        .map { it.get("call_id") }
+                        .toSet()
+                        .size != calls.size()
+                ) {
+                    errs += "$w: call_id 重複"
+                }
                 for (r in results.values()) {
                     val oc = r.get("outcome")
                     val status = oc?.get("status")?.stringValue()

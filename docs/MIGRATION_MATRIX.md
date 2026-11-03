@@ -202,7 +202,7 @@ P0 の順: F26/F04/F05/F06/F07（基礎純関数）→ F16（DB）→ F08/F09（
 | E15 | decision 内の `datetime.now()`（経過日数）、daemon の `minutes_to_post` が naive な時刻 | R | `Clock` を注入し、JST の aware な時刻で計算する（日本に夏時間は無いので数値は不変）。テストでは固定時刻にする | なし（境界の時刻はテストで確認） | GD04（mins=30/5 の境界） | 不要 |
 
 ### 8.0 T3.1（Stage 3-A）の実装状況（2026-10-23。`:domain` の `jp.jrabot.domain.decision`、D-104〜D-111）
-`pipeline_version=legacy`、`fixes.*` はすべて false（C の改善案は**未実装**。有効化は `UnsupportedDecisionScopeException`）。ゴールデンは Kotlin が検証したケースだけを数える（`tools/golden/catalog.py` の `KOTLIN_PORT`）。
+`pipeline_version=legacy`、`fixes.*` はすべて false（C の改善案は**未実装**。有効化は `UnsupportedDecisionScopeException`）。ゴールデンは Kotlin が検証したケースだけを数える（`tools/golden/catalog.json` の `kotlin_port`。D-258）。
 | # | 分類 | Kotlin（T3.1）の扱い | 検証 |
 |---|---|---|---|
 | E1 | R | **実装（T3.6-A）**: `LegacyProbabilityPipeline`/`V2ProbabilityPipeline` が理由コード（`FallbackReason`）と段階（`FallbackStep`）を必ず残す。数値は旧と同じ（市場フォールバック）。アラート・`race_evaluations` への保存の配線は T3.8 | G7-LEGACY-FAIL-001（数値・旧ラベル）・`ProbabilityPipelineTest`・`MlEndToEndTest` |

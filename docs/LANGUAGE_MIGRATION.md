@@ -94,9 +94,9 @@ Python を呼ばない方法として、Kotlin で **pickle の opcode を構造
 | Python の convert-pkl の pytest | 削除前に固定した合成 pickle 42 件の判定・出力との一致（`legacy-pkl/expected.json`。pickle は Base64 で埋め込み、`.gitignore` の `*.pkl` を緩めない） |
 | Kotlin → Python → Kotlin の結合試験 | Kotlin（export-dataset）→ Kotlin（ml-train の jar を別プロセス）→ Kotlin（ModelLoader）。言語の境界ではなくプロセスの境界の結合試験になった |
 
-## 5. ゴールデン（L4）で失われる検証と代替
+## 5. ゴールデン（L4）で失われる検証と代替（**2026-11-03 に実施: D-258**）
 - 失われる: CI ごとの『旧実装（Python, f7dbf69）から再生成してフィクスチャと完全一致』の確認。
-- 代替: フィクスチャは固定コミットの旧実装で生成済み（`tools/golden/fixtures/manifest.json` に生成元コミット・hash）。TS 版は来歴・hash・合成データであることを検証し、Kotlin は各ケースの比較規則で比較する。フィクスチャを更新する必要が生じた場合は、**本人の PC で旧実装（参照元 jra-bot）を使う一回限りの手順**とし、その結果を差分として PR に出す（通常開発・CI の必須経路ではない）。**TS や Kotlin で書き直した生成器の出力を『旧 Python 由来の証拠』とは呼ばない。**
+- 代替: フィクスチャは固定コミットの旧実装で生成済み（`tools/golden/fixtures/manifest.json` に生成元コミット・hash）。Kotlin の `golden-runner verify` が来歴・hash・合成データであること・Python の json.dumps と同じ形式（バイト単位）を検証し（当初案の TS ではなく Kotlin: 整数と浮動小数のトークンを区別して比べる必要があり、JSON.parse では区別できないため）、Kotlin は各ケースの比較規則で比較する。フィクスチャを更新する必要が生じた場合は、**本人の PC で旧実装（参照元 jra-bot）を使う一回限りの手順**とし、その結果を差分として PR に出す（通常開発・CI の必須経路ではない）。**TS や Kotlin で書き直した生成器の出力を『旧 Python 由来の証拠』とは呼ばない。**
 
 ## 6. infra ops の既知問題（L2 で修正）
 1. dry_run が操作記録（operation）を上書きする → dry_run は書込みを一切しない。

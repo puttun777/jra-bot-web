@@ -14,7 +14,7 @@ import {
   grantedTables,
   requiredBotRunEnv,
 } from "../../src/ci/consistency.js";
-import { CI_JDK, CI_NODE, ciRunBlock, LEGACY_COMMIT, stepsFor } from "../../src/ci/preflight.js";
+import { CI_JDK, CI_NODE, ciRunBlock, stepsFor } from "../../src/ci/preflight.js";
 import { isRecord } from "../../src/lib/json.js";
 import { BOT_RUN_ENV } from "../../src/release/image-smoke.js";
 import { ROOT, withTempDir } from "../lib/helpers.js";
@@ -38,7 +38,7 @@ describe("selection", () => {
   it("ci change or unknown file selects everything", () => {
     for (const files of [["tools/src/ci/classify.ts"], ["something/unknown.bin"]]) {
       const got = ids(classify(files));
-      for (const x of ["kotlin-build", "db-it-8.4", "db-it-9.7", "agent", "images", "golden-py"])
+      for (const x of ["kotlin-build", "db-it-8.4", "db-it-9.7", "agent", "images", "kotlin-golden"])
         assert.ok(got.includes(x), `${x} ${files[0]}`);
     }
   });
@@ -95,16 +95,18 @@ describe("mirrors ci", () => {
         if (!isRecord(s) || typeof s["name"] !== "string") continue;
         const n = s["name"];
         if (!/^(Verify|Comparator smoke test)/.test(n)) continue;
-        if (n === "Verify committed fixtures (schema, provenance, hashes, synthetic-only)" && source.includes("tools.golden.verify"))
-          continue;
         if (notRunLocally.has(`${jobName}/${n}`)) continue;
         if (!source.includes(`"${jobName}", "${n}"`)) missing.push(`${jobName}/${n}`);
       }
     }
     assert.deepEqual(missing, [], `preflight が参照しない CI の検査: ${missing.join(", ")}`);
   });
-  it("legacy commit matches golden constants", () => {
-    assert.ok(readFileSync(join(ROOT, "tools/golden/constants.py"), "utf8").includes(LEGACY_COMMIT));
+  it("the golden check runs the kotlin verify and comparison, without python", () => {
+    const step = stepsFor(fullPlan("t"), [], ROOT, "/tmp/x").find((s) => s.id === "kotlin-golden");
+    assert.ok(step !== undefined);
+    const flat = step.commands.map((c) => c.join(" ")).join("\n");
+    assert.ok(flat.includes("check --fixtures") && flat.includes("catalog.json"));
+    assert.ok(!/python/.test(flat));
   });
   it("ci jdk and node match the workflow", () => {
     assert.match(CI_YML, new RegExp(`java-version: "${CI_JDK}"`));

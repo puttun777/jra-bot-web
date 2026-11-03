@@ -71,7 +71,15 @@ class GoldenVerifyCompareTest {
     @Test
     fun `tampering is detected by the manifest hash, and other checks still run when the manifest is updated`() {
         val d = copy()
-        mutate(d, first, updateManifest = false) { (it.get("expected_output").get("results").get(0).get("outcome") as ObjectNode).put("value", 0.123) }
+        mutate(d, first, updateManifest = false) {
+            (
+                it
+                    .get("expected_output")
+                    .get("results")
+                    .get(0)
+                    .get("outcome") as ObjectNode
+            ).put("value", 0.123)
+        }
         assertError(d, "manifest の sha256 と不一致")
         val d2 = copy()
         mutate(d2, first) { it.put("source_commit", "0".repeat(40)) }
@@ -82,12 +90,30 @@ class GoldenVerifyCompareTest {
     @Test
     fun `metadata, commit, schema version, synthetic only`() {
         mapOf<(ObjectNode) -> Unit, String>(
-            { fx: ObjectNode -> fx.remove("generator"); Unit } to "必須メタデータなし",
-            { fx: ObjectNode -> fx.put("source_commit", "f7dbf69"); Unit } to "完全 SHA でない",
-            { fx: ObjectNode -> fx.put("schema_version", 2); Unit } to "未対応の schema_version",
-            { fx: ObjectNode -> fx.put("data_classification", "real"); Unit } to "synthetic でない",
-            { fx: ObjectNode -> (fx.get("execution_parameters") as ObjectNode).put("seed", 1); Unit } to "seed/timezone",
-            { fx: ObjectNode -> fx.putArray("source_function"); Unit } to "source_function が空",
+            { fx: ObjectNode ->
+                fx.remove("generator")
+                Unit
+            } to "必須メタデータなし",
+            { fx: ObjectNode ->
+                fx.put("source_commit", "f7dbf69")
+                Unit
+            } to "完全 SHA でない",
+            { fx: ObjectNode ->
+                fx.put("schema_version", 2)
+                Unit
+            } to "未対応の schema_version",
+            { fx: ObjectNode ->
+                fx.put("data_classification", "real")
+                Unit
+            } to "synthetic でない",
+            { fx: ObjectNode ->
+                (fx.get("execution_parameters") as ObjectNode).put("seed", 1)
+                Unit
+            } to "seed/timezone",
+            { fx: ObjectNode ->
+                fx.putArray("source_function")
+                Unit
+            } to "source_function が空",
         ).forEach { (f, needle) ->
             val d = copy()
             mutate(d, first, f = f)
@@ -108,7 +134,15 @@ class GoldenVerifyCompareTest {
     @Test
     fun `tagged nonfinite values, duplicate ids, manifest mismatch, bad rules`() {
         val d = copy()
-        mutate(d, first) { (it.get("expected_output").get("results").get(0).get("outcome") as ObjectNode).putObject("value").put("\$float", "nan") }
+        mutate(d, first) {
+            (
+                it
+                    .get("expected_output")
+                    .get("results")
+                    .get(0)
+                    .get("outcome") as ObjectNode
+            ).putObject("value").put("\$float", "nan")
+        }
         assertError(d, "NaN/Infinity（タグ付き）")
         val d2 = copy()
         Files.copy(d2.resolve(first), d2.resolve("GD01-EV-COPY.json"))
@@ -157,7 +191,13 @@ class GoldenVerifyCompareTest {
         val compact = mapper.writeValueAsString(mapper.readTree(text)) + "\n"
         Files.writeString(d2.resolve(first), compact)
         val m = read(d2, "manifest.json")
-        for (e in m.get("fixtures").values()) if (e.get("path").stringValue() == first) (e as ObjectNode).put("sha256", GoldenVerify.sha256(compact.toByteArray()))
+        for (e in m.get("fixtures").values()) {
+            if (e.get("path").stringValue() ==
+                first
+            ) {
+                (e as ObjectNode).put("sha256", GoldenVerify.sha256(compact.toByteArray()))
+            }
+        }
         Files.write(d2.resolve("manifest.json"), PyJson.dumps(m).toByteArray())
         assertError(d2, "正準 JSON 形式")
     }
@@ -175,7 +215,10 @@ class GoldenVerifyCompareTest {
 
     private fun j(s: String): JsonNode = mapper.readTree(s)
 
-    private val rules = j("""{"default":{"float":{"mode":"abs_tol","abs_tol":1e-9}},"overrides":[{"path":"x.exact","mode":"exact"},{"path":"msg","mode":"ignore"}],"strict":{}}""")
+    private val rules =
+        j(
+            """{"default":{"float":{"mode":"abs_tol","abs_tol":1e-9}},"overrides":[{"path":"x.exact","mode":"exact"},{"path":"msg","mode":"ignore"}],"strict":{}}""",
+        )
 
     private fun d(
         e: String,
@@ -203,7 +246,13 @@ class GoldenVerifyCompareTest {
     @Test
     fun `self comparison passes for every case and a perturbed value is reported with its case`() {
         val byCase = GoldenVerify.verify(fixtures, catalog).byCase
-        for ((cid, fx) in byCase) assertEquals(0, GoldenCompare.diff(fx.get("expected_output"), fx.get("expected_output"), fx.get("comparison_rules")).size, cid)
+        for ((cid, fx) in byCase) {
+            assertEquals(
+                0,
+                GoldenCompare.diff(fx.get("expected_output"), fx.get("expected_output"), fx.get("comparison_rules")).size,
+                cid,
+            )
+        }
         val output = GoldenRunner.run(fixtures)
         val report = GoldenCompare.build(byCase, output.results.get("results"), output.coverage, catalog)
         assertEquals(0, report.failed)
@@ -211,7 +260,12 @@ class GoldenVerifyCompareTest {
         assertEquals(listOf("GD10-DEFAULTS-001"), report.unsupported.map { it.first })
         // 1 つの値をずらすと、そのケースだけ不一致
         val results = output.results.get("results").deepCopy() as ObjectNode
-        val v = results.get("GD01-EV-001").get("results").get(0).get("outcome") as ObjectNode
+        val v =
+            results
+                .get("GD01-EV-001")
+                .get("results")
+                .get(0)
+                .get("outcome") as ObjectNode
         v.put("value", v.get("value").doubleValue() + 1e-6)
         val bad = GoldenCompare.build(byCase, results, output.coverage, catalog)
         assertEquals(listOf("GD01-EV-001"), bad.cases.filter { it.status == "failed" }.map { it.caseId })
@@ -231,7 +285,14 @@ class GoldenVerifyCompareTest {
         val noReason = cov.deepCopy() as ObjectNode
         (noReason.get("unsupported").get(0) as ObjectNode).put("reason", "")
         assertFailsWith<GoldenCompare.Invalid> { GoldenCompare.build(byCase, res, noReason, catalog) }
-        val otherTable = Catalog(catalog.pinned, catalog.validStatus, catalog.entries, catalog.supported - "GD01-EV-001", catalog.unsupported + ("GD01-EV-001" to "x"))
+        val otherTable =
+            Catalog(
+                catalog.pinned,
+                catalog.validStatus,
+                catalog.entries,
+                catalog.supported - "GD01-EV-001",
+                catalog.unsupported + ("GD01-EV-001" to "x"),
+            )
         assertFailsWith<GoldenCompare.Invalid> { GoldenCompare.build(byCase, res, cov, otherTable) }
         assertFailsWith<GoldenCompare.Invalid> { GoldenCompare.build(byCase, res, j("""{"schema_version":2}"""), catalog) }
     }
@@ -246,7 +307,16 @@ class GoldenVerifyCompareTest {
 
     @Test
     fun `python repr and dumps`() {
-        for ((v, want) in listOf(1.0 to "1.0", 0.1 to "0.1", 1e-5 to "1e-05", 1e16 to "1e+16", 1.5e300 to "1.5e+300", -0.0 to "-0.0", 123456789012345.6 to "123456789012345.6", 5e-324 to "5e-324")) {
+        for ((v, want) in listOf(
+            1.0 to "1.0",
+            0.1 to "0.1",
+            1e-5 to "1e-05",
+            1e16 to "1e+16",
+            1.5e300 to "1.5e+300",
+            -0.0 to "-0.0",
+            123456789012345.6 to "123456789012345.6",
+            5e-324 to "5e-324",
+        )) {
             assertEquals(want, PyJson.repr(v), v.toString())
         }
         assertEquals("{\n  \"a\": [\n    1,\n    2.5\n  ],\n  \"b\": {},\n  \"c\": []\n}\n", PyJson.dumps(j("""{"c":[],"b":{},"a":[1,2.5]}""")))

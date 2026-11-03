@@ -17,7 +17,7 @@
  * 記録: `build/preflight/last.json`（検証したコミット・ツリー・版・結果）と `build/preflight/<id>.log`（詳細ログ。Git には入れない）。
  */
 import { spawn, spawnSync } from "node:child_process";
-import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { parse as parseYaml } from "yaml";

@@ -53,7 +53,7 @@
 | L1 | CI・リリース補助（tools/ci・tools/release・JUnit 件数検査） | TypeScript（`tools/src`） | 実装・試験 163 件・ローカルのイメージスモーク 179 件成功（ブランチ claude/lang-l1-ci-tools-ts）。CI で確認中 | **A（PR 待ち）** |
 | L2 | infra の運用 CLI（ops） | TypeScript（infra `ops/src`） | 実装・試験 104 件・既知問題 5 件の修正（infra ブランチ claude/lang-l2-ops-ts）。実 GCP は未検証 | **A（コード）/ B（実 GCP）** |
 | L3 | ML 学習・評価・品質ゲート・成果物・convert-pkl（ml/・tools/ml） | Kotlin（`:ml-train`） | **実装・接続・合成データで検証済み**（D-257）。Python の ml/・tools/ml は削除。実 pkl の変換確認は本人の PC（B）、実データでの学習・閾値は COMP-4・未承認のまま | **A**（合成データの範囲） |
-| L4 | ゴールデン（tools/golden） | Kotlin + TypeScript | 未着手 | **C** |
+| L4 | ゴールデン（tools/golden） | Kotlin（`golden-runner verify/check`） | **実装・CI 接続済み**（D-258）。旧 Python の verify・kotlin_compare と同じ報告（要約がバイト単位で一致）。Python の生成器・CI ジョブは削除。旧実装からの再生成の一致は CI から外した（LANGUAGE_MIGRATION §5） | **A** |
 | L5 | Windows 取得エージェント（agent/） | C#/.NET 10 | 未着手 | **C**（実機 COM は B） |
 | L6 | GCP 資源定義（terraform/） | Pulumi + TypeScript | 未着手 | **C**（up/import は B） |
 | L7 | フロントエンド（app.js） | TypeScript | 未着手 | **C** |

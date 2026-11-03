@@ -72,7 +72,11 @@ class Catalog(
                 Pinned(
                     str(p.get("source_repository"), "pinned.source_repository"),
                     str(p.get("source_commit"), "pinned.source_commit"),
-                    p.get("schema_versions")?.values()?.map { it.intValue() }?.toSet() ?: throw IllegalArgumentException("catalog: pinned.schema_versions が無い"),
+                    p
+                        .get("schema_versions")
+                        ?.values()
+                        ?.map { it.intValue() }
+                        ?.toSet() ?: throw IllegalArgumentException("catalog: pinned.schema_versions が無い"),
                     p.get("seed")?.takeIf { it.isIntegralNumber }?.longValue() ?: throw IllegalArgumentException("catalog: pinned.seed が整数でない"),
                     str(p.get("timezone"), "pinned.timezone"),
                 )

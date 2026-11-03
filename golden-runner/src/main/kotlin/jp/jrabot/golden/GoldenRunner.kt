@@ -170,6 +170,8 @@ private fun parseArgs(
 }
 
 private fun usage(msg: String): Nothing {
-    System.err.println("ERROR: $msg\n使い方: golden-runner [verify|check] --fixtures DIR --catalog FILE … / golden-runner --fixtures DIR --out FILE --coverage FILE")
+    System.err.println(
+        "ERROR: $msg\n使い方: golden-runner [verify|check] --fixtures DIR --catalog FILE … / golden-runner --fixtures DIR --out FILE --coverage FILE",
+    )
     exitProcess(2)
 }
