@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/JraAgent.Core/JraAgent.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/JraAgent.Core.Tests/JraAgent.Core.Tests.csproj" />
+  </Folder>
+</Solution>

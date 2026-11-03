@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 取得エージェントの OS に依存しない部分（署名・封筒・ビーコン・状態機械・応答の分類・キュー・送信）。COM・DPAPI は JraAgent.Windows。 -->
+  <PropertyGroup>
+    <RootNamespace>JraAgent.Core</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="JraAgent.Core.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="BouncyCastle.Cryptography" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Tomlyn" />
+  </ItemGroup>
+</Project>
