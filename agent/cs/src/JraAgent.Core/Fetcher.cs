@@ -86,8 +86,14 @@ public sealed partial class Fetcher(
         inited = true;
     }
 
-    /// <summary>失敗した tick の後始末: ワーカー側の open を閉じる（閉じられなければ次回は JVInit からやり直す）。</summary>
-    public void ResetAfterFailure() => CloseQuietly();
+    /// <summary>
+    /// 失敗した tick の後始末: ワーカーを使った後（JVInit 済み）だけ、ワーカー側の open を閉じる（閉じられなければ次回は JVInit からやり直す）。
+    /// 使っていなければ何もしない（close を呼ぶとワーカーが起動され、仕様ゲートで止めている間に COM が生成されてしまう: 再レビュー 中）。
+    /// </summary>
+    public void ResetAfterFailure()
+    {
+        if (inited) CloseQuietly();
+    }
 
     private void CloseQuietly()
     {

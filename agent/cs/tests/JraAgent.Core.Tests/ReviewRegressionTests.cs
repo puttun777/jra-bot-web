@@ -331,4 +331,31 @@ public sealed class FailedTickTests : IDisposable
         Assert.Contains("TICK_FAILED", fx.Queue.Alerts().Keys);
         Assert.Contains("RETRY_EXHAUSTED", fx.Queue.Alerts().Keys);
     }
+
+    [Fact]
+    public void Failed_tick_does_not_start_the_worker_while_the_spec_gate_blocks_fetching()
+    {
+        // 仕様ゲート（本番の表）で取得を止めている間は、失敗した tick の後始末でもワーカー（= COM の生成）を起動しない
+        var script = Path.Combine(fx.Dir, "s.json");
+        File.WriteAllText(script, new FakeScript().ToJson());
+        var sup = new WorkerSupervisor(WorkerTests.WorkerArgv(script), new WorkerConfig(), fx.Clock);
+        try
+        {
+            var f = new Fetcher("ag_test", fx.Queue, sup, fx.Clock, SpecRegistry.Default, new QueueConfig(MinFreeBytes: 0), () => true);
+            Assert.Equal(FetchResult.Skipped, f.FetchStored(new PlanItem("RACE", null, 2, null, 300)).Result);
+            var clock = fx.Clock;
+            var cloud = new FakeCloud(clock, "jrat1_tick-token-0123456789", new BeaconSigner());
+            var modes = new ModeMachine(clock);
+            var client = new SignedClient(FakeCloud.Base, new RequestSigner("ag_test", "jrat1_tick-token-0123456789"), cloud, clock);
+            var runner = new AgentRunner(
+                fx.Queue, modes, new BeaconClient(FakeCloud.BeaconUrl, [cloud.Signer.Public], cloud, clock, new BeaconGuard(fx.Queue.GetState, fx.Queue.SetState)),
+                new AgentApi(client, modes), client, new Sender(fx.Queue, client, modes, new SenderConfig(), clock, "fp"), f, clock);
+            runner.HandleFailedTick("InvalidOperationException");
+            Assert.False(sup.Started);
+        }
+        finally
+        {
+            sup.Stop();
+        }
+    }
 }
