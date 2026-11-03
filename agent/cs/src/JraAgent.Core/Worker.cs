@@ -130,19 +130,20 @@ public static class WorkerServer
                 var op = req["op"] is JsonValue ov && ov.TryGetValue<string>(out var s) ? s : throw new WorkerOpException("BAD_REQUEST");
                 if (op == "shutdown")
                 {
-                    Respond(output, new JsonObject { ["id"] = id, ["ok"] = true, ["result"] = new JsonObject() });
+                    Respond(output, new JsonObject { ["id"] = id?.DeepClone(), ["ok"] = true, ["result"] = new JsonObject() });
                     return;
                 }
                 var args = req["args"] as JsonObject ?? [];
-                Respond(output, new JsonObject { ["id"] = id, ["ok"] = true, ["result"] = Handle(api, op, args, ref opened) });
+                var result = Handle(api, op, args, ref opened); // 応答を組み立てる前に処理する（失敗したら下で id を付けて応答する）
+                Respond(output, new JsonObject { ["id"] = id?.DeepClone(), ["ok"] = true, ["result"] = result });
             }
             catch (WorkerOpException e)
             {
-                Respond(output, new JsonObject { ["id"] = id, ["ok"] = false, ["error"] = e.Code });
+                Respond(output, new JsonObject { ["id"] = id?.DeepClone(), ["ok"] = false, ["error"] = e.Code });
             }
             catch (Exception e) when (e is JsonException or FormatException or InvalidOperationException or ArgumentException or System.Runtime.InteropServices.COMException or System.Reflection.TargetInvocationException)
             {
-                Respond(output, new JsonObject { ["id"] = id, ["ok"] = false, ["error"] = e.GetType().Name }); // 例外の型名だけ（メッセージに値が入り得る）
+                Respond(output, new JsonObject { ["id"] = id?.DeepClone(), ["ok"] = false, ["error"] = e.GetType().Name }); // 例外の型名だけ（メッセージに値が入り得る）
             }
         }
     }
@@ -230,6 +231,12 @@ public sealed class WorkerSupervisor(IReadOnlyList<string> argv, WorkerConfig cf
     private Handle? h;
     private long nextId;
     private double quarantineUntil;
+
+    /// <summary>試験用: ワーカーを起動したか（ゲートで止めた取得はワーカーも起動しない）。</summary>
+    internal bool Started => h is not null;
+
+    /// <summary>試験用: 現在のワーカーのプロセス ID。</summary>
+    internal int? Pid => h?.Proc.Id;
 
     public int Restarts { get; private set; }
 
