@@ -11,6 +11,9 @@ CI の実行範囲の決め方、分岐保護の設定、イメージのビル�
 | `release tools and ci scripts (TypeScript)` | `tools/`（TypeScript。D-254）の Biome（lint・format）・tsc（strict）・単体試験（node:test。件数下限 150・skip/todo/失敗 0 を JUnit XML で検査）。release-manifest・Dockerfile 静的検査・判定・ゲート・ワークフロー規則・JUnit 件数検査・preflight（Docker 不要） | リリース関連・Dockerfile・Dependabot 設定・マイグレーション・CI・`tools/` の変更 |
 | （削除: `golden tests (Python 3.12)`） | 2026-11-03（D-258）。フィクスチャの検証と Kotlin との比較は `build` ジョブの `golden-runner check`（Kotlin だけ）。旧実装からの再生成の一致は CI から外した（LANGUAGE_MIGRATION §5） | - |
 | （削除: `ml tools (Python 3.12)`・`ml-train (Python 3.13)`） | 2026-11-02（D-257）。ML 学習は Kotlin の `:ml-train` になり、単体試験は `build` ジョブ（件数を verify-junit で検査）、export-dataset → ml-train（jar を別プロセス）→ ModelLoader の結合試験は `db integration` の `apps` スイート（MySQL 8.4/9.7） | - |
+| `agent dotnet (linux)` | Windows 取得エージェント（`agent/cs`。C#/.NET 10。D-261）: `dotnet restore --locked-mode`・Release ビルド（警告はエラー）・xunit（試験の実行ファイルを `-result-junit` で直接起動）。件数下限 290・skip は Windows 専用の 4 件まで・必須クラスを verify-junit で検査 | `agent/`（`.md` 以外）の変更、フル検証 |
+| `agent windows` | 同じソリューションを `windows-2025` で。DPAPI・ジョブオブジェクト・COM 登録の確認・ジョブ付きワーカーのハング回復を含む全件（skip は Linux 専用の 3 件まで） | Windows 固有のファイル（`JraAgent.Windows`・ワーカー・ロック・秘密・Transport・版の固定・`scripts/`）の変更、フル検証 |
+| （削除: `agent python (3.12/3.13)`） | 2026-11-03（D-261）。Python のエージェントは C# へ。Kotlin との結合試験（`AgentInteropIntegrationTest`）は `db integration` の `apps` スイートで C# のドライバ（`jraagent-interop`）を起動する | - |
 | `images / images (build + smoke, no push)` | 5 イメージ（JVM 4 + ml-train）のビルド、スモーク、ドライラン manifest（`images.yml`） | Dockerfile・リリース・ビルド定義・マイグレーション・アプリの build 定義/リソース・CI の変更、フル検証 |
 | `connectorj26 / connector/j 26.x check (MySQL x)` | Connector/J 26.x の互換性確認（**非ゲート**、`compat-connectorj26.yml`） | Connector/J・DB 関連の依存設定の変更、手動、月次 |
 | `ci gate` | 最終集約。**常に実行**。実行が必要なジョブが success でなければ失敗 | 常に |
@@ -67,7 +70,7 @@ CI の実行範囲の決め方、分岐保護の設定、イメージのビル�
 - **Gradle**: `gradle/actions/setup-gradle` の既定。キャッシュを書くのは default ブランチ（main / schedule / dispatch）のジョブだけ。PR は読取りのみで、main 用のキャッシュを汚染できない。キャッシュが無くても動く。キャッシュには依存とビルドの中間物だけが入り、秘密は入らない（Secrets を使っていない）。
 - **Docker**: Dockerfile の Gradle 取得層（Wrapper の配布物）は層キャッシュ、依存のダウンロードは BuildKit のキャッシュマウント（イメージの層に残らない）。4 ターゲットは同じ `build` ステージを共有するので Gradle は 1 回だけ。ジョブをまたいだ Docker レイヤーキャッシュ（`actions/cache` 等）は導入していない（外部アクションの追加と汚染対策が必要で、images の実行頻度が低いため）。
 - **npm**: `tools/` の依存は `package-lock.json` で推移的依存まで固定。`npm ci --ignore-scripts`（install スクリプトを実行しない）。依存が少ない（直接 6 件）ので npm のキャッシュは使わない（`.github/actions/setup-tools`）。
-- **Python**: golden の `numpy` は小さいのでキャッシュしない（golden・agent・ml の Python は言語移行で順に廃止: `LANGUAGE_MIGRATION.md`）。
+- **Python**: CI で Python を実行するジョブは無い（golden: D-258、ml: D-257、agent: D-261 で廃止）。.NET は NuGet のキャッシュを使わない（restore は数十秒）。
 - GCP などクラウドのリソースは一切使わない。
 
 ## 3. 無料枠の見積り
@@ -116,7 +119,7 @@ run 39921807006（T2.6、head 6f24519。全ジョブが毎回実行）。壁時�
 - 検証項目: `tools/test/release/manifest.test.ts`（正常、必須欠落、未知フィールド、不正 SHA、タグのみ/短い/大文字/他レジストリ/他名前/仮値の digest、不正スキーマ版、未対応 contract_version、CONTRACTS との不一致、焼き込み値との不一致、flyway 不一致、アプリ間の食い違い、不正・未検証のロールバック範囲、プレビューの本番利用拒否、プレビューへの digest 混入、ブロッカー隠し、生成の再現性、CLI の終了コード）。
 
 ## 6. Dependabot（`.github/dependabot.yml`、D-100）
-gradle / github-actions（`/` と `/.github/actions/*`）/ npm（`/`。typescript・@types/node のメジャーは提案しない: D-254）/ docker（`Dockerfile`）/ pip（`tools/golden`）/ pip（`ml`。numpy は除外。D-178）。週次（月・火・金・水・木）、minor/patch は 1 グループ、PR 上限 3/2/2/2/1/1、自動マージなし。Spring Boot の minor/major、Connector/J の major、eclipse-temurin の major は提案しない。pip（`tools/golden`）の numpy は 2.5.3 固定のため全版を提案しない（D-103。セキュリティ更新と手動更新は妨げない設計）。設定とディレクトリ構成の整合は `tools/test/ci/workflows.test.ts` が検査。**未検証**: Dependabot の実 PR（有効化後の最初の PR で、ignore・グループ化・build-logic の検出を確認）。Dependabot version updates / security updates の有効化はリポジトリ設定（ユーザー作業）。
+gradle / github-actions（`/` と `/.github/actions/*`）/ npm（`/`。typescript・@types/node のメジャーは提案しない: D-254）/ docker（`Dockerfile`）/ nuget（`/agent/cs`。Microsoft.*・System.* のメジャーは TargetFramework と一緒に手動: D-261）。週次（月・火・金・水・木）、minor/patch は 1 グループ、PR 上限 3/2/2/2/2、自動マージなし。Spring Boot の minor/major、Connector/J の major、eclipse-temurin の major は提案しない。pip（`tools/golden`・`ml`）は Python の廃止（D-257・D-258）で削除。設定とディレクトリ構成の整合は `tools/test/ci/workflows.test.ts` が検査。**未検証**: Dependabot の実 PR（有効化後の最初の PR で、ignore・グループ化・build-logic の検出を確認）。Dependabot version updates / security updates の有効化はリポジトリ設定（ユーザー作業）。
 
 ## 7. ローカルでの確認
 ```bash

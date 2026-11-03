@@ -37,8 +37,8 @@
 | W-ML2 | `ml/src/ml_train/legacy_pkl/*`（310） | 旧 pickle モデル → 新 JSON 変換（許可リスト Unpickler。ローカル専用） | 本人の PC（`convert-pkl --confirm-own-local-file`） | クラウドでは拒否、許可リスト外の global を拒否 | `test_legacy_pkl.py` | Kotlin の**構造だけを読む pickle パーサ**（実行しない。§4.3）。旧モデルの実ファイルでの確認は B | 旧モデルの扱いは本人判断（UNRESOLVED D） |
 | W-ML3 | `tools/ml/*`（canonical・signing・dataset_contract・make_test_artifacts。約 460） | 正準 JSON・署名・データセット契約の参照実装、合成成果物の生成 | ci.yml `ml-tools`、ml-train イメージ、`repo_facts.feature_schemas` | 合成成果物はコミット済みで CI が再生成一致を確認 | 20 | Kotlin（`:domain` の `CanonicalJson` を正とし、生成器は `:ml-train` のテスト側）。TS 側は feature schema hash の再計算だけ | なし |
 | W-GD1 | `tools/golden/*`（約 2,900） | 旧実装（jra-bot f7dbf69、Python）でフィクスチャを生成・検証、Kotlin 出力との比較 | ci.yml `golden`・`build` | フィクスチャは CI が書き換えない、sha256・来歴の検証、未対応ケースを成功に数えない | 93 | 比較は `:golden-runner`（Kotlin）へ、来歴・hash 検証は TS へ。**旧実装からの再生成は必須経路から外す**（§5） | なし |
-| W-AG1 | `agent/src/jra_agent/*`（約 4,500） | Windows 取得エージェント（JV-Link COM ワーカー子プロセス・監視・SQLite キュー・署名・ビーコン・モード・DPAPI・更新・診断・タスク） | 本人の Windows PC → ingest API（CONTRACTS §6〜§8。署名ベクトル `agent/tests/vectors/signing_vectors.json`） | ハング検知と子プロセス終了、再送・重複防止、停止モード、パストラバーサル拒否 | pytest 213 + Windows 4 + `AgentInteropIntegrationTest`（実 Python エージェント ⇄ Kotlin ingest） | **C#/.NET 10**（`agent/`）。署名ベクトル・相互運用試験を C# 版で通す（§3） | 実機 COM は B（R4） |
-| W-AG2 | `agent/poc/*`・`agent/interop/driver.py`・`agent/scripts/*.ps1` | 実機 PoC・相互運用試験のドライバ・タスク登録 | 本人・ingest 統合試験 | ドライラン既定 | test_cli_poc | C# の `poc` サブコマンドと `interop` ドライバ、PowerShell は .exe 用に更新 | 実機は B |
+| W-AG1 | `agent/src/jra_agent/*`（約 4,500） | Windows 取得エージェント（JV-Link COM ワーカー子プロセス・監視・SQLite キュー・署名・ビーコン・モード・DPAPI・更新・診断・タスク） | 本人の Windows PC → ingest API（CONTRACTS §6〜§8。署名ベクトル `agent/tests/vectors/signing_vectors.json`） | ハング検知と子プロセス終了、再送・重複防止、停止モード、パストラバーサル拒否 | pytest 213 + Windows 4 + `AgentInteropIntegrationTest`（実 Python エージェント ⇄ Kotlin ingest） | **C#/.NET 10**（`agent/`）。署名ベクトル・相互運用試験を C# 版で通す（§3）→ **済（D-261。`agent/cs`、試験 296 件・結合 4/4）** | 実機 COM は B（R4） |
+| W-AG2 | `agent/poc/*`・`agent/interop/driver.py`・`agent/scripts/*.ps1` | 実機 PoC・相互運用試験のドライバ・タスク登録 | 本人・ingest 統合試験 | ドライラン既定 | test_cli_poc | C# の `poc` サブコマンドと `interop` ドライバ、PowerShell は .exe 用に更新 → **済（D-261）** | 実機は B |
 | W-FE1 | `dashboard/src/main/resources/static/app.js`（156） | 画面の処理 | ブラウザ | CSP（インライン script なし）・innerHTML 不使用 | 静的検査 | `dashboard/src/main/ts/*.ts` → Gradle で tsc → `static/js/`（生成物は Git に入れない） | 目視の受入は本人 |
 | W-DK1 | `Dockerfile` の ml-train（Python 3.13 + venv） | ml-train イメージ | images.yml | 非 root・読取り専用・ENTRYPOINT exec 形式 | スモーク | JVM の ml-train ステージ（他の JVM イメージと同じ基盤） | なし |
 | W-WF1 | ci.yml の Python ジョブ（golden/ml-tools/ml-train/agent/agent-windows/release-tools）、compat-connectorj26.yml・images.yml の Python 呼出し、dependabot の pip | — | — | — | — | 各移行の PR で置換（node/dotnet のジョブへ）。dependabot は npm・nuget へ | なし |
@@ -57,14 +57,15 @@
 2. **L2 infra ops（TS）**: 既知問題の回帰試験を先に書く → TS 実装 → workflow 切替 → Python 削除。
 3. **L3 ML（Kotlin）**: **先に Python 実装で数値フィクスチャを生成して固定**（生成元コミット・入力・hash を記録）→ `:ml-train` 実装 → 固定フィクスチャと許容差比較 → イメージ・スモーク・相互運用試験を JVM へ → Python（ml/・tools/ml）削除。release-manifest schema v3（`runtime.python` 削除）を web・infra 同時に。
 4. **L4 golden**: Kotlin の比較器を `:golden-runner` へ、来歴・hash 検証を TS へ → golden ジョブ（Python）を廃止。
-5. **L5 agent（C#）**: COM PoC → 通常ロジック（Fake）→ 署名ベクトル・ingest 相互運用試験を C# で → Windows CI → Python 削除。
+5. **L5 agent（C#）**: COM PoC → 通常ロジック（Fake）→ 署名ベクトル・ingest 相互運用試験を C# で → Windows CI → Python 削除。**2026-11-03 に実施（D-261）**。実機の COM PoC は本人の PC（POC.md）。
 6. **L6 Pulumi**: 対応表 → Pulumi 定義 + mock 試験 → preview guard → workflow（preview まで）→ Terraform は**本人の import/up 承認まで残す**（§7。実リソースが無いと確認できれば、承認後に削除）。
 7. **L7 フロント TS**、**L8 残機能**（COMPLETION の C）、**L9 リリース経路**。
 
-## 3. C# エージェントの互換性（L5）
-- 通信: CONTRACTS §6〜§8 の HMAC 署名・エンベロープ・ビーコンを、既存の署名ベクトル（`agent/tests/vectors/signing_vectors.json`。Python と Kotlin が一致済み）で検証する。**型が合うことと通信互換は別**で、Kotlin ingest との相互運用試験（実プロセス）で確認する。
-- キュー（SQLite）: スキーマは同じ表定義を維持し、旧 Python 版のキューファイルをそのまま開ける（schema_version を検査。未送信行は再送）。資格情報（DPAPI）は同じスコープ（CurrentUser）・同じ形式なら引き継げるが、**実機で未確認**。移行手順は `USER_ACTIONS.md`。
-- COM: JV-Link は 32bit の COM サーバ。エージェントのワーカーは **x86** でビルドし、STA スレッドで呼ぶ。型は公式 SDK の型ライブラリ（`JVDTLab.JVLink`）に基づく小さなインターフェイスに隔離する（§JVLINK_DESIGN 14）。SDK の DLL・仕様書は Git に入れない。
+## 3. C# エージェントの互換性（L5。**2026-11-03 に実施: D-261**）
+- 通信: CONTRACTS §6〜§8 の HMAC 署名・エンベロープ・ビーコンを、既存の署名ベクトル（`agent/tests/vectors/signing_vectors.json`。OpenSSL で独立に計算）とビーコンベクトル（`beacon_vectors.json`。削除前の Python 実装で生成。infra の ops と共有）で検証する（C# の `SigningTests`・`BeaconAndModesTests`）。**型が合うことと通信互換は別**で、Kotlin ingest との相互運用試験（`AgentInteropIntegrationTest`。C# のドライバ `jraagent-interop` を実プロセスで起動）で確認する（4/4 成功）。
+- キュー（SQLite）: スキーマは旧版と同じ表定義（schema_version 1）で、旧 Python 版のキューファイルをそのまま開ける（未送信行は同じ batchId・同じ内容で再送）。資格情報は同じスコープ（CurrentUser）・同じ entropy・同じ JSON なので引き継げる想定だが、**DPAPI の実機での引継ぎは未確認**（移行手順は `USER_ACTIONS.md`）。
+- COM: 既定は **64bit**（JRA-VAN SDK 5.0.0 の 64bit 版 JV-Link。`-r win-x64` で発行）。G-AGENT-1 が失敗した場合の代替は 32bit の JV-Link + `-r win-x86` で発行した 32bit 版（D-018 の第二案。コードは同じ）。COM は `dynamic` を使わず `Type.InvokeMember` で呼ぶ小さな型付きラッパ（`ComJvLink`）に隔離し、ワーカーの STA スレッドの中だけで生成・使用・解放する。SDK の DLL・仕様書・利用キーは Git に入れない。
+- 失われる検証: Python の ruff・mypy（C# のコンパイラ・null 安全・解析規則で代える）、Python の 2 版（3.12/3.13）での実行（.NET 10 の 1 版）。旧 Python の試験はすべて C# に移植した（`agent/cs/tests`。Python の試験ファイルごとに対応する試験クラスがある）。
 
 ## 4. ML の互換性（L3）
 ### 4.1 推論互換と学習の再現性を分ける
