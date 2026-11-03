@@ -76,7 +76,7 @@ jobs:
           distribution: temurin
           java-version: "25"
       # Wrapper jar の検証もここで行われる（既定で有効）。Gradle のキャッシュは main 以外では書かない（PR が main 用のキャッシュを汚染しない）。
-      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
       - uses: ./.github/actions/setup-tools
       - name: Show toolchain
         run: |
@@ -165,7 +165,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "25"
-      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
       - uses: ./.github/actions/setup-tools
       # Kotlin ingest と Windows エージェント（C#）の結合テスト用（AgentInteropIntegrationTest）。ドライバ jraagent-interop をビルドして渡す
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
