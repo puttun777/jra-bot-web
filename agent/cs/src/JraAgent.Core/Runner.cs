@@ -237,6 +237,24 @@ public sealed class AgentRunner(
         return rep;
     }
 
+    /// <summary>
+    /// 失敗した tick の後始末: 警告を出し（heartbeat の lastError に名前が出る）、送信中のまま残ったバッチを QUEUED へ、取得中のまま残ったセッションを
+    /// INTERRUPTED へ戻す（tick は 1 本のスレッドで順に動くので、この時点で送信・取得は進行していない。再起動時の Recover と同じ処理）。
+    /// 戻さないと、SENDING が残って以後の送信が黙って止まる（再レビュー 低）。
+    /// </summary>
+    private void RecoverAfterFailedTick(string kind)
+    {
+        try
+        {
+            queue.RaiseAlert("TICK_FAILED", $"tick が失敗した（{kind}）。送信中・取得中のものを戻して続ける");
+            queue.Recover();
+        }
+        catch (Exception e) when (e is AgentException or Microsoft.Data.Sqlite.SqliteException or InvalidOperationException)
+        {
+            logError?.Invoke($"tick の後始末も失敗: {e.GetType().Name}"); // 次の tick で再び試す
+        }
+    }
+
     /// <summary>常駐。<paramref name="stop"/> が合図されるまで回す（待機は合図で中断する）。</summary>
     public void RunForever(CancellationToken stop)
     {
@@ -247,11 +265,17 @@ public sealed class AgentRunner(
             try
             {
                 wait = Math.Min(Tick().NextWake, 5.0);
+                if (LastError is not null)
+                {
+                    LastError = null;
+                    queue.ClearAlert("TICK_FAILED");
+                }
             }
             catch (Exception e) when (e is not (OutOfMemoryException or StackOverflowException or AccessViolationException))
             {
                 LastError = e.GetType().Name;
                 logError?.Invoke($"tick が失敗: {e.GetType().Name}"); // 例外のメッセージには値が入り得るので型名だけ
+                RecoverAfterFailedTick(e.GetType().Name);
                 wait = 5.0;
             }
             stop.WaitHandle.WaitOne(TimeSpan.FromSeconds(wait));

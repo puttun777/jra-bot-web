@@ -240,3 +240,51 @@ public sealed class ReviewRegressionTests : IDisposable
         Assert.Empty(Directory.GetFileSystemEntries(Path.Combine(dir, "install", "versions")));
     }
 }
+
+/// <summary>再レビュー（低）: 失敗した tick の後に SENDING が残らず、警告が出る。</summary>
+public sealed class FailedTickTests : IDisposable
+{
+    private readonly QueueFixture fx = new();
+
+    public void Dispose() => fx.Dispose();
+
+    /// <summary>1 回目の送信の応答で例外を投げる（ITransport の契約外の例外 = 想定外の不具合の模擬）。</summary>
+    private sealed class ThrowingOnce(ITransport inner) : ITransport
+    {
+        public bool Armed { get; set; } = true;
+
+        public TransportResponse Request(string method, string url, IReadOnlyDictionary<string, string> headers, byte[]? body, double timeoutSeconds)
+        {
+            if (Armed && url.EndsWith("/v1/agent/ingest", StringComparison.Ordinal))
+            {
+                Armed = false;
+                throw new InvalidOperationException("boom");
+            }
+            return inner.Request(method, url, headers, body, timeoutSeconds);
+        }
+    }
+
+    [Fact]
+    public void Failed_tick_requeues_the_sending_batch_and_raises_an_alert()
+    {
+        var clock = fx.Clock;
+        var cloud = new FakeCloud(clock, "jrat1_tick-token-0123456789", new BeaconSigner());
+        var transport = new ThrowingOnce(cloud);
+        var modes = new ModeMachine(clock);
+        var client = new SignedClient(FakeCloud.Base, new RequestSigner("ag_test", "jrat1_tick-token-0123456789"), transport, clock);
+        var runner = new AgentRunner(
+            fx.Queue, modes, new BeaconClient(FakeCloud.BeaconUrl, [cloud.Signer.Public], transport, clock, new BeaconGuard(fx.Queue.GetState, fx.Queue.SetState)),
+            new AgentApi(client, modes), client, new Sender(fx.Queue, client, modes, new SenderConfig(), clock, "fp", rand: () => 0.5), null, clock, rand: () => 0.0);
+        var b = fx.EnqueueRealtime(fx.Queue);
+        using var stop = new CancellationTokenSource();
+        var t = new Thread(() => runner.RunForever(stop.Token)) { IsBackground = true };
+        t.Start();
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (DateTime.UtcNow < deadline && fx.Queue.Batch(b.BatchId)?.Status != "ACKED") Thread.Sleep(50);
+        stop.Cancel();
+        Assert.True(t.Join(20_000));
+        Assert.Equal("ACKED", fx.Queue.Batch(b.BatchId)?.Status); // 例外の後に SENDING のまま止まらず、再送されて ACK された
+        Assert.False(transport.Armed); // 例外は実際に起きた
+        Assert.DoesNotContain("TICK_FAILED", fx.Queue.Alerts().Keys); // 成功した tick で警告は消える
+    }
+}

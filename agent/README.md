@@ -37,7 +37,7 @@ keys = [{ kid = "beacon-2026a", public_key = "<Ed25519 公開鍵 base64url>" }] 
 [jvlink]
 mode = "com"        # 本番。公式仕様の確認が記録されるまで、取得計画があっても実取得は開始されない
 ```
-資格情報は `type token.txt | jraagent.exe --config agent.toml set-credential --stdin --expires-at 2027-01-30T00:00:00+09:00`（DPAPI 保護。画面・ログ・引数に出さない）。旧 Python 版が保存した資格情報（`<data_dir>\secrets\credential.bin`）とキュー（`queue.sqlite3`）はそのまま読める（同じ entropy・同じスキーマ）。
+資格情報は `type token.txt | jraagent.exe --config agent.toml set-credential --stdin --expires-at 2027-01-30T00:00:00+09:00`（DPAPI 保護。画面・ログ・引数に出さない）。**資格情報を入れ直したら、常駐しているエージェントを再起動する**（タスクスケジューラのタスクを停止 → 開始。動いたままだと古いトークンで 1 回送信して 401 になり、再び停止する）。旧 Python 版が保存した資格情報（`<data_dir>\secrets\credential.bin`）とキュー（`queue.sqlite3`）はそのまま読める（同じ entropy・同じスキーマ）。
 
 ## 安全上の約束
 - NORMAL が確認できない限り、取得も送信もしない（起動直後は UNKNOWN）。STOPPED/UNKNOWN 中はビーコン確認だけ。キューは保持する。
