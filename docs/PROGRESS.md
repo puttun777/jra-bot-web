@@ -18,7 +18,8 @@
 **L5 の内容**: `agent/cs`（Core・Windows・Cli・tools/Interop・tests）。旧 CLI の全コマンド・COM ワーカー・PoC（mock / g1 / g2 / g3-realtime / sleep）・結合試験のドライバを C# に。Python の `agent/src`・`poc`・`interop`・試験・requirements を削除。CI の agent（Linux）・agent-windows・db-integration（AGENT_INTEROP）を dotnet に、classify・preflight・dependabot（nuget）・scripts の PowerShell・README・POC.md・USER_ACTIONS B1 を更新。
 **旧版から直した点**（D-261）: 平文 HTTP の許可がホストの前方一致、上限超えの応答の黙った切り詰め、Base64url の字母外の文字の無視、非 ASCII の識別子、`update.enabled` の真偽値以外、未知の読み取り状態の無限待ち、試験専用の仕様表が本番から呼べた点。移植中の C# 側の不具合（単調時計の初回が負、応答の JSON ノードの再利用）も修正。
 **検証（ローカル。.NET SDK 10.0.114・JDK 25・Node 24・Docker）**: C# 296 件（成功 292・Windows 専用 4 は skip）を 3 回連続で成功、`poc mock` で G-AGENT-2〜5 が MOCK_PASS、Kotlin `AgentInteropIntegrationTest` 4/4（C# のドライバ・MySQL 8.4）、`:ingest:test`・ktlintCheck 成功、TS 160 件・lint 成功。**未実施**: Windows ランナー（PR の CI で確認）、実機（JV-Link・DPAPI の引継ぎ・スリープ: POC.md）。
-**独立レビュー**: Opus（重要レビューの区分: 暗号・署名・資格情報、状態機械、COM と Windows のプロセス制御）で実施中。結果は D-262 に記録する。
+**独立レビュー（Opus・読取り専用）**: 初回 高 0・中 2・低 5 → 修正後の確認を 4 回（途中で修正が入れた回帰を中 2 件見つけて修正: 失敗した tick の後の無限の再送、仕様ゲート中のワーカー起動）→ 最後は高・中なし（D-262）。サブエージェントのレビューで、GitHub の第三者 Approve ではない。
+**preflight（コミット 8c4f3d0。full モード）**: diff-check・hygiene・tools-ts・consistency・kotlin-build（158 秒）・kotlin-golden・db-it-8.4（367 秒）・db-it-9.7（591 秒。AGENT_INTEROP に C# のドライバ）・agent（C# 307 件。Windows 専用 4 は skip）が成功。**未実施**: images（Docker のビルド中のコンテナから外部 HTTPS ができない環境の制約。L3 と同じ。CI で確認）、agent-windows（Windows ランナーだけ。CI で確認）。
 
 ## 2026-11-03 言語移行 L4: ゴールデンの検証と比較を Kotlin へ（ブランチ claude/lang-l4-golden。D-258・D-260）
 **マージ済み（この日）**: web PR #40（L3）と infra PR #8（release-manifest v3）を同時にマージ（最新コミットで全ジョブ成功を個別に確認。images の本物のビルドとスモークも成功）。
