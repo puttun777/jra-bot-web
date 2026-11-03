@@ -3,6 +3,7 @@ package jp.jrabot.persistence.dao
 import org.seasar.doma.Dao
 import org.seasar.doma.Entity
 import org.seasar.doma.Id
+import org.seasar.doma.Insert
 import org.seasar.doma.Select
 import org.seasar.doma.Table
 import org.seasar.doma.jdbc.entity.NamingType
@@ -34,6 +35,32 @@ internal data class MlModelEntity(
     val previousModelId: String?,
 )
 
+/** 学習 Job が INSERT する列（active_flag・activated_* は書かない = NULL）。 */
+@Entity(immutable = true, naming = NamingType.SNAKE_LOWER_CASE)
+@Table(name = "ml_model")
+internal data class MlModelInsertEntity(
+    @Id val tenantId: Long,
+    @Id val modelId: String,
+    val kind: String,
+    val schemaVersion: Int,
+    val featureSchemaHash: String,
+    val artifactUri: String,
+    val sha256: String,
+    val signatureSha256: String,
+    val status: String,
+    val trainedFrom: LocalDate?,
+    val trainedTo: LocalDate?,
+    val nTrain: Long?,
+    val metricsJson: String,
+    val createdAt: LocalDateTime,
+)
+
+@Entity(immutable = true, naming = NamingType.SNAKE_LOWER_CASE)
+internal data class MlModelActiveMetricsEntity(
+    val modelId: String,
+    val metricsJson: String?,
+)
+
 @Dao
 internal interface MlModelDao {
     @Select
@@ -41,6 +68,17 @@ internal interface MlModelDao {
         tenantId: Long,
         modelId: String,
     ): MlModelEntity?
+
+    /** ACTIVE のモデルの model_id と metrics_json（学習 Job の品質ゲートの比較に使う。無ければ null）。 */
+    @Select
+    fun selectActiveMetrics(
+        tenantId: Long,
+        kind: String,
+    ): MlModelActiveMetricsEntity?
+
+    /** 学習 Job の登録（mltrain は INSERT だけ。status は CANDIDATE / REJECTED。主キーの重複は例外）。 */
+    @Insert
+    fun insert(entity: MlModelInsertEntity): org.seasar.doma.jdbc.Result<MlModelInsertEntity>
 
     /** 有効（ACTIVE）なモデル。`UNIQUE(tenant_id, kind, active_flag)` により高々 1 行。 */
     @Select

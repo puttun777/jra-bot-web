@@ -1,6 +1,6 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-11-02（言語移行 L1。下の新しい節）。旧: 2026-11-01 夜（web PR #30〜#33・infra PR #3/#4/#6 はマージ済み。残りは wip/final の TEST_RESULTS.md・D-247・R15 の MySQL 通し試験〈ReadAdminApiMySqlIntegrationTest〉。検証: ktlintCheck 成功、当該 4 試験は MySQL 8.4 で成功（ローカル）。それ以外の統合試験は CI で確認。再開手順: 本ブランチの PR の CI 結果を確認→失敗ジョブのログだけ読む→マージ条件を満たせばマージ→COMPLETION.md の C/B 項目を最終報告。判定の正本は COMPLETION.md）
+最終更新: 2026-11-02（言語移行 L3。下の新しい節）。旧: 2026-11-02（L1。web PR #36・infra PR #7〔L2〕はマージ済み）。旧: 2026-11-01 夜（web PR #30〜#33・infra PR #3/#4/#6 はマージ済み。残りは wip/final の TEST_RESULTS.md・D-247・R15 の MySQL 通し試験〈ReadAdminApiMySqlIntegrationTest〉。検証: ktlintCheck 成功、当該 4 試験は MySQL 8.4 で成功（ローカル）。それ以外の統合試験は CI で確認。再開手順: 本ブランチの PR の CI 結果を確認→失敗ジョブのログだけ読む→マージ条件を満たせばマージ→COMPLETION.md の C/B 項目を最終報告。判定の正本は COMPLETION.md）
 旧: 2026-11-01（T3.9③・reconcile・preflight・infra PR #4）
 旧: 2026-10-30（保留の再適用のレビュー・公開準備。D-229。CI 未実施）
 旧: 2026-10-29（追加レビュー 2: リース継続・保留の再適用・G-31 の null・T3.9 設計の訂正〈D-224〜D-228〉。同ブランチ。CI 未実施。PR なし）
@@ -12,6 +12,18 @@
 旧: 2026-10-27（Stage 3-G: T3.7 Discord 通知）
 旧: 2026-10-26（Public 化の準備）／2026-10-24（Stage 3-F2・3-F1・3-E）
 
+
+## 2026-11-02 言語移行 L3: ML 学習を Kotlin へ（ブランチ claude/lang-l3-ml-kotlin。D-257。infra は claude/lang-l3-manifest-v3〔I-035〕）
+**マージ済み（この日）**: web PR #36（L1: CI・リリース補助の TS 化）、infra PR #7（L2: ops の TS 化。Opus レビュー 4 回、最終は高・中なし）。どちらも最新コミットで全ジョブ成功を個別に確認してからマージ。
+**L3 の内容**: `:ml-train`（数値: Newton 法 + Cholesky〔Hipparchus 4.0.3〕・Platt・指標・品質ゲート、Job: データセット検証・冪等・保存〔.sig → report → .json〕・読み戻し検証・登録〔CANDIDATE/REJECTED のみ〕・SIGTERM、CLI: モードは DB の前・DB への接続の確認（スキーマ版は確認しない: mltrain に権限が無い）、convert-pkl: データだけを解釈する pickle 読取り）。保管は domain の `ArtifactBlobStore`（LocalFileBlobStore）と cloud-gcp の `GcsBlobStore`。persistence に `TrainingRegistry`（mltrain）。Python の `ml/`・`tools/ml` を削除、CI の Python ML ジョブ 2 つを削除、Dockerfile の ml-train は JVM、image-smoke は JVM の検査、`MlTrainInteropIntegrationTest` は ml-train の jar を別プロセスで起動。**release-manifest schema_version 3**（runtime.python 削除。CONTRACTS 0.4.17。**infra の PR と同時にマージ**）。
+**旧版との一致**: 削除前の Python で固定したフィクスチャ（数値 `python-reference/ml_reference_v1.json`、合成 pickle 42 件 `legacy-pkl/expected.json`）と比較。実測は LANGUAGE_MIGRATION §4.2、失われた検証は §4.4。
+**見つけて直した不具合**: 直線探索が丸めの限界で進まないときに反復を使い切り、Platt が『収束しない』で失敗していた（Logistic。変異で試験が失敗することを確認）。
+**検証（ローカル。JDK 25.0.4.1・Node 24.22.2・Docker 29.9.2）**: `./gradlew build checkModuleDependencies ktlintCheck` 成功（ml-train 44・domain 1098・cloud-gcp 110・persistence 33・bot 144 件、skip 0）。TS 158 件・biome・tsc・consistency 成功。infra: ops 119 件・lint・fmt 成功。MySQL 統合試験は下（実行中に記録を更新）。**未実施**: 本物の Dockerfile でのイメージビルドとスモーク（CI。ローカルはコンテナ内から外部 HTTPS ができない）、agent-windows、実 pkl（本人の PC）、実 GCP。
+**ローカル環境の注意**: Gradle は `LC_ALL=C.UTF-8` で動かす（日本語の試験名のクラスファイルで InvalidPathException になる）。Docker は `dockerd` を手で起動した。
+**結合試験（ローカル）**: MySQL 8.4 で persistence 210 件・`MlTrainInteropIntegrationTest` 5 件、MySQL 9.7 で ML 関係 14 件が成功。最初の実行で **mltrain に flyway_schema_history の権限が無い**（1142）ことが分かり、スキーマ版の確認をやめて接続の確認にした（GRANT は変えない）。
+**独立レビュー（Opus・読取り専用、8619693）**: 高 0・中 0・低 7 → 低 7 件すべてに対応（D-259。試験 4 件追加、ml-train 47 件）。サブエージェントのレビューで、GitHub の第三者 Approve ではない。
+**検証したコミット**: このコミット（`./gradlew build checkModuleDependencies`・ml-train 47・cloud-gcp 111・TS 158・MySQL 8.4 の結合試験 成功）。**未実施**: 本物の Dockerfile でのイメージビルドとスモーク（CI で確認）、agent-windows。
+**次**: push・PR（web と infra の claude/lang-l3-manifest-v3）→ CI → **同時にマージ** → L4（golden。claude/lang-l4-golden で作業中: Kotlin の verify/compare は旧 Python と同じ報告を出すことを確認済み）。
 
 ## 2026-11-02 言語移行の開始（L1: CI・リリース補助を TypeScript へ。ブランチ claude/lang-l1-ci-tools-ts。D-250〜D-256）
 **要件変更**: 自分たちで保守する Python を必須経路から外す（`LANGUAGE_MIGRATION.md`）。完成条件は `COMPLETION.md` の L1〜L9。

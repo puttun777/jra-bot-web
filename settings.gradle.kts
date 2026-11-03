@@ -24,4 +24,5 @@ include(
     ":ingest",
     ":dashboard",
     ":golden-runner",
+    ":ml-train",
 )

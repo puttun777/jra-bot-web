@@ -17,3 +17,17 @@ dependencies {
     testImplementation(testFixtures(project(":cloud-gcp")))
     testImplementation(libs.spring.boot.starter.jdbc)
 }
+
+// export-dataset → ml-train → 推論側の読込みの結合試験（MlTrainInteropIntegrationTest）は ml-train の実行 jar を**別プロセス**で起動する。
+// ml-train への依存はタスクの順序だけ（クラスパスには入れない: bot と ml-train は相互に依存しない。DependencyRules）
+tasks.named<Test>("integrationTest") {
+    dependsOn(":ml-train:bootJar")
+    systemProperty(
+        "mltrain.jar",
+        project(":ml-train")
+            .layout.buildDirectory
+            .file("libs/ml-train.jar")
+            .get()
+            .asFile.path,
+    )
+}

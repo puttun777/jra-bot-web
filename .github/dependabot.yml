@@ -114,24 +114,3 @@ updates:
       # version updates（自動 PR）だけを止める。セキュリティ更新（Dependabot security updates）と手動の更新は妨げない。
       # 更新するときは tools/golden/README.md「numpy を更新するとき」の手順で、固定版・フィクスチャ・メタデータ・再生成テストをまとめて見直す
       - dependency-name: "numpy"
-
-  # Python（ml/ の ML 学習 Job。T3.6-B）。ml/requirements.txt は推移的依存まで固定（ml-train イメージにそのまま入る）。
-  # numpy は golden と同じ 2.5.3 に固定（D-103。学習・推論の数値の再現性。更新は手順書で golden とまとめて見直す）ので version updates から外す。
-  # Dependabot の PR は自動マージしない。更新 PR は ci.yml の ml-train（pytest・mypy）と images（ml-train のビルドとスモーク）が検証する
-  - package-ecosystem: "pip"
-    directory: "/ml"
-    schedule:
-      interval: "weekly"
-      day: "thursday"
-      time: "06:30"
-      timezone: "Asia/Tokyo"
-    open-pull-requests-limit: 1
-    labels: ["dependencies"]
-    commit-message:
-      prefix: "chore(deps)"
-    groups:
-      python-ml-minor-patch:
-        patterns: ["*"]
-        update-types: ["minor", "patch"]
-    ignore:
-      - dependency-name: "numpy"

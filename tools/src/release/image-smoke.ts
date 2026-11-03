@@ -27,7 +27,7 @@ export const EXPECTED_ENTRYPOINT: Readonly<Record<ImageName, readonly string[]>>
   ingest: [...ENTRYPOINT_JVM, "-jar", "/app/app.jar"],
   bot: [...ENTRYPOINT_JVM, "-jar", "/app/app.jar"],
   "db-migration": [...ENTRYPOINT_JVM, "-cp", "/app/lib/*", "jp.jrabot.dbmigration.DbMigrationMainKt"],
-  "ml-train": ["/opt/venv/bin/python", "-m", "ml_train"],
+  "ml-train": [...ENTRYPOINT_JVM, "-jar", "/app/app.jar"],
 };
 export const SECRET_ENV_NAME = /(PASSWORD|SECRET|TOKEN|CREDENTIAL|PRIVATE|API_?KEY|ACCESS_?KEY)/i;
 export const FORBIDDEN_FILE =
@@ -273,14 +273,7 @@ export class Smoke {
     this.r.check(`[${name}] build history has no secret assignments / ARG secrets`, !/(password|secret|token|api_?key)\s*=/i.test(hist));
     this.r.check(`[${name}] no HEALTHCHECK (Cloud Run uses service probes)`, !cfg["Healthcheck"]);
 
-    if (name === "ml-train") {
-      const [rc, out, err] = this.runIn(name, {
-        args: ["--version"],
-        entrypoint: "/opt/venv/bin/python",
-        desc: `${name} python --version`,
-      });
-      this.r.check(`[${name}] runs on Python 3.13`, rc === 0 && /Python 3\.13\.\d+/.test(out + err), (out + err).slice(0, 120));
-    } else {
+    {
       const [rc, out, err] = this.runIn(name, { args: ["-version"], entrypoint: "java", desc: `${name} java -version` });
       this.r.check(`[${name}] runs on JDK 25`, rc === 0 && /version "25\./.test(out + err), (out + err).slice(0, 120));
     }
@@ -319,7 +312,7 @@ export class Smoke {
       names.push(m.name);
     }
     if (!this.r.check(`[${name}] docker export succeeded (filesystem fully scanned)`, (await exited) === 0)) return;
-    const userAreas = names.filter((n) => /^(app|home|root|tmp|srv|opt\/(?!java|venv))/.test(n) || /^etc\/[^/]*\.env/.test(n));
+    const userAreas = names.filter((n) => /^(app|home|root|tmp|srv|opt\/(?!java))/.test(n) || /^etc\/[^/]*\.env/.test(n));
     const bad = userAreas.filter((n) => FORBIDDEN_FILE.test(n));
     this.r.check(
       `[${name}] no secret/real-data file names in app areas (/app /home /root /tmp /srv /opt)`,
@@ -336,11 +329,7 @@ export class Smoke {
       JSON.stringify(writable.slice(0, 5)),
     );
     let ok: boolean;
-    if (name === "ml-train") {
-      const allowed = /^app\/(src\/ml_train\/[\w/]+\.py|tools\/__init__\.py|tools\/ml\/(__init__|canonical|dataset_contract)\.py)$/;
-      ok = appFiles.length > 0 && appFiles.every((n) => allowed.test(n)) && !appFiles.includes("app/tools/ml/signing.py");
-      ok &&= !names.some((n) => n.startsWith("app/") && /(^|\/)(tests?|make_test_artifacts|signing)(\/|\.|$)/.test(n));
-    } else if (name === "db-migration") {
+    if (name === "db-migration") {
       ok =
         appFiles.every((n) => /^app\/lib\/[\w.-]+\.jar$/.test(n)) &&
         appFiles.some((n) => n.includes("flyway-core")) &&
@@ -353,10 +342,6 @@ export class Smoke {
   }
 
   jarChecks(name: ImageName): void {
-    if (name === "ml-train") {
-      this.mlPackageChecks();
-      return;
-    }
     const c = dockerChecked(["create", this.image(name)]).trim();
     this.created.push(c);
     const required = requiredSchemaVersions(this.facts);
@@ -393,7 +378,7 @@ export class Smoke {
         const i = line.indexOf("=");
         props.set(line.slice(0, i), line.slice(i + 1).replace(/\r$/, ""));
       }
-      const req = name === "bot" || name === "ingest" || name === "dashboard" ? required[name] : undefined;
+      const req = name === "bot" || name === "ingest" || name === "dashboard" || name === "ml-train" ? required[name] : undefined;
       this.r.check(
         `[${name}] baked requiredSchemaVersion == build.gradle.kts (${String(req)})`,
         props.get("requiredSchemaVersion") === req,
@@ -419,6 +404,18 @@ export class Smoke {
         }
       }
       this.r.check(`[${name}] no secret-like assignments in own resources`, leaks.length === 0, JSON.stringify(leaks));
+      if (name === "ml-train") {
+        const testOnly = zipNames.filter((n) => /(legacy-pkl|python-reference|expected\.json|Test\.class$)/.test(n));
+        this.r.check(
+          "[ml-train] no test-only resources (synthetic pickles, reference fixtures, test classes) in the jar",
+          testOnly.length === 0,
+          JSON.stringify(testOnly.slice(0, 5)),
+        );
+        this.r.check(
+          "[ml-train] the Hipparchus linear algebra library is bundled",
+          zipNames.some((n) => /hipparchus-core-[\d.]+\.jar$/.test(n)),
+        );
+      }
     } finally {
       docker(["rm", c]);
     }
@@ -795,51 +792,7 @@ export class Smoke {
     );
   }
 
-  // ------------------------------------------------------------------ ml-train（Python イメージ。L3 で Kotlin へ移行して置き換える）
-  mlPackageChecks(): void {
-    const pins = new Map<string, string>();
-    for (const line of readFileSync(join(this.facts, "ml", "requirements.txt"), "utf8").split("\n")) {
-      if (!line.includes("==") || line.startsWith("#")) continue;
-      const [k, v] = line.split("==");
-      if (k !== undefined && v !== undefined) pins.set(k.trim().toLowerCase().replaceAll("_", "-"), v.trim());
-    }
-    const code =
-      "import importlib.metadata as m, json; print(json.dumps({d.metadata['Name'].lower(): d.version for d in m.distributions()}))";
-    let [rc, out, err] = this.runIn("ml-train", { args: ["-c", code], entrypoint: "/opt/venv/bin/python", desc: "ml-train installed" });
-    const installed = new Map(Object.entries(jsonLine(out)).map(([k, v]) => [k.toLowerCase().replaceAll("_", "-"), String(v)]));
-    const wrong = [...pins].filter(([k, v]) => installed.get(k) !== v).map(([k, v]) => `${k}: ${v} != ${String(installed.get(k))}`);
-    this.r.check(
-      "[ml-train] installed versions == ml/requirements.txt pins",
-      rc === 0 && wrong.length === 0,
-      wrong.join(", ").slice(0, 300),
-    );
-    [rc, out, err] = this.runIn("ml-train", {
-      args: ["-m", "pip", "check"],
-      entrypoint: "/opt/venv/bin/python",
-      desc: "ml-train pip check",
-    });
-    this.r.check(
-      "[ml-train] pip check: dependencies are consistent",
-      rc === 0 && out.includes("No broken requirements"),
-      (out + err).slice(0, 200),
-    );
-    [rc, out, err] = this.runIn("ml-train", {
-      args: [
-        "-c",
-        "import ml_train, numpy, scipy, sklearn, cryptography, pymysql, tools.ml.canonical, tools.ml.dataset_contract; print('ok')",
-      ],
-      entrypoint: "/opt/venv/bin/python",
-      desc: "ml-train import",
-    });
-    this.r.check("[ml-train] all runtime modules import", rc === 0 && out.trim() === "ok", (out + err).slice(0, 300));
-    [rc, out] = this.runIn("ml-train", {
-      args: ["-c", "import importlib.util as u; print(u.find_spec('tools.ml.signing') is None, u.find_spec('pytest') is None)"],
-      entrypoint: "/opt/venv/bin/python",
-      desc: "ml-train no test code",
-    });
-    this.r.check("[ml-train] test-only signing seeds and pytest are not in the image", out.trim() === "True True", out.trim());
-  }
-
+  // ------------------------------------------------------------------ ml-train（Kotlin。D-257）
   get mlKey(): string {
     if (this.mlKeyValue === undefined) {
       this.mlKeyValue = randomBytes(32).toString("base64"); // 実行時に生成するテスト鍵（秘密でも本番鍵でもない）

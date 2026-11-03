@@ -243,3 +243,46 @@ class GcsStoresTest {
         assertIs<DatasetWriteResult.AlreadyExists>(store.write(t1, e.datasetId, e.csvGz().inputStream()))
     }
 }
+
+/** ml-train の成果物の置き場（GCS）。作成は前提条件つきで上書きしない。キーはプレフィックスの下だけ。 */
+class GcsBlobStoreTest {
+    private val client = FakeObjectClient()
+    private val store = GcsBlobStore(GcsBucketPrefix.parse("gs://fake-model-store/env1"), client)
+
+    @Test
+    fun `create only under the prefix, unchanged and conflict are distinguished, delete only the given key`() {
+        assertEquals("gs://fake-model-store/env1", store.uriPrefix)
+        assertEquals(ArtifactWriteOutcome.CREATED, store.putIfAbsent("1/models/m.sig", byteArrayOf(1), "application/octet-stream"))
+        assertTrue("fake-model-store/env1/1/models/m.sig" in client.objects)
+        assertEquals(ArtifactWriteOutcome.UNCHANGED, store.putIfAbsent("1/models/m.sig", byteArrayOf(1), "application/octet-stream"))
+        assertEquals(ArtifactWriteOutcome.CONFLICT, store.putIfAbsent("1/models/m.sig", byteArrayOf(2), "application/octet-stream"))
+        assertContentEquals(byteArrayOf(1), store.get("1/models/m.sig"))
+        store.delete("1/models/m.sig")
+        assertEquals(listOf("fake-model-store/env1/1/models/m.sig"), client.deleted)
+        assertNull(store.get("1/models/m.sig"))
+        assertEquals("gs://bkt", GcsBlobStore(GcsBucketPrefix.parse("gs://bkt/"), client).uriPrefix)
+    }
+
+    @Test
+    fun `permission errors are not transient`() {
+        client.failReadsWith =
+            com.google.cloud.storage
+                .StorageException(403, "Forbidden")
+        assertFailsWith<jp.jrabot.domain.ml.StoragePermissionException> { store.get("1/models/m.json") }
+        client.failReadsWith =
+            com.google.cloud.storage
+                .StorageException(503, "Unavailable")
+        val e = assertFailsWith<StorageException> { store.get("1/models/m.json") }
+        assertTrue(e !is jp.jrabot.domain.ml.StoragePermissionException)
+    }
+
+    @Test
+    fun `invalid keys and io failures are storage errors`() {
+        for (k in listOf("../x", "1/../x", "")) assertFailsWith<StorageException>(k) { store.get(k) }
+        client.failReadsWith = java.io.IOException("simulated")
+        assertFailsWith<StorageException> { store.get("1/models/m.json") }
+        client.failReadsWith = null
+        client.failCreateOn = { true }
+        assertFailsWith<StorageException> { store.putIfAbsent("1/models/m.json", byteArrayOf(1), "application/json") }
+    }
+}

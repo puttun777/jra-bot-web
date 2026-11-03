@@ -6,12 +6,10 @@
  *
  * ファイルは先頭から順に規則に当てはめてタグを付ける（どれにも当たらないファイルは `unknown` = 全部実行）。タグ → ジョブ:
  *   docs         ドキュメントのみ（hygiene と最終ゲートだけ）
- *   kotlin_app   :bot :ingest :dashboard :cloud-gcp → build、DB 統合（アプリのスイート・MySQL 8.4）
+ *   kotlin_app   :bot :ingest :dashboard :cloud-gcp :ml-train → build、DB 統合（アプリのスイート・MySQL 8.4。:bot の結合試験が ml-train の jar を起動する）
  *   kotlin_core  :domain → build、DB 統合（persistence + アプリ・8.4）
  *   kotlin_db    :persistence :db-migration → build、DB 統合（全スイート・8.4 と 9.7）
  *   build_cfg    Gradle・版数・build-logic・ktlint 設定 → build、DB 統合（全・8.4 + 9.7）、images
- *   ml_tools     tools/ml（Python 参照実装）と合成成果物 → ml-tools
- *   ml_train     ml/（Python の学習 Job）→ ml-train。:bot の結合テストが使うので kotlin_app も
  *   golden       tools/golden（Python）→ golden
  *   kotlin_golden tools/golden（.md 以外）・golden-runner → build（比較は build ジョブの中）
  *   release      リリース補助・スキーマ・契約・マイグレーション・アプリの build 定義 → release-tools（TypeScript 単体）
@@ -31,8 +29,6 @@ export type Tag =
   | "kotlin_core"
   | "kotlin_db"
   | "build_cfg"
-  | "ml_tools"
-  | "ml_train"
   | "golden"
   | "kotlin_golden"
   | "release"
@@ -49,8 +45,6 @@ export const KNOWN_TAGS: ReadonlySet<Tag> = new Set<Tag>([
   "kotlin_core",
   "kotlin_db",
   "build_cfg",
-  "ml_tools",
-  "ml_train",
   "golden",
   "kotlin_golden",
   "release",
@@ -94,15 +88,13 @@ export const RULES: ReadonlyArray<readonly [RegExp, readonly Tag[]]> = [
   [/^agent\/(tests\/test_winapi_windows\.py|scripts\/)/, ["agent", "agent_windows"]],
   [/^agent\/(src\/|interop\/|tests\/vectors\/|pyproject\.toml$|requirements)/, ["agent", "kotlin_app"]],
   [/^agent\//, ["agent"]],
-  // --- ML ツール。合成成果物は Kotlin のテストも使う
-  [/^tools\/ml\/.*\.md$/, ["docs"]],
-  [/^tools\/ml\/(canonical|dataset_contract)\.py$/, ["ml_tools", "ml_train", "docker", "kotlin_app"]],
-  [/^tools\/ml\//, ["ml_tools"]],
-  [/^domain\/src\/test\/resources\/ml\//, ["ml_tools", "ml_train", "kotlin_golden", "release"]], // feature_schema は release-manifest の入力
-  // --- ML 学習 Job。ml/ だけの変更でも学習テストが必ず走る。イメージの中身が変わったらイメージも
-  [/^ml\/.*\.md$/, ["docs"]],
-  [/^ml\/(src\/|requirements[^/]*\.txt$|pyproject\.toml$)/, ["ml_train", "kotlin_app", "docker"]],
-  [/^ml\//, ["ml_train", "kotlin_app"]],
+  // --- ML の合成成果物（domain の試験と ml-train の試験・release-manifest の feature_schema の入力）
+  [/^domain\/src\/test\/resources\/ml\//, ["kotlin_core", "kotlin_app", "kotlin_golden", "release"]],
+  // --- ML 学習 Job（Kotlin。D-257）。イメージの中身が変わったらイメージも。旧 Python の ml/・tools/ml は削除済み
+  //     （置き場所が復活しても、どの規則にも当たらず unknown = 全部実行。.md だけなら docs）
+  [/^ml-train\/build\.gradle\.kts$/, ["kotlin_app", "release", "docker"]],
+  [/^ml-train\/src\/main\//, ["kotlin_app", "docker"]],
+  [/^ml-train\//, ["kotlin_app"]],
   // --- ドキュメント（モジュール内の README なども docs。上の規則に当たらなかったもの）
   [/^(docs\/.*|.*\.md|LICENSE|\.gitignore)$/, ["docs"]],
   // --- Kotlin
@@ -130,8 +122,6 @@ export interface Plan {
   reason: string;
   runBuild: boolean;
   runGolden: boolean;
-  runMlTools: boolean;
-  runMlTrain: boolean;
   runRelease: boolean;
   runImages: boolean;
   runConnectorj26: boolean;
@@ -148,8 +138,6 @@ function emptyPlan(mode: Mode, reason: string, files: number): Plan {
     reason,
     runBuild: false,
     runGolden: false,
-    runMlTools: false,
-    runMlTrain: false,
     runRelease: false,
     runImages: false,
     runConnectorj26: false,
@@ -173,8 +161,6 @@ export function outputs(p: Plan): Record<string, string> {
     files: String(p.files),
     run_build: b(p.runBuild),
     run_golden: b(p.runGolden),
-    run_ml_tools: b(p.runMlTools),
-    run_ml_train: b(p.runMlTrain),
     run_release: b(p.runRelease),
     run_images: b(p.runImages),
     run_connectorj26: b(p.runConnectorj26),
@@ -191,8 +177,6 @@ export function fullPlan(reason: string, files = 0, connectorj = false): Plan {
     ...emptyPlan("full", reason, files),
     runBuild: true,
     runGolden: true,
-    runMlTools: true,
-    runMlTrain: true,
     runRelease: true,
     runImages: true,
     runConnectorj26: connectorj,
@@ -235,8 +219,6 @@ export function classify(files: readonly string[]): Plan {
     p.dbSuites = ["apps"];
   }
   p.runGolden = has("golden");
-  p.runMlTools = has("ml_tools");
-  p.runMlTrain = has("ml_train");
   p.runRelease = has("release");
   p.runImages = has("docker", "build_cfg");
   p.runConnectorj26 = has("connectorj");

@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { featureSchemaHash, loadCanonicalFile, sha256Hex } from "../lib/canonical.js";
 
 /** 実行アプリ（REQUIRED_SCHEMA_VERSION を jar に焼き込む）。db-migration はスキーマ版を要求しない（適用する側）。 */
-export const APPS = ["dashboard", "ingest", "bot"] as const;
+export const APPS = ["dashboard", "ingest", "bot", "ml-train"] as const;
 export type App = (typeof APPS)[number];
 /** CONTRACTS §10 の images のキー（5 つ）。すべてビルドできる。 */
 export const IMAGE_NAMES = ["dashboard", "ingest", "bot", "db-migration", "ml-train"] as const;
@@ -69,7 +69,7 @@ export function requiredSchemaVersions(root: string): Record<App, string> {
     if (m?.[1] === undefined) throw new Error(`${app}/build.gradle.kts に requiredSchemaVersion が無い`);
     return m[1];
   };
-  return { dashboard: read("dashboard"), ingest: read("ingest"), bot: read("bot") };
+  return { dashboard: read("dashboard"), ingest: read("ingest"), bot: read("bot"), "ml-train": read("ml-train") };
 }
 
 /** 版は数値の組として比較する（10 > 9）。 */
