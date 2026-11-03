@@ -93,24 +93,3 @@ updates:
       - dependency-name: "eclipse-temurin"
         update-types: ["version-update:semver-major"]
 
-  # Python（tools/golden の requirements.txt。現在の依存は numpy だけで、numpy は下の ignore で version updates の対象外。D-103）
-  - package-ecosystem: "pip"
-    directory: "/tools/golden"
-    schedule:
-      interval: "weekly"
-      day: "thursday"
-      time: "06:00"
-      timezone: "Asia/Tokyo"
-    open-pull-requests-limit: 1
-    labels: ["dependencies"]
-    commit-message:
-      prefix: "chore(deps)"
-    groups:
-      python-minor-patch:
-        patterns: ["*"]
-        update-types: ["minor", "patch"]
-    ignore:
-      # numpy は 2.5.3 に固定（tools/golden/constants.py の PINNED_NUMPY・フィクスチャのメタデータ・sha256 と一体。D-103）。
-      # version updates（自動 PR）だけを止める。セキュリティ更新（Dependabot security updates）と手動の更新は妨げない。
-      # 更新するときは tools/golden/README.md「numpy を更新するとき」の手順で、固定版・フィクスチャ・メタデータ・再生成テストをまとめて見直す
-      - dependency-name: "numpy"

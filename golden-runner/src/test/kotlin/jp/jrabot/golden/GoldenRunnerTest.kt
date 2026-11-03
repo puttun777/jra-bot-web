@@ -209,7 +209,7 @@ class GoldenRunnerTest {
                 .values()
                 .associate { it.get("case_id").stringValue() to it.get("calls").intValue() }
 
-        // 対応表（tools/golden/catalog.py の KOTLIN_PORT と同じ内容。食い違いは kotlin_compare が失敗にする）
+        // 対応表（tools/golden/catalog.json の kotlin_port と同じ内容。食い違いは golden-runner check が失敗にする）
         assertEquals(
             setOf(
                 "GD01-EV-001",
