@@ -10,7 +10,7 @@ import kotlin.system.exitProcess
 
 /**
  * ゴールデンテストの Kotlin 側ランナー。`tools/golden/fixtures` 配下の各ケース JSON の `input.calls` を :domain の計算で実行し、次の 2 つを書き出す。
- * - `--out`: `{"schema_version":1,"results":{<case_id>:{"results":[{call_id,outcome}…]}}}`（`python -m tools.golden.compare --actual` の入力）。
+ * - `--out`: `{"schema_version":1,"results":{<case_id>:{"results":[{call_id,outcome}…]}}}`（`check` の比較の入力。旧 Python の compare と同じ形）。
  *   **実行できたケースだけ**を含める（未対応のケースを空で埋めて成功に見せない）。
  * - `--coverage`: `{"schema_version":1,"supported":[{case_id,calls}],"unsupported":[{case_id,calls,reason}]}`。呼び出し数つき。
  *
@@ -95,9 +95,9 @@ private fun verifyAndPrint(opts: Map<String, String>): Pair<Int, GoldenVerify.Re
     return 0 to r
 }
 
-private fun verifyCommand(opts: Map<String, String>): Int = verifyAndPrint(opts).first
+internal fun verifyCommand(opts: Map<String, String>): Int = verifyAndPrint(opts).first
 
-private fun checkCommand(opts: Map<String, String>): Int {
+internal fun checkCommand(opts: Map<String, String>): Int {
     val (rc, verified) = verifyAndPrint(opts)
     if (rc != 0 || verified == null) return 1
     val catalog = Catalog.load(Path.of(opts.getValue("--catalog")))

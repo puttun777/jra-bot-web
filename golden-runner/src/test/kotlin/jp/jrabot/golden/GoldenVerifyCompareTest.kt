@@ -211,6 +211,85 @@ class GoldenVerifyCompareTest {
         assertTrue(dup.check(r.byCase).any { "id 重複" in it })
     }
 
+    @Test
+    fun `forbidden patterns use python word characters around combining marks and zero width joiners`() {
+        for ((text, hit) in listOf(
+            // 期待値は Python の re で確かめた値（旧 verify.py と同じ判定）
+            "JVLink\u0e31" to true, // タイ文字の結合記号は isalnum ではない → 境界あり → 検出（Java の UNICODE_CHARACTER_CLASS では検出しなかった）
+            "a.pkl\u0301" to true, // 結合アキュートは Python の \w ではない → 境界あり → 検出
+            "\u200dJVLink" to true, // ZWJ は Python の \w ではない → 境界あり → 検出
+            "xJVLink" to false, // 直前が英字 → 境界なし
+            "JVLink①" to false, // ① は Python の \w（isalnum）→ 境界なし
+        )) {
+            val d = copy()
+            mutate(d, first) { (it.get("input").get("calls").get(0) as ObjectNode).put("note", text) }
+            assertEquals(hit, errors(d).any { "禁止パターン" in it }, text)
+        }
+    }
+
+    @Test
+    fun `malformed fixtures are reported as errors, not as a crash`() {
+        val d = copy()
+        val text = Files.readString(d.resolve(first)).replaceFirst(Regex("\"value\": [-0-9.e]+"), "\"value\": 1e999")
+        Files.writeString(d.resolve(first), text)
+        assertError(d, "非有限")
+        val d2 = copy()
+        mutate(d2, first) { (it.get("input").get("calls").get(0) as ObjectNode).remove("call_id") }
+        assertError(d2, "call_id の無い呼び出し")
+        val d3 = copy()
+        mutate(d3, first) { it.put("case_id", 5) }
+        assertTrue(errors(d3).isNotEmpty())
+    }
+
+    @Test
+    fun `verify and check exit codes`() {
+        val cat = Path.of("..", "tools", "golden", "catalog.json").toString()
+
+        fun opts(
+            dir: Path,
+            catalog: String = cat,
+        ) = mapOf("--fixtures" to dir.toString(), "--catalog" to catalog)
+        assertEquals(0, verifyCommand(opts(fixtures)))
+        assertEquals(0, checkCommand(opts(fixtures)))
+        val d = copy()
+        mutate(d, first, updateManifest = false) {
+            (
+                it
+                    .get("expected_output")
+                    .get("results")
+                    .get(0)
+                    .get("outcome") as ObjectNode
+            ).put("value", 0.5)
+        }
+        assertEquals(1, verifyCommand(opts(d)))
+        assertEquals(1, checkCommand(opts(d)))
+        // 期待値だけを変え manifest も合わせる → verify は通り、比較で差分 = 1
+        val d2 = copy()
+        mutate(d2, first) { fx ->
+            val oc =
+                fx
+                    .get("expected_output")
+                    .get("results")
+                    .get(0)
+                    .get("outcome") as ObjectNode
+            oc.put("value", oc.get("value").doubleValue() + 1.0)
+        }
+        assertEquals(0, verifyCommand(opts(d2)))
+        assertEquals(1, checkCommand(opts(d2)))
+        // 対応表と申告が違う → 形式不正 = 2
+        val badCat = Files.createTempFile("catalog", ".json")
+        val j = mapper.readTree(Files.readAllBytes(Path.of(cat))) as ObjectNode
+        val port = j.get("kotlin_port") as ObjectNode
+        val sup = port.get("supported") as ArrayNode
+        val moved = sup.remove(0).stringValue()
+        (port.get("unsupported") as ObjectNode).put(moved, "試験")
+        val cases = j.get("catalog") as ArrayNode
+        Files.writeString(badCat, mapper.writeValueAsString(j))
+        assertTrue(cases.size() > 0)
+        assertEquals(2, checkCommand(opts(fixtures, badCat.toString())))
+        assertEquals(1, verifyCommand(opts(fixtures, "/nonexistent/catalog.json")))
+    }
+
     // ------------------------------------------------------------------ 比較
 
     private fun j(s: String): JsonNode = mapper.readTree(s)

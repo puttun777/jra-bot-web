@@ -93,6 +93,8 @@ jobs:
       # フィクスチャは CI が書き換えない（sha256・来歴・合成データ・正準形式を check の中の verify で確認）。Kotlin だけで動く（D-258。旧 Python の verify・kotlin_compare は削除）。
       - name: Kotlin vs legacy golden comparison
         run: |
+          # tee の後ろでも check の終了コード（1 = 不適合・差分、2 = 形式不正）で失敗させる（既定の bash -e には pipefail が無い）
+          set -o pipefail
           mkdir -p "$RUNNER_TEMP/golden"
           ./gradlew :golden-runner:run --stacktrace --args="check --fixtures $PWD/tools/golden/fixtures --catalog $PWD/tools/golden/catalog.json --report $RUNNER_TEMP/golden/report.json" | tee "$RUNNER_TEMP/golden/summary.txt"
           { echo '### Kotlin vs legacy golden comparison'; echo '```'; cat "$RUNNER_TEMP/golden/summary.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
@@ -109,7 +111,7 @@ jobs:
             --classes "SchemaVersionTest,SchemaCheckClassificationTest,DbSettingsTest,MappingTest,PersistenceModuleTest,SqlTemplateTenantGuardTest,DeadlockRetryTest,BotRunAcquireContentionTest"
           node build/tools/src/main.js verify-junit --label "domain unit (incl. decision logic T3.1/T3.2, calendar T3.3, ingest T3.4, ML T3.6-A)" --dir domain/build/test-results/test --min 822 \
             --classes "EvMathTest,KellyMathTest,PythonCompatTest,MarketProbabilityTest,SnapshotFiltersTest,MarketBlendTest,WinStakeTest,WinDecisionEvaluatorTest,PlackettLuceTest,ComboOddsTest,ComboStrategyTest,WinDecisionComboTest,SourceVersionTest,TransitionsTest,ScheduleEventTest,CalendarOverrideTest,WatchWindowTest,EffectiveCalendarTest,ScheduleUpdaterTest,CalendarCheckPolicyTest,CalendarCheckServiceTest,CalendarSourceGuardTest,LeaseAndDayModelTest,EnvelopeValidatorTest,AgentAuthTest,FetchPolicyTest,HeartbeatAndBackfillTest,PedigreeHashTest,CanonicalJsonTest,StrictJsonTest,FeatureSchemaTest,FeatureSchemaFixtureTest,FeatureBuilderTest,ModelLoaderTest,ProbabilityPipelineTest,MlEndToEndTest,DatasetExporterTest,HorseMasterAtTimeTest,DatasetPublisherTest,TenantBoundaryContractTest"
-          node build/tools/src/main.js verify-junit --label "golden-runner unit" --dir golden-runner/build/test-results/test --min 33 --classes "GoldenRunnerTest,GoldenMlTest,GoldenVerifyCompareTest"
+          node build/tools/src/main.js verify-junit --label "golden-runner unit" --dir golden-runner/build/test-results/test --min 36 --classes "GoldenRunnerTest,GoldenMlTest,GoldenVerifyCompareTest"
           node build/tools/src/main.js verify-junit --label "bot unit" --dir bot/build/test-results/test --min 75 \
             --classes "BotArgsParserTest,BotLauncherTest,BotJobExecutorTest,BotProcessTest,BotSpringWiringTest,JobGateTest,CycleGateTest,CalendarCheckTaskHandlerTest,CalendarSettingsParserTest,ExportDatasetTaskHandlerTest"
           node build/tools/src/main.js verify-junit --label "ingest unit" --dir ingest/build/test-results/test --min 35 \

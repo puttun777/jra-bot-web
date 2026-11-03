@@ -147,6 +147,23 @@ describe("workflow rules", () => {
     assert.match(on, /^ {2}push:\n {4}branches: \[main\]/m);
     assert.ok(CI.includes("cancel-in-progress: ${{ github.event_name == 'pull_request' }}"));
   });
+  it("a run block that pipes into tee keeps the exit status (pipefail), so a failing check is not hidden", () => {
+    for (const [file, text] of Object.entries(WORKFLOWS)) {
+      const doc: unknown = parseYaml(text);
+      const jobsNode = isRecord(doc) && isRecord(doc["jobs"]) ? doc["jobs"] : {};
+      for (const [jobName, j] of Object.entries(jobsNode)) {
+        const jobShell =
+          isRecord(j) && isRecord(j["defaults"]) && isRecord(j["defaults"]["run"]) ? j["defaults"]["run"]["shell"] : undefined;
+        const steps = isRecord(j) && Array.isArray(j["steps"]) ? j["steps"] : [];
+        for (const s of steps) {
+          if (!isRecord(s) || typeof s["run"] !== "string" || !/\|\s*tee\b/.test(s["run"])) continue;
+          const shell = s["shell"] ?? jobShell;
+          // shell: bash（GitHub は bash --noprofile --norc -eo pipefail {0}）か、run の中の set -o pipefail
+          assert.ok(shell === "bash" || /set -[a-z]*o pipefail|set -o pipefail/.test(s["run"]), `${file}/${jobName}/${String(s["name"])}`);
+        }
+      }
+    }
+  });
   it("monthly schedule exists", () => assert.match(CI, /cron: "\d+ \d+ 1 \* \*"/));
   it("mandatory checks are kept in build and db jobs", () => {
     const b = jobText("build");

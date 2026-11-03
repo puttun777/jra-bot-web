@@ -27,7 +27,8 @@
 ## 旧 Python の生成器を削除したことで失われた検証（`docs/LANGUAGE_MIGRATION.md` §5）
 
 - 以前は CI のたびに、固定コミットの旧実装から**再生成してフィクスチャと一致**することを確かめていた（`golden tests (Python 3.12)` ジョブ）。これは無くなった。フィクスチャは固定コミット・sha256 つきで凍結されており、Kotlin の検証はその来歴・hash・合成データであること・形式を確かめる。
-- フィクスチャを**作り直す・ケースを足す必要が出たら**、本人の PC で一回限りの手順で行う: このリポジトリの削除前のコミット（`git log -- tools/golden/generate.py` で最後のコミットを探す）の `tools/golden` と、参照元の固定コミットを使って生成し、その差分を PR に出す（通常開発・CI の必須経路ではない）。**Kotlin や TypeScript で書き直した生成器の出力を『旧 Python 由来の証拠』とは呼ばない。**
+- ほかに、削除した Python の試験が見ていた次の検証も無くなった: シナリオ定義とフィクスチャの入力の一致（`test_inputs_match_scenario_definitions` ほか）、旧実装を読み取り専用で扱うガード（legacy guard）、numpy の版を固定した再生成の許容差。いずれも『再生成』の一部で、凍結したフィクスチャの来歴・hash の検証で代える。
+- フィクスチャを**作り直す・ケースを足す必要が出たら**、本人の PC で一回限りの手順で行う: 削除コミット（`git log --diff-filter=D -1 --format=%H -- tools/golden/generate.py`）の**親**（`<削除コミット>^`）の `tools/golden` を取り出し（`git checkout <削除コミット>^ -- tools/golden`）、参照元の固定コミットを使って生成し、その差分を PR に出す（通常開発・CI の必須経路ではない）。**Kotlin や TypeScript で書き直した生成器の出力を『旧 Python 由来の証拠』とは呼ばない。**
 
 ## 新しいケースの追加
 
