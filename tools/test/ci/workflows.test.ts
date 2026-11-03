@@ -216,6 +216,11 @@ describe("workflow rules", () => {
     const runner = readFileSync(join(ROOT, "tools", "run-tests.mjs"), "utf8");
     assert.match(runner, /const MIN = \d{3};/);
     assert.match(runner, /verify-junit/);
+    // 画面（TypeScript。D-263）の型検査と単体試験も同じジョブで、件数を検査する
+    assert.ok(r.includes("npm run --silent build:frontend") && r.includes("npm run --silent test:frontend"));
+    const fe = readFileSync(join(ROOT, "dashboard", "run-tests.mjs"), "utf8");
+    assert.match(fe, /const MIN = \d{2,};/);
+    assert.match(fe, /verify-junit/);
   });
   it("no Python ML job remains and the Kotlin ML tests are counted by the build job", () => {
     assert.ok(!("ml-train" in REQUIRED) && !("ml-tools" in REQUIRED));

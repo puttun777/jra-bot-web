@@ -9,6 +9,8 @@ import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.springframework.boot.builder.SpringApplicationBuilder
 import org.springframework.context.ConfigurableApplicationContext
+import tools.jackson.databind.JsonNode
+import tools.jackson.databind.json.JsonMapper
 import java.nio.file.Files
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -125,5 +127,61 @@ class ReadAdminApiMySqlIntegrationTest {
         assertEquals(403, createCancel(viewer).status)
         assertEquals(2, db.count("SELECT COUNT(*) FROM audit_log"))
         assertEquals(1, db.count("SELECT COUNT(*) FROM calendar_override"))
+    }
+
+    /**
+     * 画面（dashboard/src/main/ts/schema.ts）が受け取る形と、実際の応答の形が一致すること（D-263）。見本は src/test/resources/frontend-contract。
+     * オブジェクトのキーの集合と、両方が null でないときの JSON の型を比べる（配列は見本の先頭要素と実際の全要素）。
+     * TypeScript の試験は同じ見本を schema.ts の検査に通すので、サーバの DTO の項目を変えて見本・schema を直し忘れると、どちらかが失敗する。
+     */
+    @Test
+    fun `API の応答の形は画面の契約の見本（frontend-contract）と一致する`() {
+        assertEquals(201, createCancel().status)
+        db.exec(
+            "INSERT INTO bot_run (tenant_id, run_id, run_date, trigger_type, state, exit_reason, started_at, finished_at) " +
+                "VALUES (1, '00000000-0000-4000-8000-000000000001', '2026-10-24', 'SCHEDULER', 'SUCCEEDED', 'DAY_COMPLETED', " +
+                "'2026-10-24 00:30:00.000000', '2026-10-24 08:00:00.000000')",
+        )
+        val cases =
+            linkedMapOf(
+                "status.json" to "/api/v1/status",
+                "races.json" to "/api/v1/races?date=2026-10-24",
+                "signals.json" to "/api/v1/signals?date=2026-10-24",
+                "performance.json" to "/api/v1/performance?from=2026-10-24&to=2026-10-24",
+                "runs.json" to "/api/v1/runs?date=2026-10-24",
+                "overrides.json" to "/api/v1/admin/overrides?date=2026-10-24",
+                "me.json" to "/api/v1/me",
+            )
+        val mapper = JsonMapper.builder().build()
+        val compared = mutableListOf<String>()
+        for ((file, path) in cases) {
+            val res = http.get(path, admin)
+            assertEquals(200, res.status, "$path: ${res.body}")
+            val expected = mapper.readTree(checkNotNull(javaClass.getResource("/frontend-contract/$file")) { "見本 $file が無い" }.readText())
+            assertSameShape(expected, mapper.readTree(res.body), file, compared)
+        }
+        // 実際の応答が空の配列だと要素の形を比べられない。比べた位置を確かめる（見本の配列のうち、ここで要素まで比べたもの）
+        for (p in listOf("races.json[0]", "signals.json.items[0]", "runs.json[0]", "overrides.json[0]")) assertTrue(p in compared, "$p を比べていない: $compared")
+    }
+
+    private fun assertSameShape(
+        expected: JsonNode,
+        actual: JsonNode?,
+        path: String,
+        compared: MutableList<String>,
+    ) {
+        if (actual == null) throw AssertionError("$path が応答に無い")
+        if (expected.isNull || actual.isNull) return
+        assertEquals(expected.nodeType, actual.nodeType, "$path の JSON の型")
+        if (expected.isObject) {
+            val keys = expected.properties().map { it.key }.toSortedSet()
+            assertEquals(keys, actual.properties().map { it.key }.toSortedSet(), "$path のキー（画面の schema.ts と見本を合わせる）")
+            for (k in keys) assertSameShape(expected.get(k), actual.get(k), "$path.$k", compared)
+        } else if (expected.isArray && expected.size() > 0) {
+            for (i in 0 until actual.size()) {
+                compared += "$path[$i]"
+                assertSameShape(expected.get(0), actual.get(i), "$path[$i]", compared)
+            }
+        }
     }
 }

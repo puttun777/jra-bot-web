@@ -31,10 +31,31 @@ describe("dockerfile", () => {
     const aliases = new Set(STAGES.map(([, a]) => a).filter((a) => a !== ""));
     const externals = STAGES.map(([r]) => r).filter((r) => !aliases.has(r));
     const jvm = externals.filter((r) => r.startsWith("eclipse-temurin"));
+    const node = externals.filter((r) => r.startsWith("node:"));
     assert.equal(jvm.length, 2); // JDK（build）と JRE（runtime）
-    assert.equal(externals.length, jvm.length); // Python などの他のベースイメージは無い（D-250・D-257）
+    assert.equal(node.length, 1); // 画面の TypeScript の変換だけ（frontend ステージ。D-263）
+    assert.equal(externals.length, jvm.length + node.length); // Python などの他のベースイメージは無い（D-250・D-257）
     for (const r of jvm) assert.match(r, /^eclipse-temurin:25-(jdk|jre)-noble@sha256:[0-9a-f]{64}$/);
-    for (const r of externals) assert.doesNotMatch(r, /latest|ea|rc|beta|alpha/i);
+    for (const r of node) assert.match(r, /^node:24\.\d+\.\d+-trixie-slim@sha256:[0-9a-f]{64}$/);
+    // 版の部分（@sha256 の前）だけを見る（digest の 16 進数に "ea" などが現れ得る）
+    for (const r of externals) assert.doesNotMatch(r.split("@")[0] ?? r, /latest|ea|rc|beta|alpha/i);
+  });
+  it("the Node stage only compiles the dashboard TypeScript and only the build stage uses its output (D-263)", () => {
+    // Node の版は CI（setup-tools の actions/setup-node）と同じ。npm ci は lockfile どおり・install スクリプトを実行しない
+    const setup = readFileSync(join(ROOT, ".github", "actions", "setup-tools", "action.yml"), "utf8");
+    const ciNode = /node-version: "([0-9.]+)"/.exec(setup)?.[1];
+    assert.ok(ciNode !== undefined);
+    assert.ok(STAGES.some(([r, a]) => a === "frontend" && r.startsWith(`node:${ciNode}-trixie-slim@sha256:`)));
+    const fe = stageBody("frontend");
+    assert.match(fe, /npm ci --ignore-scripts --no-audit --no-fund/);
+    assert.match(fe, /node node_modules\/typescript\/bin\/tsc -p dashboard\/tsconfig\.json/);
+    const copies = [...fe.matchAll(/^COPY (.+) \S+$/gm)].map((m) => m[1]);
+    assert.deepEqual(copies, ["package.json package-lock.json", "dashboard/tsconfig.json", "dashboard/src/main/ts"]);
+    assert.equal([...DOCKERFILE.matchAll(/--from=frontend\b/g)].length, 1);
+    const build = stageBody("build");
+    assert.match(build, /COPY --from=frontend \/src\/dashboard\/build\/generated\/frontend \.\/dashboard\/build\/generated\/frontend/);
+    assert.match(build, /-PfrontendPrebuilt=true/);
+    for (const t of TARGETS) assert.doesNotMatch(stageBody(t), /\bnode\b|\bnpm\b/i, t); // 実行イメージに Node は入らない
   });
   it("all targets exist with an exec form entrypoint and no CMD", () => {
     for (const t of TARGETS) {
@@ -93,6 +114,8 @@ describe("dockerignore", () => {
       [...allowed].sort(),
       [
         "/gradlew",
+        "/package.json",
+        "/package-lock.json",
         "/settings.gradle.kts",
         "/build.gradle.kts",
         "/gradle.properties",
@@ -120,8 +143,7 @@ describe("dockerignore", () => {
       "/ml/",
       "/.env",
       "/tools/ml/signing.py",
-      "/node_modules/",
-      "/package.json",
+      "/node_modules/", // npm の依存はイメージの文脈に入れない（frontend ステージが npm ci で取得する。package.json と lockfile だけ許可: D-263）
     ]) {
       assert.ok(!allowed.has(f), f);
     }

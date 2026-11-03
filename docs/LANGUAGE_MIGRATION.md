@@ -39,7 +39,7 @@
 | W-GD1 | `tools/golden/*`（約 2,900） | 旧実装（jra-bot f7dbf69、Python）でフィクスチャを生成・検証、Kotlin 出力との比較 | ci.yml `golden`・`build` | フィクスチャは CI が書き換えない、sha256・来歴の検証、未対応ケースを成功に数えない | 93 | 比較は `:golden-runner`（Kotlin）へ、来歴・hash 検証は TS へ。**旧実装からの再生成は必須経路から外す**（§5） | なし |
 | W-AG1 | `agent/src/jra_agent/*`（約 4,500） | Windows 取得エージェント（JV-Link COM ワーカー子プロセス・監視・SQLite キュー・署名・ビーコン・モード・DPAPI・更新・診断・タスク） | 本人の Windows PC → ingest API（CONTRACTS §6〜§8。署名ベクトル `agent/tests/vectors/signing_vectors.json`） | ハング検知と子プロセス終了、再送・重複防止、停止モード、パストラバーサル拒否 | pytest 213 + Windows 4 + `AgentInteropIntegrationTest`（実 Python エージェント ⇄ Kotlin ingest） | **C#/.NET 10**（`agent/`）。署名ベクトル・相互運用試験を C# 版で通す（§3）→ **済（D-261。`agent/cs`、試験 296 件・結合 4/4）** | 実機 COM は B（R4） |
 | W-AG2 | `agent/poc/*`・`agent/interop/driver.py`・`agent/scripts/*.ps1` | 実機 PoC・相互運用試験のドライバ・タスク登録 | 本人・ingest 統合試験 | ドライラン既定 | test_cli_poc | C# の `poc` サブコマンドと `interop` ドライバ、PowerShell は .exe 用に更新 → **済（D-261）** | 実機は B |
-| W-FE1 | `dashboard/src/main/resources/static/app.js`（156） | 画面の処理 | ブラウザ | CSP（インライン script なし）・innerHTML 不使用 | 静的検査 | `dashboard/src/main/ts/*.ts` → Gradle で tsc → `static/js/`（生成物は Git に入れない） | 目視の受入は本人 |
+| W-FE1 | `dashboard/src/main/resources/static/app.js`（156） | 画面の処理 | ブラウザ | CSP（インライン script なし）・innerHTML 不使用 | 静的検査 | `dashboard/src/main/ts/*.ts` → Gradle で tsc → `static/js/`（生成物は Git に入れない）→ **済（D-263。TS 試験 44 件・契約の見本を Kotlin の統合試験と共有・Docker は Node のステージ）** | 目視の受入は本人 |
 | W-DK1 | `Dockerfile` の ml-train（Python 3.13 + venv） | ml-train イメージ | images.yml | 非 root・読取り専用・ENTRYPOINT exec 形式 | スモーク | JVM の ml-train ステージ（他の JVM イメージと同じ基盤） | なし |
 | W-WF1 | ci.yml の Python ジョブ（golden/ml-tools/ml-train/agent/agent-windows/release-tools）、compat-connectorj26.yml・images.yml の Python 呼出し、dependabot の pip | — | — | — | — | 各移行の PR で置換（node/dotnet のジョブへ）。dependabot は npm・nuget へ | なし |
 
@@ -58,8 +58,8 @@
 3. **L3 ML（Kotlin）**: **先に Python 実装で数値フィクスチャを生成して固定**（生成元コミット・入力・hash を記録）→ `:ml-train` 実装 → 固定フィクスチャと許容差比較 → イメージ・スモーク・相互運用試験を JVM へ → Python（ml/・tools/ml）削除。release-manifest schema v3（`runtime.python` 削除）を web・infra 同時に。
 4. **L4 golden**: Kotlin の比較器を `:golden-runner` へ、来歴・hash 検証を TS へ → golden ジョブ（Python）を廃止。
 5. **L5 agent（C#）**: COM PoC → 通常ロジック（Fake）→ 署名ベクトル・ingest 相互運用試験を C# で → Windows CI → Python 削除。**2026-11-03 に実施（D-261）**。実機の COM PoC は本人の PC（POC.md）。
-6. **L6 Pulumi**: 対応表 → Pulumi 定義 + mock 試験 → preview guard → workflow（preview まで）→ Terraform は**本人の import/up 承認まで残す**（§7。実リソースが無いと確認できれば、承認後に削除）。
-7. **L7 フロント TS**、**L8 残機能**（COMPLETION の C）、**L9 リリース経路**。
+6. **L6 Pulumi**: 対応表 → Pulumi 定義 + mock 試験 → preview guard → workflow（preview まで）→ Terraform は**本人の import/up 承認まで残す**（§7。実リソースが無いと確認できれば、承認後に削除）。**2026-11-03 に定義・mock 試験・preview guard・`ops db-users` を実施（infra PR #9 = c6613ed、I-036・I-037）**。preview の workflow・WIF の束縛・up/import は本人の承認後。
+7. **L7 フロント TS**（**2026-11-03 に実施: D-263**）、**L8 残機能**（COMPLETION の C）、**L9 リリース経路**。
 
 ## 3. C# エージェントの互換性（L5。**2026-11-03 に実施: D-261**）
 - 通信: CONTRACTS §6〜§8 の HMAC 署名・エンベロープ・ビーコンを、既存の署名ベクトル（`agent/tests/vectors/signing_vectors.json`。OpenSSL で独立に計算）とビーコンベクトル（`beacon_vectors.json`。削除前の Python 実装で生成。infra の ops と共有）で検証する（C# の `SigningTests`・`BeaconAndModesTests`）。**型が合うことと通信互換は別**で、Kotlin ingest との相互運用試験（`AgentInteropIntegrationTest`。C# のドライバ `jraagent-interop` を実プロセスで起動）で確認する（4/4 成功）。

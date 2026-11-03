@@ -139,6 +139,11 @@ jobs:
         run: npm run --silent lint
       - name: Unit tests (none skipped)
         run: node tools/run-tests.mjs
+      # ダッシュボードの画面（dashboard/src/main/ts。D-263）: strict の型検査（ブラウザ用と試験用の tsconfig）と node:test（件数・skip を検査）
+      - name: Dashboard frontend (TypeScript) type check and unit tests
+        run: |
+          npm run --silent build:frontend
+          npm run --silent test:frontend
 
   # DB 統合テスト（T2.3 + T2.4 + T2.8）: Flyway V1/V2/R__grants と CLI（:db-migration）、Doma の Repository（:persistence）、実行アプリの起動・Job を、
   # 使い捨ての MySQL コンテナ（Testcontainers）に対して検証する。MySQL 8.4 LTS（本番の暫定基準: D-046）と 9.7 LTS（互換性の確認: G-DB-0）。

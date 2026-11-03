@@ -55,8 +55,8 @@
 | L3 | ML 学習・評価・品質ゲート・成果物・convert-pkl（ml/・tools/ml） | Kotlin（`:ml-train`） | **実装・接続・合成データで検証済み**（D-257）。Python の ml/・tools/ml は削除。実 pkl の変換確認は本人の PC（B）、実データでの学習・閾値は COMP-4・未承認のまま | **A**（合成データの範囲） |
 | L4 | ゴールデン（tools/golden） | Kotlin（`golden-runner verify/check`） | **実装・CI 接続済み**（D-258）。旧 Python の verify・kotlin_compare と同じ報告（要約がバイト単位で一致）。Python の生成器・CI ジョブは削除。旧実装からの再生成の一致は CI から外した（LANGUAGE_MIGRATION §5） | **A** |
 | L5 | Windows 取得エージェント（agent/） | C#/.NET 10 | 未着手 | **C**（実機 COM は B） |
-| L6 | GCP 資源定義（terraform/） | Pulumi + TypeScript | 未着手 | **C**（up/import は B） |
-| L7 | フロントエンド（app.js） | TypeScript | 未着手 | **C** |
+| L6 | GCP 資源定義（terraform/） | Pulumi + TypeScript | **定義・mock 試験・preview guard 済**（infra I-036・I-037。Terraform は up/import の承認まで現行） | **C**（up/import・preview の workflow は B） |
+| L7 | フロントエンド（app.js） | TypeScript | **済（D-263）**。目視の受入は本人 | **C** |
 | L8 | 残機能（上表の C） | Kotlin/TS | 未着手 | **C** |
 | L9 | リリース経路（AR 公開・本番 manifest・deploy 受渡し） | GitHub Actions + TS | 未着手 | **C**（実公開は B） |
 

@@ -159,11 +159,12 @@ export function stepsFor(plan: Plan, files: readonly string[], root: string, out
   });
   s.push({
     id: "tools-ts",
-    title: "TypeScript: lint・型検査・ビルド・単体（tools。CI の release-tools と同一）",
+    title: "TypeScript: lint・型検査・ビルド・単体（tools と画面。CI の release-tools と同一）",
     commands: [
       ["npm", "run", "--silent", "lint"],
       ["npm", "run", "--silent", "build"],
       ["node", "tools/run-tests.mjs"],
+      ["npm", "run", "--silent", "test:frontend"],
     ],
   });
   s.push({

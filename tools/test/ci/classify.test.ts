@@ -370,3 +370,36 @@ describe("git diff", () => {
     });
   });
 });
+
+describe("dashboard frontend (TypeScript, D-263)", () => {
+  it("frontend source, tsconfig and static files run release tools (type check + node:test), build and images", () => {
+    for (const f of [
+      "dashboard/src/main/ts/app.ts",
+      "dashboard/src/main/ts/schema.ts",
+      "dashboard/tsconfig.json",
+      "dashboard/tsconfig.test.json",
+      "dashboard/src/main/resources/static/index.html",
+      "dashboard/src/main/resources/static/style.css",
+    ]) {
+      const p = classify([f]);
+      assert.ok(p.runBuild && p.runRelease && p.runImages, f);
+      assert.deepEqual(p.dbSuites, ["apps"], f);
+    }
+  });
+  it("frontend tests and the contract samples run release tools and build (the Kotlin integration test reads the samples) without images", () => {
+    for (const f of [
+      "dashboard/src/test/ts/view.test.ts",
+      "dashboard/run-tests.mjs",
+      "dashboard/src/test/resources/frontend-contract/status.json",
+      "dashboard/src/test/resources/frontend-contract/README.md",
+    ]) {
+      const p = classify([f]);
+      assert.ok(p.runBuild && p.runRelease && !p.runImages, f);
+      assert.deepEqual(p.dbSuites, ["apps"], f);
+    }
+  });
+  it("kotlin-only dashboard changes still do not run release tools", () => {
+    const p = classify(["dashboard/src/main/kotlin/jp/jrabot/dashboard/api/ReadApi.kt"]);
+    assert.ok(p.runBuild && !p.runRelease);
+  });
+});
