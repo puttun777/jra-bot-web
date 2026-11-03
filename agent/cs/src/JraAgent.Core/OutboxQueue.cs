@@ -204,6 +204,9 @@ public sealed class OutboxQueue : IDisposable
         set => cfg = value;
     }
 
+    /// <summary>結合試験のドライバ用: 再送の待機を解除する（同じ SQL を試験用の <see cref="ExecRaw"/> でも使う）。</summary>
+    internal void ExecRawForInterop(string sql) => ExecRaw(sql);
+
     /// <summary>試験用: 生の SQL を実行する（壊れた状態・容量不足の再現）。</summary>
     internal void ExecRaw(string sql)
     {

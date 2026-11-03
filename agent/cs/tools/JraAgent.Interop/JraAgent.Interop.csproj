@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Kotlin ingest との結合試験用ドライバ（:ingest の AgentInteropIntegrationTest が子プロセスとして起動する）。配布物には含めない。 -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>jraagent-interop</AssemblyName>
+    <RootNamespace>JraAgent.Interop</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/JraAgent.Core/JraAgent.Core.csproj" />
+  </ItemGroup>
+</Project>

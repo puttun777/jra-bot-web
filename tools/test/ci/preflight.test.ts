@@ -49,9 +49,9 @@ describe("selection", () => {
     assert.ok(ids(p, files).includes("images"));
   });
   it("python-only change still runs kotlin interop where needed", () => {
-    const got = ids(classify(["agent/src/jra_agent/queue.py"]));
+    const got = ids(classify(["agent/cs/src/JraAgent.Core/OutboxQueue.cs"]));
     assert.ok(got.includes("agent"));
-    assert.ok(got.includes("kotlin-build")); // agent/src は kotlin_app も付く（AgentInteropIntegrationTest）
+    assert.ok(got.includes("kotlin-build")); // agent/cs/src/JraAgent.Core は kotlin_app も付く（AgentInteropIntegrationTest）
     const all = ids(classify(["tools/src/ci/classify.ts"]));
     assert.ok(!all.includes("ml-train") && !all.includes("ml-tools"), "Python の ML の検査は無い（D-257）");
   });

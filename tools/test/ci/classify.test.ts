@@ -204,19 +204,18 @@ describe("agent", () => {
     assert.equal(p.mode, "docs");
     assert.ok(!(p.runAgent || p.runAgentWindows));
   });
-  it("agent tests and poc run python only", () => {
-    for (const f of ["agent/tests/test_queue.py", "agent/poc/poc_mock.py"]) {
+  it("agent cli and tests run the linux agent job only", () => {
+    for (const f of ["agent/cs/tests/JraAgent.Core.Tests/QueueTests.cs", "agent/cs/src/JraAgent.Cli/Program.cs", "agent/cs/.gitignore"]) {
       const p = classify([f]);
       assert.equal(p.runAgent, true, f);
       assert.ok(!(p.runAgentWindows || p.runBuild || p.dbMatrix.length > 0), f);
     }
   });
-  it("agent source also runs kotlin interop on 8.4 only", () => {
+  it("agent core, the interop driver and the vectors also run kotlin interop on 8.4 only", () => {
     for (const f of [
-      "agent/src/jra_agent/sender.py",
-      "agent/interop/driver.py",
+      "agent/cs/src/JraAgent.Core/Sender.cs",
+      "agent/cs/tools/JraAgent.Interop/Program.cs",
       "agent/tests/vectors/signing_vectors.json",
-      "agent/pyproject.toml",
     ]) {
       const p = classify([f]);
       assert.ok(p.runAgent && p.runBuild, f);
@@ -227,14 +226,22 @@ describe("agent", () => {
   });
   it("windows specific files run windows runner", () => {
     for (const f of [
-      "agent/src/jra_agent/winapi.py",
-      "agent/src/jra_agent/lock.py",
-      "agent/src/jra_agent/jvlink/supervisor.py",
-      "agent/tests/test_winapi_windows.py",
+      "agent/cs/src/JraAgent.Windows/ComJvLink.cs",
+      "agent/cs/src/JraAgent.Core/Worker.cs",
+      "agent/cs/src/JraAgent.Core/InstanceLock.cs",
+      "agent/cs/src/JraAgent.Cli/WorkerCommand.cs",
+      "agent/cs/tests/JraAgent.Core.Tests/WindowsTests.cs",
+      "agent/cs/Directory.Packages.props",
+      "agent/cs/src/JraAgent.Core/packages.lock.json",
       "agent/scripts/install-task.ps1",
     ]) {
       assert.equal(classify([f]).runAgentWindows, true, f);
     }
+  });
+  it("a resurrected python agent file only runs the C# agent job (python is not run in CI: D-250)", () => {
+    const p = classify(["agent/src/jra_agent/sender.py"]);
+    assert.equal(p.runAgent, true);
+    assert.ok(!(p.runAgentWindows || p.runBuild));
   });
   it("full runs everything including agent jobs", () => {
     const p = planForEvent("workflow_dispatch");

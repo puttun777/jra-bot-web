@@ -14,7 +14,7 @@
  *   release      リリース補助・スキーマ・契約・マイグレーション・アプリの build 定義 → release-tools（TypeScript 単体）
  *   docker       Dockerfile / .dockerignore → images
  *   connectorj   DB ドライバ関連の依存設定 → connector/j 26.x 互換性チェック（非ゲート）
- *   agent        agent/ → agent（Linux）
+ *   agent        agent/ → agent（Linux。C#/.NET）
  *   agent_windows agent/ の Windows 固有部分 → agent-windows
  *   ci           CI 自体（ワークフロー・tools の共通部・分類ロジック・npm の依存）→ すべて（connector/j 26.x は除く）
  * 実行されなかったジョブは「テストされた」ことにならない（最終ゲートが skipped を成功として数えない）。
@@ -76,14 +76,20 @@ export const RULES: ReadonlyArray<readonly [RegExp, readonly Tag[]]> = [
   // --- Connector/J・DB ドライバ関連の依存設定（gradle/libs.versions.toml は build_cfg でもある）
   [/^gradle\/libs\.versions\.toml$/, ["build_cfg", "connectorj"]],
   [/^(persistence|db-migration)\/build\.gradle\.kts$/, ["kotlin_db", "connectorj", "docker"]],
-  // --- Windows エージェント。.md は docs。Windows 固有のファイルだけ Windows ランナーでも検証する
+  // --- Windows エージェント（C#。agent/cs。D-261）。.md は docs。Windows 固有のファイルだけ Windows ランナーでも検証する。
+  //     Core・ツール（jraagent-interop）・署名ベクトルは Kotlin の AgentInteropIntegrationTest（kotlin_app）でも使う。
+  //     旧 Python の置き場所（agent/src・agent/poc・agent/interop・agent/tests/*.py）が復活しても agent の規則に当たり、C# の試験だけが走る
+  //     （Python は CI で実行しない: 言語方針 D-250）
   [/^agent\/.*\.md$/, ["docs"]],
   [
-    /^agent\/src\/jra_agent\/(winapi|secrets_store|lock)\.py$|^agent\/src\/jra_agent\/jvlink\/(procutil|supervisor|com_adapter|worker_main)\.py$/,
+    /^agent\/cs\/(global\.json|Directory\.(Build|Packages)\.props|JraAgent\.slnx|.*packages\.lock\.json)$|^agent\/cs\/src\/JraAgent\.Windows\/|^agent\/cs\/src\/JraAgent\.Core\/(Worker|InstanceLock|Secrets|Transport)\.cs$/,
     ["agent", "agent_windows", "kotlin_app"],
   ],
-  [/^agent\/(tests\/test_winapi_windows\.py|scripts\/)/, ["agent", "agent_windows"]],
-  [/^agent\/(src\/|interop\/|tests\/vectors\/|pyproject\.toml$|requirements)/, ["agent", "kotlin_app"]],
+  [
+    /^agent\/cs\/src\/JraAgent\.Cli\/(Commands|WorkerCommand|Poc)\.cs$|^agent\/cs\/tests\/JraAgent\.Core\.Tests\/WindowsTests\.cs$|^agent\/scripts\//,
+    ["agent", "agent_windows"],
+  ],
+  [/^agent\/cs\/src\/JraAgent\.Core\/|^agent\/cs\/tools\/|^agent\/tests\/vectors\//, ["agent", "kotlin_app"]],
   [/^agent\//, ["agent"]],
   // --- ML の合成成果物（domain の試験と ml-train の試験・release-manifest の feature_schema の入力）
   [/^domain\/src\/test\/resources\/ml\//, ["kotlin_core", "kotlin_app", "kotlin_golden", "release"]],

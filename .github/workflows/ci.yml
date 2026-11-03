@@ -167,17 +167,16 @@ jobs:
           java-version: "25"
       - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
       - uses: ./.github/actions/setup-tools
-      # Kotlin ingest と Windows エージェント（Python）の結合テスト用（AgentInteropIntegrationTest）。実行時の依存は cryptography だけ
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      # Kotlin ingest と Windows エージェント（C#）の結合テスト用（AgentInteropIntegrationTest）。ドライバ jraagent-interop をビルドして渡す
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         if: contains(env.DB_SUITES, 'apps')
         with:
-          python-version: "3.13"
-      - name: Agent runtime dependencies (for the interop test)
+          dotnet-version: "10.0.113"
+      - name: Agent interop driver (for the interop test)
         if: contains(env.DB_SUITES, 'apps')
         run: |
-          python -m venv "$RUNNER_TEMP/agent-venv"
-          "$RUNNER_TEMP/agent-venv/bin/pip" install --no-input -r agent/requirements.txt
-          echo "AGENT_PYTHON=$RUNNER_TEMP/agent-venv/bin/python" >> "$GITHUB_ENV"
+          dotnet build agent/cs/tools/JraAgent.Interop/JraAgent.Interop.csproj -c Release -p:RestoreLockedMode=true
+          echo "AGENT_INTEROP=$PWD/agent/cs/tools/JraAgent.Interop/bin/Release/net10.0/jraagent-interop" >> "$GITHUB_ENV"
       - name: Docker and image
         run: |
           docker version --format 'client={{.Client.Version}} server={{.Server.Version}}'
@@ -212,89 +211,75 @@ jobs:
           node build/tools/src/main.js verify-junit --label "ingest integration" --dir ingest/build/test-results/integrationTest --min 50 --classes "IngestReadyIntegrationTest,AgentAuthIntegrationTest,IngestIdempotencyIntegrationTest,IngestPipelineIntegrationTest,AgentInteropIntegrationTest"
           node build/tools/src/main.js verify-junit --label "dashboard integration" --dir dashboard/build/test-results/integrationTest --min 13 --classes "DashboardReadyIntegrationTest,ReadAdminApiMySqlIntegrationTest"
 
-  # Windows 取得エージェント（agent/。Python。T3.5）。Gradle に組み込まない独立プロジェクト。Linux の 2 つの Python minor（最小 3.12 と目標 3.13）で
-  # lint・型・単体・SQLite WAL・Mock HTTP・Mock COM（子プロセスのワーカー）・署名・ビーコン・再送と復旧を検査する。実 JV-Link・SDK・実トークンは使わない。
+  # Windows 取得エージェント（agent/cs。C#/.NET 10。D-261）。Gradle に組み込まない独立プロジェクト。Linux で restore（lock file どおり）・ビルド（警告はエラー）・
+  # 単体・SQLite WAL・偽サーバ・子プロセスのワーカー（Fake の JV-Link）・署名・ビーコン・再送と復旧・CLI・PoC の Mock を検査する。実 JV-Link・SDK・実トークンは使わない。
   agent:
-    name: agent python (${{ matrix.python }})
+    name: agent dotnet (linux)
     needs: changes
     if: needs.changes.outputs.run_agent == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        python: ["3.12", "3.13"]
-    defaults:
-      run:
-        working-directory: agent
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          python-version: ${{ matrix.python }}
-      - name: Install (pinned)
+          dotnet-version: "10.0.113"
+      - uses: ./.github/actions/setup-tools
+      - name: Restore (locked) and build (warnings are errors)
+        working-directory: agent/cs
         run: |
-          python -m pip install --no-input -r requirements-dev.txt
-          python -m pip install --no-input --no-deps -e .
-          python --version
-      - name: ruff and mypy
+          dotnet --version
+          dotnet restore JraAgent.slnx --locked-mode
+          dotnet build JraAgent.slnx --no-restore -c Release
+      - name: Tests
+        working-directory: agent/cs
         run: |
-          ruff check .
-          ruff format --check .
-          mypy
-      - name: Unit, integration (mock) and PoC mock tests
-        run: python -m pytest -q --junitxml=pytest.xml
-      # 0 件・失敗・想定外のスキップを成功扱いにしない。スキップを許すのは Windows 専用テスト（@win_only）だけ
+          mkdir -p "$RUNNER_TEMP/agent-junit"
+          tests/JraAgent.Core.Tests/bin/Release/net10.0/JraAgent.Core.Tests -reporter quiet -result-junit "$RUNNER_TEMP/agent-junit/agent.xml"
+      # 0 件・失敗・想定外のスキップを成功扱いにしない。スキップを許すのは Windows 専用の 4 件（WindowsTests）だけ
       - name: Verify that the tests actually ran
+        if: always()
         run: |
-          python - <<'PY'
-          import xml.etree.ElementTree as ET
-          r = ET.parse("pytest.xml").getroot()
-          s = r if r.tag == "testsuite" else r.find("testsuite")
-          tests, skipped, failures, errors = (int(s.get(k)) for k in ("tests", "skipped", "failures", "errors"))
-          print(f"tests={tests} skipped={skipped} failures={failures} errors={errors}")
-          if tests < 200 or skipped > 4 or failures or errors:
-              raise SystemExit("agent tests did not all run and pass (skips are allowed only for the 4 Windows-only tests)")
-          PY
+          node build/tools/src/main.js verify-junit --label "agent (linux)" --dir "$RUNNER_TEMP/agent-junit" --min 290 --max-skipped 4 \
+            --classes "SigningTests,BeaconAndModesTests,QueueTests,SenderTests,WorkerTests,FetcherTests,RunnerScenarioTests,PlanUpdateLockTests,ConfigAndSecretsTests,CliTests,WindowsTests"
 
-  # Windows 固有部分（DPAPI・ジョブオブジェクト・ファイルロック・ワーカーのハング回復）。SDK・JV-Link・pywin32 は不要。Windows ランナーは分単位の課金が 2 倍なので、
-  # Windows 固有のファイルが変わったときとフル検証のときだけ実行する（毎コミットは不要。classify の agent_windows）。
+  # Windows 固有部分（DPAPI・ジョブオブジェクト・ファイルロック・ワーカーのハング回復・COM 登録の確認）と、全試験の Windows での実行。SDK・JV-Link は不要。
+  # Windows ランナーは分単位の課金が 2 倍なので、Windows 固有のファイルが変わったときとフル検証のときだけ実行する（毎コミットは不要。classify の agent_windows）。
   agent-windows:
     name: agent windows
     needs: changes
     if: needs.changes.outputs.run_agent_windows == 'true'
     runs-on: windows-2025
-    timeout-minutes: 15
+    timeout-minutes: 20
     defaults:
       run:
-        working-directory: agent
         shell: bash
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          python-version: "3.13"
-      - name: Install (pinned)
+          dotnet-version: "10.0.113"
+      - uses: ./.github/actions/setup-tools
+      - name: Restore (locked) and build (warnings are errors)
+        working-directory: agent/cs
         run: |
-          python -m pip install --no-input -r requirements-dev.txt
-          python -m pip install --no-input --no-deps -e .
-      - name: All tests on Windows (none skipped)
-        run: python -m pytest -q --junitxml=pytest.xml
+          dotnet --version
+          dotnet restore JraAgent.slnx --locked-mode
+          dotnet build JraAgent.slnx --no-restore -c Release
+      - name: All tests on Windows
+        working-directory: agent/cs
+        run: |
+          mkdir -p "$RUNNER_TEMP/agent-junit"
+          tests/JraAgent.Core.Tests/bin/Release/net10.0/JraAgent.Core.Tests.exe -reporter quiet -result-junit "$RUNNER_TEMP/agent-junit/agent.xml"
+      # Windows では WindowsTests を含む全件が実行されること。スキップを許すのは Linux 専用の 3 件（sh を使う偽ワーカーと COM の拒否）だけ
       - name: Verify that the Windows tests actually ran
+        if: always()
         run: |
-          python - <<'PY'
-          import xml.etree.ElementTree as ET
-          r = ET.parse("pytest.xml").getroot()
-          s = r if r.tag == "testsuite" else r.find("testsuite")
-          tests, skipped, failures, errors = (int(s.get(k)) for k in ("tests", "skipped", "failures", "errors"))
-          print(f"tests={tests} skipped={skipped} failures={failures} errors={errors}")
-          if tests < 200 or skipped or failures or errors:
-              raise SystemExit("windows agent tests did not all run and pass")
-          PY
+          node build/tools/src/main.js verify-junit --label "agent (windows)" --dir "$RUNNER_TEMP/agent-junit" --min 290 --max-skipped 3 --classes "WindowsTests,WorkerTests,CliTests,QueueTests"
 
   # イメージのビルドとスモーク + ドライラン manifest（images.yml）。push も認証もしない。Dockerfile・リリース関連・ビルド定義が変わったときと、フル検証のときだけ
   images:
