@@ -285,6 +285,14 @@ agent/
 ### 12.3 T3.0（Windows 実機 PoC）の手順の更新（SDK 5.0.0 対応）
 1. 利用者が JRA-VAN SDK **5.0.0（64bit）**を入手。JV-Link(64bit) をインストールし、**64bit 用の利用キー**を設定（32bit 版と併存する場合は別キー）。版数を記録。
 2. 公式の検証ツール(64bit)で `JVInit`/`JVOpen`/`JVRTOpen` が通ることを先に確認（集計だけ報告）。
-3. 公式 Python サンプル（Python 3.14）を参考にしたスクリプトで G-AGENT-1〜3 を確認。**`JVRTOpen=-413` の報告**があるので、検証ツールでは取れるのに Python で失敗する場合は、そのエラーコードと条件を集計で報告する。
-4. 64bit が不調なら 32bit 版 Ver.5.0.0 + 32bit Python（D-018 の第二案）で同じ項目を確認する。
+3. C# のエージェント（`jraagent.exe poc g1|g2|g3-realtime`。D-261）で G-AGENT-1〜3 を確認する（2026-11-03 までは Python のスクリプト。公式 Python サンプルで **`JVRTOpen=-413` の報告**があったので、検証ツールでは取れるのにエージェントで失敗する場合は、そのエラーコードと条件を集計で報告する）。
+4. 64bit が不調なら 32bit 版 Ver.5.0.0 + `-r win-x86` で発行した 32bit 版のエージェント（D-018 の第二案。コードは同じ）で同じ項目を確認する。
 5. 動作したことと、公開されていることは別。**結果は PoC の集計 JSON で記録するまで「動作確認済み」と書かない**。
+
+## 13. C#/.NET 10 のエージェント（2026-11-03。D-261）
+- **構成**: `agent/cs`。`JraAgent.Core`（OS 非依存）・`JraAgent.Windows`（DPAPI・ジョブオブジェクト・COM・レジストリ）・`JraAgent.Cli`（`jraagent.exe`）・`tools/JraAgent.Interop`（結合試験のドライバ）。責務の分け方・状態・キューのスキーマ・ワーカーのプロトコル（stdin/stdout の JSON 行、バイト列は Base64）は Python 版（§5〜§11）と同じ。
+- **COM の境界**: `ComJvLink` だけが COM に触れる。`dynamic` を使わず `Type.InvokeMember` で呼び、参照渡しの位置（JVOpen の 4〜6 番目、JVRead の 3 つ）を固定し、戻り値の型（int・string）を検査してから変換する。HRESULT や例外のメッセージは返さず固定のコード（`COM_ERROR`・`COM_BAD_TYPE`・`COM_ENCODING`・`COM_UNAVAILABLE`）だけ。JVRead の文字列は cp932 へ再エンコードし、変換できない文字は例外（欠損を隠さない）。JVGets は仕様未確認のため実装しない（§12.2 の JVGETS_BYTES）。
+- **スレッドとプロセス**: COM の生成・使用・解放はワーカープロセスの STA スレッドの中だけ（`jraagent worker --backend com`）。監視側（`WorkerSupervisor`）は呼出しごとのタイムアウトで無応答のワーカーをプロセスツリーごと終了し、Windows ではジョブオブジェクト（KILL_ON_JOB_CLOSE）に入れてエージェントが落ちても孤児を残さない（入れられなければワーカーを使わない）。再起動は窓の中の回数で制限し、超えたら一定時間起動しない。
+- **仕様ゲート**: `SpecRegistry.Default` は全項目が未確認。本番の取得は `Require` で拒否される（Python 版と同じ。迂回の設定は無い。試験用の全確認済みの表は `internal`）。
+- **確認済み（Mock）**: 試験 296 件（Linux。Windows 固有 4 件は Windows ランナーで）、Kotlin ingest との結合 4/4、`poc mock` で G-AGENT-2〜5 が MOCK_PASS。**未確認（実機）**: G-AGENT-1〜3・6（§11・POC.md）、DPAPI の旧版の資格情報の引継ぎ。
+

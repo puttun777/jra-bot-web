@@ -270,6 +270,7 @@ describe("dependabot", () => {
       ["github-actions", "/.github/actions/*"],
       ["npm", "/"],
       ["docker", "/"],
+      ["nuget", "/agent/cs"],
     ]);
   });
   it("updates are grouped and limited", () => {
@@ -286,6 +287,7 @@ describe("dependabot", () => {
     assert.ok(ignores("gradle").includes("version-update:semver-minor"));
     assert.ok(ignores("docker").includes("eclipse-temurin"));
     assert.ok(ignores("npm").includes('"typescript"') && ignores("npm").includes("@types/node"));
+    assert.ok(ignores("nuget").includes("Microsoft.*") && ignores("nuget").includes("version-update:semver-major"));
     for (const e of updates.filter((x) => x["package-ecosystem"] === "pip")) {
       const ig = Array.isArray(e["ignore"]) ? e["ignore"].filter(isRecord) : [];
       const numpy = ig.find((i) => i["dependency-name"] === "numpy");

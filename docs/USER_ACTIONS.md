@@ -13,16 +13,28 @@
 | A7 | 実データのクラウド投入（COMP-4 の回答後） | `docs/DATA_SOURCE_COMPLIANCE.md` §0 の Q1〜Q3 を JRA-VAN に問い合わせ | **実データはクラウドに入れない**（ローカルでの検証のみ） |
 
 ## B. 実機・外部での作業
-### B1. Windows と JV-Link の実機 PoC（R4）
-前提: 64bit の Windows・JV-Link（利用キー設定済み）・Python 64bit。リポジトリを取得し `agent/` で依存を入れる（`agent/requirements.txt`）。
+### B1. Windows と JV-Link の実機 PoC（R4。エージェントは C#/.NET 10: D-261）
+前提: 64bit の Windows・JV-Link（利用キー設定済み）。エージェントの実行ファイル `jraagent.exe` を作る（Python は不要）:
+1. .NET 10 SDK（10.0.113 以降の 10.0.1xx。`agent/cs/global.json`）をインストールする（公式のインストーラ。`winget install Microsoft.DotNet.SDK.10` でもよい）。
+2. リポジトリを取得し、PowerShell で:
 ```
-python -m poc.poc_real g1 --allow-real-jvlink --out g1.json
-python -m poc.poc_real g2 --allow-real-jvlink --dataspec RACE --option 1 --fromtime 20261001000000 --max-records 500 --out g2.json
-python -m poc.poc_real g3-realtime --allow-real-jvlink --dataspec 0B12 --key 20261101 --out g3rt.json
+cd agent\cs
+dotnet restore JraAgent.slnx --locked-mode
+dotnet publish src\JraAgent.Cli -c Release -r win-x64 --self-contained -o C:\jraagent\app
+powershell -File ..\scripts\check-env.ps1 -AgentExe C:\jraagent\app\jraagent.exe
 ```
-- 実行前に『これから呼ぶ JV-Link の API 一覧』が出る。確認して `--yes`。ネットワークには何も送らない（集計 JSON だけが残る）。
-- **返してほしいもの**: 各 JSON の `passed`/件数/エラー種別（レコードの中身は不要）。期待: g1 = COM 生成と JVInit 成功、g2 = 500 件前後の読取りと終了コード、g3 = リアルタイムの接続可否。
+3. 実機の確認（手順の詳細は `agent/POC.md`）:
+```
+C:\jraagent\app\jraagent.exe poc mock --out result-mock.json
+C:\jraagent\app\jraagent.exe poc g1 --allow-real-jvlink --out g1.json
+C:\jraagent\app\jraagent.exe poc g2 --allow-real-jvlink --dataspec RACE --option 1 --fromtime 20261001000000 --max-records 500 --out g2.json
+C:\jraagent\app\jraagent.exe poc g3-realtime --allow-real-jvlink --dataspec 0B12 --key 20261101 --out g3rt.json
+```
+- 実行前に『これから呼ぶ JV-Link の API 一覧』が出る。確認して `y`（または `--yes`）。ネットワークには何も送らない（集計 JSON だけが残る）。
+- **返してほしいもの**: 各 JSON の `gates[].status`・件数・エラーコード（レコードの中身は不要）。期待: g1 = COM 生成と JVInit 成功、g2 = 500 件前後の読取りと `roundtrip_ng == 0`、g3 = リアルタイムの接続可否。
+- g1 が「COM を生成できない」で失敗したら、32bit の JV-Link の可能性がある。`-r win-x86` で発行した 32bit 版で g1 をやり直す（D-018 の第二案）。
 - 失敗したら、画面のエラー行（秘密を含まないもの）だけ。
+- **旧 Python 版を使っていた場合**: データフォルダ（`%LOCALAPPDATA%\jraagent`）のキュー（`queue.sqlite3`）と資格情報（`secrets\credential.bin`）は C# 版がそのまま読む想定（同じスキーマ・同じ DPAPI の entropy）。`jraagent.exe --config agent.toml diagnose` で `credential.present: true` と `queue.problems: []` を確認する。読めなければ `set-credential` で入れ直す（キューの未送信分は失わない）。タスクスケジューラの登録は `scripts\install-task.ps1 -AgentExe C:\jraagent\app\jraagent.exe -Config <agent.toml>`（ドライラン → `-Apply`）で作り直す。
 
 ### B2. JV-Data の仕様（R5）
 JV-Link 仕様書 Ver.4.9 の該当ページ（RA/SE/O1〜O6/HR などの項目位置）。`docs/JVLINK_DESIGN.md` の 12 項目のうち、手元の資料で答えられるものから。**推測でパーサは書かない**。

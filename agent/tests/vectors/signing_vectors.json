@@ -1,5 +1,5 @@
 {
-  "description": "エージェント署名の既知テストベクトル。OpenSSL（`openssl dgst -sha256 -mac HMAC`）で独立に計算した。Python クライアント（agent/tests/test_signing.py）と Kotlin サーバ（domain の AgentSigningVectorsTest）が同じファイルを読み、同じ値になることを検査する。トークンはテスト専用の公開値で、実トークンではない。",
+  "description": "エージェント署名の既知テストベクトル。OpenSSL（`openssl dgst -sha256 -mac HMAC`）で独立に計算した。C# クライアント（agent/cs の SigningTests。旧 Python クライアントも同じファイルで検査していた）と Kotlin サーバ（ingest の AgentSigningVectorsTest）が同じファイルを読み、同じ値になることを検査する。トークンはテスト専用の公開値で、実トークンではない。",
   "derive_label": "jra-bot/agent-sign/v1",
   "canonical_format": "method|requestUri|timestamp|nonce|sha256hex(送信した本文のバイト列)",
   "cases": [

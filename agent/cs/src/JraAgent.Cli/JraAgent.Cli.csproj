@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 取得エージェントの実行ファイル（jraagent.exe）。常駐・診断・資格情報の操作と、COM ワーカー（worker サブコマンド）を同じ実行ファイルで提供する。 -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>jraagent</AssemblyName>
+    <RootNamespace>JraAgent.Cli</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="JraAgent.Core.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../JraAgent.Core/JraAgent.Core.csproj" />
+    <ProjectReference Include="../JraAgent.Windows/JraAgent.Windows.csproj" />
+  </ItemGroup>
+</Project>

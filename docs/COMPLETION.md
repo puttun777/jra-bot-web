@@ -15,10 +15,10 @@
 |---|---|---|---|---|---|
 | R1 | 開催日・発走予定に基づく制御（F03）、中止・延期・時刻変更・手動補正 | `domain/calendar`、`bot/CalendarCheckTaskHandler` | calendar-check → `JobLauncher` | 単体 + MySQL 統合 | **A**（起動の実行基盤は R2） |
 | R2 | calendar-check から bot-run を**実際に起動**（Cloud Run Jobs） | `:cloud-gcp` `CloudRunJobLauncher`、`bot/RunJobsSettings` | 本番の calendar-check は `RUN_JOBS_*` 必須（無ければ exit 2）。無いローカルは未設定の fail closed | 偽サーバで宛先・認証・引数の上書き・失敗の分類を試験。**実 Cloud Run は未検証** | **A（web 側）/ B（実 GCP での確認）**。infra: calendar-check Job に `RUN_JOBS_*` を渡し、`sa-bot` に bot-run Job の `jobsExecutorWithOverrides` を付与（infra PR） |
-| R3 | 取得エージェント（F01/F22/F23）: 署名・キュー・送信・ビーコン・状態機械 | `agent/`（Python） | ingest API | pytest 213 + Linux/Windows CI + Kotlin 相互運用 | **A**（Mock 取得。実機は R4） |
+| R3 | 取得エージェント（F01/F22/F23）: 署名・キュー・送信・ビーコン・状態機械 | `agent/cs`（C#/.NET 10。D-261。旧 Python 版は削除） | ingest API | xunit 296（Windows 専用 4 を含む）+ Linux/Windows CI + Kotlin 相互運用 4 | **A**（Mock 取得。実機は R4） |
 | R4 | JV-Link 実取得（COM）・実機 PoC（T3.0） | `agent/` の COM ワーカー | Windows 実機 | 未実施 | **B**（Windows 実機で `agent/poc` を実行。手順は `docs/USER_ACTIONS.md`〔作成予定〕） |
 | R5 | JV-Data 実レコードのパーサ（F02: RA/SE/O1〜O6/HR/結果ほか） | `ingest` の `RecordParser`（合成の正規化 JSON のみ） | ingest | 合成のみ | **B**（JV-Link 仕様書 Ver.4.9 の項目位置の確認。T1.17/G-5/G-16。取得できる資料を `JVLINK_DESIGN.md` の 12 項目で特定） |
-| R6 | 取込 API・冪等 upsert・バックフィル・再開・保留の再適用（F21/F22、T3.4） | `:ingest`、`domain/ingest` | MySQL | 単体 + 統合 + 実 Python エージェント | **A** |
+| R6 | 取込 API・冪等 upsert・バックフィル・再開・保留の再適用（F21/F22、T3.4） | `:ingest`、`domain/ingest` | MySQL | 単体 + 統合 + 実 C# エージェント（`jraagent-interop`） | **A** |
 | R7 | 結果・払戻の取込（F15 前半） | `ObservationApplier`、`ResultStore`/`PayoutStore` | MySQL（`results`/`payouts`） | 統合試験（合成レコード NRS/NHR） | **A**（実データ形式は R5） |
 | R8 | 判定（EV/Kelly/確率/ワイド/三連複/買い目）（F05〜F09） | `domain/decision` | bot-run | 旧実装とのゴールデン 34 ケース全一致 | **A** |
 | R9 | bot-run: 監視・評価・通知タイミングの確定・Discord 通知（F13/F14/F24） | `domain/botrun`、`bot/` | Discord Webhook | 単体 + MySQL 統合 + Fake HTTP | **A**（実 Discord は B: `USER_ACTIONS`） |

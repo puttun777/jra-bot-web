@@ -232,3 +232,18 @@ GitHub Actions（`db-integration` 8.4 / 9.7、ubuntu-24.04、Temurin 25、PR #8�
 |---|---|---|
 | Hipparchus（`hipparchus-core`・`hipparchus-stat`） | 4.0.3 | Maven Central の `hipparchus-core-4.0.3.pom` の公開日 2026-02-07（Last-Modified。公開から 2 週間以上）。安定版（Alpha/Beta/RC ではない）。用途は Cholesky 分解（`linear`）・順位（`NaturalRanking`）・分位点（`Percentile` R_7）だけ。ライセンスは Apache-2.0。**未確認**: これが最新の安定版か（このセッションから Maven Central のメタデータが 429・hipparchus.org は許可外で取得できなかった）。Dependabot（gradle）が新しい版を提案する |
 - 学習ライブラリ（Smile・Tribuo など）は採らない: 必要なのは L2 ロジスティック回帰と Platt だけで、目的関数・停止条件・数値を自分たちで読める形で持てる（Newton 法 + Cholesky）。依存は :ml-train だけ（:domain には入れない: DependencyRules）。
+
+## 18. Windows 取得エージェント（C#/.NET 10。2026-11-03。D-261）
+版は NuGet の公開日・dotnet/core の releases.json で確認し、**公開から 2 週間以上の安定版**に固定する（`agent/cs/Directory.Packages.props` の中央管理 + 各プロジェクトの `packages.lock.json`。CI は `--locked-mode`）。§14（Python 版）は廃止。
+
+| 項目 | 採用 | 根拠 |
+|---|---|---|
+| .NET SDK | **10.0.113**（`global.json`、`rollForward: latestPatch`）。CI は actions/setup-dotnet で 10.0.113 | .NET 10.0.13 は 2026-10-13 公開（SDK 10.0.113）。10.0.14（2026-10-25、SDK 10.0.114）は確認時点（2026-11-03）で 2 週間未満。ローカルの 10.0.114 は latestPatch で許容 |
+| TargetFramework | net10.0（LTS） | Windows 固有 API は `[SupportedOSPlatform("windows")]` と CA1416 で呼出しを制限（Linux の CI でもビルド・試験できる） |
+| BouncyCastle.Cryptography | 2.7.0 | Ed25519 の署名検証（ビーコン・更新 manifest）。.NET の標準暗号に Ed25519 が無い。RFC 8032 のベクトルと削除前の Python のビーコンベクトルで検査 |
+| Microsoft.Data.Sqlite | 10.0.13 | キュー（SQLite WAL）。同梱の e_sqlite3（SQLitePCLRaw）。10.0.14 は 2 週間未満 |
+| System.Security.Cryptography.ProtectedData | 10.0.13 | DPAPI（CurrentUser） |
+| Tomlyn | 2.10.1（2026-07-02） | TOML の設定（`TomlSerializer.Deserialize<TomlTable>`）。BSD-2-Clause |
+| xunit.v3 | 4.0.2 | 試験（Microsoft.Testing.Platform。`global.json` の `test.runner`）。CI は試験の実行ファイルを直接起動し `-result-junit` で JUnit 形式を出す（`verify-junit` で件数・skip を検査） |
+| actions/setup-dotnet | **v6.0.0**（SHA `a98b56852c35b8e3190ac28c8c2271da59106c68`、2026-07-15） | v6.1.0 は 2026-11-02 公開で 2 週間未満 |
+| 解析 | `TreatWarningsAsErrors`・`AnalysisLevel=latest-recommended`・`Nullable=enable`・`EnforceCodeStyleInBuild` | CA1716（Visual Basic の予約語との衝突）だけ全体で対象外（C# だけで使う）。LibraryImport の生成コードのため JraAgent.Windows だけ `AllowUnsafeBlocks`（手書きのコードでは unsafe を使わない） |

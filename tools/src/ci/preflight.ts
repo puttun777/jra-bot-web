@@ -17,8 +17,8 @@
  * 記録: `build/preflight/last.json`（検証したコミット・ツリー・版・結果）と `build/preflight/<id>.log`（詳細ログ。Git には入れない）。
  */
 import { spawn, spawnSync } from "node:child_process";
-import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { parse as parseYaml } from "yaml";
 import { isRecord } from "../lib/json.js";
@@ -140,23 +140,12 @@ async function ensureDocker(out: string): Promise<boolean> {
   return false;
 }
 
-/** `build/preflight/venv-<name>` を作り、固定された requirements を入れて python のパスを返す（Python の各コンポーネントが移行されるまでの経過措置）。 */
-function venv(root: string, out: string, name: string, requirements: readonly string[], extra: readonly string[] = []): string {
-  const d = join(out, `venv-${name}`);
-  const py = join(d, "bin", "python");
-  const stamp = join(d, ".reqs");
-  const wanted = `${requirements.map((r) => `${r}:${statSync(join(root, r)).mtimeMs}`).join("|")}|${extra.join(" ")}`;
-  if (!existsSync(py) && spawnSync("python3", ["-m", "venv", d], { stdio: "inherit" }).status !== 0) throw new Error("venv を作れない");
-  if (!existsSync(stamp) || readFileSync(stamp, "utf8") !== wanted) {
-    for (const r of requirements) {
-      if (spawnSync(py, ["-m", "pip", "install", "-q", "--no-input", "-r", join(root, r)], { stdio: "inherit" }).status !== 0)
-        throw new Error(`pip install -r ${r} が失敗`);
-    }
-    if (extra.length > 0 && spawnSync(py, ["-m", "pip", "install", "-q", "--no-input", ...extra], { stdio: "inherit" }).status !== 0)
-      throw new Error("pip install が失敗");
-    writeFileSync(stamp, wanted);
-  }
-  return py;
+/** jraagent-interop（Kotlin の AgentInteropIntegrationTest が起動する C# のドライバ）を Release でビルドし、実行ファイルのパスを返す（CI と同じ）。 */
+function interopDriver(root: string, log: number): string {
+  const proj = join(root, "agent", "cs", "tools", "JraAgent.Interop", "JraAgent.Interop.csproj");
+  if (runLogged(["dotnet", "build", proj, "-c", "Release", "-p:RestoreLockedMode=true"], root, process.env, log) !== 0)
+    throw new Error("jraagent-interop をビルドできない");
+  return join(root, "agent", "cs", "tools", "JraAgent.Interop", "bin", "Release", "net10.0", "jraagent-interop");
 }
 
 // ---------------------------------------------------------------------------------------------- 検査の定義
@@ -244,11 +233,17 @@ export function stepsFor(plan: Plan, files: readonly string[], root: string, out
         needsDocker: true,
         needsJdk25: true,
         verify,
-        caveat: "AGENT_PYTHON は preflight が venv を用意して渡す（CI と同じ。Python のエージェントが C# へ移行されるまでの経過措置）",
+        caveat: "AGENT_INTEROP は preflight が dotnet build して渡す（CI と同じ）",
       });
     }
   }
-  if (plan.runAgent) s.push({ id: "agent", title: "agent（Python）: ruff・format・mypy・pytest", commands: [], special: "agent" });
+  if (plan.runAgent)
+    s.push({
+      id: "agent",
+      title: "agent（C#/.NET 10）: restore（lock file どおり）・build（警告はエラー）・xunit",
+      commands: [],
+      special: "agent",
+    });
   const appRuntimeChanged = files.some((f) => /^(bot|ingest|dashboard|cloud-gcp|persistence|domain)\/src\/main\//.test(f));
   if (plan.runImages || appRuntimeChanged) {
     // CI は kotlin のアプリ/ドメイン変更だけでは images を実行しない（節約）。起動設定の食い違いを push 前に捕まえるため、ローカルでは実行する
@@ -289,24 +284,27 @@ function runSpecial(step: Step, root: string, out: string, env: NodeJS.ProcessEn
   };
   switch (step.special) {
     case "agent": {
-      const py = venv(
-        root,
-        out,
-        "agent",
-        ["agent/requirements.txt"],
-        ["pytest==9.1.1", "pytest-timeout==2.4.0", "ruff==0.17.2", "mypy==2.4.0"],
-      );
-      const aenv = { ...env, PATH: `${resolve(py, "..")}:${env["PATH"] ?? ""}` };
-      if (runLogged([py, "-m", "pip", "install", "-q", "--no-input", "--no-deps", "-e", join(root, "agent")], root, aenv, log) !== 0)
-        return 1;
+      const cs = join(root, "agent", "cs");
       const d = junit("agent");
+      const exe = join(cs, "tests", "JraAgent.Core.Tests", "bin", "Release", "net10.0", "JraAgent.Core.Tests");
       const rc = steps(
-        [["ruff", "check", "."], ["ruff", "format", "--check", "."], ["mypy"], [py, "-m", "pytest", "-q", `--junitxml=${d}/pytest.xml`]],
-        join(root, "agent"),
-        aenv,
+        [
+          ["dotnet", "restore", "JraAgent.slnx", "--locked-mode"],
+          ["dotnet", "build", "JraAgent.slnx", "--no-restore", "-c", "Release"],
+          [exe, "-reporter", "quiet", "-result-junit", join(d, "agent-junit", "agent.xml")],
+        ],
+        cs,
+        env,
       );
       if (rc !== 0) return rc;
-      return bash(ciRunBlock(root, "agent", "Verify that the tests actually ran"), d, aenv, log, "agent tests actually ran");
+      // CI の検査ブロックは $RUNNER_TEMP/agent-junit を読む
+      return bash(
+        ciRunBlock(root, "agent", "Verify that the tests actually ran"),
+        root,
+        { ...env, RUNNER_TEMP: d },
+        log,
+        "agent tests actually ran",
+      );
     }
     case "images": {
       const sha = sh(root, "git", "rev-parse", "HEAD");
@@ -394,7 +392,7 @@ export async function main(argv: readonly string[]): Promise<number> {
     let rc = 0;
     try {
       if (st.id.startsWith("db-it-")) {
-        env["AGENT_PYTHON"] = venv(root, out, "agent-rt", ["agent/requirements.txt"]);
+        env["AGENT_INTEROP"] = interopDriver(root, log);
       }
       if (st.special !== undefined) rc = runSpecial(st, root, out, env, log);
       else {

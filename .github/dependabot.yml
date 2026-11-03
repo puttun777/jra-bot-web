@@ -93,3 +93,26 @@ updates:
       - dependency-name: "eclipse-temurin"
         update-types: ["version-update:semver-major"]
 
+
+  # NuGet（Windows 取得エージェント agent/cs。Directory.Packages.props の中央管理と packages.lock.json。D-261）
+  - package-ecosystem: "nuget"
+    directory: "/agent/cs"
+    schedule:
+      interval: "weekly"
+      day: "thursday"
+      time: "06:00"
+      timezone: "Asia/Tokyo"
+    open-pull-requests-limit: 2
+    labels: ["dependencies"]
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      nuget-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      # .NET のランタイム付属パッケージ（Microsoft.Data.Sqlite・ProtectedData）のメジャーは TargetFramework（net10.0）と一緒に手動で上げる
+      - dependency-name: "Microsoft.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "System.*"
+        update-types: ["version-update:semver-major"]

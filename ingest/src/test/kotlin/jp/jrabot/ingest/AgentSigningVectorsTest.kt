@@ -10,7 +10,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * エージェント（Python）と共有する署名の既知テストベクトル（OpenSSL で独立に計算。agent/tests/vectors/signing_vectors.json）。
+ * エージェント（C#。agent/cs の SigningTests）と共有する署名の既知テストベクトル（OpenSSL で独立に計算。agent/tests/vectors/signing_vectors.json）。
  * サーバの `AgentSigning` が同じ鍵導出・署名対象・署名を出すことを検査する。ファイルが無い・0 件なら失敗する。
  */
 class AgentSigningVectorsTest {

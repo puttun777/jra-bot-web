@@ -4,7 +4,6 @@ import jp.jrabot.domain.ops.OpsMode
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
-import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
@@ -13,9 +12,10 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * Windows エージェント（Python）と Kotlin ingest の結合（実 HTTP + 本物の MySQL + 実際の署名）。認証は迂回しない:
- * Python は本物の署名クライアントで、発行されたトークンから署名する。合成データだけ・実 GCP なし。
- * `AGENT_PYTHON`（cryptography を入れた Python）が無い環境では**失敗する**（スキップして緑にしない）。
+ * Windows エージェント（C#。agent/cs）と Kotlin ingest の結合（実 HTTP + 本物の MySQL + 実際の署名）。認証は迂回しない:
+ * エージェントは本物の署名クライアントで、発行されたトークンから署名する。合成データだけ・実 GCP なし。
+ * ドライバは agent/cs/tools/JraAgent.Interop（`dotnet build` で作る jraagent-interop）。`AGENT_INTEROP`（その実行ファイルのパス）が無い環境では
+ * **失敗する**（スキップして緑にしない）。
  */
 @Tag("integration")
 class AgentInteropIntegrationTest {
@@ -24,20 +24,10 @@ class AgentInteropIntegrationTest {
     @BeforeEach
     fun setUp() = it.reset()
 
-    private fun repoRoot(): Path {
-        var p: Path? = Path.of("").toAbsolutePath()
-        while (p != null && !Files.isDirectory(p.resolve("agent/src/jra_agent"))) p = p.parent
-        return assertNotNull(p, "agent/ が見つからない")
-    }
-
     private fun runDriver(phase: String): Map<String, Any?> {
-        val python = assertNotNull(System.getenv("AGENT_PYTHON"), "AGENT_PYTHON が未設定（CI は設定する。ローカルは venv の python を指定）")
-        val root = repoRoot()
-        val pb =
-            ProcessBuilder(python, "-m", "interop.driver", "http://127.0.0.1:${it.port}", it.one.id, phase)
-                .directory(File(root.resolve("agent").toString()))
-                .redirectErrorStream(false)
-        pb.environment()["PYTHONPATH"] = "${root.resolve("agent/src")}${File.pathSeparator}${root.resolve("agent")}"
+        val exe = assertNotNull(System.getenv("AGENT_INTEROP"), "AGENT_INTEROP が未設定（CI は設定する。ローカルは dotnet build した jraagent-interop を指定）")
+        assertTrue(Files.isExecutable(Path.of(exe)), "AGENT_INTEROP が実行できない: $exe")
+        val pb = ProcessBuilder(exe, "http://127.0.0.1:${it.port}", it.one.id, phase).redirectErrorStream(false)
         val proc = pb.start()
         proc.outputStream.use { o -> o.write((it.one.token + "\n").toByteArray()) } // トークンは標準入力だけ
         val out = proc.inputStream.readAllBytes().toString(Charsets.UTF_8)
@@ -51,7 +41,7 @@ class AgentInteropIntegrationTest {
     }
 
     @Test
-    fun `Python エージェントが本物の署名で plan mode heartbeat を呼び、取得セッションを送り、ACK 直前の切断後の再送で cursor を受け取る`() {
+    fun `C# エージェントが本物の署名で plan mode heartbeat を呼び、取得セッションを送り、ACK 直前の切断後の再送で cursor を受け取る`() {
         val r = runDriver("normal")
         assertEquals("NORMAL", r["probe_mode"])
         assertEquals(200, r["plan_status"])
