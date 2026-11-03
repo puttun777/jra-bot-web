@@ -3,7 +3,8 @@ plugins {
 }
 
 // ML 学習 Job（D-257。旧 Python の ml/ を Kotlin へ移植）。bot とは独立した実行単位・イメージ。登録は CANDIDATE / REJECTED だけ（ACTIVE にしない）。
-// ml_model（V2）と ml_dataset 系の表を使う。他アプリと同じスキーマ版を要求する（release-manifest の検証規則: 全アプリで同一）
+// ml_model（V2）を使う。requiredSchemaVersion は release-manifest に宣言するだけで、実行時には確認しない（mltrain は flyway_schema_history を読めない。
+// deploy が migrate を先に行う）。値は他アプリと同じにする（release-manifest の検証規則: 全アプリで同一）
 extra["requiredSchemaVersion"] = "5"
 
 dependencies {

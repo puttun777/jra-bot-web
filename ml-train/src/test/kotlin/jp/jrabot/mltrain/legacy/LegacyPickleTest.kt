@@ -90,6 +90,22 @@ class LegacyPickleTest {
         )
     }
 
+    @Test
+    fun `deeply nested tuples and huge decimal integers are refused quickly instead of exhausting the stack or the cpu`() {
+        // TUPLE1 を 15 万段（opcode の上限内）。比較・ハッシュは再帰するので、深さの上限で MALFORMED にする（レビュー 低1）
+        val deep = ByteArray(2 + 1 + 150_000 + 1) { 0x85.toByte() }
+        deep[0] = 0x80.toByte()
+        deep[1] = 4
+        deep[2] = 'N'.code.toByte()
+        deep[deep.size - 1] = '.'.code.toByte()
+        assertEquals("MALFORMED", assertFailsWith<UnpickleRefused> { RestrictedPickle.loadLegacyModel(deep) }.reason)
+        // 300 万桁の LONG（protocol 0 の 10 進）。走査の段階で行の長さの上限に当たる（レビュー 低2）
+        val t0 = System.nanoTime()
+        val huge = "\u0080\u0002L".toByteArray(Charsets.ISO_8859_1) + ByteArray(3_000_000) { '7'.code.toByte() } + "L\n.".toByteArray()
+        assertEquals("MALFORMED", assertFailsWith<UnpickleRefused> { RestrictedPickle.loadLegacyModel(huge) }.reason)
+        assertTrue((System.nanoTime() - t0) / 1e9 < 5.0, "すぐに拒否する")
+    }
+
     private fun cli(
         args: List<String>,
         env: Map<String, String>,

@@ -120,7 +120,7 @@ jobs:
             --classes "IngestInternalApiTest,AgentApiOpsGuardTest,IngestStartupConfigTest,AgentSigningVectorsTest,PlanProviderTest"
           node build/tools/src/main.js verify-junit --label "dashboard unit" --dir dashboard/build/test-results/test --min 30 \
             --classes "DashboardInternalApiTest,AdminWriteGuardTest,DashboardStartupConfigTest"
-          node build/tools/src/main.js verify-junit --label "ml-train unit (Kotlin. D-257)" --dir ml-train/build/test-results/test --min 44 \
+          node build/tools/src/main.js verify-junit --label "ml-train unit (Kotlin. D-257)" --dir ml-train/build/test-results/test --min 47 \
             --classes "PythonReferenceTest,PythonReferencePipelineTest,TrainJobTest,LegacyPickleTest,ModelJsonTest,LogisticRoundoffTest,LauncherTest"
 
   # TypeScript のツール（tools/: 変更判定・ゲート・整合検査・JUnit 件数検査・preflight・release-manifest・イメージスモーク）の

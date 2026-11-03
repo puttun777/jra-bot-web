@@ -20,7 +20,10 @@
 **見つけて直した不具合**: 直線探索が丸めの限界で進まないときに反復を使い切り、Platt が『収束しない』で失敗していた（Logistic。変異で試験が失敗することを確認）。
 **検証（ローカル。JDK 25.0.4.1・Node 24.22.2・Docker 29.9.2）**: `./gradlew build checkModuleDependencies ktlintCheck` 成功（ml-train 44・domain 1098・cloud-gcp 110・persistence 33・bot 144 件、skip 0）。TS 158 件・biome・tsc・consistency 成功。infra: ops 119 件・lint・fmt 成功。MySQL 統合試験は下（実行中に記録を更新）。**未実施**: 本物の Dockerfile でのイメージビルドとスモーク（CI。ローカルはコンテナ内から外部 HTTPS ができない）、agent-windows、実 pkl（本人の PC）、実 GCP。
 **ローカル環境の注意**: Gradle は `LC_ALL=C.UTF-8` で動かす（日本語の試験名のクラスファイルで InvalidPathException になる）。Docker は `dockerd` を手で起動した。
-**次**: Opus の独立レビュー（ML 数値・署名・pickle）→ 指摘の修正 → push・PR（web/infra）→ CI → 同時にマージ → L4（golden）。
+**結合試験（ローカル）**: MySQL 8.4 で persistence 210 件・`MlTrainInteropIntegrationTest` 5 件、MySQL 9.7 で ML 関係 14 件が成功。最初の実行で **mltrain に flyway_schema_history の権限が無い**（1142）ことが分かり、スキーマ版の確認をやめて接続の確認にした（GRANT は変えない）。
+**独立レビュー（Opus・読取り専用、8619693）**: 高 0・中 0・低 7 → 低 7 件すべてに対応（D-259。試験 4 件追加、ml-train 47 件）。サブエージェントのレビューで、GitHub の第三者 Approve ではない。
+**検証したコミット**: このコミット（`./gradlew build checkModuleDependencies`・ml-train 47・cloud-gcp 111・TS 158・MySQL 8.4 の結合試験 成功）。**未実施**: 本物の Dockerfile でのイメージビルドとスモーク（CI で確認）、agent-windows。
+**次**: push・PR（web と infra の claude/lang-l3-manifest-v3）→ CI → **同時にマージ** → L4（golden。claude/lang-l4-golden で作業中: Kotlin の verify/compare は旧 Python と同じ報告を出すことを確認済み）。
 
 ## 2026-11-02 言語移行の開始（L1: CI・リリース補助を TypeScript へ。ブランチ claude/lang-l1-ci-tools-ts。D-250〜D-256）
 **要件変更**: 自分たちで保守する Python を必須経路から外す（`LANGUAGE_MIGRATION.md`）。完成条件は `COMPLETION.md` の L1〜L9。

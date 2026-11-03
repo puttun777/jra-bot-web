@@ -23,6 +23,7 @@ object TrainingRun {
         val base: Trainer.LinearModel,
         val model: Trainer.LinearModel,
         val platt: Pair<Double, Double>,
+        val plattFit: jp.jrabot.mltrain.numeric.Logistic.Fit,
         val eval: Metrics.Evaluation,
         val uncalibrated: Map<String, Double>,
         val train: Map<String, Double?>,
@@ -86,7 +87,8 @@ object TrainingRun {
         val w = Trainer.sampleWeights(tr.map { ds.raceDate[it] }, cfg.recencyHalflifeDays)
         val base = Trainer.trainLinear(ds.rows(tr), ds.labels(tr), w, cfg.l2C, cfg.maxIter, cfg.tol)
         checkTerminate()
-        val platt = Trainer.fitPlatt(base.predict(ds.rows(calib)), ds.labels(calib))
+        val plattFit = Trainer.fitPlattDetailed(base.predict(ds.rows(calib)), ds.labels(calib))
+        val platt = plattFit.weights[0] to plattFit.bias
         val model = base.withPlatt(platt.first, platt.second)
         val evX = ds.rows(ev)
         val evY = ds.labels(ev)
@@ -113,6 +115,6 @@ object TrainingRun {
                 horseMasterCoverage = coverage,
                 activeLogloss = activeLogloss,
             )
-        return Outcome(tr, calib, ev, base, model, platt, evaluation, uncal, trainM, facts, QualityGate.evaluate(gate, facts))
+        return Outcome(tr, calib, ev, base, model, platt, plattFit, evaluation, uncal, trainM, facts, QualityGate.evaluate(gate, facts))
     }
 }

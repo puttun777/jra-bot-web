@@ -41,7 +41,10 @@ class PBytes(
 
 data class PTuple(
     val items: List<PValue>,
-) : PValue
+) : PValue {
+    /** 入れ子の深さ（子は作成済みなので再帰しない）。等価性には含めない。 */
+    val depth: Int = 1 + (items.maxOfOrNull { (it as? PTuple)?.depth ?: 0 } ?: 0)
+}
 
 /** 変更できる（APPEND）。同一性で比べる（memo の参照を共有する）。 */
 class PList(
@@ -113,6 +116,12 @@ object RestrictedPickle {
     const val MAX_OPCODES = 200_000
     private const val MAX_ITEMS = 1_000_000
 
+    /** タプルの入れ子の上限（比較・ハッシュは再帰するので、深すぎる入力でスタックを使い切らない）。 */
+    const val MAX_TUPLE_DEPTH = 100
+
+    /** テキストの opcode（INT・LONG・FLOAT・GLOBAL・PUT/GET）の行の長さの上限。Python 3.11 以降の int の桁数上限（4300）と同じ */
+    const val MAX_LINE = 4300
+
     private val LEGACY_MODULES = setOf("jraev.ml.model", "src.jraev.ml.model")
     private const val LEGACY_CLASS = "WinProbabilityModel"
     private val NUMPY_MULTIARRAY = setOf("numpy.core.multiarray", "numpy._core.multiarray")
@@ -166,7 +175,10 @@ object RestrictedPickle {
 
         fun line(): String {
             val start = pos
-            while (pos < b.size && b[pos] != '\n'.code.toByte()) pos++
+            while (pos < b.size && b[pos] != '\n'.code.toByte()) {
+                pos++
+                if (pos - start > MAX_LINE) malformed("行が長すぎる")
+            }
             if (pos >= b.size) malformed("行が終わらない")
             val s = String(b, start, pos - start, Charsets.ISO_8859_1)
             pos++
@@ -452,22 +464,22 @@ object RestrictedPickle {
                     }
 
                     't' -> {
-                        push(PTuple(popMark()))
+                        push(tuple(popMark()))
                     }
 
                     '\u0085' -> {
-                        push(PTuple(listOf(pop())))
+                        push(tuple(listOf(pop())))
                     }
 
                     '\u0086' -> {
                         val b = pop()
-                        push(PTuple(listOf(pop(), b)))
+                        push(tuple(listOf(pop(), b)))
                     }
 
                     '\u0087' -> {
                         val c = pop()
                         val b = pop()
-                        push(PTuple(listOf(pop(), b, c)))
+                        push(tuple(listOf(pop(), b, c)))
                     }
 
                     ']' -> {
@@ -603,6 +615,12 @@ object RestrictedPickle {
                     }
                 }
             }
+        }
+
+        private fun tuple(items: List<PValue>): PTuple {
+            val t = PTuple(items)
+            if (t.depth > MAX_TUPLE_DEPTH) malformed("タプルの入れ子が深すぎる")
+            return t
         }
 
         private fun hashable(v: PValue): PValue =

@@ -386,6 +386,37 @@ class TrainJobTest {
     }
 
     @Test
+    fun `a storage permission error fails with exit 1, not as a transient error`() {
+        val e = Env()
+        val real = LocalFileBlobStore(e.root)
+        e.blob =
+            object : ArtifactBlobStore by real {
+                override fun putIfAbsent(
+                    key: String,
+                    data: ByteArray,
+                    contentType: String,
+                ): ArtifactWriteOutcome =
+                    throw jp.jrabot.domain.ml
+                        .StoragePermissionException("403")
+            }
+        val err = assertFailsWith<MlTrainError> { e.run() }
+        assertEquals("STORAGE_PERMISSION_DENIED" to ExitCode.FAILURE, err.reason to err.exitCode)
+        assertTrue(e.registry.rows.isEmpty())
+    }
+
+    @Test
+    fun `the report records how the solvers stopped`() {
+        val e = Env()
+        val out = e.run()
+        val solver = e.json("1/reports/${out.modelId}.report.json").obj("solver")
+        for (k in listOf("base", "platt")) {
+            val s = solver.obj(k)
+            assertTrue((s["iterations"] as JsonInt).value >= 1, k)
+            assertTrue((s["gradient_max"] as jp.jrabot.domain.ml.json.JsonFloat).value <= 1e-8, k)
+        }
+    }
+
+    @Test
     fun `an existing conflicting artifact is never overwritten`() {
         val e = Env()
         val modelId = TrainingRun.deriveModelId(1, "calibration", datasetCsvSha(e), CFG, GOOD_GATE)

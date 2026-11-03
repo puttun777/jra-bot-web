@@ -3,6 +3,7 @@ package jp.jrabot.cloudgcp.store
 import jp.jrabot.domain.ml.ArtifactBlobStore
 import jp.jrabot.domain.ml.ArtifactKeys
 import jp.jrabot.domain.ml.ArtifactWriteOutcome
+import jp.jrabot.domain.ml.StoragePermissionException
 
 /**
  * Cloud Storage の [ArtifactBlobStore]（ml-train が `MODEL_STORE_URI=gs://…` のときに使う）。作成は `ifGenerationMatch=0` の前提条件つき
@@ -22,7 +23,7 @@ class GcsBlobStore internal constructor(
 
     override fun get(key: String): ByteArray? {
         val n = name(key)
-        return io("読込み") { client.read(location.bucket, n) }
+        return gio("読込み") { client.read(location.bucket, n) }
     }
 
     override fun putIfAbsent(
@@ -31,7 +32,7 @@ class GcsBlobStore internal constructor(
         contentType: String,
     ): ArtifactWriteOutcome {
         val n = name(key)
-        return io("書込み") {
+        return gio("書込み") {
             if (client.createIfAbsent(location.bucket, n, data, contentType)) {
                 ArtifactWriteOutcome.CREATED
             } else {
@@ -43,8 +44,22 @@ class GcsBlobStore internal constructor(
 
     override fun delete(key: String) {
         val n = name(key)
-        io("削除") { client.delete(location.bucket, n) }
+        gio("削除") { client.delete(location.bucket, n) }
     }
+
+    /** [io] と同じだが、401・403（権限）は [StoragePermissionException] に分ける（一時的な失敗として再試行させない）。 */
+    private inline fun <T> gio(
+        what: String,
+        block: () -> T,
+    ): T =
+        io(what) {
+            try {
+                block()
+            } catch (e: com.google.cloud.storage.StorageException) {
+                if (e.code == 401 || e.code == 403) throw StoragePermissionException("$what の権限が無い(${e.code})", e)
+                throw e
+            }
+        }
 
     companion object {
         /** `gs://bucket[/prefix]`。ADC のクライアントは最初の操作の前に作る（生成時に通信しない）。不正な URI は [IllegalArgumentException]。 */

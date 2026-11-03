@@ -202,7 +202,7 @@ describe("workflow rules", () => {
     const b = jobText("build");
     for (const needle of [
       "domain/build/test-results/test --min 822",
-      "ml-train/build/test-results/test --min 44",
+      "ml-train/build/test-results/test --min 47",
       "TrainJobTest",
       "LegacyPickleTest",
       "ModelLoaderTest",

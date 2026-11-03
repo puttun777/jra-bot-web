@@ -264,6 +264,19 @@ class GcsBlobStoreTest {
     }
 
     @Test
+    fun `permission errors are not transient`() {
+        client.failReadsWith =
+            com.google.cloud.storage
+                .StorageException(403, "Forbidden")
+        assertFailsWith<jp.jrabot.domain.ml.StoragePermissionException> { store.get("1/models/m.json") }
+        client.failReadsWith =
+            com.google.cloud.storage
+                .StorageException(503, "Unavailable")
+        val e = assertFailsWith<StorageException> { store.get("1/models/m.json") }
+        assertTrue(e !is jp.jrabot.domain.ml.StoragePermissionException)
+    }
+
+    @Test
     fun `invalid keys and io failures are storage errors`() {
         for (k in listOf("../x", "1/../x", "")) assertFailsWith<StorageException>(k) { store.get(k) }
         client.failReadsWith = java.io.IOException("simulated")

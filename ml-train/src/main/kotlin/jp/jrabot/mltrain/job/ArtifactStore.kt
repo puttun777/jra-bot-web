@@ -3,6 +3,7 @@ package jp.jrabot.mltrain.job
 import jp.jrabot.domain.ml.ArtifactBlobStore
 import jp.jrabot.domain.ml.ArtifactWriteOutcome
 import jp.jrabot.domain.ml.StorageException
+import jp.jrabot.domain.ml.StoragePermissionException
 
 /** 保存先の I/O の失敗（一時的な失敗: exit 75）。 */
 class StoreError(
@@ -31,6 +32,8 @@ class ArtifactStore(
     private inline fun <T> io(block: () -> T): T =
         try {
             block()
+        } catch (e: StoragePermissionException) {
+            throw MlTrainError("STORAGE_PERMISSION_DENIED", e.message ?: "保存先の権限が無い", cause = e)
         } catch (e: StorageException) {
             throw StoreError(e.message ?: "保存先の I/O に失敗", e)
         }

@@ -80,6 +80,8 @@ object Trainer {
         val weights: DoubleArray,
         val bias: Double,
         val platt: Pair<Double, Double>? = null,
+        /** 学習の停止状態（反復回数・停止時の勾配・丸めで止めたか。レポートに記録する） */
+        val solver: Logistic.Fit? = null,
     ) {
         fun rawProbability(x: DoubleArray): Double = Logistic.clippedSigmoid(Logistic.dot(standardizer.apply(x), weights) + bias, Z_LIMIT)
 
@@ -95,7 +97,7 @@ object Trainer {
         fun withPlatt(
             a: Double,
             b: Double,
-        ): LinearModel = LinearModel(standardizer, weights, bias, a to b)
+        ): LinearModel = LinearModel(standardizer, weights, bias, a to b, solver)
     }
 
     fun trainLinear(
@@ -110,14 +112,15 @@ object Trainer {
         val fit =
             try {
                 // 設定の tol は上限。Newton 法は数回で最適解の近くまで詰められるので 1e-10 まで詰める（真の最適解に近い方が再現性が高い）
-                Logistic.fit(st.apply(x), y, sampleWeight, l2C, minOf(tol, 1e-10), maxIter)
+                // 丸めで止まったときに受け入れる勾配は設定の tol を超えない（記録した tol より緩い解を合格にしない）
+                Logistic.fit(st.apply(x), y, sampleWeight, l2C, minOf(tol, 1e-10), maxIter, acceptTol = minOf(tol, Logistic.ROUNDOFF_GRADIENT))
             } catch (e: Logistic.NotConverged) {
                 throw TrainingFailed("TRAINING_DID_NOT_CONVERGE", "Newton 法が収束しなかった（max_iter を増やすか l2_c を見直す）: ${e.message}")
             } catch (e: ArithmeticException) {
                 throw TrainingFailed("TRAINING_FAILED", "学習に失敗: ${e.message}")
             }
         if (!(fit.weights.all { it.isFinite() } && fit.bias.isFinite())) throw TrainingFailed("TRAINING_FAILED", "重みが有限でない")
-        return LinearModel(st, fit.weights, fit.bias)
+        return LinearModel(st, fit.weights, fit.bias, solver = fit)
     }
 
     /**
@@ -127,7 +130,13 @@ object Trainer {
     fun fitPlatt(
         p: DoubleArray,
         y: IntArray,
-    ): Pair<Double, Double> {
+    ): Pair<Double, Double> = fitPlattDetailed(p, y).let { it.weights[0] to it.bias }
+
+    /** [fitPlatt] と同じ。停止状態（[Logistic.Fit]）も返す。 */
+    fun fitPlattDetailed(
+        p: DoubleArray,
+        y: IntArray,
+    ): Logistic.Fit {
         val z = Array(p.size) { doubleArrayOf(logit(clipP(p[it]))) }
         val fit =
             try {
@@ -140,6 +149,6 @@ object Trainer {
         val a = fit.weights[0]
         val b = fit.bias
         if (!(a.isFinite() && b.isFinite())) throw TrainingFailed("CALIBRATION_FAILED", "Platt の a・b が有限でない")
-        return a to b
+        return fit
     }
 }

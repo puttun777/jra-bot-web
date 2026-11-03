@@ -86,6 +86,20 @@ object TrainJob {
             "hipparchus" to JsonString(org.hipparchus.linear.MatrixUtils::class.java.`package`?.implementationVersion ?: "unknown"),
         )
 
+    /** 学習の停止状態（反復回数・停止時の勾配〔C·Σw で割った値〕・丸めの限界で止めたか）。 */
+    private fun solverJson(f: jp.jrabot.mltrain.numeric.Logistic.Fit?): JsonValue =
+        if (f == null) {
+            JsonNull
+        } else {
+            JsonObject.of(
+                "iterations" to JsonInt(f.iterations.toLong()),
+                "gradient_max" to ModelJson.f(f.gradientMax),
+                "stopped_at_roundoff" to
+                    jp.jrabot.domain.ml.json
+                        .JsonBool(f.roundoffStop),
+            )
+        }
+
     private fun gateJson(r: QualityGate.Result): JsonObject =
         JsonObject.of(
             "verdict" to JsonString(r.verdict),
@@ -253,6 +267,12 @@ object TrainJob {
                 "metrics_train" to ModelJson.of(out.train),
                 "unavailable_metrics" to ModelJson.of(out.eval.unavailable),
                 "platt" to JsonObject.of("a" to ModelJson.f(out.platt.first), "b" to ModelJson.f(out.platt.second)),
+                "solver" to
+                    JsonObject.of(
+                        "method" to JsonString("newton_cholesky"),
+                        "base" to solverJson(out.base.solver),
+                        "platt" to solverJson(out.plattFit),
+                    ),
                 "active_reference" to
                     JsonObject.of(
                         "model_id" to (active?.modelId?.value?.let(::JsonString) ?: JsonNull),

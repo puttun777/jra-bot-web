@@ -87,6 +87,12 @@ open class StorageException(
     cause: Throwable? = null,
 ) : RuntimeException(message, cause)
 
+/** 保存先の権限が無い（IAM の設定誤りなど。再試行しても直らないので、Job としては失敗: exit 1）。 */
+class StoragePermissionException(
+    message: String,
+    cause: Throwable? = null,
+) : StorageException(message, cause)
+
 /** 成果物はあるが署名（`.sig`）が無い。**未署名のモデルは存在しないものとして扱わず、署名不正として拒否する**（[jp.jrabot.domain.ml.pipeline.FallbackReason.MODEL_SIGNATURE_INVALID]）。 */
 class MissingSignatureException(
     message: String,

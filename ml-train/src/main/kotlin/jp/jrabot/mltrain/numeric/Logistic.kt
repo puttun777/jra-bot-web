@@ -33,6 +33,8 @@ object Logistic {
         val iterations: Int,
         val gradientMax: Double,
         val objective: Double,
+        /** 直線探索が丸めの限界で進まず、勾配 ≤ [fit] の acceptTol で止めた（sklearn の lbfgs が ftol で止まるのに相当） */
+        val roundoffStop: Boolean = false,
     )
 
     /** log(1 + exp(z)) を桁あふれなく。 */
@@ -63,6 +65,7 @@ object Logistic {
         c: Double,
         tol: Double,
         maxIter: Int,
+        acceptTol: Double = ROUNDOFF_GRADIENT,
     ): Fit {
         val n = x.size
         require(n > 0 && y.size == n && (w == null || w.size == n)) { "入力の長さが合わない" }
@@ -118,7 +121,7 @@ object Logistic {
             if (fNext >= f || t < 1e-12) {
                 // 直線探索で目的関数が測れるほど下がらない = 倍精度の丸めの限界（C が大きいと f が大きく、最適解の近くの減少が丸めに埋もれる）。
                 // 何も進まない一歩を受け入れて反復を使い切らない。勾配が十分小さければ最適解とみなす（そうでなければ収束失敗）
-                if (gmax <= ROUNDOFF_GRADIENT) return Fit(beta, b, iter, gmax, f)
+                if (gmax <= maxOf(tol, acceptTol)) return Fit(beta, b, iter, gmax, f, roundoffStop = true)
                 break
             }
             System.arraycopy(next, 0, theta, 0, p)
@@ -140,8 +143,8 @@ object Logistic {
             throw ArithmeticException("ヘッセ行列が正定値でない: ${e.message}")
         }
 
-    /** 直線探索が倍精度の丸めで進めなくなったときに、最適解とみなす勾配（C·Σw で割った値）の上限 */
-    private const val ROUNDOFF_GRADIENT = 1e-8
+    /** 直線探索が倍精度の丸めで進めなくなったときに、最適解とみなす勾配（C·Σw で割った値）の上限の既定値。呼び出し側が acceptTol でさらに絞れる */
+    const val ROUNDOFF_GRADIENT = 1e-8
 
     fun dot(
         a: DoubleArray,
