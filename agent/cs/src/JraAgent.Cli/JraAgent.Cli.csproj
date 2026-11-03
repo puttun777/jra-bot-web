@@ -10,5 +10,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../JraAgent.Core/JraAgent.Core.csproj" />
+    <ProjectReference Include="../JraAgent.Windows/JraAgent.Windows.csproj" />
   </ItemGroup>
 </Project>

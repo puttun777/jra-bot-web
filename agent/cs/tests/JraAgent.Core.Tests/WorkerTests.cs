@@ -171,7 +171,7 @@ public sealed class WorkerTests : IDisposable
     public void Non_object_json_line_from_worker_is_a_protocol_error()
     {
         // ワーカーが JSON でも辞書でない行（配列など）を返しても、WorkerCrashed（BAD_PROTOCOL）として扱い、ワーカーを捨てる
-        if (OperatingSystem.IsWindows()) return; // sh を使う偽ワーカー（Windows 版は Windows ジョブで確認する）
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "sh を使う偽ワーカー（Linux だけ）");
         var s = new WorkerSupervisor(["/bin/sh", "-c", "while read -r l; do echo '[]'; done"], new WorkerConfig(2.0, 5.0, 5, 3600.0, 60.0), new FakeClock());
         made.Add(s);
         Assert.Equal("BAD_PROTOCOL", Assert.Throws<WorkerCrashedException>(() => s.Call("ping")).Kind);
@@ -180,7 +180,7 @@ public sealed class WorkerTests : IDisposable
     [Fact]
     public void Response_with_another_id_is_a_protocol_error()
     {
-        if (OperatingSystem.IsWindows()) return;
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "sh を使う偽ワーカー（Linux だけ）");
         var s = new WorkerSupervisor(["/bin/sh", "-c", "while read -r l; do echo '{\"id\":999,\"ok\":true,\"result\":{}}'; done"], new WorkerConfig(2.0, 5.0, 5, 3600.0, 60.0), new FakeClock());
         made.Add(s);
         Assert.Equal("BAD_PROTOCOL", Assert.Throws<WorkerCrashedException>(() => s.Call("ping")).Kind);

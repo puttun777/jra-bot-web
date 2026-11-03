@@ -222,3 +222,31 @@ public sealed partial class SigningTests
         Assert.Null(r.Response);
     }
 }
+
+public sealed class ClockAndTransportTests
+{
+    [Fact]
+    public void System_clock_monotonic_is_never_negative_on_first_use()
+    {
+        // 型の初期化の順序で初回が負になった不具合の回帰試験（新しい監視側が最初の起動を『隔離中』と誤判定した）
+        var c = new SystemClock();
+        var a = c.Monotonic;
+        var b = c.Monotonic;
+        Assert.True(a >= 0);
+        Assert.True(b >= a);
+    }
+
+    [Theory]
+    [InlineData("https://ingest.example/v1", true)]
+    [InlineData("http://127.0.0.1:8080/x", true)]
+    [InlineData("http://localhost/x", true)]
+    [InlineData("http://[::1]:9/x", true)]
+    [InlineData("http://127.0.0.1.evil.example/x", false)] // 旧版の前方一致では通っていた
+    [InlineData("http://localhost.evil.example/x", false)]
+    [InlineData("http://127.0.0.1@evil.example/x", false)]
+    [InlineData("https://user:pw@ingest.example/", false)]
+    [InlineData("http://ingest.example/", false)]
+    [InlineData("ftp://127.0.0.1/", false)]
+    [InlineData("not a url", false)]
+    public void Only_https_or_exact_loopback_http_is_allowed(string url, bool ok) => Assert.Equal(ok, HttpTransport.IsAllowedUrl(url));
+}

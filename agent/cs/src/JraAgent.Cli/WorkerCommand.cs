@@ -27,15 +27,32 @@ internal static class WorkerCommand
                     return 2;
             }
         }
-        IJvLink api;
         switch (backend)
         {
             case "fake":
-                api = new FakeJvLink(script is null ? new FakeScript() : FakeScript.FromJson(File.ReadAllText(script)));
-                break;
-            case "com" when comFactory is not null:
-                api = comFactory();
-                break;
+                return Serve(new FakeJvLink(script is null ? new FakeScript() : FakeScript.FromJson(File.ReadAllText(script))));
+            case "com" when comFactory is not null && OperatingSystem.IsWindows():
+                {
+                    // JV-Link は ActiveX（STA が前提）。COM の生成・使用・解放は、この STA スレッドの中だけで行う
+                    var rc = 2;
+                    var t = new Thread(() =>
+                    {
+                        IJvLink? api = null;
+                        try
+                        {
+                            api = comFactory();
+                        }
+                        catch (WorkerOpException e)
+                        {
+                            Console.Error.WriteLine($"COM を生成できない: {e.Code}"); // 以後の要求には NO_BACKEND で応答する（クラッシュにしない）
+                        }
+                        rc = Serve(api);
+                    });
+                    t.SetApartmentState(ApartmentState.STA);
+                    t.Start();
+                    t.Join();
+                    return rc;
+                }
             case "com":
                 Console.Error.WriteLine("COM は Windows でだけ使える");
                 return 2;
@@ -43,6 +60,10 @@ internal static class WorkerCommand
                 Console.Error.WriteLine("usage: jraagent worker --backend fake|com [--script <path>]");
                 return 2;
         }
+    }
+
+    private static int Serve(IJvLink? api)
+    {
         var stdout = Console.OpenStandardOutput();
         Console.SetOut(Console.Error);
         try
@@ -53,9 +74,9 @@ internal static class WorkerCommand
         {
             try
             {
-                api.Close();
+                api?.Close();
             }
-            catch (Exception e) when (e is InvalidOperationException or System.Runtime.InteropServices.COMException)
+            catch (Exception e) when (e is InvalidOperationException or WorkerOpException or System.Runtime.InteropServices.COMException)
             {
                 // 終了処理の失敗はプロセスが終わるので無視する
             }

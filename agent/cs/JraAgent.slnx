@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/JraAgent.Core/JraAgent.Core.csproj" />
     <Project Path="src/JraAgent.Cli/JraAgent.Cli.csproj" />
+    <Project Path="src/JraAgent.Windows/JraAgent.Windows.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/JraAgent.Core.Tests/JraAgent.Core.Tests.csproj" />

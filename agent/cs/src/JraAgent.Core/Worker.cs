@@ -230,7 +230,7 @@ public sealed class WorkerSupervisor(IReadOnlyList<string> argv, WorkerConfig cf
     private readonly Queue<double> starts = new();
     private Handle? h;
     private long nextId;
-    private double quarantineUntil;
+    private double quarantineUntil = double.NegativeInfinity;
 
     /// <summary>試験用: ワーカーを起動したか（ゲートで止めた取得はワーカーも起動しない）。</summary>
     internal bool Started => h is not null;

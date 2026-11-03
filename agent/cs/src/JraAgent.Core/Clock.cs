@@ -16,11 +16,15 @@ public interface IClock
 
 public sealed class SystemClock : IClock
 {
-    private static readonly double Start = System.Diagnostics.Stopwatch.GetTimestamp();
+    private static readonly long Start = System.Diagnostics.Stopwatch.GetTimestamp();
 
     public DateTimeOffset Now => DateTimeOffset.UtcNow;
 
-    public double Monotonic => (System.Diagnostics.Stopwatch.GetTimestamp() - Start) / System.Diagnostics.Stopwatch.Frequency;
+    /// <summary>
+    /// プロセス内の起点からの経過秒（0 以上）。起点を先に読んでから現在の時刻を取る
+    /// （以前は <c>GetTimestamp() - Start</c> の順で、型の初期化が後から走ると初回の値が負になり、ワーカーの監視が最初の起動を『隔離中』と誤判定した）。
+    /// </summary>
+    public double Monotonic => System.Diagnostics.Stopwatch.GetElapsedTime(Start).TotalSeconds;
 
     public void Sleep(double seconds)
     {

@@ -140,6 +140,8 @@ public static class WireNames
 
     public static string Of(FetchResult r) => Snake(r.ToString());
 
+    public static string Of(ReadStatus s) => Snake(s.ToString());
+
     private static string Snake(string pascal)
     {
         var sb = new System.Text.StringBuilder();

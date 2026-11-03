@@ -19,9 +19,16 @@ public sealed class HttpTransport : ITransport, IDisposable
     public const int MaxResponseBytes = 1024 * 1024;
     private readonly HttpClient client = new(new SocketsHttpHandler { AllowAutoRedirect = false, AutomaticDecompression = System.Net.DecompressionMethods.None }) { Timeout = Timeout.InfiniteTimeSpan };
 
-    public static bool IsAllowedUrl(string url) =>
-        url.StartsWith("https://", StringComparison.Ordinal) || url.StartsWith("http://127.0.0.1", StringComparison.Ordinal)
-        || url.StartsWith("http://localhost", StringComparison.Ordinal) || url.StartsWith("http://[::1]", StringComparison.Ordinal);
+    /// <summary>
+    /// HTTPS か、ホストがループバック（127.0.0.1・::1・localhost）そのものの平文 HTTP だけ。
+    /// 旧版は文字列の前方一致で、<c>http://127.0.0.1.example</c> のようなホストも通していた（URL を解析してホストを比べる）。
+    /// </summary>
+    public static bool IsAllowedUrl(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var u) || !string.IsNullOrEmpty(u.UserInfo)) return false;
+        if (u.Scheme == Uri.UriSchemeHttps) return u.Host.Length > 0;
+        return u.Scheme == Uri.UriSchemeHttp && u.Host is "127.0.0.1" or "[::1]" or "::1" or "localhost";
+    }
 
     public TransportResponse Request(string method, string url, IReadOnlyDictionary<string, string> headers, byte[]? body, double timeoutSeconds)
     {
@@ -47,10 +54,11 @@ public sealed class HttpTransport : ITransport, IDisposable
             var h = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var kv in resp.Headers.Concat(resp.Content.Headers)) h[kv.Key.ToLowerInvariant()] = string.Join(", ", kv.Value);
             using var stream = resp.Content.ReadAsStream(cts.Token);
-            var buf = new byte[MaxResponseBytes];
+            var buf = new byte[MaxResponseBytes + 1];
             var n = 0;
             int r;
             while (n < buf.Length && (r = stream.Read(buf, n, buf.Length - n)) > 0) n += r;
+            if (n > MaxResponseBytes) throw new TransportException("TOO_LARGE"); // 上限を超える応答は切り詰めずに失敗にする
             return new TransportResponse((int)resp.StatusCode, h, buf[..n]);
         }
         catch (OperationCanceledException)
