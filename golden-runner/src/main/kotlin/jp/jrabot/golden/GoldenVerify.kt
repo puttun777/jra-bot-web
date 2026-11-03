@@ -50,7 +50,8 @@ object GoldenVerify {
         listOf(
             Pattern.compile("discord(app)?\\.com/api/webhooks", FLAGS_I) to "Discord Webhook",
             Pattern.compile("https?://", FLAGS_I) to "URL",
-            Pattern.compile("(?:$W|[.+-])+@(?:$W|-)+\\.(?:$W|\\.)+", FLAGS) to "メールアドレス",
+            // 繰り返しの中に選択（|）を置くと、Java は反復ごとに再帰して長い文字列で StackOverflowError になる（再レビュー 中）。文字クラスにまとめる
+            Pattern.compile("[\\p{L}\\p{N}_.+-]+@[\\p{L}\\p{N}_-]+\\.[\\p{L}\\p{N}_.]+", FLAGS) to "メールアドレス",
             Pattern.compile("\\.(sqlite3?|db|pkl|pickle)$NOT_W_AFTER", FLAGS_I) to "DB/モデルファイル名",
             Pattern.compile("[A-Za-z0-9_\\-]{40,}", FLAGS) to "長いトークン様文字列",
             Pattern.compile("-----BEGIN", FLAGS) to "秘密鍵",

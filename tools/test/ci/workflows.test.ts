@@ -148,21 +148,36 @@ describe("workflow rules", () => {
     assert.ok(CI.includes("cancel-in-progress: ${{ github.event_name == 'pull_request' }}"));
   });
   it("a run block that pipes into tee keeps the exit status (pipefail), so a failing check is not hidden", () => {
+    // shell: bash（GitHub は bash --noprofile --norc -eo pipefail {0}）か、tee より前の行の set -o pipefail。コメント・文字列の中の記述は数えない
+    const shellOf = (node: unknown): unknown =>
+      isRecord(node) && isRecord(node["defaults"]) && isRecord(node["defaults"]["run"]) ? node["defaults"]["run"]["shell"] : undefined;
+    const keepsStatus = (run: string): boolean => {
+      const lines = run.split("\n").map((l) => l.trim());
+      const teeAt = lines.findIndex((l) => !l.startsWith("#") && /\|&?\s*(sudo\s+)?tee\b/.test(l));
+      if (teeAt < 0) return true;
+      return lines.slice(0, teeAt).some((l) => /^set\s+-[a-z]*o\s+pipefail\b/.test(l) || /^set\s+-o\s+pipefail\b/.test(l));
+    };
     for (const [file, text] of Object.entries(WORKFLOWS)) {
       const doc: unknown = parseYaml(text);
       const jobsNode = isRecord(doc) && isRecord(doc["jobs"]) ? doc["jobs"] : {};
       for (const [jobName, j] of Object.entries(jobsNode)) {
-        const jobShell =
-          isRecord(j) && isRecord(j["defaults"]) && isRecord(j["defaults"]["run"]) ? j["defaults"]["run"]["shell"] : undefined;
         const steps = isRecord(j) && Array.isArray(j["steps"]) ? j["steps"] : [];
         for (const s of steps) {
-          if (!isRecord(s) || typeof s["run"] !== "string" || !/\|\s*tee\b/.test(s["run"])) continue;
-          const shell = s["shell"] ?? jobShell;
-          // shell: bash（GitHub は bash --noprofile --norc -eo pipefail {0}）か、run の中の set -o pipefail
-          assert.ok(shell === "bash" || /set -[a-z]*o pipefail|set -o pipefail/.test(s["run"]), `${file}/${jobName}/${String(s["name"])}`);
+          if (!isRecord(s) || typeof s["run"] !== "string") continue;
+          const shell = s["shell"] ?? shellOf(j) ?? shellOf(doc);
+          assert.ok(shell === "bash" || keepsStatus(s["run"]), `${file}/${jobName}/${String(s["name"])}`);
         }
       }
     }
+    // 判定そのものの試験（抜け道: コメント・後置・|& tee）
+    assert.equal(keepsStatus("set -o pipefail\nx | tee a"), true);
+    assert.equal(keepsStatus("set -euo pipefail\nx | tee a"), true);
+    assert.equal(keepsStatus("# set -o pipefail\nx | tee a"), false);
+    assert.equal(keepsStatus('echo "set -o pipefail"\nx | tee a'), false);
+    assert.equal(keepsStatus("x | tee a\nset -o pipefail"), false);
+    assert.equal(keepsStatus("x |& tee a"), false);
+    assert.equal(keepsStatus("x | sudo tee a"), false);
+    assert.equal(keepsStatus("# x | tee a\necho ok"), true);
   });
   it("monthly schedule exists", () => assert.match(CI, /cron: "\d+ \d+ 1 \* \*"/));
   it("mandatory checks are kept in build and db jobs", () => {

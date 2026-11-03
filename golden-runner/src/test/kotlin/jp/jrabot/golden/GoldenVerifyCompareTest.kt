@@ -228,6 +228,16 @@ class GoldenVerifyCompareTest {
     }
 
     @Test
+    fun `long inputs do not overflow the stack in the forbidden patterns`() {
+        // 旧い正規表現（繰り返しの中の選択）は 5000 文字で StackOverflowError になった
+        for ((text, hit) in listOf("あ".repeat(5000) to false, "あ".repeat(5000) + "@例え.日本" to true, "a.b+c".repeat(2000) + "@x-y.z" to true)) {
+            val d = copy()
+            mutate(d, first) { (it.get("input").get("calls").get(0) as ObjectNode).put("note", text) }
+            assertEquals(hit, errors(d).any { "禁止パターン（メールアドレス" in it }, text.take(20))
+        }
+    }
+
+    @Test
     fun `malformed fixtures are reported as errors, not as a crash`() {
         val d = copy()
         val text = Files.readString(d.resolve(first)).replaceFirst(Regex("\"value\": [-0-9.e]+"), "\"value\": 1e999")
