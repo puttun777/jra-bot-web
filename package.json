@@ -17,7 +17,7 @@
     "test:frontend": "tsc -p dashboard/tsconfig.test.json && node dashboard/run-tests.mjs"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.15",
+    "@biomejs/biome": "2.6.4",
     "@types/node": "24.19.2",
     "typescript": "6.0.3"
   },
