@@ -38,6 +38,8 @@ val compileFrontend by tasks.registering(Exec::class) {
     inputs.dir("src/main/ts")
     inputs.file(frontendTsconfig)
     inputs.file(rootProject.layout.projectDirectory.file("package-lock.json"))
+    // 入っている typescript の版（lockfile が同じでも node_modules が古い場合に up-to-date にしない。無ければ空の入力で、doFirst が理由を示して失敗する）
+    inputs.files(rootProject.layout.projectDirectory.file("node_modules/typescript/package.json"))
     outputs.dir(frontendOut)
     onlyIf("-PfrontendPrebuilt=true のときは Docker の Node ステージの結果を使う") { !frontendPrebuilt.get() }
     workingDir(rootDirFile)

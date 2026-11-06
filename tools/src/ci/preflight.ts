@@ -164,6 +164,7 @@ export function stepsFor(plan: Plan, files: readonly string[], root: string, out
       ["npm", "run", "--silent", "lint"],
       ["npm", "run", "--silent", "build"],
       ["node", "tools/run-tests.mjs"],
+      ["npm", "run", "--silent", "build:frontend"], // ブラウザ用の tsconfig（lib es2022）での型検査。試験用は lib es2024 なので別に要る（レビュー 低）
       ["npm", "run", "--silent", "test:frontend"],
     ],
   });

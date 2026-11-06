@@ -1,1 +1,1 @@
-[{"id":1,"scope":"RACE","date":"2026-10-24","raceId":"202610240501","action":"CANCEL","value":null,"reason":"天候","createdBy":"me@example.com","createdAt":"2026-10-24T00:10:00Z","validUntil":null,"revokedAt":null,"revokedBy":null}]
+[{"id":1,"scope":"RACE","date":"2026-10-24","raceId":"202610240501","action":"SET_POST_TIME","value":"2026-10-24T06:30:00Z","reason":"天候","createdBy":"me@example.com","createdAt":"2026-10-24T00:10:00Z","validUntil":"2026-10-25T00:00:00Z","revokedAt":"2026-10-24T00:20:00Z","revokedBy":"me@example.com"}]

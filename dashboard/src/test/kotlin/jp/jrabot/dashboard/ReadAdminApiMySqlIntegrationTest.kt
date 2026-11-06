@@ -1,5 +1,15 @@
 package jp.jrabot.dashboard
 
+import jp.jrabot.dashboard.api.ComboSummaryDto
+import jp.jrabot.dashboard.api.DayDto
+import jp.jrabot.dashboard.api.MeDto
+import jp.jrabot.dashboard.api.OverrideDto
+import jp.jrabot.dashboard.api.PageDto
+import jp.jrabot.dashboard.api.PerformanceDto
+import jp.jrabot.dashboard.api.RaceDto
+import jp.jrabot.dashboard.api.RunDto
+import jp.jrabot.dashboard.api.SignalDto
+import jp.jrabot.dashboard.api.StatusDto
 import jp.jrabot.persistence.integration.MySqlSupport
 import jp.jrabot.persistence.integration.TestDb
 import jp.jrabot.persistence.integration.resetData
@@ -12,6 +22,10 @@ import org.springframework.context.ConfigurableApplicationContext
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.json.JsonMapper
 import java.nio.file.Files
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -22,6 +36,7 @@ import kotlin.test.assertTrue
 @Tag("integration")
 class ReadAdminApiMySqlIntegrationTest {
     companion object {
+        private val READER: JsonMapper = JsonMapper.builder().build()
         private val db: TestDb = MySqlSupport.migratedDatabase()
         private val ops = writeOpsState(Files.createTempDirectory("dashboard-api-it"))
         private lateinit var ctx: ConfigurableApplicationContext
@@ -130,18 +145,35 @@ class ReadAdminApiMySqlIntegrationTest {
     }
 
     /**
-     * 画面（dashboard/src/main/ts/schema.ts）が受け取る形と、実際の応答の形が一致すること（D-263）。見本は src/test/resources/frontend-contract。
+     * 画面（dashboard/src/main/ts/schema.ts）が受け取る形と、実際の HTTP の応答の形が一致すること（D-263）。見本は src/test/resources/frontend-contract。
      * オブジェクトのキーの集合と、両方が null でないときの JSON の型を比べる（配列は見本の先頭要素と実際の全要素）。
+     * 今日（JST）の開催日・レース・実行記録も入れて、status の days・lastRun・nextRaceAt を値のある状態で比べる（レビュー 中: 空の配列・null で比較を素通りしていた）。
      * TypeScript の試験は同じ見本を schema.ts の検査に通すので、サーバの DTO の項目を変えて見本・schema を直し忘れると、どちらかが失敗する。
      */
     @Test
     fun `API の応答の形は画面の契約の見本（frontend-contract）と一致する`() {
         assertEquals(201, createCancel().status)
+        val today = LocalDate.now(ZoneId.of("Asia/Tokyo"))
+        val raceId = today.format(DateTimeFormatter.BASIC_ISO_DATE) + "0501"
         db.exec(
-            "INSERT INTO bot_run (tenant_id, run_id, run_date, trigger_type, state, exit_reason, started_at, finished_at) " +
-                "VALUES (1, '00000000-0000-4000-8000-000000000001', '2026-10-24', 'SCHEDULER', 'SUCCEEDED', 'DAY_COMPLETED', " +
-                "'2026-10-24 00:30:00.000000', '2026-10-24 08:00:00.000000')",
+            "INSERT INTO race_day (tenant_id, race_date, venue_code, kai, nichime, status, first_seen_at, last_confirmed_at) " +
+                "VALUES (1, '$today', '05', 4, 8, 'RUNNING', NOW(6), NOW(6))",
         )
+        db.exec(
+            "INSERT INTO races (tenant_id, race_id, race_date, venue_code, race_no, created_at, updated_at) VALUES (1, '$raceId', '$today', '05', 1, NOW(6), NOW(6))",
+        )
+        db.exec(
+            "INSERT INTO race_schedule (tenant_id, race_id, race_date, venue_code, race_no, scheduled_post_at, post_time_unknown, " +
+                "status, data_kubun, source_version, race_name, last_changed_at) " +
+                "VALUES (1, '$raceId', '$today', '05', 1, DATE_ADD(NOW(6), INTERVAL 2 HOUR), 0, 'CARD', '2', '202610232', '今日1R', NOW(6))",
+        )
+        for ((n, date) in listOf(1 to "2026-10-24", 2 to today.toString())) {
+            db.exec(
+                "INSERT INTO bot_run (tenant_id, run_id, run_date, trigger_type, state, exit_reason, started_at, finished_at) " +
+                    "VALUES (1, '00000000-0000-4000-8000-00000000000$n', '$date', 'SCHEDULER', 'SUCCEEDED', 'DAY_COMPLETED', " +
+                    "'2026-10-24 00:30:00.000000', '2026-10-24 08:00:00.000000')",
+            )
+        }
         val cases =
             linkedMapOf(
                 "status.json" to "/api/v1/status",
@@ -152,36 +184,119 @@ class ReadAdminApiMySqlIntegrationTest {
                 "overrides.json" to "/api/v1/admin/overrides?date=2026-10-24",
                 "me.json" to "/api/v1/me",
             )
-        val mapper = JsonMapper.builder().build()
         val compared = mutableListOf<String>()
         for ((file, path) in cases) {
             val res = http.get(path, admin)
             assertEquals(200, res.status, "$path: ${res.body}")
-            val expected = mapper.readTree(checkNotNull(javaClass.getResource("/frontend-contract/$file")) { "見本 $file が無い" }.readText())
-            assertSameShape(expected, mapper.readTree(res.body), file, compared)
+            assertSameShape(sample(file), READER.readTree(res.body), file, compared, strict = false)
         }
-        // 実際の応答が空の配列だと要素の形を比べられない。比べた位置を確かめる（見本の配列のうち、ここで要素まで比べたもの）
-        for (p in listOf("races.json[0]", "signals.json.items[0]", "runs.json[0]", "overrides.json[0]")) assertTrue(p in compared, "$p を比べていない: $compared")
+        // 実際の応答が空の配列だと要素の形を比べられない。比べた位置を確かめる（見本の配列のうち、ここで要素まで比べたもの）。
+        // performance.combos は合成の買い目の通知が要るため、下の DTO の試験で比べる
+        for (p in listOf("status.json.days[0]", "races.json[0]", "signals.json.items[0]", "runs.json[0]", "overrides.json[0]")) {
+            assertTrue(p in compared, "$p を比べていない: $compared")
+        }
+        assertTrue("status.json.lastRun.finishedAt" in compared && "status.json.nextRaceAt" in compared, "status の値のある項目を比べていない: $compared")
     }
+
+    /**
+     * DTO のすべての項目に値がある応答を、アプリと同じ JsonMapper（Spring の Bean）で JSON にし、見本と**型まで厳密に**比べる（null を許さない）。
+     * HTTP の試験では値が null になりやすい項目（取消・期限・買い目の集計など）の JSON の型を、ここで確かめる（レビュー 中）。
+     */
+    @Test
+    fun `すべての項目に値がある DTO の JSON は見本と型まで一致する`() {
+        val mapper = ctx.getBean(JsonMapper::class.java)
+        val at = Instant.parse("2026-10-24T00:30:00Z")
+        val day = LocalDate.of(2026, 10, 24)
+        val run = RunDto("00000000-0000-4000-8000-000000000001", day, "SCHEDULER", "FAILED", at, at.plusSeconds(900), "DB_UNAVAILABLE")
+        val dtos =
+            linkedMapOf<String, Any>(
+                "status.json" to StatusDto(at, day, "NORMAL", listOf(DayDto("05", "RUNNING", at)), run, at.plusSeconds(3600), false, at),
+                "races.json" to listOf(RaceDto("202610240501", "05", 1, "テスト1R", at, "CARD")),
+                "signals.json" to PageDto(listOf(SignalDto(1L, "202610240501", "win", 2, at, 8.0, 0.2, 0.6, 3.0, "market", "SENT")), 0, 50, 1),
+                "performance.json" to
+                    PerformanceDto(
+                        day,
+                        day,
+                        1,
+                        1,
+                        3.0,
+                        24.0,
+                        24.0,
+                        1.0,
+                        8.0,
+                        listOf(ComboSummaryDto("wide", 2, 1, 2.0, 3.5, 0.5, 1.75)),
+                        0,
+                        0,
+                        0,
+                        0,
+                    ),
+                "runs.json" to listOf(run),
+                "overrides.json" to
+                    listOf(
+                        OverrideDto(
+                            1L,
+                            "RACE",
+                            day,
+                            "202610240501",
+                            "SET_POST_TIME",
+                            "2026-10-24T06:30:00Z",
+                            "天候",
+                            "me@example.com",
+                            at,
+                            at,
+                            at,
+                            "me@example.com",
+                        ),
+                    ),
+                "me.json" to MeDto("me@example.com", "ADMIN", 1L),
+            )
+        for ((file, dto) in dtos) {
+            val actual = READER.readTree(mapper.writeValueAsString(dto))
+            assertSameShape(sample(file), actual, file, mutableListOf(), strict = true)
+        }
+    }
+
+    /** 画面の ES モジュールは毎回再検証させる（デプロイの直後に新旧のモジュールが混ざって読み込めなくなるのを防ぐ。レビュー 中）。配信の型も確かめる。 */
+    @Test
+    fun `画面と ES モジュールは no-cache で配信され モジュールは JavaScript`() {
+        val index = http.get("/")
+        assertEquals(200, index.status)
+        assertTrue(index.body.contains("""<script type="module" src="/js/app.js"></script>"""), index.body.take(200))
+        assertTrue(index.header("Cache-Control")?.contains("no-cache") == true, "index: ${index.header("Cache-Control")}")
+        for (m in listOf("app", "api", "dom", "format", "schema", "validate", "view")) {
+            val r = http.get("/js/$m.js")
+            assertEquals(200, r.status, m)
+            assertTrue(r.header("Content-Type")?.contains("javascript") == true, "$m: ${r.header("Content-Type")}")
+            assertTrue(r.header("Cache-Control")?.contains("no-cache") == true, "$m: ${r.header("Cache-Control")}")
+        }
+        assertEquals(404, http.get("/app.js").status, "旧 app.js は無い")
+    }
+
+    private fun sample(file: String): JsonNode = READER.readTree(checkNotNull(javaClass.getResource("/frontend-contract/$file")) { "見本 $file が無い" }.readText())
 
     private fun assertSameShape(
         expected: JsonNode,
         actual: JsonNode?,
         path: String,
         compared: MutableList<String>,
+        strict: Boolean,
     ) {
         if (actual == null) throw AssertionError("$path が応答に無い")
-        if (expected.isNull || actual.isNull) return
+        if (strict) {
+            assertTrue(!expected.isNull && !actual.isNull, "$path が null（見本と DTO はすべての項目に値を入れる）")
+        } else if (expected.isNull || actual.isNull) {
+            return
+        }
+        compared += path
         assertEquals(expected.nodeType, actual.nodeType, "$path の JSON の型")
         if (expected.isObject) {
             val keys = expected.properties().map { it.key }.toSortedSet()
             assertEquals(keys, actual.properties().map { it.key }.toSortedSet(), "$path のキー（画面の schema.ts と見本を合わせる）")
-            for (k in keys) assertSameShape(expected.get(k), actual.get(k), "$path.$k", compared)
-        } else if (expected.isArray && expected.size() > 0) {
-            for (i in 0 until actual.size()) {
-                compared += "$path[$i]"
-                assertSameShape(expected.get(0), actual.get(i), "$path[$i]", compared)
-            }
+            for (k in keys) assertSameShape(expected.get(k), actual.get(k), "$path.$k", compared, strict)
+        } else if (expected.isArray) {
+            assertTrue(expected.size() > 0, "$path: 見本の配列は 1 件以上")
+            if (strict) assertTrue(actual.size() > 0, "$path: DTO の配列は 1 件以上")
+            for (i in 0 until actual.size()) assertSameShape(expected.get(0), actual.get(i), "$path[$i]", compared, strict)
         }
     }
 }

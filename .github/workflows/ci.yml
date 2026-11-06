@@ -116,8 +116,8 @@ jobs:
             --classes "BotArgsParserTest,BotLauncherTest,BotJobExecutorTest,BotProcessTest,BotSpringWiringTest,JobGateTest,CycleGateTest,CalendarCheckTaskHandlerTest,CalendarSettingsParserTest,ExportDatasetTaskHandlerTest"
           node build/tools/src/main.js verify-junit --label "ingest unit" --dir ingest/build/test-results/test --min 35 \
             --classes "IngestInternalApiTest,AgentApiOpsGuardTest,IngestStartupConfigTest,AgentSigningVectorsTest,PlanProviderTest"
-          node build/tools/src/main.js verify-junit --label "dashboard unit" --dir dashboard/build/test-results/test --min 30 \
-            --classes "DashboardInternalApiTest,AdminWriteGuardTest,DashboardStartupConfigTest"
+          node build/tools/src/main.js verify-junit --label "dashboard unit" --dir dashboard/build/test-results/test --min 58 \
+            --classes "DashboardInternalApiTest,AdminWriteGuardTest,DashboardStartupConfigTest,SecurityHeadersFilterTest"
           node build/tools/src/main.js verify-junit --label "ml-train unit (Kotlin. D-257)" --dir ml-train/build/test-results/test --min 47 \
             --classes "PythonReferenceTest,PythonReferencePipelineTest,TrainJobTest,LegacyPickleTest,ModelJsonTest,LogisticRoundoffTest,LauncherTest"
 
@@ -214,7 +214,7 @@ jobs:
         run: |
           node build/tools/src/main.js verify-junit --label "bot integration" --dir bot/build/test-results/integrationTest --min 42 --classes "BotJobIntegrationTest,CalendarCheckIntegrationTest,MlTrainInteropIntegrationTest,ReconcileIntegrationTest,RetentionIntegrationTest"
           node build/tools/src/main.js verify-junit --label "ingest integration" --dir ingest/build/test-results/integrationTest --min 50 --classes "IngestReadyIntegrationTest,AgentAuthIntegrationTest,IngestIdempotencyIntegrationTest,IngestPipelineIntegrationTest,AgentInteropIntegrationTest"
-          node build/tools/src/main.js verify-junit --label "dashboard integration" --dir dashboard/build/test-results/integrationTest --min 13 --classes "DashboardReadyIntegrationTest,ReadAdminApiMySqlIntegrationTest"
+          node build/tools/src/main.js verify-junit --label "dashboard integration" --dir dashboard/build/test-results/integrationTest --min 16 --classes "DashboardReadyIntegrationTest,ReadAdminApiMySqlIntegrationTest"
 
   # Windows 取得エージェント（agent/cs。C#/.NET 10。D-261）。Gradle に組み込まない独立プロジェクト。Linux で restore（lock file どおり）・ビルド（警告はエラー）・
   # 単体・SQLite WAL・偽サーバ・子プロセスのワーカー（Fake の JV-Link）・署名・ビーコン・再送と復旧・CLI・PoC の Mock を検査する。実 JV-Link・SDK・実トークンは使わない。

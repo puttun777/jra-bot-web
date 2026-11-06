@@ -53,6 +53,18 @@ describe("contract: API の応答の見本", () => {
     });
   }
 
+  test("見本はすべての項目に値がある（null が無い。Kotlin の比較が全項目の JSON の型を確かめられるように）", () => {
+    const nulls: string[] = [];
+    const walk = (v: unknown, path: string): void => {
+      if (v === null) nulls.push(path);
+      else if (Array.isArray(v)) {
+        for (const [i, x] of v.entries()) walk(x, `${path}[${i}]`);
+      } else if (isRecord(v)) for (const [k, x] of Object.entries(v)) walk(x, `${path}.${k}`);
+    };
+    for (const [file] of CASES) walk(load(file), file);
+    assert.deepEqual(nulls, []);
+  });
+
   test("配列を持つ見本は要素を 1 件以上持つ（status.days・signals.items・performance.combos）", () => {
     const status = load("status.json");
     const signals = load("signals.json");
@@ -75,6 +87,27 @@ describe("contract: 静的な画面", () => {
     const ids = [...app.matchAll(/byId\("([^"]+)"/g)].map((m) => m[1]);
     assert.ok(ids.length >= 20, `id の参照が少なすぎる（${ids.length}）`);
     for (const id of ids) assert.ok(html.includes(`id="${id}"`), `index.html に id="${id}" が無い`);
+  });
+
+  test("app.ts が期待する要素の種類（HTMLxxxElement）と index.html のタグが一致する", () => {
+    const app = readFileSync(join(ROOT, "main/ts/app.ts"), "utf8");
+    const TAG: Readonly<Record<string, string>> = {
+      HTMLDivElement: "div",
+      HTMLInputElement: "input",
+      HTMLButtonElement: "button",
+      HTMLSpanElement: "span",
+      HTMLFormElement: "form",
+      HTMLSelectElement: "select",
+    };
+    const refs = [...app.matchAll(/byId\("([^"]+)", (HTML\w+Element)\)/g)];
+    assert.ok(refs.length >= 20);
+    for (const m of refs) {
+      const [, id, type] = m;
+      assert.ok(id !== undefined && type !== undefined);
+      const tag = TAG[type];
+      assert.ok(tag !== undefined, `対応表に無い要素の種類 ${type}`);
+      assert.match(html, new RegExp(`<${tag}\\b[^>]*\\bid="${id}"`), `#${id} は <${tag}>`);
+    }
   });
 
   test("index.html はモジュールの script を 1 つだけ読み、インライン script・インラインイベントが無い", () => {

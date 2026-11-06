@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-const MIN = 40;
+const MIN = 47;
 const testDir = "dashboard/build/frontend-test/test/ts";
 const outDir = "dashboard/build/frontend-test-results";
 mkdirSync(outDir, { recursive: true });
@@ -12,8 +12,11 @@ const files = readdirSync(testDir)
   .filter((f) => f.endsWith(".test.js"))
   .sort()
   .map((f) => join(testDir, f));
-if (files.length === 0) {
-  console.error("::error::試験ファイルが無い（tsc -p dashboard/tsconfig.test.json を先に実行）");
+// 試験ファイルの取りこぼし（削除・tsconfig の include 漏れ）を件数だけで見逃さない（レビュー 低）
+const EXPECTED = ["api.test.js", "contract.test.js", "format.test.js", "validate.test.js", "view.test.js"];
+const missing = EXPECTED.filter((f) => !files.includes(join(testDir, f)));
+if (files.length === 0 || missing.length > 0) {
+  console.error(`::error::試験ファイルが無い: ${missing.join(", ") || "すべて"}（tsc -p dashboard/tsconfig.test.json を先に実行）`);
   process.exit(1);
 }
 const r = spawnSync(

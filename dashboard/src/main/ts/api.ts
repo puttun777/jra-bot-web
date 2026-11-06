@@ -44,7 +44,11 @@ export async function getJson<T>(path: string, decoder: Decoder<T>, fetchFn: Fet
   return decodeBody(res, decoder);
 }
 
-export async function postJson<T>(path: string, body: unknown, decoder: Decoder<T>, fetchFn: FetchFn = browserFetch): Promise<T> {
+/**
+ * 管理操作（POST）。2xx なら成功とし、応答の本文は使わない（レビュー 低: 成功した操作の応答の形が違うだけで失敗と表示すると、利用者が再送して
+ * 409〔重複〕になる）。画面は成功後に一覧を読み直す（一覧の応答は getJson で検査する）。
+ */
+export async function post(path: string, body: unknown, fetchFn: FetchFn = browserFetch): Promise<void> {
   let res: Response;
   try {
     res = await fetchFn(path, {
@@ -57,7 +61,7 @@ export async function postJson<T>(path: string, body: unknown, decoder: Decoder<
     throw new ApiError(NETWORK_MESSAGE);
   }
   if (!res.ok) throw new ApiError(postFailureMessage(res.status));
-  return decodeBody(res, decoder);
+  await res.body?.cancel();
 }
 
 /** 画面に出す文。ApiError 以外（想定外の例外）は詳細を出さない。 */

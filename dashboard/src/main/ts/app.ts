@@ -2,10 +2,10 @@
  * JRA Bot ダッシュボードの画面（index.html から `<script type="module" src="/js/app.js">` で読む）。読取り中心で、管理者だけが手動補正を操作できる。
  * 外部ライブラリ・CDN・インライン script なし。値は textContent だけで描画する。応答は schema.ts で検査してから使う。
  */
-import { ApiError, getJson, messageOf, postJson } from "./api.js";
+import { ApiError, getJson, messageOf, post } from "./api.js";
 import { byId, el, emptyBox, errorBox, pill, show, table } from "./dom.js";
 import { dateQuery, hasNextPage, pageInfo, performanceQuery, signalsQuery } from "./format.js";
-import { Me, Override, Overrides, Performance, Races, Runs, SignalPage, Status } from "./schema.js";
+import { Me, type Override, Overrides, Performance, Races, Runs, SignalPage, Status } from "./schema.js";
 import {
   OVERRIDE_HEADERS,
   overrideRequest,
@@ -133,7 +133,7 @@ function start(u: Ui): void {
     b.addEventListener("click", async () => {
       if (!confirm("この補正を取り消しますか？")) return;
       try {
-        await postJson(`/api/v1/admin/overrides/${encodeURIComponent(String(id))}/revoke`, {}, Override);
+        await post(`/api/v1/admin/overrides/${encodeURIComponent(String(id))}/revoke`, {});
         void loadOverrides();
       } catch (e) {
         u.msg.textContent = messageOf(e);
@@ -178,7 +178,7 @@ function start(u: Ui): void {
         reason: u.reason.value,
       });
       try {
-        await postJson("/api/v1/admin/overrides", body, Override);
+        await post("/api/v1/admin/overrides", body);
         u.msg.textContent = "追加しました。";
         u.reason.value = "";
         void loadOverrides();
@@ -231,7 +231,10 @@ function start(u: Ui): void {
   });
   void loadStatus().then(() => {
     loaders.overview();
-    void initAdmin();
+    // 想定外の例外でも管理 UI は出さない（未処理の Promise の拒否にしない。レビュー 低）
+    initAdmin().catch(() => {
+      u.admin.hidden = true;
+    });
   });
   setInterval(() => {
     if (document.visibilityState === "visible") void loadStatus();

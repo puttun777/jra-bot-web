@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { ApiError, CSRF_HEADER, type FetchFn, getJson, messageOf, postJson } from "../../main/ts/api.js";
+import { ApiError, CSRF_HEADER, type FetchFn, getJson, messageOf, post } from "../../main/ts/api.js";
 import { FORMAT_MESSAGE, NETWORK_MESSAGE } from "../../main/ts/format.js";
 import { Me } from "../../main/ts/schema.js";
 
@@ -66,7 +66,7 @@ describe("api: GET", () => {
 describe("api: POST", () => {
   test("CSRF の印・JSON の本文・no-store で送る", async () => {
     const f = fake(() => json(me, 201));
-    assert.deepEqual(await postJson("/api/v1/admin/overrides", { a: 1 }, Me, f.fn), me);
+    assert.equal(await post("/api/v1/admin/overrides", { a: 1 }, f.fn), undefined);
     const init = f.calls[0]?.init;
     assert.equal(init?.method, "POST");
     assert.equal(init?.cache, "no-store");
@@ -82,19 +82,24 @@ describe("api: POST", () => {
 
   test("本文が undefined なら {} を送る", async () => {
     const f = fake(() => json(me));
-    await postJson("/x", undefined, Me, f.fn);
+    await post("/x", undefined, f.fn);
     assert.equal(f.calls[0]?.init.body, "{}");
   });
 
+  test("2xx なら応答の本文の形に関係なく成功（本文は使わない）", async () => {
+    assert.equal(await post("/x", {}, fake(() => new Response("<html>", { status: 201 })).fn), undefined);
+    assert.equal(await post("/x", {}, fake(() => new Response(null, { status: 204 })).fn), undefined);
+  });
+
   test("409・404・400・403 と通信の失敗の文", async () => {
-    await rejectsWith(postJson("/x", {}, Me, fake(() => json({}, 409)).fn), /操作できません/);
-    await rejectsWith(postJson("/x", {}, Me, fake(() => json({}, 404)).fn), /見つかりません/);
-    await rejectsWith(postJson("/x", {}, Me, fake(() => json({}, 400)).fn), /入力が正しくありません/);
-    await rejectsWith(postJson("/x", {}, Me, fake(() => json({}, 403)).fn), /権限がありません/);
+    await rejectsWith(post("/x", {}, fake(() => json({}, 409)).fn), /操作できません/);
+    await rejectsWith(post("/x", {}, fake(() => json({}, 404)).fn), /見つかりません/);
+    await rejectsWith(post("/x", {}, fake(() => json({}, 400)).fn), /入力が正しくありません/);
+    await rejectsWith(post("/x", {}, fake(() => json({}, 403)).fn), /権限がありません/);
     const offline: FetchFn = async () => {
       throw new TypeError("Failed to fetch");
     };
-    await rejectsWith(postJson("/x", {}, Me, offline), NETWORK_MESSAGE);
+    await rejectsWith(post("/x", {}, offline), NETWORK_MESSAGE);
   });
 });
 
