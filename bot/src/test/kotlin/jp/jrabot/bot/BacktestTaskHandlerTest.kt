@@ -3,6 +3,7 @@ package jp.jrabot.bot
 import jp.jrabot.domain.backtest.BacktestReport
 import jp.jrabot.domain.backtest.BacktestRequest
 import jp.jrabot.domain.backtest.ExclusionReason
+import jp.jrabot.domain.botrun.testing.StubJudge
 import jp.jrabot.domain.ingest.PayoutRow
 import jp.jrabot.domain.ingest.PayoutStore
 import jp.jrabot.domain.ingest.ResultEntry
@@ -12,15 +13,24 @@ import jp.jrabot.domain.ml.json.JsonNull
 import jp.jrabot.domain.ml.json.JsonObject
 import jp.jrabot.domain.ml.json.JsonString
 import jp.jrabot.domain.ml.json.StrictJson
+import jp.jrabot.domain.ml.pipeline.FallbackReason
+import jp.jrabot.domain.ml.pipeline.ProbSource
+import jp.jrabot.domain.ml.pipeline.ProbabilityPipelineVersion
+import jp.jrabot.domain.ml.pipeline.ProbabilityResult
 import jp.jrabot.domain.odds.Market
+import jp.jrabot.domain.odds.Odds
+import jp.jrabot.domain.odds.OddsEntry
+import jp.jrabot.domain.odds.OddsSnapshot
 import jp.jrabot.domain.performance.ComboSummary
 import jp.jrabot.domain.performance.PerformanceSummary
+import jp.jrabot.domain.race.HorseNumber
 import jp.jrabot.domain.race.RaceId
 import jp.jrabot.domain.repository.UpsertOutcome
 import jp.jrabot.domain.tenant.TenantId
 import org.junit.jupiter.api.Test
 import org.slf4j.helpers.NOPLogger
 import java.time.Duration
+import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
@@ -54,7 +64,7 @@ class BacktestTaskHandlerTest {
         val h =
             handler { req ->
                 seen += req
-                BacktestRun.Done(report(req, 8), null, null)
+                BacktestRun.Done(report(req, 8), null)
             }
         assertEquals(JobResult(JobExit.OK, "BACKTEST_DONE"), h.execute(command("--from=2026-01-01", "--to=2026-01-31")))
         val req = seen.single()
@@ -67,13 +77,28 @@ class BacktestTaskHandlerTest {
 
     @Test
     fun `評価 0 件・判定の失敗・ML のモデルを固定できないときは 1 で 成功にしない`() {
-        assertEquals(JobResult(JobExit.FAILURE, "BACKTEST_EMPTY"), handler { BacktestRun.Done(report(it, 0), null, null) }.execute(command()))
+        assertEquals(JobResult(JobExit.FAILURE, "BACKTEST_EMPTY"), handler { BacktestRun.Done(report(it, 0), null) }.execute(command()))
         assertEquals(
             JobResult(JobExit.FAILURE, "BACKTEST_JUDGE_FAILED"),
-            handler { BacktestRun.Done(report(it, 8, judgeFailed = 1), "ensemble", "ens-1") }.execute(command()),
+            handler { BacktestRun.Done(report(it, 8, judgeFailed = 1), "ensemble", MlUsage(used = 8, modelIds = setOf("ens-1"))) }.execute(command()),
             "判定の中の読取りの障害が 1 件でもあれば欠けた成績",
         )
         assertEquals(JobResult(JobExit.FAILURE, "BACKTEST_ML_UNAVAILABLE"), handler { BacktestRun.MlUnavailable("ensemble") }.execute(command()))
+        // レジストリに ACTIVE の行があっても、モデルを読めず市場確率に落ちた判定があれば失敗（D-266 の再レビュー）
+        assertEquals(
+            JobResult(JobExit.FAILURE, "BACKTEST_ML_FALLBACK"),
+            handler { BacktestRun.Done(report(it, 8), "ensemble", MlUsage(used = 7, fallback = 1, modelIds = setOf("ens-1"))) }.execute(command()),
+        )
+        assertEquals(
+            JobResult(JobExit.FAILURE, "BACKTEST_ML_FALLBACK"),
+            handler { BacktestRun.Done(report(it, 8), "ensemble", MlUsage()) }.execute(command()),
+            "ML 有効で 1 回も使えていない",
+        )
+        assertEquals(
+            JobResult(JobExit.OK, "BACKTEST_DONE"),
+            handler { BacktestRun.Done(report(it, 8), "ensemble", MlUsage(used = 8, degraded = 2, modelIds = setOf("ens-1"))) }.execute(command()),
+            "一部の役割を外しただけ（degraded）は報告に出して成功",
+        )
     }
 
     @Test
@@ -81,7 +106,7 @@ class BacktestTaskHandlerTest {
         val cmd = command()
         val bt = checkNotNull(cmd.backtest)
         val req = BacktestRequest(cmd.tenantId, bt.from, bt.to, listOf(30.0, 5.0), Duration.ofSeconds(90))
-        val line = BacktestTaskHandler.render(report(req, 8), "ensemble", "ens-1")
+        val line = BacktestTaskHandler.render(report(req, 8), "ensemble", MlUsage(used = 8, degraded = 1, modelIds = setOf("ens-1")))
         assertFalse(line.contains('\n'))
         val json = StrictJson.parse(line) as JsonObject
         assertEquals(
@@ -92,6 +117,9 @@ class BacktestTaskHandlerTest {
                 "max_odds_age_seconds",
                 "model_type",
                 "model_id",
+                "ml_used",
+                "ml_fallback",
+                "ml_degraded",
                 "candidates",
                 "evaluated",
                 "excluded",
@@ -111,10 +139,62 @@ class BacktestTaskHandlerTest {
         assertTrue(line.contains("\"actual_roi\":1.75"), line)
         assertTrue(line.contains("in-sample"), "今のモデルを過去に当てる注意を報告に含める")
         assertFalse(line.contains("2026010"), "レース ID などの行の値を出さない")
-        val market = StrictJson.parse(BacktestTaskHandler.render(report(req, 8), null, null)) as JsonObject
+        val market = StrictJson.parse(BacktestTaskHandler.render(report(req, 8), null, MlUsage())) as JsonObject
         assertEquals(JsonNull, market["model_type"], "ML 無効は null")
+        val unused = StrictJson.parse(BacktestTaskHandler.render(report(req, 8), "ensemble", MlUsage(fallback = 8))) as JsonObject
+        assertEquals(JsonNull, unused["model_id"], "使えなかったモデルの ID は出さない（レジストリの行の ID ではない）")
         val nan = report(req, 8).copy(win = PerformanceSummary(count = 1, hits = 0, totalStake = Double.NaN, paperPayout = 0.0, actualPayout = null))
-        assertTrue(BacktestTaskHandler.render(nan, null, null).contains("\"total_stake\":null"), "非有限の数でも報告を失わない")
+        assertTrue(BacktestTaskHandler.render(nan, null, MlUsage()).contains("\"total_stake\":null"), "非有限の数でも報告を失わない")
+    }
+
+    @Test
+    fun `MlUsageJudge は判定ごとに ML を実際に使えたか・市場確率に落ちたか・一部を外したかを数え ML 無効は数えない`() {
+        val t = TenantId.of(1)
+        val race = RaceId.parse("202610240501")
+        val win = OddsSnapshot(t, race, Market.WIN, Instant.parse("2026-10-24T00:30:00Z"), listOf(OddsEntry(HorseNumber.of(2), Odds.of(8.0), 1)))
+
+        fun prob(
+            source: ProbSource,
+            reason: FallbackReason?,
+        ) = ProbabilityResult(
+            listOf(1.0),
+            listOf(1.0),
+            source,
+            listOf(source),
+            "x",
+            reason,
+            emptyList(),
+            listOf(1.0),
+            listOf(1.0),
+            ProbabilityPipelineVersion.LEGACY,
+        )
+        val base = StubJudge().evaluate(t, race, win, win.observedAt, 30.0)
+        val outcomes =
+            ArrayDeque(
+                listOf(
+                    base.copy(probability = prob(ProbSource.ML_ENSEMBLE_CALIB_ALPHA, null), modelId = "ens-1"),
+                    base.copy(probability = prob(ProbSource.ML_ENSEMBLE_CALIB_ONLY, FallbackReason.MODEL_PREDICTION_FAILED), modelId = "ens-1"),
+                    base.copy(probability = prob(ProbSource.MARKET_FALLBACK, FallbackReason.MODEL_PREDICTION_FAILED), modelId = null),
+                    base.copy(probability = prob(ProbSource.ML_CALIBRATION, null), modelId = null), // ID の無い ML は使えたと数えない
+                    base, // ML 無効（probability = null）
+                ),
+            )
+        val judge = MlUsageJudge { _, _, _, _, _ -> outcomes.removeFirst() }
+        repeat(5) { judge.evaluate(t, race, win, win.observedAt, 30.0) }
+        assertEquals(MlUsage(used = 2, fallback = 2, degraded = 1, modelIds = setOf("ens-1")), judge.usage)
+    }
+
+    @Test
+    fun `本番の配線は結果・払戻を ReadOnlyResults で包み 判定を MlUsageJudge で数える（外すと試験が失敗する）`() {
+        val src =
+            java.nio.file.Files
+                .readString(
+                    java.nio.file.Path
+                        .of("src/main/kotlin/jp/jrabot/bot/BotConfiguration.kt"),
+                )
+        val branch = src.substringAfter("BotTask.BACKTEST ->").substringBefore("BotTask.BOT_RUN ->")
+        assertTrue(branch.contains("ReadOnlyResults(resultStore, payoutStore)") && branch.contains("MlUsageJudge("), branch)
+        assertFalse(Regex("""BacktestRunner\([^)]*\b(resultStore|payoutStore)\b""").containsMatchIn(branch), "生の保管を渡していない")
     }
 
     @Test

@@ -32,7 +32,7 @@
   `gcloud run jobs execute jra-bot-backtest --region=asia-northeast1 --wait --args=--task=backtest,--tenant-id=1,--from=2026-01-01,--to=2026-03-31`
   任意: `--minutes-before-post=30,5`（1〜1440 分。最大 12 個）、`--max-odds-age-seconds=N`（既定は `BOT_RUN_MAX_ODDS_AGE_SECONDS`）。
 - 結果: Cloud Logging の `BACKTEST_REPORT {...}`（1 行の JSON。件数・除外の内訳と率・単勝と組み合わせの集計・使ったモデル）。DB には書かず、通知もしない。
-- 終了コード: 0 = `BACKTEST_DONE`、1 = `BACKTEST_EMPTY`（評価 0 件）／`BACKTEST_JUDGE_FAILED`（判定の中で例外。欠けた成績なので読み捨てる）／`BACKTEST_ML_UNAVAILABLE`（ML 有効なのにモデルを固定できない）。1 は infra の『Job の失敗』アラートの対象になる（手動の実行で起きても通知が来る）。
+- 終了コード: 0 = `BACKTEST_DONE`、1 = `BACKTEST_EMPTY`（評価 0 件）／`BACKTEST_JUDGE_FAILED`（判定の中で例外。欠けた成績なので読み捨てる）／`BACKTEST_ML_UNAVAILABLE`（ML 有効なのにモデルを固定できない）／`BACKTEST_ML_FALLBACK`（モデルを読めない・検証できない・推論の失敗で市場確率に落ちた判定がある。報告の `ml_used`・`ml_fallback` で件数を確認）。1 は infra の『Job の失敗』アラートの対象になる（手動の実行で起きても通知が来る）。
 - 運用モードが NORMAL 以外（STOPPED・STARTING・STOPPING）だと DB に接続せず exit 0（`MODE_<mode>`）で終わり、**報告は出ない**。先に `ops-start`。
 - 注意: モデルは**今 ACTIVE のもの**を使う。その期間を含むデータで学習したモデルなら成績は楽観的になる（重みの先読み）。期間は 366 日以内、タイムアウトは 1 時間（長い期間・多くの時点で終わらないときは期間を分ける。報告は最後に 1 回だけ出る）。
 

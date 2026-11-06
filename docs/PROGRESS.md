@@ -16,8 +16,8 @@
 ## 2026-11-06 L8 ①: R16 バックテストを bot の Job に接続（ブランチ claude/l8-backtest-task。D-265。infra は claude/l8-backtest-job〔I-038〕）
 **マージ済み（この日）**: web PR #45（L7 = bdcfce6）。最新コミット 3f52592 で実行された全ジョブ（images・MySQL 8.4/9.7・Windows を含む）の成功を個別に確認。
 **内容**: `bot --task=backtest`（D-265）。CONTRACTS 0.4.18（§1・§5.3・§8.3〔プール合計 25〕・§9.1）。infra に Cloud Run Job `backtest` と、deploy の BOT_JOBS の漏れ（export-dataset）の修正（I-038）。COMPLETION の R14 を A に訂正（performance API に接続済み）、R16 を A（Job）/ B（画面・保存は V6）。
-**検証（ローカル。D-264: 変更範囲の速い検査）**: bot の単体（BacktestTaskHandlerTest 4・BotArgsParserTest 13・BotSpringWiringTest 8・BotLauncherTest 15 ほか全件）・domain の JobLaunchRequestTest・ktlint、tools 164 件、consistency OK。infra: lint・ops 138・pulumi 28・terraform fmt。**未実施（CI で確認）**: イメージのスモーク（backtest の STOPPED）、terraform validate・test（registry に接続できない）。
-**独立レビュー（Sonnet・High・読取り専用）**: 高 0・中 6・低 8 → 中 6 と低 5 を修正（D-266。infra は deploy の Job の事前確認）。
+**検証（ローカル。D-264: 変更範囲の速い検査）**: bot の単体（BacktestTaskHandlerTest 6・BotArgsParserTest 13・BotSpringWiringTest 8・BotLauncherTest 15 ほか全件）・domain の JobLaunchRequestTest・ktlint、tools 164 件、consistency OK。infra: lint・ops 138・pulumi 28・terraform fmt。**未実施（CI で確認）**: イメージのスモーク（backtest の STOPPED）、terraform validate・test（registry に接続できない）。
+**独立レビュー（Sonnet・High・読取り専用）**: 高 0・中 6・低 8 → 中 6 と低 5 を修正（D-266。infra は deploy の Job の事前確認）。再レビューで中 1（モデルを読めず市場確率に落ちても成功）→ 修正（D-267。MlUsageJudge）。
 **次**: 修正後の再レビュー → web・infra の PR → CI → マージ。続いて R22（ML モデルの表示）、R20（エージェントの失効）、R24（SQLite 移行ツール）、R30。
 
 ## 2026-11-03〜06 言語移行 L7: ダッシュボードの画面を TypeScript へ（ブランチ claude/lang-l7-frontend-ts。D-263）

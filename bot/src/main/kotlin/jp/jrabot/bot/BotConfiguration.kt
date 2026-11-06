@@ -197,17 +197,16 @@ class BotConfiguration {
                             BacktestRun.MlUnavailable(type)
                         } else {
                             val readOnly = ReadOnlyResults(resultStore, payoutStore)
+                            val judge =
+                                MlUsageJudge(
+                                    jp.jrabot.domain.botrun
+                                        .RaceEvaluator(settings.run, odds, combos, features, ml),
+                                )
                             val report =
                                 jp.jrabot.domain.backtest
-                                    .BacktestRunner(
-                                        schedules,
-                                        odds,
-                                        readOnly,
-                                        readOnly,
-                                        jp.jrabot.domain.botrun
-                                            .RaceEvaluator(settings.run, odds, combos, features, ml),
-                                    ).run(req)
-                            BacktestRun.Done(report, type, ml.pinnedModelId)
+                                    .BacktestRunner(schedules, odds, readOnly, readOnly, judge)
+                                    .run(req)
+                            BacktestRun.Done(report, type, judge.usage)
                         }
                     },
                     defaultMaxOddsAge = settings.run.maxOddsAge,
