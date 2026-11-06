@@ -638,9 +638,10 @@ export class Smoke {
     };
     const mounts = [`${d}:/ops:ro`];
     const net = this.network;
-    const tasks = ["bot-run", "calendar-check", "reconcile", "retention", "export-dataset"];
+    const tasks = ["bot-run", "calendar-check", "reconcile", "retention", "export-dataset", "backtest"];
     const extraArgs: Readonly<Record<string, readonly string[]>> = {
       "export-dataset": ["--dataset-id=smoke", "--from=2026-01-01", "--to=2026-01-31", "--feature-schema=calibration"],
+      backtest: ["--from=2026-01-01", "--to=2026-01-31"],
     };
     let before = this.connections();
     const codes: Record<string, number> = {};
@@ -655,7 +656,7 @@ export class Smoke {
     }
     let after = this.connections();
     this.r.check(
-      "[bot] STOPPED -> exit 0 for all 5 tasks",
+      "[bot] STOPPED -> exit 0 for all 6 tasks",
       Object.values(codes).every((c) => c === 0),
       JSON.stringify(codes),
     );

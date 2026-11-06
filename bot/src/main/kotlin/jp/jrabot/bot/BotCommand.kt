@@ -21,6 +21,7 @@ enum class BotTask(
     RECONCILE("reconcile", 1, setOf("date")),
     RETENTION("retention", 1, setOf("dry-run")),
     EXPORT_DATASET("export-dataset", 2, setOf("dataset-id", "from", "to", "feature-schema", "valid-fraction", "as-of-lead-minutes")),
+    BACKTEST("backtest", 1, setOf("from", "to", "minutes-before-post", "max-odds-age-seconds")),
     ;
 
     init {
@@ -68,6 +69,20 @@ data class ExportArgs(
     }
 }
 
+/** `backtest` の検証済み引数（R16。D-241・D-265）。[maxOddsAge] が null なら `BOT_RUN_MAX_ODDS_AGE_SECONDS`（bot-run と同じ鮮度の上限）。 */
+data class BacktestArgs(
+    val from: LocalDate,
+    val to: LocalDate,
+    /** 評価する時点（発走の何分前か。重複なし・降順）。 */
+    val minutesBeforePost: List<Double>,
+    val maxOddsAge: Duration?,
+) {
+    companion object {
+        val DEFAULT_MINUTES: List<Double> = listOf(30.0, 5.0)
+        const val MAX_POINTS = 12
+    }
+}
+
 /** 検証済みの Job 引数。 */
 data class BotCommand(
     val task: BotTask,
@@ -77,6 +92,8 @@ data class BotCommand(
     val dryRun: Boolean = false,
     /** `export-dataset` のときだけ非 null。 */
     val export: ExportArgs? = null,
+    /** `backtest` のときだけ非 null。 */
+    val backtest: BacktestArgs? = null,
 )
 
 sealed interface ParsedArgs {
@@ -101,6 +118,7 @@ sealed interface ParsedArgs {
  * | `bot-run` | `--date=YYYY-MM-DD`、`--trigger=SCHEDULER\|MANUAL\|RECONCILE\|BACKFILL`（JobLauncher が渡す上書き） |
  * | `calendar-check` / `reconcile` | `--date=YYYY-MM-DD` |
  * | `retention` | `--dry-run`（削除せず対象だけを数える。D-043） |
+ * | `backtest` | **必須**: `--from=YYYY-MM-DD`、`--to=YYYY-MM-DD`（レース日、両端を含む。最大 366 日）。任意: `--minutes-before-post=30,5`（発走の何分前に判定するか。1 <= x <= 1440、最大 12 個。1 分未満は発走時刻と同じ秒に丸まり得る）、`--max-odds-age-seconds=N`（1〜86400。既定は `BOT_RUN_MAX_ODDS_AGE_SECONDS`） |
  * | `export-dataset` | **必須**: `--dataset-id=ID`（`[A-Za-z0-9_-]{1,64}`。データセットは不変なので内容ごとに別の ID）、`--from=YYYY-MM-DD`、`--to=YYYY-MM-DD`（レース日、両端を含む。最大 800 日）、`--feature-schema=calibration\|alpha`。任意: `--valid-fraction=0.2`（0 < x < 1）、`--as-of-lead-minutes=10`（1〜1440） |
  *
  * この表は T2.8 時点の暫定の契約（D-081）に、Stage 3-F2（T3.6-B）で `export-dataset` の引数を追加した（CONTRACTS 0.4.10）。
@@ -146,12 +164,21 @@ object BotArgsParser {
             } else {
                 null
             }
+        val backtest =
+            if (task == BotTask.BACKTEST) {
+                when (val r = parseBacktest(values)) {
+                    is BacktestParse.Ok -> r.args
+                    is BacktestParse.Bad -> return invalid(r.message)
+                }
+            } else {
+                null
+            }
         val trigger =
             values["trigger"]?.let { v ->
                 TriggerType.entries.firstOrNull { it.name == v }
                     ?: return invalid("--trigger が不正です（${TriggerType.entries.joinToString("|")}）")
             }
-        return ParsedArgs.Valid(BotCommand(task, tenant, date, trigger, dryRun = "dry-run" in values, export = export))
+        return ParsedArgs.Valid(BotCommand(task, tenant, date, trigger, dryRun = "dry-run" in values, export = export, backtest = backtest))
     }
 
     private sealed interface ExportParse {
@@ -200,6 +227,54 @@ object BotArgsParser {
                 it.toLongOrNull()?.takeIf { v -> v in 1..1440 } ?: return bad("--as-of-lead-minutes は 1〜1440 です")
             } ?: ExportArgs.DEFAULT_AS_OF_LEAD_MINUTES
         return ExportParse.Ok(ExportArgs(datasetId, from, to, schema, fraction, Duration.ofMinutes(lead)))
+    }
+
+    private sealed interface BacktestParse {
+        data class Ok(
+            val args: BacktestArgs,
+        ) : BacktestParse
+
+        data class Bad(
+            val message: String,
+        ) : BacktestParse
+    }
+
+    /** メッセージには引数の値を含めない（名前と理由だけ）。 */
+    private fun parseBacktest(values: Map<String, String>): BacktestParse {
+        fun bad(m: String) = BacktestParse.Bad(m)
+
+        fun date(name: String): LocalDate? =
+            values[name]?.let {
+                try {
+                    LocalDate.parse(it)
+                } catch (_: DateTimeParseException) {
+                    null
+                }
+            }
+        if ("from" !in values || "to" !in values) return bad("--from と --to が必須です")
+        val from = date("from") ?: return bad("--from は YYYY-MM-DD です")
+        val to = date("to") ?: return bad("--to は YYYY-MM-DD です")
+        if (to.isBefore(from)) return bad("--to は --from 以降です")
+        if (java.time.temporal.ChronoUnit.DAYS
+                .between(from, to) > jp.jrabot.domain.backtest.BacktestRequest.MAX_DAYS
+        ) {
+            return bad("期間は ${jp.jrabot.domain.backtest.BacktestRequest.MAX_DAYS} 日以内です")
+        }
+        val minutes =
+            values["minutes-before-post"]?.let { raw ->
+                val parts = raw.split(',')
+                val parsed = parts.map { p -> p.toDoubleOrNull()?.takeIf { it >= 1.0 && it <= 1440.0 && it.isFinite() } }
+                if (parsed.any { it == null } || parsed.isEmpty()) return bad("--minutes-before-post は 1 以上 1440 以下の数をカンマ区切りで指定します")
+                val distinct = parsed.filterNotNull().distinct()
+                if (distinct.size != parsed.size) return bad("--minutes-before-post に重複があります")
+                if (distinct.size > BacktestArgs.MAX_POINTS) return bad("--minutes-before-post は ${BacktestArgs.MAX_POINTS} 個までです")
+                distinct.sortedDescending()
+            } ?: BacktestArgs.DEFAULT_MINUTES
+        val age =
+            values["max-odds-age-seconds"]?.let {
+                it.toLongOrNull()?.takeIf { v -> v in 1..86_400 } ?: return bad("--max-odds-age-seconds は 1〜86400 です")
+            }
+        return BacktestParse.Ok(BacktestArgs(from, to, minutes, age?.let { Duration.ofSeconds(it) }))
     }
 
     private fun invalid(message: String) = ParsedArgs.Invalid(message)

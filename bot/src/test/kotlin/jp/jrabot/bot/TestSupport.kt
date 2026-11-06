@@ -104,13 +104,15 @@ fun args(
     vararg more: String,
 ): Array<String> = arrayOf("--task=$task", "--tenant-id=$tenant", *more) + exportDefaults(task, more)
 
-/** export-dataset は引数が必須。テストの既定値（呼び出し側が --dataset-id を指定していなければ補う）。 */
+/** export-dataset と backtest は引数が必須。テストの既定値（呼び出し側が --dataset-id を指定していなければ補う）。 */
 fun exportDefaults(
     task: String,
     more: Array<out String> = emptyArray(),
 ): Array<String> =
     if (task == "export-dataset" && more.none { it.startsWith("--dataset-id") }) {
         arrayOf("--dataset-id=ds-test", "--from=2026-01-01", "--to=2026-01-31", "--feature-schema=calibration")
+    } else if (task == "backtest" && more.none { it.startsWith("--from") }) {
+        arrayOf("--from=2026-01-01", "--to=2026-01-31")
     } else {
         emptyArray()
     }

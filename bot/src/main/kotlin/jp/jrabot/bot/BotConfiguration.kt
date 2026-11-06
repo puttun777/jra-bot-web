@@ -143,7 +143,7 @@ class BotConfiguration {
     ): ErrorReporter = ErrorReporter(notifier, clock)
 
     /**
-     * タスクごとの実装。**calendar-check（T3.3）・export-dataset（T3.6-B）・bot-run（T3.8）・reconcile・retention（T3.9）が実装済み**。
+     * タスクごとの実装。**calendar-check（T3.3）・export-dataset（T3.6-B）・bot-run（T3.8）・reconcile・retention（T3.9）・backtest（R16。D-265）が実装済み**。
      * [StubTaskHandler] は `when` の網羅用に残るだけ（全タスクが実装済み）。
      */
     @Bean
@@ -183,6 +183,34 @@ class BotConfiguration {
             BotTask.EXPORT_DATASET -> {
                 val uri = checkNotNull(runtime.settings.modelStoreUri) { "export-dataset の保管先が無い（BotSettings が検証しているはず）" }
                 ExportDatasetTaskHandler(features, datasets, DatasetStoreFactory.create(uri), clock)
+            }
+
+            BotTask.BACKTEST -> {
+                val settings = checkNotNull(runtime.settings.botRun) { "backtest の設定が無い（BotSettings が検証しているはず）" }
+                BacktestTaskHandler(
+                    runner = { req ->
+                        // bot-run と同じ判定（RaceEvaluator・同じ設定・同じ ML のモデル）。渡すのは読取りの口だけ（予定・オッズ・特徴量は Reader の型、
+                        // 結果・払戻は書込みを例外にする ReadOnlyResults）。評価・Signal・通知・タイミングの書込みの部品は渡さない
+                        val ml = BotRunWiring.startMl(settings, req.tenantId, registry, clock)
+                        val type = ml.modelType?.name?.lowercase()
+                        if (type != null && ml.pinnedModelId == null) {
+                            BacktestRun.MlUnavailable(type)
+                        } else {
+                            val readOnly = ReadOnlyResults(resultStore, payoutStore)
+                            val judge =
+                                MlUsageJudge(
+                                    jp.jrabot.domain.botrun
+                                        .RaceEvaluator(settings.run, odds, combos, features, ml),
+                                )
+                            val report =
+                                jp.jrabot.domain.backtest
+                                    .BacktestRunner(schedules, odds, readOnly, readOnly, judge)
+                                    .run(req)
+                            BacktestRun.Done(report, type, judge.usage)
+                        }
+                    },
+                    defaultMaxOddsAge = settings.run.maxOddsAge,
+                )
             }
 
             BotTask.BOT_RUN -> {
