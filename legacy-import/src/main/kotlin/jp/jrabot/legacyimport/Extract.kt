@@ -84,11 +84,22 @@ object Extract {
                 val byLower = LegacySchema.tables(c).associateBy { it.lowercase() }
                 LegacySchema.expected.keys
                     .sorted()
-                    .map { t -> extractTable(c, t, checkNotNull(byLower[t.lowercase()]), outDir, chunkRows) }
+                    .map { t ->
+                        val actual = checkNotNull(byLower[t.lowercase()])
+                        extractTable(c, t, actual, outDir, chunkRows).also { e ->
+                            // preflight の行数と照らす（黙って行を落としていないこと。レビュー 低）
+                            check(report.rowCounts[actual] == e.rows) { "行数が preflight と違う: $t" }
+                        }
+                    }
             }
+        // 抽出の間に書き込まれていないこと（本体の sha256 と、横の -wal 等: レビュー 低）
+        Preflight.checkInput(sqlite)
         if (Preflight.sha256(sqlite) != report.sha256) throw InputRejected("抽出の間に入力が変わった。旧アプリを止めたコピーで再実行する")
         val manifest = ExtractManifest(report.sha256, report.sizeBytes, chunkRows, report.verdict, tables)
-        Files.writeString(outDir.resolve(MANIFEST), CanonicalJson.encode(toJson(manifest)) + "\n", StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)
+        // 一時ファイルに書いてから名前を変える（途中で落ちても不完全な manifest.json を残さない）
+        val tmp = outDir.resolve("$MANIFEST.tmp")
+        Files.writeString(tmp, CanonicalJson.encode(toJson(manifest)) + "\n", StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE, StandardOpenOption.SYNC)
+        Files.move(tmp, outDir.resolve(MANIFEST), java.nio.file.StandardCopyOption.ATOMIC_MOVE)
         return manifest
     }
 
@@ -123,23 +134,34 @@ object Extract {
             s.fetchSize = 1000
             s.executeQuery("SELECT $select FROM \"$actualTable\" ORDER BY $order").use { rs ->
                 var writer: ChunkWriter? = null
-                while (rs.next()) {
-                    val row = (1..columns.size).map { value(rs, it) }
-                    val w = writer ?: ChunkWriter(dir, table, chunks.size).also { writer = it }
-                    w.write(row, JsonArray(pkIdx.map { row[it] }))
-                    total++
-                    if (w.rows == chunkRows.toLong()) {
-                        chunks += w.close()
-                        writer = null
+                try {
+                    while (rs.next()) {
+                        val row = (1..columns.size).map { value(rs, it) }
+                        val w = writer ?: ChunkWriter(dir, table, chunks.size).also { writer = it }
+                        w.write(row, JsonArray(pkIdx.map { row[it] }))
+                        total++
+                        if (w.rows == chunkRows.toLong()) {
+                            writer = null
+                            chunks += w.close()
+                        }
                     }
+                    writer?.let {
+                        writer = null
+                        chunks += it.close()
+                    }
+                } finally {
+                    // 失敗したときもファイルを閉じる（Windows で出力先を消せるように: レビュー 低）
+                    writer?.let { runCatching { it.abort() } }
                 }
-                writer?.let { chunks += it.close() }
             }
         }
         return TableEntry(table, columns, pk, total, chunks)
     }
 
-    /** SQLite の保存の型のまま JSON の値にする。 */
+    /**
+     * SQLite の保存の型のまま JSON の値にする。TEXT は保存されたバイト列を UTF-8 として厳密に読み、読めなければ
+     * `{"$bytes": base64}`（置換文字で黙って変えない: レビュー 中。変換の段階で隔離する）。
+     */
     internal fun value(
         rs: ResultSet,
         i: Int,
@@ -150,18 +172,36 @@ object Extract {
             is Long -> JsonInt(v)
             is Double -> if (v.isFinite()) JsonFloat(v) else JsonObject.of("\$real" to JsonString(if (v > 0) "inf" else "-inf"))
             is Float -> JsonFloat(v.toDouble())
-            is String -> JsonString(v)
+            is String -> strictText(rs.getBytes(i)) ?: JsonObject.of("\$bytes" to JsonString(Base64.getEncoder().encodeToString(rs.getBytes(i))))
             is ByteArray -> JsonObject.of("\$blob" to JsonString(Base64.getEncoder().encodeToString(v)))
             else -> throw IllegalStateException("想定外の値の型: ${v.javaClass.simpleName}")
         }
+
+    private fun strictText(bytes: ByteArray): JsonValue? =
+        try {
+            val dec =
+                Charsets.UTF_8
+                    .newDecoder()
+                    .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+            JsonString(dec.decode(java.nio.ByteBuffer.wrap(bytes)).toString())
+        } catch (e: java.nio.charset.CharacterCodingException) {
+            null
+        }
+
+    /** チャンクのファイル名（manifest の no から決まる）。 */
+    fun chunkFile(
+        table: String,
+        no: Int,
+    ): String = "$table/" + "%05d.ndjson.gz".format(no)
 
     private class ChunkWriter(
         dir: Path,
         table: String,
         val no: Int,
     ) {
-        val name = "%05d.ndjson.gz".format(no)
-        val file = "$table/$name"
+        val file = chunkFile(table, no)
+        val name = file.substringAfter('/')
         private val md = MessageDigest.getInstance("SHA-256")
         private val gz = GZIPOutputStream(Files.newOutputStream(dir.resolve(name), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE))
         private val out: OutputStream = DigestOutputStream(gz, md)
@@ -183,35 +223,62 @@ object Extract {
             out.close()
             return ChunkEntry(no, file, rows, first, last, CanonicalJson.hex(md.digest()))
         }
+
+        fun abort() = out.close()
     }
 
-    /** 出力先の各チャンクを読み直し、行数・sha256・列の数を manifest と照らす。食い違いを返す（空なら一致）。 */
+    /**
+     * 出力先の各チャンクを読み直し、manifest と照らす。食い違いを返す（空なら一致）。表の集合・チャンクの番号とファイル名・行数・
+     * sha256・列の数・主キーの範囲（先頭と末尾の行）を見る。壊れた gzip はそのチャンクの食い違いとして続ける（レビュー 中）。
+     */
     fun verify(outDir: Path): List<String> {
         val manifestFile = outDir.resolve(MANIFEST)
         if (!Files.isRegularFile(manifestFile)) return listOf("manifest.json が無い（抽出が完了していない）")
         val m = fromJson(StrictJson.parse(Files.readString(manifestFile)))
+        val root = outDir.toRealPath()
         val problems = mutableListOf<String>()
+        val tables = m.tables.map { it.table }
+        if (tables.toSet() != LegacySchema.expected.keys || tables.size != tables.toSet().size) problems += "表の集合が期待するスキーマと違う"
         for (t in m.tables) {
             var rows = 0L
-            for (ch in t.chunks) {
-                val p = outDir.resolve(ch.file).normalize()
-                if (!p.startsWith(outDir.normalize()) || !Files.isRegularFile(p)) {
+            val pkIdx = t.primaryKey.map { p -> t.columns.indexOf(p) }
+            if (pkIdx.any { it < 0 }) problems += "${t.table}: 主キーの列が列の一覧に無い"
+            t.chunks.forEachIndexed { i, ch ->
+                if (ch.no != i || ch.file != chunkFile(t.table, ch.no)) problems += "${ch.file}: チャンクの番号・名前が並びと違う"
+                if (ch.rows < 1 || ch.rows > m.chunkRows) problems += "${ch.file}: 行数がチャンクの範囲の外"
+                val p = root.resolve(ch.file).normalize()
+                val real = if (Files.isRegularFile(p, java.nio.file.LinkOption.NOFOLLOW_LINKS)) p.toRealPath() else null
+                if (!p.startsWith(root) || real == null || !real.startsWith(root)) {
                     problems += "${ch.file}: ファイルが無い"
-                    continue
+                    return@forEachIndexed
                 }
                 val md = MessageDigest.getInstance("SHA-256")
                 var n = 0L
                 var badWidth = false
-                BufferedReader(DigestInputStream(GZIPInputStream(Files.newInputStream(p)), md).reader(Charsets.UTF_8)).use { r ->
-                    r.lineSequence().forEach { line ->
-                        val v = runCatching { StrictJson.parse(line) }.getOrNull()
-                        if (v !is JsonArray || v.items.size != t.columns.size) badWidth = true
-                        n++
+                var first: JsonValue = JsonNull
+                var last: JsonValue = JsonNull
+                try {
+                    BufferedReader(DigestInputStream(GZIPInputStream(Files.newInputStream(real)), md).reader(Charsets.UTF_8)).use { r ->
+                        r.lineSequence().forEach { line ->
+                            val v = runCatching { StrictJson.parse(line) }.getOrNull()
+                            if (v !is JsonArray || v.items.size != t.columns.size || pkIdx.any { it < 0 }) {
+                                badWidth = true
+                            } else {
+                                val key = JsonArray(pkIdx.map { v.items[it] })
+                                if (n == 0L) first = key
+                                last = key
+                            }
+                            n++
+                        }
                     }
+                } catch (e: java.io.IOException) {
+                    problems += "${ch.file}: 読めない（${e.javaClass.simpleName}）"
+                    return@forEachIndexed
                 }
                 if (CanonicalJson.hex(md.digest()) != ch.sha256) problems += "${ch.file}: sha256 が違う"
                 if (n != ch.rows) problems += "${ch.file}: 行数が違う（manifest ${ch.rows}、実際 $n）"
                 if (badWidth) problems += "${ch.file}: 読めない行・列の数が違う行がある"
+                if (!badWidth && (first != ch.keyFrom || last != ch.keyTo)) problems += "${ch.file}: 主キーの範囲が違う"
                 rows += n
             }
             if (rows != t.rows) problems += "${t.table}: 行数の合計が違う（manifest ${t.rows}、実際 $rows）"
@@ -256,7 +323,7 @@ object Extract {
 
         fun JsonValue?.str() = (this as? JsonString)?.value ?: throw IllegalArgumentException("manifest の形式が不正（文字列）")
 
-        fun JsonValue?.long() = (this as? JsonInt)?.value ?: throw IllegalArgumentException("manifest の形式が不正（整数）")
+        fun JsonValue?.long() = (this as? JsonInt)?.value?.takeIf { it >= 0 } ?: throw IllegalArgumentException("manifest の形式が不正（0 以上の整数）")
 
         fun JsonValue?.arr() = (this as? JsonArray)?.items ?: throw IllegalArgumentException("manifest の形式が不正（配列）")
         val o = v.obj()
@@ -265,7 +332,7 @@ object Extract {
         return ExtractManifest(
             inputSha256 = input["sha256"].str(),
             inputSizeBytes = input["size_bytes"].long(),
-            chunkRows = o["chunk_rows"].long().toInt(),
+            chunkRows = Math.toIntExact(o["chunk_rows"].long()),
             preflightVerdict = o["preflight_verdict"].str(),
             tables =
                 o["tables"].arr().map { tv ->
@@ -279,7 +346,7 @@ object Extract {
                             t["chunks"].arr().map { cv ->
                                 val ch = cv.obj()
                                 ChunkEntry(
-                                    no = ch["no"].long().toInt(),
+                                    no = Math.toIntExact(ch["no"].long()),
                                     file = ch["file"].str(),
                                     rows = ch["rows"].long(),
                                     keyFrom = ch["key_from"] ?: JsonNull,

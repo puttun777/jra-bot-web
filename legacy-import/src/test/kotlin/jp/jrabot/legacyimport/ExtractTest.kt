@@ -214,4 +214,82 @@ class ExtractTest {
         Files.delete(out.resolve(Extract.MANIFEST))
         assertEquals(1, LegacyImport.run(arrayOf("verify-extract", "--dir", out.toString()), sink, sink))
     }
+
+    @Test
+    fun `チャンクの行数ちょうどの倍数と 1 行ずつでも 境界が正しい`() {
+        val db = seeded { c -> for (i in 1..4) c.exec("INSERT INTO results (race_id, umaban, finish) VALUES ('202610240501', $i, $i)") }
+        val two = Extract.run(db, dir.resolve("two"), 2).tables.single { it.table == "results" }
+        assertEquals(listOf(2L, 2L), two.chunks.map { it.rows })
+        val one = Extract.run(db, dir.resolve("one"), 1).tables.single { it.table == "results" }
+        assertEquals(listOf(1L, 1L, 1L, 1L), one.chunks.map { it.rows })
+        assertEquals((1..4).map { JsonArray(JsonString("202610240501"), JsonInt(it.toLong())) }, one.chunks.map { it.keyFrom })
+        assertEquals(emptyList(), Extract.verify(dir.resolve("one")))
+    }
+
+    @Test
+    fun `読めない UTF-8 は印付き、NUL と大きな整数はそのまま`() {
+        val db =
+            seeded { c ->
+                c.exec(
+                    "INSERT INTO races (race_id, date, track, race_no, post_time, name) VALUES ('202610240509', '20261024', '東京', 9, '15:00', CAST(x'66ff67' AS TEXT))",
+                )
+                c.exec(
+                    "INSERT INTO races (race_id, date, track, race_no, post_time, name) VALUES ('202610240510', '20261024', '東京', 10, '15:30', 'a' || char(0) || 'b')",
+                )
+                c.exec("INSERT INTO results (race_id, umaban, finish, payout) VALUES ('202610240501', 1, 9223372036854775807, 3)")
+            }
+        val out = dir.resolve("out")
+        val m = Extract.run(db, out)
+        val races = m.tables.single { it.table == "races" }
+        val byId = lines(out.resolve(races.chunks.single().file)).associateBy { (it.items[0] as JsonString).value }
+        val name = races.columns.indexOf("name")
+        assertEquals(JsonObject.of("\$bytes" to JsonString("Zv9n")), byId.getValue("202610240509").items[name])
+        assertEquals(JsonString("a\u0000b"), byId.getValue("202610240510").items[name])
+        val res = m.tables.single { it.table == "results" }
+        val row = lines(out.resolve(res.chunks.single().file)).single()
+        assertEquals(JsonInt(Long.MAX_VALUE), row.items[res.columns.indexOf("finish")])
+        assertEquals(JsonFloat(3.0), row.items[res.columns.indexOf("payout")])
+        assertEquals(emptyList(), Extract.verify(out))
+    }
+
+    @Test
+    fun `verify は相対パスでも読み 壊れたチャンクを個別に報告する`() {
+        val out = dir.resolve("out")
+        val m = Extract.run(seeded(), out, 2)
+        val rel = Path.of("").toAbsolutePath().relativize(out)
+        assertEquals(emptyList(), Extract.verify(rel))
+        assertEquals(emptyList(), Extract.verify(out.resolve("races").resolve("..")))
+
+        val odds = m.tables.single { it.table == "odds_snapshots" }
+        val p = out.resolve(odds.chunks[0].file)
+        Files.write(p, Files.readAllBytes(p).copyOf(10))
+        val problems = Extract.verify(out)
+        assertTrue(problems.any { it.startsWith(odds.chunks[0].file) && it.contains("読めない") }, problems.toString())
+        assertTrue(problems.all { it.startsWith("odds_snapshots") }, "他のチャンクは一致: $problems")
+        assertTrue(problems.any { it.contains("行数の合計") }, problems.toString())
+
+        val edited =
+            m.copy(
+                tables =
+                    m.tables
+                        .filter { it.table != "bets" }
+                        .map { t -> if (t.table == "races") t.copy(chunks = t.chunks.map { it.copy(file = "../escape.ndjson.gz") }) else t },
+            )
+        Files.writeString(
+            out.resolve(Extract.MANIFEST),
+            jp.jrabot.domain.ml.json.CanonicalJson
+                .encode(Extract.toJson(edited)),
+        )
+        val p2 = Extract.verify(out)
+        assertTrue(p2.any { it.contains("表の集合") }, p2.toString())
+        assertTrue(p2.any { it.contains("../escape") && it.contains("ファイルが無い") }, p2.toString())
+    }
+
+    @Test
+    fun `横に中身のある -wal があれば 抽出しない`() {
+        val db = seeded()
+        Files.write(dir.resolve("jraev.sqlite-wal"), ByteArray(32) { 1 })
+        assertFailsWith<InputRejected> { Extract.run(db, dir.resolve("out")) }
+        assertFalse(Files.exists(dir.resolve("out")))
+    }
 }
