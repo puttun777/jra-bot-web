@@ -133,6 +133,15 @@ class PersistenceConfiguration {
     @Bean
     fun modelRegistryReader(config: Config): ModelRegistryReader = MlModelRegistryRepository(MlModelDaoImpl(config))
 
+    /** エージェントの一覧と失効（dashboard の管理画面。R20。D-270）。資格情報の列は読まない。 */
+    @Bean
+    fun agentAdminStore(config: Config): jp.jrabot.domain.agent.AgentAdminStore =
+        jp.jrabot.persistence.repository
+            .AgentAdminRepository(
+                jp.jrabot.persistence.dao
+                    .AgentAdminDaoImpl(config),
+            )
+
     /** モデルの一覧（dashboard の管理画面の表示だけ。R22。D-268）。 */
     @Bean
     fun modelCatalogReader(config: Config): jp.jrabot.domain.ml.registry.ModelCatalogReader =

@@ -65,6 +65,8 @@ class RepositoryHarness(
     val overrides: CalendarOverrideRepository get() = context.getBean(CalendarOverrideRepository::class.java)
     val models: ModelRegistryReader get() = context.getBean(ModelRegistryReader::class.java)
     val catalog: jp.jrabot.domain.ml.registry.ModelCatalogReader get() = context.getBean(jp.jrabot.domain.ml.registry.ModelCatalogReader::class.java)
+    val agentAdmin: jp.jrabot.domain.agent.AgentAdminStore get() = context.getBean(jp.jrabot.domain.agent.AgentAdminStore::class.java)
+    val agentCredentials: jp.jrabot.domain.ingest.AgentCredentialStore get() = context.getBean(jp.jrabot.domain.ingest.AgentCredentialStore::class.java)
     val results: jp.jrabot.domain.ingest.ResultStore get() = context.getBean(jp.jrabot.domain.ingest.ResultStore::class.java)
     val payouts: jp.jrabot.domain.ingest.PayoutStore get() = context.getBean(jp.jrabot.domain.ingest.PayoutStore::class.java)
     val dataSource: DataSource get() = context.getBean(DataSource::class.java)

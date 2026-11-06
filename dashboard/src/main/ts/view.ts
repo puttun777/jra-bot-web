@@ -1,6 +1,21 @@
 /** API の応答 → 表示する行・札（DOM に依存しない純粋な変換。node:test で試験する）。 */
-import { DASH, DAY, fmtDateTime, fmtTime, label, MODEL_STATUS, modeLabel, num, pct, RACE, RUN, SIGNAL, type Tone } from "./format.js";
-import type { MlModel, Override, Performance, Race, Run, Signal, Status } from "./schema.js";
+import {
+  AGENT_STATUS,
+  DASH,
+  DAY,
+  fmtDateTime,
+  fmtTime,
+  label,
+  MODEL_STATUS,
+  modeLabel,
+  num,
+  pct,
+  RACE,
+  RUN,
+  SIGNAL,
+  type Tone,
+} from "./format.js";
+import type { Agent, MlModel, Override, Performance, Race, Run, Signal, Status } from "./schema.js";
 
 export interface Pill {
   readonly text: string;
@@ -147,4 +162,25 @@ export function mlMetricsText(m: MlModel): string {
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([k, v]) => `${k}=${Number(v.toFixed(4))}`);
   return parts.length ? parts.join(", ") : DASH;
+}
+
+/** エージェントの一覧（R20）。末尾の列（失効ボタン）は画面側で足す。 */
+export const AGENT_HEADERS = ["エージェント", "名前", "状態", "資格情報の期限", "登録", "失効", ""] as const;
+export function agentRows(rows: readonly Agent[]): string[][] {
+  return rows.map((a) => [
+    a.agentId,
+    a.name,
+    label(AGENT_STATUS, a.status),
+    fmtDateTime(a.tokenExpiresAt),
+    `${fmtDateTime(a.createdAt)}${a.createdBy ? ` (${a.createdBy})` : ""}`,
+    a.revokedAt ? `${fmtDateTime(a.revokedAt)}${a.revokedBy ? ` (${a.revokedBy})` : ""}` : DASH,
+  ]);
+}
+
+/** 失効の理由（入力の検査。サーバの isISOControl と同じく C0・DEL・C1 の制御文字を拒否し、1〜500 文字）。不正なら null。 */
+export function revokeReason(input: string | null): string | null {
+  if (input === null) return null;
+  const r = input.trim();
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: 制御文字を拒否するための範囲
+  return r.length >= 1 && r.length <= 500 && !/[\u0000-\u001f\u007f-\u009f]/.test(r) ? r : null;
 }

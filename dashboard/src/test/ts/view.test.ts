@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import type { MlModel, Performance, Status } from "../../main/ts/schema.js";
+import type { Agent, MlModel, Performance, Status } from "../../main/ts/schema.js";
 import {
+  AGENT_HEADERS,
+  agentRows,
   ML_HEADERS,
   mlMetricsText,
   mlModelRows,
@@ -15,6 +17,7 @@ import {
   RACE_HEADERS,
   RUN_HEADERS,
   raceRows,
+  revokeReason,
   runRows,
   SIGNAL_HEADERS,
   signalRows,
@@ -294,5 +297,38 @@ describe("view: ML モデルの一覧（R22。表示だけ）", () => {
   test("指標を読めない・指標が空", () => {
     assert.equal(mlMetricsText({ ...base, metricsReadable: false, metrics: {} }), "指標を読めない");
     assert.equal(mlMetricsText({ ...base, metrics: {} }), "—");
+  });
+});
+
+describe("view: エージェント（R20）", () => {
+  const a: Agent = {
+    agentId: "pc_main",
+    name: "自宅 PC",
+    tokenExpiresAt: "2027-01-01T00:00:00Z",
+    status: "ACTIVE",
+    createdAt: "2026-10-01T00:00:00Z",
+    createdBy: "me@example.com",
+    revokedAt: null,
+    revokedBy: null,
+  };
+
+  test("行: 状態の表示名・期限・登録者・失効（無ければ —）、末尾の列は画面が足す", () => {
+    const rows = agentRows([
+      a,
+      { ...a, agentId: "pc_old", status: "REVOKED", revokedAt: "2026-10-24T01:00:00Z", revokedBy: "me@example.com", createdBy: null },
+    ]);
+    assert.deepEqual(rows[0], ["pc_main", "自宅 PC", "有効", "1/1 09:00", "10/1 09:00 (me@example.com)", "—"]);
+    assert.deepEqual(rows[1]?.slice(2), ["失効", "1/1 09:00", "10/1 09:00", "10/24 10:00 (me@example.com)"]);
+    assert.equal(rows[0]?.length, AGENT_HEADERS.length - 1);
+  });
+
+  test("失効の理由: 前後の空白を除き 1〜500 文字・制御文字なし。取消（null）や不正は null", () => {
+    assert.equal(revokeReason("  PC を紛失  "), "PC を紛失");
+    assert.equal(revokeReason(null), null);
+    assert.equal(revokeReason("   "), null);
+    assert.equal(revokeReason("x".repeat(501)), null);
+    assert.equal(revokeReason("x".repeat(500)), "x".repeat(500));
+    assert.equal(revokeReason("改行\nあり"), null);
+    assert.equal(revokeReason("C1\u0085あり"), null, "サーバの isISOControl と同じく C1 も拒否");
   });
 });
