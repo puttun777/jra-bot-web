@@ -80,3 +80,12 @@ export function object<S extends Shape>(shape: S): Decoder<FromShape<S>> {
     return out as FromShape<S>;
   };
 }
+
+/** キーが任意の文字列のオブジェクト（値はすべて [d] で検査。継承したプロパティは見ない）。 */
+export function record<T>(d: Decoder<T>): Decoder<Record<string, T>> {
+  return (v, p) => {
+    if (!isRecord(v)) throw new DecodeError(p, "オブジェクトではない");
+    // 代入ではなく fromEntries で作る（"__proto__" のキーも自身のプロパティとして残す）
+    return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, d(x, `${p}.${k}`)]));
+  };
+}

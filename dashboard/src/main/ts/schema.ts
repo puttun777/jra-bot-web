@@ -3,7 +3,7 @@
  * サーバの DTO と項目名・型を揃える。見本（src/test/resources/frontend-contract/*.json）を、TypeScript の試験はこの検査に通し、
  * Kotlin の統合試験は実際の応答と形（キーと JSON の型）を比べる。サーバ側の変更で食い違ったら、どちらかの試験が失敗する。
  */
-import { array, boolean, type Infer, instant, integer, localDate, nullable, number, object, string } from "./validate.js";
+import { array, boolean, type Infer, instant, integer, localDate, nullable, number, object, record, string } from "./validate.js";
 
 export const Run = object({
   runId: string,
@@ -110,3 +110,25 @@ export const Overrides = array(Override);
 
 export const Me = object({ email: string, role: string, tenantId: integer });
 export type Me = Infer<typeof Me>;
+
+/** ML モデルの一覧（R22。D-268。表示だけ）。 */
+export const MlModel = object({
+  modelId: string,
+  kind: string,
+  status: string,
+  schemaVersion: integer,
+  featureSchemaHash: string,
+  trainedFrom: nullable(localDate),
+  trainedTo: nullable(localDate),
+  nTrain: nullable(integer),
+  createdAt: instant,
+  activatedAt: nullable(instant),
+  activatedBy: nullable(string),
+  previousModelId: nullable(string),
+  metrics: record(number),
+  gatePurpose: nullable(string),
+  gateReasons: array(string),
+  metricsReadable: boolean,
+});
+export type MlModel = Infer<typeof MlModel>;
+export const MlModels = array(MlModel);

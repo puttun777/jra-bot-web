@@ -1,6 +1,6 @@
 /** API の応答 → 表示する行・札（DOM に依存しない純粋な変換。node:test で試験する）。 */
-import { DASH, DAY, fmtDateTime, fmtTime, label, modeLabel, num, pct, RACE, RUN, SIGNAL, type Tone } from "./format.js";
-import type { Override, Performance, Race, Run, Signal, Status } from "./schema.js";
+import { DASH, DAY, fmtDateTime, fmtTime, label, MODEL_STATUS, modeLabel, num, pct, RACE, RUN, SIGNAL, type Tone } from "./format.js";
+import type { MlModel, Override, Performance, Race, Run, Signal, Status } from "./schema.js";
 
 export interface Pill {
   readonly text: string;
@@ -122,4 +122,29 @@ export function overrideRequest(f: OverrideForm): Record<string, string | null> 
     postponedTo: f.postponedTo || null,
     reason: f.reason,
   };
+}
+
+/** ML モデルの一覧（R22。表示だけ。有効化は本人の判断なので操作のボタンは置かない）。 */
+export const ML_HEADERS = ["作成", "モデル", "種別", "状態", "学習期間", "件数", "指標", "品質ゲート"] as const;
+export const ML_NUM_COLS = [5] as const;
+export function mlModelRows(rows: readonly MlModel[]): string[][] {
+  return rows.map((m) => [
+    fmtDateTime(m.createdAt),
+    m.modelId,
+    m.kind,
+    label(MODEL_STATUS, m.status),
+    m.trainedFrom || m.trainedTo ? `${m.trainedFrom ?? "?"}〜${m.trainedTo ?? "?"}` : DASH,
+    m.nTrain === null ? DASH : num(m.nTrain),
+    mlMetricsText(m),
+    m.gatePurpose ? `${m.gatePurpose}: ${m.gateReasons.join("・") || DASH}` : m.gateReasons.join("・") || DASH,
+  ]);
+}
+
+/** 指標（キーの辞書順。小数 4 桁まで）。読めなければその旨。 */
+export function mlMetricsText(m: MlModel): string {
+  if (!m.metricsReadable) return "指標を読めない";
+  const parts = Object.entries(m.metrics)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([k, v]) => `${k}=${Number(v.toFixed(4))}`);
+  return parts.length ? parts.join(", ") : DASH;
 }

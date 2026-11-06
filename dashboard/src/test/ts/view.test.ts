@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import type { Performance, Status } from "../../main/ts/schema.js";
+import type { MlModel, Performance, Status } from "../../main/ts/schema.js";
 import {
+  ML_HEADERS,
+  mlMetricsText,
+  mlModelRows,
   OVERRIDE_HEADERS,
   overrideRequest,
   overrideRows,
@@ -248,5 +251,48 @@ describe("view: 表の行", () => {
         reason: "変更",
       },
     );
+  });
+});
+
+describe("view: ML モデルの一覧（R22。表示だけ）", () => {
+  const base: MlModel = {
+    modelId: "cal-001",
+    kind: "calibration",
+    status: "CANDIDATE",
+    schemaVersion: 1,
+    featureSchemaHash: `sha256:${"a".repeat(64)}`,
+    trainedFrom: "2025-01-01",
+    trainedTo: "2026-01-01",
+    nTrain: 1234,
+    createdAt: "2026-10-01T00:00:00Z",
+    activatedAt: null,
+    activatedBy: null,
+    previousModelId: null,
+    metrics: { logloss: 0.512345678, brier: 0.2 },
+    gatePurpose: "calibration",
+    gateReasons: ["ok", "n>=100"],
+    metricsReadable: true,
+  };
+
+  test("行: 作成時刻・状態の表示名・学習期間・件数・指標（辞書順・4 桁）・品質ゲート", () => {
+    const rows = mlModelRows([base, { ...base, status: "REJECTED", trainedFrom: null, nTrain: null, gatePurpose: null, gateReasons: [] }]);
+    assert.deepEqual(rows[0], [
+      "10/1 09:00",
+      "cal-001",
+      "calibration",
+      "候補",
+      "2025-01-01〜2026-01-01",
+      "1,234",
+      "brier=0.2, logloss=0.5123",
+      "calibration: ok・n>=100",
+    ]);
+    assert.deepEqual(rows[1]?.slice(3), ["不合格", "?〜2026-01-01", "—", "brier=0.2, logloss=0.5123", "—"]);
+    assert.equal(mlModelRows([{ ...base, trainedFrom: null, trainedTo: null }])[0]?.[4], "—");
+    assert.equal(rows[0]?.length, ML_HEADERS.length);
+  });
+
+  test("指標を読めない・指標が空", () => {
+    assert.equal(mlMetricsText({ ...base, metricsReadable: false, metrics: {} }), "指標を読めない");
+    assert.equal(mlMetricsText({ ...base, metrics: {} }), "—");
   });
 });

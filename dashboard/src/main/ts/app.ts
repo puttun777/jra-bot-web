@@ -5,8 +5,11 @@
 import { ApiError, getJson, messageOf, post } from "./api.js";
 import { byId, el, emptyBox, errorBox, pill, show, table } from "./dom.js";
 import { dateQuery, hasNextPage, pageInfo, performanceQuery, signalsQuery } from "./format.js";
-import { Me, type Override, Overrides, Performance, Races, Runs, SignalPage, Status } from "./schema.js";
+import { Me, MlModels, type Override, Overrides, Performance, Races, Runs, SignalPage, Status } from "./schema.js";
 import {
+  ML_HEADERS,
+  ML_NUM_COLS,
+  mlModelRows,
   OVERRIDE_HEADERS,
   overrideRequest,
   overrideRows,
@@ -58,6 +61,7 @@ function ui() {
     postponed: byId("o-postponed", HTMLInputElement),
     reason: byId("o-reason", HTMLInputElement),
     msg: byId("o-msg", HTMLSpanElement),
+    mlModels: byId("ml-models", HTMLDivElement),
   };
 }
 type Ui = ReturnType<typeof ui>;
@@ -156,6 +160,15 @@ function start(u: Ui): void {
     }
   }
 
+  async function loadMlModels(): Promise<void> {
+    try {
+      const rows = await getJson("/api/v1/admin/ml-models", MlModels);
+      show(u.mlModels, rows.length ? table(ML_HEADERS, mlModelRows(rows), ML_NUM_COLS) : emptyBox("登録されたモデルはありません。"));
+    } catch (e) {
+      show(u.mlModels, errorBox(messageOf(e)));
+    }
+  }
+
   async function initAdmin(): Promise<void> {
     let me: Me;
     try {
@@ -187,6 +200,7 @@ function start(u: Ui): void {
       }
     });
     void loadOverrides();
+    void loadMlModels();
   }
 
   const loaders: Readonly<Record<Tab, () => void>> = {
@@ -195,7 +209,10 @@ function start(u: Ui): void {
     performance: () => void loadPerformance(),
     ops: () => {
       void loadRuns();
-      if (!u.admin.hidden) void loadOverrides();
+      if (!u.admin.hidden) {
+        void loadOverrides();
+        void loadMlModels();
+      }
     },
   };
 

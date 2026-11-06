@@ -158,7 +158,7 @@ dashboard ─読取（DTO）─▶ MySQL        export-dataset ─▶ GCS datase
 
 ## T3.6-A（Stage 3-F1）で追加した ML の構成（2026-10-24）
 - `:domain` の `jp.jrabot.domain.ml.*`: `json`（厳密パーサ・正準 JSON）/ `features`（スキーマ・ハッシュ・旧互換と point-in-time のビルダ・`FeatureSource` ポート）/ `model`（推論の算術・`ModelLoader`・`ModelTrust`・`VerifiedModel`）/ `pipeline`（`LegacyProbabilityPipeline`・`V2ProbabilityPipeline`・`FallbackReason`）/ `registry`（`ModelRegistryReader`・`ModelRunPin`・`ModelSession`）/ `store`（ローカル/メモリの実装）/ `dataset`（`DatasetExporter`）と `MlInference`。外部依存は JDK の標準（`java.security` の Ed25519・MD5・SHA-256）だけ。
-- `:persistence`: `MlModelRegistryRepository`（`ml_model` の SELECT のみ。bot の権限で足りる）。`FeatureSource`・`DatasetSource` の実装は T3.6-B。
+- `:persistence`: `MlModelRegistryRepository`（`ml_model` の SELECT のみ。bot の権限で足りる）。一覧の表示用は `MlModelCatalogRepository`（`ModelCatalogReader`。dashboard の管理画面。ACTIVE を先頭に新しい順。D-268）。`FeatureSource`・`DatasetSource` の実装は T3.6-B。
 - `:golden-runner`: 旧 `WinProbabilityModel` の互換モジュール `GoldenMl`（次元の切詰め/ゼロ埋め = 旧 H2 をここにだけ置く。本番の 3 アプリは `:golden-runner` に依存しない）。
 - 流れ（bot-run。T3.8 で配線）: `ModelRunPin.capture`（ACTIVE を固定）→ `ModelSession`（`ModelStore` から読み、sha256・署名・スキーマ・次元を検証）→ `MlInference`（そのモデルのスキーマで特徴量を作り、検証済みモデルで確率）→ `ProbabilityPipeline`（正規化・ensemble・判定側ブレンド）→ `WinDecisionEvaluator`（`MlProbabilityInput` で確率を受け取る。EV・Kelly・買い目の計算は T3.1/T3.2 のまま）。
 - ML 学習: `:ml-train`（Kotlin。`:domain`・`:persistence`・`:cloud-gcp` に依存。数値は Hipparchus）。旧 Python の `tools/ml`・`ml/` は 2026-11-02 に削除（D-257）。合成成果物（`domain/src/test/resources/ml`）は削除前の Python が生成したもので固定。

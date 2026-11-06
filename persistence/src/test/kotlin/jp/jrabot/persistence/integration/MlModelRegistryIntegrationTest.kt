@@ -60,6 +60,46 @@ class MlModelRegistryIntegrationTest {
     }
 
     @Test
+    fun `一覧（R22）は自分のテナントだけを ACTIVE を先頭に新しい順で件数の上限まで返し 指標の JSON も読める`() {
+        insert(1, "m_old", "calibration", "RETIRED", n = 1)
+        insert(1, "m_new", "calibration", "ACTIVE", previous = "m_old", n = 2)
+        insert(1, "m_cand", "alpha", "CANDIDATE", n = 3)
+        insert(2, "m_other", "calibration", "CANDIDATE", n = 4)
+        db.exec("UPDATE ml_model SET created_at = '2026-09-01 00:00:00.000000' WHERE model_id = 'm_old'")
+        db.exec("""UPDATE ml_model SET metrics_json = '{"gate_purpose":"p","logloss":0.5}' WHERE model_id = 'm_cand'""")
+        val rows = h.catalog.recent(T1, 10)
+        assertEquals(listOf("m_new", "m_cand", "m_old"), rows.map { it.modelId }, "ACTIVE が先頭、続けて新しい順・同時刻は model_id の昇順。他テナントは出ない")
+        assertTrue(rows[1].metricsJson.orEmpty().contains("logloss"), "指標の JSON を読める")
+        assertNull(rows[0].metricsJson)
+        assertEquals("ACTIVE", rows[0].status)
+        assertEquals("m_old", rows[0].previousModelId)
+        assertEquals(listOf("m_new", "m_cand"), h.catalog.recent(T1, 2).map { it.modelId })
+        assertEquals(
+            listOf("m_other"),
+            h.catalog
+                .recent(
+                    jp.jrabot.domain.tenant.TenantId
+                        .of(2),
+                    10,
+                ).map { it.modelId },
+        )
+        assertFailsWith<IllegalArgumentException> { h.catalog.recent(T1, 0) }
+        assertFailsWith<IllegalArgumentException> { h.catalog.recent(T1, 201) }
+        // 有効なモデルが最も古くても、上限の外に落ちない（候補が増え続けても画面から消えない）
+        db.exec("UPDATE ml_model SET created_at = '2026-01-01 00:00:00.000000' WHERE model_id = 'm_new'")
+        assertEquals(listOf("m_new"), h.catalog.recent(T1, 1).map { it.modelId })
+        // 想定外の値（ハッシュの形式）でも一覧は失敗しない（ModelRecord の検査をしない表示用の読取り）
+        db.exec("UPDATE ml_model SET feature_schema_hash = 'md5:not-a-sha256' WHERE model_id = 'm_cand'")
+        assertEquals(
+            "md5:not-a-sha256",
+            h.catalog
+                .recent(T1, 10)
+                .single { it.modelId == "m_cand" }
+                .featureSchemaHash,
+        )
+    }
+
+    @Test
     fun `無いモデルは null`() {
         assertNull(h.models.find(T1, ModelId.of("nope")))
         assertNull(h.models.active(T1, ModelKind.CALIBRATION))

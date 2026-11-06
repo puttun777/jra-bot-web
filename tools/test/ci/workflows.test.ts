@@ -200,7 +200,7 @@ describe("workflow rules", () => {
       ":persistence:integrationTest",
       ":bot:integrationTest :ingest:integrationTest :dashboard:integrationTest",
       "--min 44",
-      "--min 179",
+      "--min 180",
     ]) {
       assert.ok(d.includes(needle), needle);
     }
