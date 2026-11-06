@@ -19,6 +19,7 @@ import kotlin.system.exitProcess
  * legacy-import preflight --sqlite <コピーした jraev.sqlite> [--out <report.json>]
  * legacy-import extract --sqlite <コピー> --out-dir <空のディレクトリ> [--chunk-rows <n>]   # P1（D-273）
  * legacy-import verify-extract --dir <extract の出力先>
+ * legacy-import transform --extract <extract の出力先> --out-dir <空のディレクトリ> --tenant-id <n> [--naive-zone Asia/Tokyo] [--lenient-json]   # P2（D-274）
  * ```
  * | 終了コード | 意味 |
  * |---|---|
@@ -28,6 +29,7 @@ import kotlin.system.exitProcess
  *
  * extract: 0 = 抽出した、1 = preflight が NG（抽出しない）、2 = 引数・入力の誤り・出力先が空でない・抽出中に入力が変わった・ツールの失敗。
  * verify-extract: 0 = manifest と一致、1 = 食い違いがある、2 = 検証できない。
+ * transform: 0 = 変換した（隔離した行は quarantine/ と manifest の件数）、2 = 引数・入力の誤り・extract の食い違い・ツールの失敗。
  *
  * transform・load・verify・promote は後続（実データのクラウド投入は COMP-4 の回答待ち）。
  */
@@ -46,6 +48,7 @@ object LegacyImport {
             "preflight" -> parse(rest, setOf("sqlite", "out"))?.let { preflight(it, out, err) } ?: usage(err)
             "extract" -> parse(rest, setOf("sqlite", "out-dir", "chunk-rows"))?.let { extract(it, err) } ?: usage(err)
             "verify-extract" -> parse(rest, setOf("dir"))?.let { verifyExtract(it, err) } ?: usage(err)
+            "transform" -> parse(rest, setOf("extract", "out-dir", "tenant-id", "naive-zone"), setOf("lenient-json"))?.let { transform(it, err) } ?: usage(err)
             else -> usage(err)
         }
     }
@@ -173,27 +176,76 @@ object LegacyImport {
     private const val USAGE =
         "使い方: legacy-import preflight --sqlite <path> [--out <report.json>]\n" +
             "       legacy-import extract --sqlite <path> --out-dir <dir> [--chunk-rows <n>]\n" +
-            "       legacy-import verify-extract --dir <dir>"
+            "       legacy-import verify-extract --dir <dir>\n" +
+            "       legacy-import transform --extract <dir> --out-dir <dir> --tenant-id <n> [--naive-zone Asia/Tokyo] [--lenient-json]"
 
     private fun usage(err: PrintStream): Int {
         err.println(USAGE)
         return 2
     }
 
-    /** `--name value` の組（未知の名前・重複・値の欠落は null）。 */
+    /** `--name value` の組と、値を取らない `--flag`（値は "true"）。未知の名前・重複・値の欠落は null。 */
     private fun parse(
         rest: List<String>,
         names: Set<String>,
+        flags: Set<String> = emptySet(),
     ): Map<String, String>? {
         val m = LinkedHashMap<String, String>()
         var i = 0
         while (i < rest.size) {
             val name = rest[i].removePrefix("--")
-            if (!rest[i].startsWith("--") || name !in names || name in m || i + 1 >= rest.size) return null
-            m[name] = rest[i + 1]
-            i += 2
+            if (!rest[i].startsWith("--") || name in m) return null
+            when (name) {
+                in flags -> {
+                    m[name] = "true"
+                    i += 1
+                }
+
+                in names -> {
+                    if (i + 1 >= rest.size) return null
+                    m[name] = rest[i + 1]
+                    i += 2
+                }
+
+                else -> {
+                    return null
+                }
+            }
         }
         return m
+    }
+
+    private fun transform(
+        opts: Map<String, String>,
+        err: PrintStream,
+    ): Int {
+        val extract = opts["extract"] ?: return usage(err)
+        val outDir = opts["out-dir"] ?: return usage(err)
+        val tenant = opts["tenant-id"]?.toLongOrNull()?.takeIf { it > 0 } ?: return usage(err)
+        val zone =
+            try {
+                java.time.ZoneId.of(opts["naive-zone"] ?: "Asia/Tokyo")
+            } catch (e: java.time.DateTimeException) {
+                return usage(err)
+            }
+        return try {
+            val m = Transform(tenant, zone, opts["lenient-json"] == "true").run(Path.of(extract), Path.of(outDir))
+            for (t in m.tables) {
+                val q = t.quarantined.values.sum()
+                if (q > 0 || t.adjusted.isNotEmpty()) {
+                    err.println("  ${t.source} → ${t.target}: ${t.rows} 行、隔離 $q ${t.quarantined}、扱い ${t.adjusted}")
+                }
+            }
+            val q = m.tables.sumOf { t -> t.quarantined.values.sum() }
+            err.println("transform: OK (rows=${m.tables.sumOf { it.rows }}, quarantined=$q, naive_zone=${m.naiveZone})")
+            0
+        } catch (e: InputRejected) {
+            err.println("入力を受け付けない: ${e.message}")
+            2
+        } catch (e: Exception) {
+            err.println("変換に失敗した（出力先を消して再実行する）: ${e.javaClass.simpleName}")
+            2
+        }
     }
 
     /** 人が読む要約（件数と表・列の名前だけ）。 */
