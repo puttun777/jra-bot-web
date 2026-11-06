@@ -58,7 +58,15 @@ data class PreflightReport(
             buildList {
                 if (walMode) add("WAL のモードのファイル（旧アプリを止めてから、または sqlite3 の .backup で作ったコピーでなければ、未反映の変更が欠ける）")
                 for ((t, cols) in missingColumns - missingRequiredColumns.keys) add("$t に起動時に足される列が無い: ${cols.joinToString()}")
-                for (t in extraTables) if ((rowCounts[t] ?: 0) > 0) add("期待に無い表に行がある（移行の対象外）: $t")
+                for (t in extraTables) {
+                    val n = rowCounts[t]
+                    // 名前の形式が不正な表は数えない（SQL に埋め込まない）。行の有無が分からないので必ず知らせる
+                    if (n == null) {
+                        add("期待に無い表（名前の形式が不正で行数不明。移行の対象外）: ${t.length} 文字の表名")
+                    } else if (n > 0) {
+                        add("期待に無い表に行がある（移行の対象外）: $t")
+                    }
+                }
                 for ((t, cols) in extraColumns) if ((rowCounts[t] ?: 0) > 0) add("期待に無い列（移行の対象外）: $t.${cols.joinToString()}")
                 for (o in orphans) if (o.count > 0) add("孤立: ${o.table}.${o.column} → ${o.parent} が無い ${o.count} 行")
                 for (f in times) for (k in listOf("other", "with_offset")) if ((f.counts[k] ?: 0) > 0) add("時刻の形式（$k）: ${f.table}.${f.column} ${f.counts[k]} 行")

@@ -263,4 +263,30 @@ class PreflightTest {
         assertEquals(2, LegacyImport.run(arrayOf("preflight", "--sqlite", ok.toString(), "--out", existing.toString()), sink, sink))
         assertEquals("previous", Files.readString(existing), "既存のレポートを上書きしない")
     }
+
+    @Test
+    fun `パスの形式が不正なら 2、既にある出力先は走査の前に 2`() {
+        val err = ByteArrayOutputStream()
+        val sink = PrintStream(err, true, Charsets.UTF_8)
+        assertEquals(2, LegacyImport.run(arrayOf("preflight", "--sqlite", "a\u0000b"), sink, sink))
+        val p = legacyDb()
+        assertEquals(2, LegacyImport.run(arrayOf("preflight", "--sqlite", p.toString(), "--out", "r\u0000.json"), sink, sink))
+        val existing = dir.resolve("prev.json")
+        Files.writeString(existing, "previous")
+        err.reset()
+        assertEquals(2, LegacyImport.run(arrayOf("preflight", "--sqlite", p.toString(), "--out", existing.toString()), sink, sink))
+        val msg = err.toString(Charsets.UTF_8)
+        assertTrue(msg.contains("出力先が既にある"), msg)
+        assertFalse(msg.contains("preflight:"), "走査（要約）の前に止める")
+    }
+
+    @Test
+    fun `名前の形式が不正な余分な表は 行数を数えずに WARN`() {
+        val p = legacyDb { it.exec("CREATE TABLE \"odd name\" (id INTEGER)") }
+        val r = Preflight.run(p)
+        assertEquals(listOf("odd name"), r.extraTables)
+        assertFalse("odd name" in r.rowCounts)
+        assertEquals("WARN", r.verdict)
+        assertTrue(r.warnings.any { it.contains("行数不明") }, r.warnings.toString())
+    }
 }

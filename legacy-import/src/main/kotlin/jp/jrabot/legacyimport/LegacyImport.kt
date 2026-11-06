@@ -21,7 +21,7 @@ import kotlin.system.exitProcess
  * | 終了コード | 意味 |
  * |---|---|
  * | 0 | レポートを出した（判定 OK または WARN。WARN の内容は本人が確認して方針を決める） |
- * | 1 | 判定 NG（整合性の検査の失敗・期待する表が無い） |
+ * | 1 | 判定 NG（整合性の検査の失敗・期待する表が無い・抽出に要る列が無い） |
  * | 2 | 引数・入力の誤り・ツールの失敗（ファイルが無い・開けない・SQLite ではない・横に未反映の -wal がある・出力先が入力と同じか既にある・読み書きの失敗）。レポートは出さない |
  *
  * extract・transform・load・verify・promote は後続（今は preflight だけ。実データのクラウド投入は COMP-4 の回答待ち）。
@@ -42,11 +42,28 @@ object LegacyImport {
         }
         val opts = parse(args.drop(1)) ?: return usage(err)
         val sqlite = opts["sqlite"] ?: return usage(err)
-        val input = Path.of(sqlite)
-        val outPath = opts["out"]?.let { Path.of(it) }
-        if (outPath != null && isSameOrSidecar(outPath, input)) {
-            err.println("出力先が入力（またはその -wal・-shm）と同じ。別のパスを指定する")
-            return 2
+        val (input, outPath) =
+            try {
+                Path.of(sqlite) to opts["out"]?.let { Path.of(it) }
+            } catch (e: java.nio.file.InvalidPathException) {
+                err.println("パスの形式が不正: ${e.javaClass.simpleName}")
+                return 2
+            }
+        if (outPath != null) {
+            val bad =
+                try {
+                    when {
+                        isSameOrSidecar(outPath, input) -> "出力先が入力（またはその -wal・-shm・-journal）と同じ。別のパスを指定する"
+                        Files.exists(outPath, java.nio.file.LinkOption.NOFOLLOW_LINKS) -> "出力先が既にある（上書きしない）。別のパスを指定する"
+                        else -> null
+                    }
+                } catch (e: RuntimeException) {
+                    "出力先を確かめられない: ${e.javaClass.simpleName}"
+                }
+            if (bad != null) {
+                err.println(bad)
+                return 2
+            }
         }
         val report =
             try {
