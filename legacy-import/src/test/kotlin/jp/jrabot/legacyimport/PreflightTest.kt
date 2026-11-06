@@ -5,7 +5,6 @@ import java.io.ByteArrayOutputStream
 import java.io.PrintStream
 import java.nio.file.Files
 import java.nio.file.Path
-import java.security.MessageDigest
 import java.sql.Connection
 import java.sql.DriverManager
 import kotlin.test.Test
@@ -19,30 +18,14 @@ class PreflightTest {
     @TempDir
     lateinit var dir: Path
 
-    /** 旧スキーマ（期待値と同じリソース）で合成の DB を作る。 */
     private fun legacyDb(
         name: String = "jraev.sqlite",
         seed: (Connection) -> Unit = {},
-    ): Path {
-        val p = dir.resolve(name)
-        DriverManager.getConnection("jdbc:sqlite:$p").use { c ->
-            for (file in listOf("schema.sql", "migration_add_bets.sql")) {
-                val sql = checkNotNull(javaClass.getResource("/legacy-schema/$file")).readText()
-                for (stmt in LegacySchema.statements(sql)) c.createStatement().use { it.executeUpdate(stmt) }
-            }
-            for (line in checkNotNull(javaClass.getResource("/legacy-schema/dynamic-columns.tsv")).readText().lines()) {
-                if (line.isBlank() || line.startsWith("#")) continue
-                val (t, col, type) = line.split('\t')
-                if (col !in LegacySchema.columns(c, t)) c.createStatement().use { it.executeUpdate("ALTER TABLE $t ADD COLUMN $col $type") }
-            }
-            seed(c)
-        }
-        return p
-    }
+    ): Path = LegacyDbs.create(dir.resolve(name), seed)
 
-    private fun Connection.exec(sql: String) = createStatement().use { it.executeUpdate(sql) }
+    private fun Connection.exec(sql: String) = with(LegacyDbs) { exec(sql) }
 
-    private fun sha(p: Path) = MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(p)).joinToString("") { "%02x".format(it) }
+    private fun sha(p: Path) = LegacyDbs.sha(p)
 
     @Test
     fun `期待するスキーマは旧の 15 表と起動時に足される列を含む`() {
