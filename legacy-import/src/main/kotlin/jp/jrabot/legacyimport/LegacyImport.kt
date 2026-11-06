@@ -240,7 +240,7 @@ object LegacyImport {
             err.println("transform: OK (rows=${m.tables.sumOf { it.rows }}, quarantined=$q, naive_zone=${m.naiveZone})")
             0
         } catch (e: InputRejected) {
-            err.println("入力を受け付けない: ${e.message}")
+            err.println("入力を受け付けない（出力先を消して再実行する）: ${e.message}")
             2
         } catch (e: Exception) {
             err.println("変換に失敗した（出力先を消して再実行する）: ${e.javaClass.simpleName}")

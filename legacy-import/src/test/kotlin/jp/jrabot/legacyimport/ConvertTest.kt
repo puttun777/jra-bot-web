@@ -72,4 +72,19 @@ class ConvertTest {
         assertEquals(0L, cv.flag("clipped", JsonNull, 0L))
         assertEquals("out_of_range", code { cv.flag("sent", JsonInt(2), 0L) })
     }
+
+    @Test
+    fun `夏時間で無い・重なる時刻、MySQL の範囲外の年、10 進でない数字の文字列は隔離`() {
+        val ny = Convert(ZoneId.of("America/New_York"))
+        assertEquals("time_format", code { ny.time("ts", JsonString("2024-03-10T02:30:00")) }, "切替で無い時刻")
+        assertEquals("time_format", code { ny.time("ts", JsonString("2024-11-03T01:30:00")) }, "重なる時刻")
+        assertEquals("2024-03-10 07:30:00.000000", ny.time("ts", JsonString("2024-03-10T03:30:00")))
+        assertEquals("time_format", code { cv.time("ts", JsonString("9999-12-31T23:00:00-05:00")) })
+        assertEquals("time_format", code { cv.time("ts", JsonString("1000-01-01T05:00:00")) }, "UTC で 999 年")
+        assertEquals("date_format", code { cv.date("date", JsonString("09990101")) })
+        for (bad in listOf("1.5f", "0x1p3", " 1.5", "1d", "NaN", "Infinity")) assertEquals("type", code { cv.double("x", JsonString(bad)) }, bad)
+        assertEquals(-1.5e3, cv.double("x", JsonString("-1.5e3")))
+        for (bad in listOf("+1", " 1", "1.0", "0x10")) assertEquals("type", code { cv.long("x", JsonString(bad), 0L..9L) }, bad)
+        assertEquals(7L, cv.long("x", JsonString("7"), 0L..9L))
+    }
 }

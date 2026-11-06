@@ -1,6 +1,6 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-11-06（L8 ⑤: R24 移行ツールの extract。下の新しい節）。旧: 2026-11-06（L8 ④: R24 移行ツールの preflight）。旧: 2026-11-06（L8 ③: R20 エージェントの失効）。旧: 2026-11-06（L8 ②: R22 ML モデルの表示）。旧: 2026-11-06（L8 ①: R16 バックテストの Job）。旧: 2026-11-06（言語移行 L7）。旧: 2026-11-03（言語移行 L5）。旧: 2026-11-02（言語移行 L3）。旧: 2026-11-02（L1。web PR #36・infra PR #7〔L2〕はマージ済み）。旧: 2026-11-01 夜（web PR #30〜#33・infra PR #3/#4/#6 はマージ済み。残りは wip/final の TEST_RESULTS.md・D-247・R15 の MySQL 通し試験〈ReadAdminApiMySqlIntegrationTest〉。検証: ktlintCheck 成功、当該 4 試験は MySQL 8.4 で成功（ローカル）。それ以外の統合試験は CI で確認。再開手順: 本ブランチの PR の CI 結果を確認→失敗ジョブのログだけ読む→マージ条件を満たせばマージ→COMPLETION.md の C/B 項目を最終報告。判定の正本は COMPLETION.md）
+最終更新: 2026-11-06（L8 ⑥: R24 移行ツールの transform。下の新しい節）。旧: 2026-11-06（L8 ⑤: R24 移行ツールの extract）。旧: 2026-11-06（L8 ④: R24 移行ツールの preflight）。旧: 2026-11-06（L8 ③: R20 エージェントの失効）。旧: 2026-11-06（L8 ②: R22 ML モデルの表示）。旧: 2026-11-06（L8 ①: R16 バックテストの Job）。旧: 2026-11-06（言語移行 L7）。旧: 2026-11-03（言語移行 L5）。旧: 2026-11-02（言語移行 L3）。旧: 2026-11-02（L1。web PR #36・infra PR #7〔L2〕はマージ済み）。旧: 2026-11-01 夜（web PR #30〜#33・infra PR #3/#4/#6 はマージ済み。残りは wip/final の TEST_RESULTS.md・D-247・R15 の MySQL 通し試験〈ReadAdminApiMySqlIntegrationTest〉。検証: ktlintCheck 成功、当該 4 試験は MySQL 8.4 で成功（ローカル）。それ以外の統合試験は CI で確認。再開手順: 本ブランチの PR の CI 結果を確認→失敗ジョブのログだけ読む→マージ条件を満たせばマージ→COMPLETION.md の C/B 項目を最終報告。判定の正本は COMPLETION.md）
 旧: 2026-11-01（T3.9③・reconcile・preflight・infra PR #4）
 旧: 2026-10-30（保留の再適用のレビュー・公開準備。D-229。CI 未実施）
 旧: 2026-10-29（追加レビュー 2: リース継続・保留の再適用・G-31 の null・T3.9 設計の訂正〈D-224〜D-228〉。同ブランチ。CI 未実施。PR なし）
@@ -12,6 +12,13 @@
 旧: 2026-10-27（Stage 3-G: T3.7 Discord 通知）
 旧: 2026-10-26（Public 化の準備）／2026-10-24（Stage 3-F2・3-F1・3-E）
 
+
+## 2026-11-06 L8 ⑥: R24 移行ツールの transform（P2。ブランチ claude/l8-legacy-transform。D-274）
+**マージ済み（この日）**: web PR #50（R24 extract = e19e146。修正後の再レビューで高・中 0。最新コミットで ci gate と実行された全 8 ジョブの成功を個別に確認。connectorj26 は分類で対象外のため skipped で、成功とは数えていない）。
+**内容**: `legacy-import transform`。extract を照合しながら読み、新スキーマの値に変換する。変換できない行・親が隔離された子・一意キーの重複は quarantine/ に入れる。元の行数 = 変換 + 隔離 を manifest に記録する。旧の sent=0 のシグナルは SEND_UNKNOWN にする。変換の表は DATA_MIGRATION_DESIGN §5.5。
+**検証（ローカル。D-264）**: legacy-import の単体 34（Preflight 15・Extract 9・Convert 4・Transform 6。合成 SQLite）・ktlint。それ以外は CI。
+**独立レビュー（Opus・High・読取り専用）**: 高 0・中 4・低 7 → 修正（D-274）。
+**次**: PR → 修正後の再レビュー → CI → マージ。続いて P3 load（MySQL の staging。Testcontainers の統合試験で Flyway のスキーマへの往復を確かめる）→ P4 verify → P5 promote、R30、L9。
 
 ## 2026-11-06 L8 ⑤: R24 移行ツールの extract（P1。ブランチ claude/l8-legacy-extract。D-273）
 **マージ済み（この日）**: web PR #49（R24 preflight = 1089ab3。再レビューの低 3 を 790de32 で修正。最新コミットで ci gate を含む全 11 ジョブの成功を個別に確認）。

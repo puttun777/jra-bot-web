@@ -100,6 +100,17 @@ class Transform(
             null
         }
 
+    /** 0/1 の列。NULL なら既定値にして adjusted に数える（レビュー 中: 黙って既定値にしない）。 */
+    private fun flag(
+        col: String,
+        v: JsonValue,
+        default: Long,
+    ): Long =
+        cv.long(col, v, 0L..1L) ?: run {
+            adjust("$col: NULL を既定の $default")
+            default
+        }
+
     private fun raceRef(v: JsonValue): String {
         val id = cv.requiredText("race_id", v, 12, ascii = true)
         if (id !in races) throw Reject("orphan", "race_id: races に無い（隔離を含む）")
@@ -162,12 +173,23 @@ class Transform(
                 ),
             ) { s ->
                 val id = cv.requiredText("race_id", s["race_id"], 12, ascii = true)
-                if (!Convert.RACE_ID.matches(id)) throw Reject("race_id", "race_id: 12 桁の数字ではない")
+                // ドメインの RaceId と同じ検査（1900 年以降・暦にある日付・既知の場・番号 1 以上。CHECK ck_races_race_id_parts も満たす: レビュー 中）
+                if (jp.jrabot.domain.race.RaceId
+                        .parseOrNull(id) == null
+                ) {
+                    throw Reject("race_id", "race_id: 形式・日付・場・番号が不正")
+                }
                 val date = cv.date("date", s["date"]) ?: throw Reject("null", "date: 必須の値が無い")
                 if (date.replace("-", "") != id.substring(0, 8)) throw Reject("race_id_mismatch", "date: race_id の日付と違う")
                 val venue = id.substring(8, 10)
                 if (venue !in Convert.VENUES) throw Reject("venue", "race_id: 未知の場コード")
-                cv.text("track_cd", s["track_cd"], 2, ascii = true)?.let { if (it != venue) throw Reject("race_id_mismatch", "track_cd: race_id の場と違う") }
+                cv.text("track_cd", s["track_cd"], 2, ascii = true)?.let {
+                    if (it.padStart(2, '0') !=
+                        venue
+                    ) {
+                        throw Reject("race_id_mismatch", "track_cd: race_id の場と違う")
+                    }
+                }
                 val no = id.substring(10, 12).toLong()
                 if (no !in 1L..99L) throw Reject("race_id", "race_id: レース番号が 1..99 の外")
                 if (cv.requiredLong("race_no", s["race_no"], 1L..99L) != no) throw Reject("race_id_mismatch", "race_no: race_id の番号と違う")
@@ -201,7 +223,7 @@ class Transform(
                     cv.text("dirt_baba_cd", s["dirt_baba_cd"], 2, true),
                     created,
                     created,
-                ).also { races += id } // 全列を変換できてから受け入れる（子の参照の判定に使う）
+                )
             },
             Mapping(
                 "horses",
@@ -356,7 +378,7 @@ class Transform(
                     cv.market("market", s["market"]),
                     cv.requiredText("key", s["key"], 16, true),
                     nonNegative("payout", s["payout"]) ?: throw Reject("null", "payout: 必須の値が無い"),
-                    cv.flag("is_provisional", s["is_provisional"], 0L),
+                    flag("is_provisional", s["is_provisional"], 0L),
                     created,
                     created,
                 )
@@ -401,7 +423,7 @@ class Transform(
                         adjust("stake: NULL を既定の 1.0")
                         1.0
                     }
-                val sent = cv.flag("sent", s["sent"], 0L)
+                val sent = flag("sent", s["sent"], 0L)
                 val row =
                     listOf(
                         id,
@@ -412,14 +434,14 @@ class Transform(
                         positive("odds", s["odds"]),
                         prob,
                         cv.requiredDouble("ev", s["ev"]),
-                        cv.flag("is_paper", s["is_paper"], 1L),
+                        flag("is_paper", s["is_paper"], 1L),
                         stake,
                         cv.double("expected_profit", s["expected_profit"]),
                         cv.text("skip_reason", s["skip_reason"], 200),
                         cv.double("kelly_raw", s["kelly_raw"]),
                         cv.double("kelly_adj", s["kelly_adj"]),
                         cv.double("bet_before_clip", s["bet_before_clip"]),
-                        cv.flag("clipped", s["clipped"], 0L),
+                        flag("clipped", s["clipped"], 0L),
                         cv.double("mkt", s["mkt"]),
                         cv.double("mkt_adj", s["mkt_adj"]),
                         cv.double("ratio", s["ratio"]),
@@ -432,7 +454,6 @@ class Transform(
                         created(s),
                     )
                 if (sent != 1L) adjust("sent: 0 を SEND_UNKNOWN（再送しない）")
-                signals += id
                 row
             },
             Mapping(
@@ -484,16 +505,15 @@ class Transform(
                         json("best_candidate_json", s["best_candidate_json"]),
                         cv.double("best_ev", s["best_ev"]),
                         json("rejection_summary_json", s["rejection_summary_json"]),
-                        cv.flag("signal_sent", s["signal_sent"], 0L),
+                        flag("signal_sent", s["signal_sent"], 0L),
                         cv.time("settled_at", s["settled_at"]),
                         cv.flag("hit", s["hit"], null),
                         cv.double("payout_used", s["payout_used"]),
-                        cv.flag("is_provisional", s["is_provisional"], 0L),
+                        flag("is_provisional", s["is_provisional"], 0L),
                         cv.text("settle_status", s["settle_status"], 16, true),
                         json("best_win_hint_json", s["best_win_hint_json"]),
                         created(s),
                     )
-                evaluations += id
                 row
             },
             Mapping(
@@ -529,7 +549,7 @@ class Transform(
                     cv.requiredTime("snapshot_at", s["snapshot_at"]),
                     cv.requiredText("bet_type", s["bet_type"], 16),
                     cv.text("combo_key", s["combo_key"], 16, true),
-                    cv.long("umaban", s["umaban"], 1L..99L),
+                    cv.long("umaban", s["umaban"], 0L..255L), // 新表は TINYINT UNSIGNED（CHECK なし）
                     positive("odds", s["odds"]),
                     cv.double("p_model", s["p_model"]),
                     cv.double("p_mkt", s["p_mkt"]),
@@ -539,7 +559,7 @@ class Transform(
                     cv.double("stake", s["stake"]),
                     cv.long("rank", s["rank"], Int.MIN_VALUE.toLong()..Int.MAX_VALUE.toLong()),
                     cv.text("reject_reason", s["reject_reason"], 200),
-                    cv.flag("accepted", s["accepted"], 0L),
+                    flag("accepted", s["accepted"], 0L),
                     created(s),
                 )
             },
@@ -607,7 +627,6 @@ class Transform(
                         cv.text("skip_reason", s["skip_reason"], 200),
                         created(s),
                     )
-                bets += id
                 row
             },
             Mapping(
@@ -653,12 +672,79 @@ class Transform(
             },
         )
 
+    /**
+     * [keys]: 新表の主キー・一意キーの列（tenant_id を除く）。重複は `duplicate` で隔離する（MySQL の ascii_bin は末尾の空白を無視するので、
+     * 文字列は末尾の空白を除いて比べる: レビュー 中）。[partition]: extract の並び（旧の主キーの先頭の列）と同じ順に並ぶ新表の列。
+     * 指定すると、その値が変わるごとに重複の記憶を捨てる（大きな表でメモリを抑える）。[accept]: 行を受け入れたとき（子の参照の判定用）。
+     */
     private class Mapping(
         val source: String,
         val target: String,
         val columns: List<String>,
+        val keys: List<String> = emptyList(),
+        val partition: String? = null,
+        val accept: (List<Any?>) -> Unit = {},
         val map: (Src) -> List<Any?>,
-    )
+    ) {
+        fun with(
+            keys: List<String>,
+            partition: String? = null,
+            accept: (List<Any?>) -> Unit = {},
+        ) = Mapping(source, target, columns, keys, partition, accept, map)
+    }
+
+    /** 表ごとの一意キー・並び・受け入れ（子の参照の判定に使う親は、全列を変換でき重複でもない行だけ）。 */
+    private fun spec(m: Mapping): Mapping =
+        when (m.source) {
+            "races" -> m.with(listOf("race_id"), accept = { races += it[0] as String })
+            "horses" -> m.with(listOf("ketto_num"))
+            "race_horses" -> m.with(listOf("race_id", "umaban"), "race_id")
+            "horse_past_runs" -> m.with(listOf("ketto_num", "race_id"), "ketto_num")
+            "odds_snapshots" -> m.with(listOf("race_id", "market", "observed_at", "umaban"), "race_id")
+            "combo_odds_snapshots" -> m.with(listOf("race_id", "market", "collected_at", "combo_key"), "race_id")
+            "results" -> m.with(listOf("race_id", "umaban"), "race_id")
+            "payouts" -> m.with(listOf("race_id", "market", "combo_key"), "race_id")
+            "signals" -> m.with(listOf("race_id", "market", "umaban", "observed_at"), accept = { signals += it[0] as Long })
+            "race_evaluations" -> m.with(listOf("legacy_id"), accept = { evaluations += it[0] as Long })
+            "ticket_evaluations" -> m.with(listOf("legacy_id"))
+            "bets" -> m.with(listOf("legacy_id"), accept = { bets += it[0] as Long })
+            "bet_legs" -> m.with(listOf("legacy_id"))
+            "model_metrics" -> m.with(listOf("legacy_id"))
+            "jvlink_timestamps" -> m.with(listOf("data_type"))
+            else -> error("一意キーの指定が無い: ${m.source}")
+        }
+
+    /** 一意キーの重複の検出（[Mapping.partition] ごと。並びが崩れていたらツールの失敗）。 */
+    private class Dedup(
+        private val keyIdx: List<Int>,
+        private val partIdx: Int?,
+    ) {
+        private val seen = HashSet<String>()
+        private val closed = HashSet<String>()
+        private var current: String? = null
+
+        /** 重複なら false。 */
+        fun add(row: List<Any?>): Boolean {
+            if (keyIdx.isEmpty()) return true
+            if (partIdx != null) {
+                val p = norm(row[partIdx])
+                if (p != current) {
+                    check(p !in closed) { "extract の並びが想定と違う（重複を検出できない）" }
+                    current?.let { closed += it }
+                    current = p
+                    seen.clear()
+                }
+            }
+            return seen.add(keyIdx.joinToString("\u0000") { norm(row[it]) })
+        }
+
+        private fun norm(v: Any?): String =
+            when (v) {
+                null -> "\u0001null"
+                is String -> v.trimEnd(' ')
+                else -> v.toString()
+            }
+    }
 
     fun run(
         extractDir: Path,
@@ -669,7 +755,7 @@ class Transform(
         checkOutDir(outDir)
         Files.createDirectories(outDir.resolve("quarantine"))
         val byTable = extract.tables.associateBy { it.table }
-        val mappings = mappings()
+        val mappings = mappings().map(::spec)
         require(mappings.map { it.source }.toSet() == LegacySchema.expected.keys) { "変換の表が期待するスキーマと違う" }
         val quarantineFiles = mutableListOf<OutChunk>()
         val tables =
@@ -681,6 +767,13 @@ class Transform(
                 var rows = 0L
                 var sourceRows = 0L
                 val writer = ChunkedWriter(outDir, m.target, extract.chunkRows)
+                val dedup =
+                    Dedup(
+                        m.keys.map { k ->
+                            m.columns.indexOf(k).also { check(it >= 0) { "キーの列が無い: $k" } }
+                        },
+                        m.partition?.let { m.columns.indexOf(it) },
+                    )
                 val qFile = "quarantine/${m.source}.ndjson.gz"
                 val q = HashedGzip(outDir.resolve(qFile))
                 try {
@@ -693,6 +786,8 @@ class Transform(
                             try {
                                 val out = m.map(src)
                                 check(out.size == m.columns.size) { "変換の列の数が違う: ${m.source}" }
+                                if (!dedup.add(out)) throw Reject("duplicate", "新表の一意キーが重複する（末尾の空白・時刻の形の違いを含む）")
+                                m.accept(out)
                                 writer.write(JsonArray(listOf(JsonInt(tenantId)) + out.map(::toJson)))
                                 rows++
                                 for (a in pending) adjusted.merge(a, 1L, Long::plus)
@@ -734,11 +829,17 @@ class Transform(
     ): JsonValue =
         JsonObject.of(
             "source_table" to JsonString(source),
-            "source_key" to JsonArray(t.primaryKey.map { src[it] }),
+            "source_key" to JsonString(sourceKey(JsonArray(t.primaryKey.map { src[it] }))),
             "reason_code" to JsonString(e.code),
             "reason_detail" to JsonString(e.detail),
             "payload" to JsonObject(t.columns.withIndex().associate { (i, c) -> c to src.values[i] }),
         )
+
+    /** `import_quarantine.source_key`（VARCHAR(255)）に入る主キーの表現。長ければ sha256（レビュー 低）。 */
+    private fun sourceKey(key: JsonValue): String {
+        val s = CanonicalJson.encode(key)
+        return if (s.codePointCount(0, s.length) <= 255) s else "sha256:" + CanonicalJson.sha256Hex(key)
+    }
 
     /** extract のチャンクを読み、展開後の sha256 を manifest と照らす（食い違えば失敗）。 */
     private fun readChunk(

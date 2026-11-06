@@ -79,7 +79,7 @@ class Convert(
                 // REAL 親和性・計算の結果で 3.0 のように入った整数値は受け付ける（小数部があれば隔離）
                 is JsonFloat -> if (v.value % 1.0 == 0.0 && kotlin.math.abs(v.value) < 9.0e15) v.value.toLong() else throw Reject("type", "$col: 整数ではない")
 
-                is JsonString -> v.value.toLongOrNull() ?: throw Reject("type", "$col: 整数ではない")
+                is JsonString -> v.value.takeIf { INT_TEXT.matches(it) }?.toLongOrNull() ?: throw Reject("type", "$col: 整数ではない")
 
                 else -> throw Reject("type", "$col: 整数ではない")
             }
@@ -105,12 +105,33 @@ class Convert(
         v: JsonValue,
     ): Double? =
         when (v) {
-            JsonNull -> null
-            is JsonFloat -> v.value
-            is JsonInt -> v.value.toDouble()
-            is JsonString -> v.value.toDoubleOrNull()?.takeIf { it.isFinite() } ?: throw Reject("type", "$col: 数値ではない")
-            is JsonObject -> throw special(col, v)
-            else -> throw Reject("type", "$col: 数値ではない")
+            JsonNull -> {
+                null
+            }
+
+            is JsonFloat -> {
+                v.value
+            }
+
+            is JsonInt -> {
+                v.value.toDouble()
+            }
+
+            // 10 進の数字の形だけ（Java の parseDouble は "1.5f"・"0x1p3"・前後の空白も受け付けるため: レビュー 中）
+            is JsonString -> {
+                v.value
+                    .takeIf { NUM_TEXT.matches(it) }
+                    ?.toDoubleOrNull()
+                    ?.takeIf { it.isFinite() } ?: throw Reject("type", "$col: 数値ではない")
+            }
+
+            is JsonObject -> {
+                throw special(col, v)
+            }
+
+            else -> {
+                throw Reject("type", "$col: 数値ではない")
+            }
         }
 
     fun requiredDouble(
@@ -132,15 +153,33 @@ class Convert(
         val instant =
             try {
                 when {
-                    NAIVE_T.matches(s) -> LocalDateTime.parse(s, ISO_LOCAL).atZone(naiveZone).toInstant()
-                    SPACE_UTC.matches(s) -> LocalDateTime.parse(s.replace(' ', 'T'), ISO_LOCAL).toInstant(ZoneOffset.UTC)
-                    WITH_OFFSET.matches(s) -> OffsetDateTime.parse(s).toInstant()
-                    else -> throw Reject("time_format", "$col: 判別できない時刻の形式")
+                    NAIVE_T.matches(s) -> {
+                        // 夏時間の切替で無い・重なる時刻は解釈が一つに決まらないので隔離（レビュー 中。Asia/Tokyo には無い）
+                        val ldt = LocalDateTime.parse(s, ISO_LOCAL)
+                        val offsets = naiveZone.rules.getValidOffsets(ldt)
+                        if (offsets.size != 1) throw Reject("time_format", "$col: 夏時間の切替で無い・重なる時刻")
+                        ldt.toInstant(offsets[0])
+                    }
+
+                    SPACE_UTC.matches(s) -> {
+                        LocalDateTime.parse(s.replace(' ', 'T'), ISO_LOCAL).toInstant(ZoneOffset.UTC)
+                    }
+
+                    WITH_OFFSET.matches(s) -> {
+                        OffsetDateTime.parse(s).toInstant()
+                    }
+
+                    else -> {
+                        throw Reject("time_format", "$col: 判別できない時刻の形式")
+                    }
                 }
             } catch (e: DateTimeException) {
                 throw Reject("time_format", "$col: 暦にない時刻")
             }
-        return OUT.format(instant.atOffset(ZoneOffset.UTC))
+        val utc = instant.atOffset(ZoneOffset.UTC)
+        // MySQL の DATETIME の範囲（1000〜9999 年）に収める（レビュー 低）
+        if (utc.year !in 1000..9999) throw Reject("time_format", "$col: 年が 1000..9999 の外")
+        return OUT.format(utc)
     }
 
     fun requiredTime(
@@ -170,6 +209,7 @@ class Convert(
             } catch (e: DateTimeException) {
                 throw Reject("date_format", "$col: 暦にない日付")
             }
+        if (d.year !in 1000..9999) throw Reject("date_format", "$col: 年が 1000..9999 の外")
         return d.toString()
     }
 
@@ -247,5 +287,7 @@ class Convert(
         private val ISO_LOCAL = DateTimeFormatter.ISO_LOCAL_DATE_TIME.withResolverStyle(java.time.format.ResolverStyle.STRICT)
         private val OUT = DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss.SSSSSS")
         val RACE_ID = Regex("""\d{12}""")
+        private val INT_TEXT = Regex("""-?\d{1,18}""")
+        private val NUM_TEXT = Regex("""-?\d+(\.\d+)?([eE][+-]?\d+)?""")
     }
 }

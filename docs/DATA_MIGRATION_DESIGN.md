@@ -202,7 +202,7 @@ CREATE TABLE payouts (
 | model_metrics → 同名 | `sample_count`←`count`。日付は 2 つの形を受け付ける | 暦にない日付 | — |
 | jvlink_timestamps → ingest_cursor | `last_file_timestamp`←`lastfiletimestamp` | 14 文字を超える | — |
 
-親子の参照は旧の ID のまま（`*_legacy_id`）出力し、新しい ID への張り替えは promote で行う（§5.2 P5）。同じ自然キーの重複（例: 形の違う 2 つの時刻が同じ UTC になる）は load の段階で UNIQUE によって検出する。
+親子の参照は旧の ID のまま（`*_legacy_id`）出力し、新しい ID への張り替えは promote で行う（§5.2 P5）。**新表の主キー・一意キーの重複は transform で検出し、後の行を `duplicate` で隔離する**。例えば形の違う 2 つの時刻が同じ UTC になる場合、末尾の空白だけが違う場合（ascii_bin は PAD SPACE）、旧に一意キーの無い `signals` の自然キーが重なる場合が当たる。races の race_id はドメインの `RaceId` と同じ検査（1900 年以降・暦にある日付・既知の場・番号 1 以上）にかける。0/1 の列が NULL なら既定値にし、adjusted に数える。`--naive-zone` が夏時間のある地域なら、切替で無い・重なる時刻を隔離する。時刻・日付の年は MySQL の範囲（1000〜9999）に限る。数値の文字列は 10 進の形だけ受け付ける。
 出力: `<新表>/<番号>.ndjson.gz`、`quarantine/<旧表>.ndjson.gz`（理由・主キー・元の値）、`transform-manifest.json`（表ごとの元の行数・変換した行数・隔離の理由ごとの件数・adjusted・チャンクの sha256、extract の manifest の sha256）。
 
 ### 5.4 重複・孤立・不正データの扱い

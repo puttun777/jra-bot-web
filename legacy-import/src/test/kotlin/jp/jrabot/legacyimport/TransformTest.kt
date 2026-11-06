@@ -106,7 +106,7 @@ class TransformTest {
         val q = quarantine(out, "odds_snapshots").map { it["reason_code"] }
         assertEquals(listOf("out_of_range", "orphan", "orphan").map(::JsonString), q)
         val qr = quarantine(out, "races").single()
-        assertEquals(JsonArray(JsonString("202610240503")), qr["source_key"])
+        assertEquals(JsonString("[\"202610240503\"]"), qr["source_key"])
         assertEquals(JsonString("20261025"), (qr["payload"] as JsonObject)["date"], "隔離は元の値を持つ")
         assertEquals(m.quarantineFiles.sumOf { it.rows }, m.tables.sumOf { it.quarantined.values.sum() })
     }
@@ -211,5 +211,58 @@ class TransformTest {
             LegacyImport.run(arrayOf("transform", "--extract", ex.toString(), "--out-dir", dir.resolve("bad").toString(), "--tenant-id", "7"), sink, sink),
         )
         assertFalse(Files.exists(dir.resolve("bad").resolve(Transform.MANIFEST)))
+    }
+
+    @Test
+    fun `新表の一意キーの重複は duplicate で隔離 — 時刻の形の違い・末尾の空白・旧に一意キーの無い signals`() {
+        val db =
+            LegacyDbs.create(dir.resolve("dup.sqlite")) { c ->
+                c.exec(
+                    "INSERT INTO races (race_id, date, track, track_cd, race_no, post_time, created_at) VALUES ('202610240501', '20261024', '東京', '5', 1, '10:05', '2026-10-20 03:00:00')",
+                )
+                c.exec("INSERT INTO odds_snapshots (race_id, ts, market, umaban, odds) VALUES ('202610240501', '2026-10-24T10:00:00', 'win', 1, 3.5)")
+                c.exec("INSERT INTO odds_snapshots (race_id, ts, market, umaban, odds) VALUES ('202610240501', '2026-10-24 01:00:00', 'win', 1, 3.6)") // 同じ UTC
+                val co = "INSERT INTO combo_odds_snapshots (race_id, collected_at, market, combo_key, odds, created_at) VALUES "
+                c.exec("$co('202610240501', '2026-10-24T10:00:00', 'wide', '1-2', 5.0, '2026-10-24 01:00:00')")
+                c.exec("$co('202610240501', '2026-10-24T10:00:00', 'wide', '1-2 ', 5.0, '2026-10-24 01:00:00')") // ascii_bin では同じ
+                val sg = "INSERT INTO signals (id, race_id, ts, umaban, odds, prob, ev, sent, created_at) VALUES "
+                c.exec("$sg(1, '202610240501', '2026-10-24T09:55:00', 1, 3.5, 0.3, 1.05, 1, '2026-10-24T09:55:01')")
+                c.exec("$sg(2, '202610240501', '2026-10-24T09:55:00', 1, 3.5, 0.3, 1.05, 1, '2026-10-24T09:55:01')")
+                c.exec(
+                    "INSERT INTO bets (id, race_id, ts, stake, signal_id, created_at) VALUES (9, '202610240501', '2026-10-24T09:55:00', 1.0, 2, '2026-10-24T09:55:02')",
+                )
+            }
+        val ex = dir.resolve("dup-ex")
+        Extract.run(db, ex)
+        val m = Transform(7, tokyo, lenientJson = false).run(ex, dir.resolve("dup-t"))
+        val byS = m.tables.associateBy { it.source }
+        assertEquals(1L, byS.getValue("races").rows, "track_cd の 5 は 05 と同じ場")
+        for (t in listOf("odds_snapshots", "combo_odds_snapshots", "signals")) {
+            assertEquals(mapOf("duplicate" to 1L), byS.getValue(t).quarantined, t)
+            assertEquals(1L, byS.getValue(t).rows, t)
+        }
+        val bet = rows(dir.resolve("dup-t"), byS.getValue("bets")).single()
+        assertEquals(JsonNull, bet["signal_legacy_id"], "重複で隔離した signal は親として受け入れない")
+    }
+
+    @Test
+    fun `隔離した行の扱いは adjusted に数えず、NULL の 0_1 の列は既定値として数える。1900 年より前のレースは隔離`() {
+        val db =
+            LegacyDbs.create(dir.resolve("adj.sqlite")) { c ->
+                val r = "INSERT INTO races (race_id, date, track, race_no, post_time, distance_m, created_at) VALUES "
+                c.exec("$r('202610240501', '20261024', '東京', 1, '00:00', 0, '2026-10-20 03:00:00')")
+                c.exec("$r('202610240502', '20261024', '東京', 2, '00:00', 0, NULL)") // created_at が無い → 隔離。扱いは数えない
+                c.exec("$r('185001010501', '18500101', '東京', 1, '10:00', 1000, '2026-10-20 03:00:00')")
+                c.exec(
+                    "INSERT INTO payouts (race_id, market, key, payout, is_provisional, created_at) VALUES ('202610240501', 'wide', '1-2', 150, NULL, '2026-10-20 03:00:00')",
+                )
+            }
+        val ex = dir.resolve("adj-ex")
+        Extract.run(db, ex)
+        val m = Transform(7, tokyo, lenientJson = false).run(ex, dir.resolve("adj-t"))
+        val races = m.tables.single { it.source == "races" }
+        assertEquals(mapOf("null" to 1L, "race_id" to 1L), races.quarantined)
+        assertEquals(mapOf("post_time: 不明（00:00・範囲外・形式外）" to 1L, "distance_m: 0 を NULL" to 1L), races.adjusted)
+        assertEquals(mapOf("is_provisional: NULL を既定の 0" to 1L), m.tables.single { it.source == "payouts" }.adjusted)
     }
 }
