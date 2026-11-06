@@ -100,6 +100,7 @@ class SqlTemplateTenantGuardTest {
                 .sorted()
         assertEquals(
             listOf(
+                "AgentAdminDao",
                 "AgentDao",
                 "AgentHeartbeatDao",
                 "AgentNonceDao",
