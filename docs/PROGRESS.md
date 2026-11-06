@@ -1,6 +1,6 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-11-06（L8 ③: R20 エージェントの失効。下の新しい節）。旧: 2026-11-06（L8 ②: R22 ML モデルの表示）。旧: 2026-11-06（L8 ①: R16 バックテストの Job）。旧: 2026-11-06（言語移行 L7）。旧: 2026-11-03（言語移行 L5）。旧: 2026-11-02（言語移行 L3）。旧: 2026-11-02（L1。web PR #36・infra PR #7〔L2〕はマージ済み）。旧: 2026-11-01 夜（web PR #30〜#33・infra PR #3/#4/#6 はマージ済み。残りは wip/final の TEST_RESULTS.md・D-247・R15 の MySQL 通し試験〈ReadAdminApiMySqlIntegrationTest〉。検証: ktlintCheck 成功、当該 4 試験は MySQL 8.4 で成功（ローカル）。それ以外の統合試験は CI で確認。再開手順: 本ブランチの PR の CI 結果を確認→失敗ジョブのログだけ読む→マージ条件を満たせばマージ→COMPLETION.md の C/B 項目を最終報告。判定の正本は COMPLETION.md）
+最終更新: 2026-11-06（L8 ④: R24 移行ツールの preflight。下の新しい節）。旧: 2026-11-06（L8 ③: R20 エージェントの失効）。旧: 2026-11-06（L8 ②: R22 ML モデルの表示）。旧: 2026-11-06（L8 ①: R16 バックテストの Job）。旧: 2026-11-06（言語移行 L7）。旧: 2026-11-03（言語移行 L5）。旧: 2026-11-02（言語移行 L3）。旧: 2026-11-02（L1。web PR #36・infra PR #7〔L2〕はマージ済み）。旧: 2026-11-01 夜（web PR #30〜#33・infra PR #3/#4/#6 はマージ済み。残りは wip/final の TEST_RESULTS.md・D-247・R15 の MySQL 通し試験〈ReadAdminApiMySqlIntegrationTest〉。検証: ktlintCheck 成功、当該 4 試験は MySQL 8.4 で成功（ローカル）。それ以外の統合試験は CI で確認。再開手順: 本ブランチの PR の CI 結果を確認→失敗ジョブのログだけ読む→マージ条件を満たせばマージ→COMPLETION.md の C/B 項目を最終報告。判定の正本は COMPLETION.md）
 旧: 2026-11-01（T3.9③・reconcile・preflight・infra PR #4）
 旧: 2026-10-30（保留の再適用のレビュー・公開準備。D-229。CI 未実施）
 旧: 2026-10-29（追加レビュー 2: リース継続・保留の再適用・G-31 の null・T3.9 設計の訂正〈D-224〜D-228〉。同ブランチ。CI 未実施。PR なし）
@@ -12,6 +12,13 @@
 旧: 2026-10-27（Stage 3-G: T3.7 Discord 通知）
 旧: 2026-10-26（Public 化の準備）／2026-10-24（Stage 3-F2・3-F1・3-E）
 
+
+## 2026-11-06 L8 ④: R24 旧 SQLite の移行ツール（preflight。ブランチ claude/l8-legacy-import。D-271）
+**マージ済み（この日）**: web PR #48（R20 = 51b3a9c。初回の CI の build が SqlTemplateTenantGuardTest の DAO 一覧の漏れで失敗 → 追加して全ジョブ成功を確認）。教訓: 永続化の変更は push 前に `./gradlew build`（全モジュール）を実行する。
+**内容**: 新しいモジュール `:legacy-import`（Kotlin の CLI。sqlite-jdbc 3.53.4.0）。`preflight` だけ（読取り専用・件数だけのレポート・OK/WARN/NG）。期待するスキーマは参照元 f7dbf69 の DDL を写したリソース。DATA_MIGRATION_DESIGN の D-038（Python 案）を置換。
+**検証（ローカル。D-264）**: `./gradlew build -x integrationTest`（全モジュール）・build-logic の試験・legacy-import の単体 13（合成 SQLite）、tools 166。
+**独立レビュー（Sonnet・High・読取り専用）**: 高 1（WAL）・中 6・低 5 → 修正（D-272）。
+**次**: 修正後の再レビュー → PR → CI → マージ。続いて移行ツールの extract 以降、R30、L9。
 
 ## 2026-11-06 L8 ③: R20 エージェントの一覧と失効（ブランチ claude/l8-agent-revoke。D-270）
 **マージ済み（この日）**: web PR #47（R22 = c0a3a62。最新コミットで実行された全ジョブの成功を個別に確認）。

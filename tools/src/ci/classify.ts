@@ -11,6 +11,7 @@
  *   kotlin_db    :persistence :db-migration → build、DB 統合（全スイート・8.4 と 9.7）
  *   build_cfg    Gradle・版数・build-logic・ktlint 設定 → build、DB 統合（全・8.4 + 9.7）、images
  *   kotlin_golden tools/golden（fixtures・catalog.json。.md 以外）・golden-runner → build（検証と比較は build ジョブの中。D-258）
+ *   kotlin_tool  legacy-import（旧 SQLite の移行ツール。D-271。イメージに入らない）→ build
  *   release      リリース補助・スキーマ・契約・マイグレーション・アプリの build 定義 → release-tools（TypeScript 単体）
  *   docker       Dockerfile / .dockerignore → images
  *   connectorj   DB ドライバ関連の依存設定 → connector/j 26.x 互換性チェック（非ゲート）
@@ -29,6 +30,7 @@ export type Tag =
   | "kotlin_db"
   | "build_cfg"
   | "kotlin_golden"
+  | "kotlin_tool"
   | "release"
   | "docker"
   | "connectorj"
@@ -44,6 +46,7 @@ export const KNOWN_TAGS: ReadonlySet<Tag> = new Set<Tag>([
   "kotlin_db",
   "build_cfg",
   "kotlin_golden",
+  "kotlin_tool",
   "release",
   "docker",
   "connectorj",
@@ -115,6 +118,9 @@ export const RULES: ReadonlyArray<readonly [RegExp, readonly Tag[]]> = [
   ],
   // --- ゴールデン。フィクスチャやシナリオが変わったら Kotlin 側の比較も必要
   [/^golden-runner\//, ["kotlin_golden"]],
+  // 旧 SQLite → MySQL の移行ツール（D-271）。build 定義は Docker のビルド段の設定の評価にも関わる（settings.gradle.kts が include する）
+  [/^legacy-import\/build\.gradle\.kts$/, ["kotlin_tool", "docker"]],
+  [/^legacy-import\//, ["kotlin_tool"]],
   [/^tools\/golden\/.*\.md$/, ["docs"]],
   [/^tools\/golden\/(fixtures\/|catalog\.json$)/, ["kotlin_golden"]], // 旧 Python（*.py）は削除済み。置き場所が復活したら unknown = 全部実行
 ];
@@ -210,7 +216,7 @@ export function classify(files: readonly string[]): Plan {
 
   const has = (...ts: Tag[]): boolean => ts.some((t) => tags.has(t));
   const p = emptyPlan("code", "", files.length);
-  p.runBuild = has("kotlin_app", "kotlin_core", "kotlin_db", "build_cfg", "kotlin_golden");
+  p.runBuild = has("kotlin_app", "kotlin_core", "kotlin_db", "build_cfg", "kotlin_golden", "kotlin_tool");
   if (has("kotlin_db", "build_cfg")) {
     p.dbMatrix = [...FULL_MATRIX];
     p.dbSuites = [...ALL_SUITES];

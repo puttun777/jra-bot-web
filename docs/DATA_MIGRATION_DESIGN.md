@@ -163,13 +163,13 @@ CREATE TABLE payouts (
                                                               ▼
                               verify(件数・チェックサム・集計) ──promote──▶ 本番スキーマ(ローカル → 規約回答後にクラウド)
 ```
-- ツール: **Python の独立ツール `tools/migrate/`**（リポジトリに置く。SQLite は標準ライブラリ、MySQL は公式ドライバ）。理由: 実 DB が利用者の PC にあり、Python/SQLite の扱いが容易、Kotlin 本体に移行専用コードを持ち込まない。**秘密・データ・出力ファイルは Git に入れない**。
+- ツール: **（2026-11-06 に置換: D-271）Kotlin の `:legacy-import`**（利用者の PC で実行する CLI。言語方針 D-250 で Python を使わない。まず preflight を実装し、以下の段階を順に足す）。旧案: Python の独立ツール `tools/migrate/`（リポジトリに置く。SQLite は標準ライブラリ、MySQL は公式ドライバ）。理由: 実 DB が利用者の PC にあり、Python/SQLite の扱いが容易、Kotlin 本体に移行専用コードを持ち込まない。**秘密・データ・出力ファイルは Git に入れない**。
 - 実行環境: 利用者の PC（Docker で MySQL）。クラウドへ載せる段階は、同じ staging→promote をクラウド DB に向けて実行（接続は Cloud SQL Auth Proxy 等。**規約回答後**）。
 
 ### 5.2 フェーズ
 | # | フェーズ | 内容 | 失敗時 |
 |---|---|---|---|
-| P0 | **事前検査（preflight）** | ① SQLite のコピー（稼働中は `sqlite3 .backup` または停止後のファイルコピー。WAL の `-wal/-shm` を含む）を取り sha256 を記録、`PRAGMA integrity_check`、② `PRAGMA table_info` で**スキーマ指紋**を取り `schema.sql` との差分（動的列の有無）を報告、③ テーブル別の行数・PK 重複・孤立行（FK 違反: `PRAGMA foreign_key_check`）・NULL/型の分布、④ 時刻形式の分布（`T` 有無）と JST/UTC 整合のサンプル検証、⑤ JSON 列の妥当性、⑥ `race_id` 形式（12 桁数字）、⑦ 推定サイズ（§9） | 検査報告のみ。移行しない |
+| P0 | **事前検査（preflight）** | ① SQLite のコピー（稼働中は `sqlite3 .backup`、または停止して WAL を反映した後の**単一ファイル**のコピー。空でない `-wal`/`-shm`/`-journal` が横にあるコピーは preflight が受け付けない: D-272）を取り sha256 を記録、`PRAGMA integrity_check`、② `PRAGMA table_info` で**スキーマ指紋**を取り `schema.sql` との差分（動的列の有無）を報告、③ テーブル別の行数・PK 重複・孤立行（FK 違反: `PRAGMA foreign_key_check`）・NULL/型の分布、④ 時刻形式の分布（`T` 有無）と JST/UTC 整合のサンプル検証、⑤ JSON 列の妥当性、⑥ `race_id` 形式（12 桁数字）、⑦ 推定サイズ（§9） | 検査報告のみ。移行しない |
 | P1 | extract | 読み取り専用接続（`file:…?mode=ro`）。テーブルごとに PK 順で**チャンク**（例: 10,000 行 or 日付範囲）に分け NDJSON.gz に出力、チャンクごとに行数・PK 範囲・内容ハッシュを `manifest.json` に記録 | チャンク単位で再実行 |
 | P2 | transform/validate | 型・時刻・命名の変換（§1.2, §2）、**tenant_id 付与**、`legacy_id` 保持、`INSERT OR REPLACE` 由来の重複は PK で一意（SQLite の PK が保証）、変換不能行は隔離 | 隔離行は `import_quarantine`（テナント表）と NDJSON に理由付きで保存 |
 | P3 | load（staging） | staging スキーマ（`import_{run}`）へバッチ INSERT（2,000〜5,000 行/トランザクション、PK 順）。`legacy_id` の UNIQUE で冪等 | チャンク単位でロールバック→再試行 |
@@ -277,7 +277,7 @@ CREATE TABLE payouts (
 | T6.x | 実ファイルでのリハーサル、旧新比較、カットオーバー |
 
 ## 12. 実ファイル取得後の実行手順（Runbook 案。**今回は実行しない**）
-1. 旧デーモン/ダッシュボードを停止し（または開催のない日に）、`data/jraev.sqlite`（+ `-wal`/`-shm`）を**読み取り専用でコピー**、sha256 を記録。元ファイルは保管（削除しない）。
+1. 旧デーモン/ダッシュボードを停止し（または開催のない日に）、`sqlite3 data/jraev.sqlite ".backup <コピー先>"` か、停止して `-wal` が空になった後の `data/jraev.sqlite` **単体**をコピーし、sha256 を記録（空でない `-wal`/`-shm` が横にあるコピーは受け付けない: D-272）。元ファイルは保管（削除しない）。
 2. ローカルに MySQL（Docker, 9.7 または 8.4）を起動し、Flyway で V1〜Vn を適用（空 DB）。
 3. `tools/migrate preflight --sqlite <copy>` を実行し、レポート（スキーマ差分、行数、孤立行、時刻形式、JSON 妥当性、サイズ見積り）を確認。**ユーザーが方針（孤立行の扱い、時刻の解釈、隔離行の扱い）を承認**。
 4. `extract` → `transform/validate` → `load(staging)` → `verify`（§6）。隔離行を確認。
@@ -290,7 +290,7 @@ CREATE TABLE payouts (
 ## 13. 決定案・未確認
 | ID | 内容 | 状態 |
 |---|---|---|
-| D-038 | 移行は Python ツール（`tools/migrate/`）。staging→promote の段階制、チャンク再開、隔離（quarantine）。まずローカル MySQL でリハーサル、クラウドは規約回答後 | 案 |
+| D-038 | （**D-271 で Kotlin の `:legacy-import` に置換**）移行は Python ツール（`tools/migrate/`）。staging→promote の段階制、チャンク再開、隔離（quarantine）。まずローカル MySQL でリハーサル、クラウドは規約回答後 | 案 |
 | D-039 | テナント方式 A（共有スキーマ + `tenant_id` 先頭 + 複合 FK + DAO 必須引数 + CI の SQL 検査 + 越境テスト）。共有表は `tenant/app_user/code_venue` のみ | 案 |
 | D-040 | レース識別は `race_id CHAR(12)`（+ `kai`/`nichime` NULL 可）に統一し、RACE_CALENDAR_DESIGN の `race_key CHAR(16)` を修正。`rt_key`(16桁) は導出 | 案 |
 | D-041 | 時刻は UTC `DATETIME(6)`。移行時は形式（`T` 有無）で JST/UTC を判別して変換、実ファイルで JST 仮定を検証 | 案 |

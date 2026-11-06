@@ -14,7 +14,10 @@ object DependencyRules {
     const val GOLDEN_RUNNER = ":golden-runner"
     const val ML_TRAIN = ":ml-train"
 
-    val modules = listOf(DOMAIN, PERSISTENCE, DB_MIGRATION, CLOUD_GCP, BOT, INGEST, DASHBOARD, GOLDEN_RUNNER, ML_TRAIN)
+    /** 旧 SQLite → MySQL の移行ツール（D-271。利用者の PC で実行する CLI。アプリのイメージには含めない）。 */
+    const val LEGACY_IMPORT = ":legacy-import"
+
+    val modules = listOf(DOMAIN, PERSISTENCE, DB_MIGRATION, CLOUD_GCP, BOT, INGEST, DASHBOARD, GOLDEN_RUNNER, ML_TRAIN, LEGACY_IMPORT)
     val apps = setOf(BOT, INGEST, DASHBOARD, ML_TRAIN)
 
     /** 各モジュールが依存してよいプロジェクト。表にないものはすべて禁止。 */
@@ -30,6 +33,8 @@ object DependencyRules {
             GOLDEN_RUNNER to setOf(DOMAIN),
             // 学習 Job（D-257）。bot とは独立した実行単位。学習ライブラリ（Hipparchus）はここだけ（:domain に入れない）
             ML_TRAIN to setOf(DOMAIN, PERSISTENCE, CLOUD_GCP),
+            // 移行ツール（D-271）。SQLite のドライバはここだけ。値の検査（RaceId など）に :domain を使う
+            LEGACY_IMPORT to setOf(DOMAIN),
         )
 
     /** `:domain` に入れてはいけない外部ライブラリ（group の前方一致）。 */

@@ -31,6 +31,7 @@ settings.gradle.kts / build.gradle.kts / gradle/libs.versions.toml   # Version C
 domain/  persistence/  db-migration/  cloud-gcp/  bot/  ingest/  dashboard/   # Gradle (Kotlin)
 agent/            # Windows JV-Link 取得エージェント（Python, Windows 専用。CI では Linux で単体テストだけ）
 ml-train/         # ml-train（Kotlin の学習 Job。独立イメージ。D-257）
+legacy-import/    # 旧 SQLite → MySQL の移行ツール（Kotlin の CLI。利用者の PC で実行。イメージに入らない。D-271）
 tools/migrate/    # SQLite→MySQL 移行ツール（Python。デプロイしない）
 tools/golden/     # 参照元から合成フィクスチャを作るスクリプト（Python。JSON だけをコミット）
 docs/             # 設計・進捗・判断（正本）
