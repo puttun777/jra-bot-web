@@ -80,3 +80,13 @@ export function object<S extends Shape>(shape: S): Decoder<FromShape<S>> {
     return out as FromShape<S>;
   };
 }
+
+/** キーが任意の文字列のオブジェクト（値はすべて [d] で検査。継承したプロパティは見ない）。 */
+export function record<T>(d: Decoder<T>): Decoder<Record<string, T>> {
+  return (v, p) => {
+    if (!isRecord(v)) throw new DecodeError(p, "オブジェクトではない");
+    const out: Record<string, T> = {};
+    for (const [k, x] of Object.entries(v)) out[k] = d(x, `${p}.${k}`);
+    return out;
+  };
+}

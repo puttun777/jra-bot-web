@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { array, boolean, DecodeError, instant, integer, localDate, nullable, number, object, string } from "../../main/ts/validate.js";
+import {
+  array,
+  boolean,
+  DecodeError,
+  instant,
+  integer,
+  localDate,
+  nullable,
+  number,
+  object,
+  record,
+  string,
+} from "../../main/ts/validate.js";
 
 const rejects = (f: () => unknown, path: string) =>
   assert.throws(f, (e: unknown) => e instanceof DecodeError && e.path === path, `${path} で拒否する`);
@@ -68,5 +80,15 @@ describe("validate: 配列とオブジェクト", () => {
     assert.deepEqual(WithToString({}, "$"), { toString: null });
     const parsed: unknown = JSON.parse('{"__proto__": {"id": 1}}');
     rejects(() => Item(parsed, "$"), "$.id");
+  });
+});
+
+describe("validate: 任意のキーのオブジェクト", () => {
+  test("record は全ての値を検査し、配列・null・型の違う値を拒否する", () => {
+    assert.deepEqual(record(number)({ a: 1, b: 2.5 }, "$"), { a: 1, b: 2.5 });
+    assert.deepEqual(record(number)({}, "$"), {});
+    rejects(() => record(number)({ a: "1" }, "$"), "$.a");
+    rejects(() => record(number)([1], "$"), "$");
+    rejects(() => record(number)(null, "$"), "$");
   });
 });

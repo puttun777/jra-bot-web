@@ -2,6 +2,8 @@ package jp.jrabot.persistence.repository
 
 import jp.jrabot.domain.ml.ModelId
 import jp.jrabot.domain.ml.model.ModelKind
+import jp.jrabot.domain.ml.registry.ModelCatalogEntry
+import jp.jrabot.domain.ml.registry.ModelCatalogReader
 import jp.jrabot.domain.ml.registry.ModelRecord
 import jp.jrabot.domain.ml.registry.ModelRegistryReader
 import jp.jrabot.domain.ml.registry.ModelStatus
@@ -28,6 +30,45 @@ internal class MlModelRegistryRepository(
         tenantId: TenantId,
         kind: ModelKind,
     ): ModelRecord? = dao.selectActive(tenantId.value, kind.json)?.toDomain()
+}
+
+/** 一覧の読取りだけ（R22。D-268）。昇格の操作は持たない。 */
+internal class MlModelCatalogRepository(
+    private val dao: MlModelDao,
+) : ModelCatalogReader {
+    override fun recent(
+        tenantId: TenantId,
+        limit: Int,
+    ): List<ModelCatalogEntry> {
+        require(limit in 1..MAX_LIMIT) { "limit は 1〜$MAX_LIMIT" }
+        return dao.selectRecent(tenantId.value, limit).map { e ->
+            ModelCatalogEntry(
+                MlModelEntity(
+                    e.tenantId,
+                    e.modelId,
+                    e.kind,
+                    e.schemaVersion,
+                    e.featureSchemaHash,
+                    e.artifactUri,
+                    e.sha256,
+                    e.signatureSha256,
+                    e.status,
+                    e.trainedFrom,
+                    e.trainedTo,
+                    e.nTrain,
+                    e.createdAt,
+                    e.activatedAt,
+                    e.activatedBy,
+                    e.previousModelId,
+                ).toDomain(),
+                e.metricsJson,
+            )
+        }
+    }
+
+    companion object {
+        const val MAX_LIMIT = 200
+    }
 }
 
 private fun MlModelEntity.toDomain(): ModelRecord =

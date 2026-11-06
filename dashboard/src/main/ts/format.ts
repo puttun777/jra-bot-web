@@ -68,6 +68,8 @@ export const RUN: Readonly<Record<string, string>> = {
   INTERRUPTED: "中断",
 };
 
+export const MODEL_STATUS: Readonly<Record<string, string>> = { CANDIDATE: "候補", ACTIVE: "有効", RETIRED: "退役", REJECTED: "不合格" };
+
 /** 表示名。未知の値（サーバ側で追加された状態）は値そのものを出す。継承したプロパティ（"constructor" など）は表示名にしない。 */
 export function label(map: Readonly<Record<string, string>>, key: string): string {
   return Object.hasOwn(map, key) ? (map[key] ?? key) : key;

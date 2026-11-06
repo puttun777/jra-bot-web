@@ -124,3 +124,20 @@ interface TrainingRegistry {
     /** 主キーの重複は [DuplicateModelException]。 */
     fun insert(row: NewModelRecord)
 }
+
+/** 一覧の 1 行（dashboard の表示用。R22。[metricsJson] は `ml_model.metrics_json` の正準 JSON。指標だけで値・資格情報を含まない）。 */
+data class ModelCatalogEntry(
+    val record: ModelRecord,
+    val metricsJson: String?,
+)
+
+/**
+ * モデルの一覧の**読取りだけ**（R22: 管理画面での表示。D-268）。**有効化（ACTIVE への昇格）の操作は持たない**: 品質ゲートの閾値が未承認のため、
+ * 昇格は本人の判断事項（CLAUDE.md・COMPLETION R22 の B）。新しい順・テナントの範囲だけ。
+ */
+interface ModelCatalogReader {
+    fun recent(
+        tenantId: TenantId,
+        limit: Int,
+    ): List<ModelCatalogEntry>
+}

@@ -60,6 +60,33 @@ class MlModelRegistryIntegrationTest {
     }
 
     @Test
+    fun `一覧（R22）は自分のテナントだけを新しい順に件数の上限まで返し 指標の JSON も読める`() {
+        insert(1, "m_old", "calibration", "RETIRED", n = 1)
+        insert(1, "m_new", "calibration", "ACTIVE", previous = "m_old", n = 2)
+        insert(1, "m_cand", "alpha", "CANDIDATE", n = 3)
+        insert(2, "m_other", "calibration", "CANDIDATE", n = 4)
+        db.exec("UPDATE ml_model SET created_at = '2026-09-01 00:00:00.000000' WHERE model_id = 'm_old'")
+        db.exec("""UPDATE ml_model SET metrics_json = '{"gate_purpose":"p","logloss":0.5}' WHERE model_id = 'm_cand'""")
+        val rows = h.catalog.recent(T1, 10)
+        assertEquals(listOf("m_cand", "m_new", "m_old"), rows.map { it.record.modelId.value }, "新しい順・同時刻は model_id の昇順。他テナントは出ない")
+        assertTrue(rows[0].metricsJson.orEmpty().contains("logloss"), "指標の JSON を読める")
+        assertNull(rows[1].metricsJson)
+        assertEquals(ModelStatus.ACTIVE, rows[1].record.status)
+        assertEquals(listOf("m_cand", "m_new"), h.catalog.recent(T1, 2).map { it.record.modelId.value })
+        assertEquals(
+            listOf("m_other"),
+            h.catalog
+                .recent(
+                    jp.jrabot.domain.tenant.TenantId
+                        .of(2),
+                    10,
+                ).map { it.record.modelId.value },
+        )
+        assertFailsWith<IllegalArgumentException> { h.catalog.recent(T1, 0) }
+        assertFailsWith<IllegalArgumentException> { h.catalog.recent(T1, 201) }
+    }
+
+    @Test
     fun `無いモデルは null`() {
         assertNull(h.models.find(T1, ModelId.of("nope")))
         assertNull(h.models.active(T1, ModelKind.CALIBRATION))

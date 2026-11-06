@@ -35,6 +35,29 @@ internal data class MlModelEntity(
     val previousModelId: String?,
 )
 
+/** 一覧の表示用（R22。D-268）: [MlModelEntity] の列に metrics_json を加えたもの。 */
+@Entity(immutable = true, naming = NamingType.SNAKE_LOWER_CASE)
+@Table(name = "ml_model")
+internal data class MlModelCatalogEntity(
+    @Id val tenantId: Long,
+    @Id val modelId: String,
+    val kind: String,
+    val schemaVersion: Int,
+    val featureSchemaHash: String,
+    val artifactUri: String,
+    val sha256: String,
+    val signatureSha256: String,
+    val status: String,
+    val trainedFrom: LocalDate?,
+    val trainedTo: LocalDate?,
+    val nTrain: Long?,
+    val createdAt: LocalDateTime,
+    val activatedAt: LocalDateTime?,
+    val activatedBy: String?,
+    val previousModelId: String?,
+    val metricsJson: String?,
+)
+
 /** 学習 Job が INSERT する列（active_flag・activated_* は書かない = NULL）。 */
 @Entity(immutable = true, naming = NamingType.SNAKE_LOWER_CASE)
 @Table(name = "ml_model")
@@ -79,6 +102,13 @@ internal interface MlModelDao {
     /** 学習 Job の登録（mltrain は INSERT だけ。status は CANDIDATE / REJECTED。主キーの重複は例外）。 */
     @Insert
     fun insert(entity: MlModelInsertEntity): org.seasar.doma.jdbc.Result<MlModelInsertEntity>
+
+    /** 新しい順の一覧（dashboard の表示用。テナントの範囲だけ。R22）。 */
+    @Select
+    fun selectRecent(
+        tenantId: Long,
+        limit: Int,
+    ): List<MlModelCatalogEntity>
 
     /** 有効（ACTIVE）なモデル。`UNIQUE(tenant_id, kind, active_flag)` により高々 1 行。 */
     @Select

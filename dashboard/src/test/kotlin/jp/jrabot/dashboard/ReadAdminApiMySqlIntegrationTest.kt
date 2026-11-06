@@ -183,6 +183,7 @@ class ReadAdminApiMySqlIntegrationTest {
                 "runs.json" to "/api/v1/runs?date=2026-10-24",
                 "overrides.json" to "/api/v1/admin/overrides?date=2026-10-24",
                 "me.json" to "/api/v1/me",
+                "ml-models.json" to "/api/v1/admin/ml-models",
             )
         val compared = mutableListOf<String>()
         for ((file, path) in cases) {
@@ -249,6 +250,27 @@ class ReadAdminApiMySqlIntegrationTest {
                         ),
                     ),
                 "me.json" to MeDto("me@example.com", "ADMIN", 1L),
+                "ml-models.json" to
+                    listOf(
+                        jp.jrabot.dashboard.api.MlModelDto(
+                            "cal-001",
+                            "calibration",
+                            "ACTIVE",
+                            1,
+                            "sha256:" + "a".repeat(64),
+                            day,
+                            day,
+                            1234L,
+                            at,
+                            at,
+                            "me@example.com",
+                            "cal-000",
+                            mapOf("brier" to 0.2, "logloss" to 0.5),
+                            "calibration",
+                            listOf("ok"),
+                            true,
+                        ),
+                    ),
             )
         for ((file, dto) in dtos) {
             val actual = READER.readTree(mapper.writeValueAsString(dto))

@@ -1,6 +1,6 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-11-06（L8: R16 バックテストの Job。下の新しい節）。旧: 2026-11-06（言語移行 L7）。旧: 2026-11-03（言語移行 L5）。旧: 2026-11-02（言語移行 L3）。旧: 2026-11-02（L1。web PR #36・infra PR #7〔L2〕はマージ済み）。旧: 2026-11-01 夜（web PR #30〜#33・infra PR #3/#4/#6 はマージ済み。残りは wip/final の TEST_RESULTS.md・D-247・R15 の MySQL 通し試験〈ReadAdminApiMySqlIntegrationTest〉。検証: ktlintCheck 成功、当該 4 試験は MySQL 8.4 で成功（ローカル）。それ以外の統合試験は CI で確認。再開手順: 本ブランチの PR の CI 結果を確認→失敗ジョブのログだけ読む→マージ条件を満たせばマージ→COMPLETION.md の C/B 項目を最終報告。判定の正本は COMPLETION.md）
+最終更新: 2026-11-06（L8 ②: R22 ML モデルの表示。下の新しい節）。旧: 2026-11-06（L8 ①: R16 バックテストの Job）。旧: 2026-11-06（言語移行 L7）。旧: 2026-11-03（言語移行 L5）。旧: 2026-11-02（言語移行 L3）。旧: 2026-11-02（L1。web PR #36・infra PR #7〔L2〕はマージ済み）。旧: 2026-11-01 夜（web PR #30〜#33・infra PR #3/#4/#6 はマージ済み。残りは wip/final の TEST_RESULTS.md・D-247・R15 の MySQL 通し試験〈ReadAdminApiMySqlIntegrationTest〉。検証: ktlintCheck 成功、当該 4 試験は MySQL 8.4 で成功（ローカル）。それ以外の統合試験は CI で確認。再開手順: 本ブランチの PR の CI 結果を確認→失敗ジョブのログだけ読む→マージ条件を満たせばマージ→COMPLETION.md の C/B 項目を最終報告。判定の正本は COMPLETION.md）
 旧: 2026-11-01（T3.9③・reconcile・preflight・infra PR #4）
 旧: 2026-10-30（保留の再適用のレビュー・公開準備。D-229。CI 未実施）
 旧: 2026-10-29（追加レビュー 2: リース継続・保留の再適用・G-31 の null・T3.9 設計の訂正〈D-224〜D-228〉。同ブランチ。CI 未実施。PR なし）
@@ -12,6 +12,12 @@
 旧: 2026-10-27（Stage 3-G: T3.7 Discord 通知）
 旧: 2026-10-26（Public 化の準備）／2026-10-24（Stage 3-F2・3-F1・3-E）
 
+
+## 2026-11-06 L8 ②: R22 ML モデルの一覧を管理画面に表示（ブランチ claude/l8-ml-models-view。D-268）
+**マージ済み（この日）**: web PR #46（R16 = c971420）、infra PR #10（I-038 = 58f79f2。infra の CI は Actions の実行枠の問題で 2 回ランナーに割り当てられず、本人が状態を戻して再実行した後に全ジョブ成功〔terraform test 17 件〕を確認してマージ）。
+**内容**: `GET /api/v1/admin/ml-models`（表示だけ。有効化・退役は置かない）、`ModelCatalogReader`、画面の運用タブの管理者の欄に表。COMPLETION R22 を A（表示）/ B（有効化）に。OPERATIONS §3.1 に `ml_degraded` の読み方（D-267 の再レビューの低）。
+**検証（ローカル。D-264）**: dashboard 単体 61（MlModelApiTest 3）・ktlint、persistence の MlModelRegistryIntegrationTest 6（MySQL 8.4）、dashboard の ReadAdminApiMySqlIntegrationTest 7（MySQL 8.4。ml-models の HTTP と DTO の厳密比較）、画面の TS 51 件。
+**次**: 独立レビュー → PR → CI → マージ。続いて R20（エージェントの失効）、R24（SQLite 移行ツール）、R30。
 
 ## 2026-11-06 L8 ①: R16 バックテストを bot の Job に接続（ブランチ claude/l8-backtest-task。D-265。infra は claude/l8-backtest-job〔I-038〕）
 **マージ済み（この日）**: web PR #45（L7 = bdcfce6）。最新コミット 3f52592 で実行された全ジョブ（images・MySQL 8.4/9.7・Windows を含む）の成功を個別に確認。

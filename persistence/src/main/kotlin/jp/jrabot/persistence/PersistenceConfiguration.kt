@@ -133,6 +133,12 @@ class PersistenceConfiguration {
     @Bean
     fun modelRegistryReader(config: Config): ModelRegistryReader = MlModelRegistryRepository(MlModelDaoImpl(config))
 
+    /** モデルの一覧（dashboard の管理画面の表示だけ。R22。D-268）。 */
+    @Bean
+    fun modelCatalogReader(config: Config): jp.jrabot.domain.ml.registry.ModelCatalogReader =
+        jp.jrabot.persistence.repository
+            .MlModelCatalogRepository(MlModelDaoImpl(config))
+
     /** 特徴量の入力（学習用データセット・推論）。読取りだけ。すべての SQL が tenant_id と時刻の上限（asOf・レース日）を持つ。 */
     @Bean
     fun featureSource(config: Config): FeatureSource = DbFeatureSource(MlSourceDaoImpl(config))
