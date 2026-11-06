@@ -148,7 +148,7 @@ EVENT_NAME=push BEFORE_SHA=<sha> node build/tools/src/main.js classify   # 変�
 **継続的なセキュリティスキャンの提案**（費用・頻度を考慮。今回は実装しない）: ①GitHub の Secret scanning と Push protection（Public は無料）を主とする。②gitleaks / trufflehog の全履歴スキャンは、**毎回の CI に入れない**。月次の既存フル検証に合わせた手動実行か、Claude クラウド上でのリリース前スキャンにする。③PR ごとの差分スキャン（`gitleaks --log-opts=base..head`）は数秒で終わるため、希望すれば `changes and repo hygiene` に足せる（今回は追加しない）。
 
 ## 10. 画面の TypeScript（2026-11-03。D-263）
-- **CI**: release-tools ジョブに `npm run --silent build:frontend`（ブラウザ用の tsconfig で strict の型検査）と `npm run --silent test:frontend`（試験用の tsconfig で変換し node:test。`dashboard/run-tests.mjs` が JUnit で件数〔最小 40〕・skip 0 を検査）。Biome の lint は `dashboard/src/main/ts`・`src/test/ts`・`run-tests.mjs` も対象。
+- **CI**: release-tools ジョブに `npm run --silent build:frontend`（ブラウザ用の tsconfig で strict の型検査）と `npm run --silent test:frontend`（試験用の tsconfig で変換し node:test。`dashboard/run-tests.mjs` が JUnit で件数〔最小 47・試験ファイル 5 つの存在〕・skip 0 を検査）。Biome の lint は `dashboard/src/main/ts`・`src/test/ts`・`run-tests.mjs` も対象。
 - **Gradle**: `:dashboard:compileFrontend`（Exec。ルートの `node_modules/typescript`）→ `build/generated/frontend/static/js` → main の resources。build・db-integration ジョブは setup-tools で Node と `npm ci` を済ませているので追加の手順は無い。compat-connectorj26 は `:persistence` だけなので影響しない。
 - **Docker**: `frontend` ステージ（`node:24.22.2-trixie-slim`、digest 固定。Dependabot の docker が digest を更新）→ build ステージへ変換結果だけを COPY、Gradle は `-PfrontendPrebuilt=true`。実行イメージに Node は入らない（`dockerfile.test.ts` が検査）。
 - **分類**: `dashboard/src/main/ts`・`dashboard/tsconfig*.json`・`dashboard/src/main/resources/static` → kotlin_app + release + docker、`dashboard/src/test/ts`・`run-tests.mjs`・契約の見本（`src/test/resources/frontend-contract`）→ kotlin_app + release。

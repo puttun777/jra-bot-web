@@ -61,7 +61,8 @@ export async function post(path: string, body: unknown, fetchFn: FetchFn = brows
     throw new ApiError(NETWORK_MESSAGE);
   }
   if (!res.ok) throw new ApiError(postFailureMessage(res.status));
-  await res.body?.cancel();
+  // 成功の判定の後なので、本文の破棄の失敗で操作を失敗扱いにしない（再レビュー 低）
+  await res.body?.cancel().catch(() => undefined);
 }
 
 /** 画面に出す文。ApiError 以外（想定外の例外）は詳細を出さない。 */
