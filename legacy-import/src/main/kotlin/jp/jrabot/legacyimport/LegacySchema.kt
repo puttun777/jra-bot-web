@@ -17,13 +17,16 @@ data class ForeignKey(
  */
 object LegacySchema {
     /** 表名 → 列名（定義順）。 */
-    val expected: Map<String, List<String>> get() = model.first
+    val expected: Map<String, List<String>> get() = model.tables
 
     /**
      * 期待するスキーマの外部キー（`PRAGMA foreign_key_list`）。孤立の検査はここに宣言された関係だけを見る
      * （手で規則を書かない。例えば horse_past_runs.race_id は races への外部キーではない: レビュー 中）。
      */
-    val foreignKeys: List<ForeignKey> get() = model.second
+    val foreignKeys: List<ForeignKey> get() = model.foreignKeys
+
+    /** 表名 → 主キーの列（主キー内の順）。抽出はこの順に並べる（D-273）。 */
+    val primaryKeys: Map<String, List<String>> get() = model.primaryKeys
 
     /** 起動時に足される列（表 → 列）。これが無いだけの古い DB は WARN、それ以外の列が無ければ NG。 */
     val dynamicColumns: Map<String, Set<String>> by lazy {
@@ -35,11 +38,17 @@ object LegacySchema {
             .mapValues { it.value.toSet() }
     }
 
-    private val model: Pair<Map<String, List<String>>, List<ForeignKey>> by lazy { load() }
+    private class Model(
+        val tables: Map<String, List<String>>,
+        val foreignKeys: List<ForeignKey>,
+        val primaryKeys: Map<String, List<String>>,
+    )
+
+    private val model: Model by lazy { load() }
 
     private fun resource(name: String): String = checkNotNull(LegacySchema::class.java.getResource("/legacy-schema/$name")) { "リソース $name が無い" }.readText()
 
-    private fun load(): Pair<Map<String, List<String>>, List<ForeignKey>> =
+    private fun load(): Model =
         DriverManager.getConnection("jdbc:sqlite::memory:").use { c ->
             for (file in listOf("schema.sql", "migration_add_bets.sql")) {
                 for (stmt in statements(resource(file))) c.createStatement().use { it.executeUpdate(stmt) }
@@ -50,7 +59,7 @@ object LegacySchema {
                 if (column !in columns(c, table)) c.createStatement().use { it.executeUpdate("ALTER TABLE $table ADD COLUMN $column $type") }
             }
             val ts = tables(c)
-            ts.associateWith { columns(c, it) } to ts.flatMap { foreignKeys(c, it) }
+            Model(ts.associateWith { columns(c, it) }, ts.flatMap { foreignKeys(c, it) }, ts.associateWith { primaryKey(c, it) })
         }
 
     private fun foreignKeys(
@@ -62,6 +71,19 @@ object LegacySchema {
                 buildList { while (rs.next()) add(ForeignKey(table, rs.getString("from"), rs.getString("table"), rs.getString("to") ?: "rowid")) }
             }
         }
+
+    private fun primaryKey(
+        c: Connection,
+        table: String,
+    ): List<String> =
+        c
+            .createStatement()
+            .use { s ->
+                s.executeQuery("PRAGMA table_info(\"$table\")").use { rs ->
+                    buildList { while (rs.next()) if (rs.getInt("pk") > 0) add(rs.getInt("pk") to rs.getString("name")) }
+                }
+            }.sortedBy { it.first }
+            .map { it.second }
 
     /** `;` で区切った文（行コメント `--` を除く）。旧スキーマの DDL には文字列中の `;` が無い。 */
     internal fun statements(sql: String): List<String> =

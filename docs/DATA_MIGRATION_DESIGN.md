@@ -170,7 +170,7 @@ CREATE TABLE payouts (
 | # | フェーズ | 内容 | 失敗時 |
 |---|---|---|---|
 | P0 | **事前検査（preflight）** | ① SQLite のコピー（稼働中は `sqlite3 .backup`、または停止して WAL を反映した後の**単一ファイル**のコピー。空でない `-wal`/`-shm`/`-journal` が横にあるコピーは preflight が受け付けない: D-272）を取り sha256 を記録、`PRAGMA integrity_check`、② `PRAGMA table_info` で**スキーマ指紋**を取り `schema.sql` との差分（動的列の有無）を報告、③ テーブル別の行数・PK 重複・孤立行（FK 違反: `PRAGMA foreign_key_check`）・NULL/型の分布、④ 時刻形式の分布（`T` 有無）と JST/UTC 整合のサンプル検証、⑤ JSON 列の妥当性、⑥ `race_id` 形式（12 桁数字）、⑦ 推定サイズ（§9） | 検査報告のみ。移行しない |
-| P1 | extract | 読み取り専用接続（`file:…?mode=ro`）。テーブルごとに PK 順で**チャンク**（例: 10,000 行 or 日付範囲）に分け NDJSON.gz に出力、チャンクごとに行数・PK 範囲・内容ハッシュを `manifest.json` に記録 | チャンク単位で再実行 |
+| P1 | extract | 読み取り専用接続（`file:…?mode=ro&immutable=1`）。preflight が NG なら抽出しない。テーブルごとに PK 順（+ rowid）で**チャンク**（既定 10,000 行）に分け NDJSON.gz（1 行 = 列の値の JSON 配列。保存の型のまま、BLOB・無限大は印付き）に出力、チャンクごとに行数・PK 範囲・内容（展開後）の sha256 を `manifest.json` に記録（D-273） | 出力先を消して再実行（決定的）。チャンク単位の再開は P3 の `import_chunk` |
 | P2 | transform/validate | 型・時刻・命名の変換（§1.2, §2）、**tenant_id 付与**、`legacy_id` 保持、`INSERT OR REPLACE` 由来の重複は PK で一意（SQLite の PK が保証）、変換不能行は隔離 | 隔離行は `import_quarantine`（テナント表）と NDJSON に理由付きで保存 |
 | P3 | load（staging） | staging スキーマ（`import_{run}`）へバッチ INSERT（2,000〜5,000 行/トランザクション、PK 順）。`legacy_id` の UNIQUE で冪等 | チャンク単位でロールバック→再試行 |
 | P4 | verify | §6 | 不一致なら promote しない |

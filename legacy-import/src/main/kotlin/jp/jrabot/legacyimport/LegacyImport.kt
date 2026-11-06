@@ -17,6 +17,8 @@ import kotlin.system.exitProcess
  *
  * ```
  * legacy-import preflight --sqlite <コピーした jraev.sqlite> [--out <report.json>]
+ * legacy-import extract --sqlite <コピー> --out-dir <空のディレクトリ> [--chunk-rows <n>]   # P1（D-273）
+ * legacy-import verify-extract --dir <extract の出力先>
  * ```
  * | 終了コード | 意味 |
  * |---|---|
@@ -24,7 +26,10 @@ import kotlin.system.exitProcess
  * | 1 | 判定 NG（整合性の検査の失敗・期待する表が無い・抽出に要る列が無い） |
  * | 2 | 引数・入力の誤り・ツールの失敗（ファイルが無い・開けない・SQLite ではない・横に未反映の -wal がある・出力先が入力と同じか既にある・読み書きの失敗）。レポートは出さない |
  *
- * extract・transform・load・verify・promote は後続（今は preflight だけ。実データのクラウド投入は COMP-4 の回答待ち）。
+ * extract: 0 = 抽出した、1 = preflight が NG（抽出しない）、2 = 引数・入力の誤り・出力先が空でない・抽出中に入力が変わった・ツールの失敗。
+ * verify-extract: 0 = manifest と一致、1 = 食い違いがある、2 = 検証できない。
+ *
+ * transform・load・verify・promote は後続（実データのクラウド投入は COMP-4 の回答待ち）。
  */
 fun main(args: Array<String>) {
     exitProcess(LegacyImport.run(args, System.out, System.err))
@@ -36,11 +41,20 @@ object LegacyImport {
         out: PrintStream,
         err: PrintStream,
     ): Int {
-        if (args.firstOrNull() != "preflight") {
-            err.println("使い方: legacy-import preflight --sqlite <path> [--out <report.json>]")
-            return 2
+        val rest = args.drop(1)
+        return when (args.firstOrNull()) {
+            "preflight" -> parse(rest, setOf("sqlite", "out"))?.let { preflight(it, out, err) } ?: usage(err)
+            "extract" -> parse(rest, setOf("sqlite", "out-dir", "chunk-rows"))?.let { extract(it, err) } ?: usage(err)
+            "verify-extract" -> parse(rest, setOf("dir"))?.let { verifyExtract(it, err) } ?: usage(err)
+            else -> usage(err)
         }
-        val opts = parse(args.drop(1)) ?: return usage(err)
+    }
+
+    private fun preflight(
+        opts: Map<String, String>,
+        out: PrintStream,
+        err: PrintStream,
+    ): Int {
         val sqlite = opts["sqlite"] ?: return usage(err)
         val (input, outPath) =
             try {
@@ -109,18 +123,73 @@ object LegacyImport {
         return Files.exists(o) && Files.exists(i) && runCatching { Files.isSameFile(o, i) }.getOrDefault(true)
     }
 
+    private fun extract(
+        opts: Map<String, String>,
+        err: PrintStream,
+    ): Int {
+        val sqlite = opts["sqlite"] ?: return usage(err)
+        val outDir = opts["out-dir"] ?: return usage(err)
+        val chunkRows =
+            opts["chunk-rows"]?.let { v -> v.toIntOrNull()?.takeIf { it in Extract.CHUNK_ROWS_RANGE } ?: return usage(err) } ?: Extract.DEFAULT_CHUNK_ROWS
+        return try {
+            // 出力先は無いか空のディレクトリだけ（入力のファイル・入力のあるディレクトリは受け付けない）
+            val m = Extract.run(Path.of(sqlite), Path.of(outDir), chunkRows)
+            err.println(
+                "extract: OK (tables=${m.tables.size}, rows=${m.tables.sumOf {
+                    it.rows
+                }}, chunks=${m.tables.sumOf { it.chunks.size }}, preflight=${m.preflightVerdict})",
+            )
+            0
+        } catch (e: PreflightFailed) {
+            err.println(summary(e.report))
+            err.println("preflight が NG のため抽出しない")
+            1
+        } catch (e: InputRejected) {
+            err.println("入力を受け付けない: ${e.message}")
+            2
+        } catch (e: Exception) {
+            // パス・値は出さない。途中の出力は不完全（manifest.json が無い）なので、出力先を消して再実行する
+            err.println("抽出に失敗した（出力先を消して再実行する）: ${e.javaClass.simpleName}")
+            2
+        }
+    }
+
+    private fun verifyExtract(
+        opts: Map<String, String>,
+        err: PrintStream,
+    ): Int {
+        val dir = opts["dir"] ?: return usage(err)
+        return try {
+            val problems = Extract.verify(Path.of(dir))
+            for (p in problems) err.println("  $p")
+            err.println(if (problems.isEmpty()) "verify-extract: OK" else "verify-extract: NG (${problems.size})")
+            if (problems.isEmpty()) 0 else 1
+        } catch (e: Exception) {
+            err.println("検証できない: ${e.javaClass.simpleName}")
+            2
+        }
+    }
+
+    private const val USAGE =
+        "使い方: legacy-import preflight --sqlite <path> [--out <report.json>]\n" +
+            "       legacy-import extract --sqlite <path> --out-dir <dir> [--chunk-rows <n>]\n" +
+            "       legacy-import verify-extract --dir <dir>"
+
     private fun usage(err: PrintStream): Int {
-        err.println("使い方: legacy-import preflight --sqlite <path> [--out <report.json>]")
+        err.println(USAGE)
         return 2
     }
 
     /** `--name value` の組（未知の名前・重複・値の欠落は null）。 */
-    private fun parse(rest: List<String>): Map<String, String>? {
+    private fun parse(
+        rest: List<String>,
+        names: Set<String>,
+    ): Map<String, String>? {
         val m = LinkedHashMap<String, String>()
         var i = 0
         while (i < rest.size) {
             val name = rest[i].removePrefix("--")
-            if (!rest[i].startsWith("--") || name !in setOf("sqlite", "out") || name in m || i + 1 >= rest.size) return null
+            if (!rest[i].startsWith("--") || name !in names || name in m || i + 1 >= rest.size) return null
             m[name] = rest[i + 1]
             i += 2
         }

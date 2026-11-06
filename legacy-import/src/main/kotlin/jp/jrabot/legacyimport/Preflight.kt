@@ -93,6 +93,15 @@ data class PreflightReport(
  */
 object Preflight {
     fun run(sqlite: Path): PreflightReport {
+        checkInput(sqlite)
+        val sha = sha256(sqlite)
+        val size = Files.size(sqlite)
+        val wal = isWalMode(sqlite)
+        return open(sqlite).use { c -> inspect(c, sha, size, wal) }
+    }
+
+    /** ファイルがあり、横に中身のある -wal・-shm・-journal が無いこと（無ければ [InputRejected]）。 */
+    internal fun checkInput(sqlite: Path) {
         if (!Files.isRegularFile(sqlite)) throw InputRejected("SQLite のファイルが無い")
         for (suffix in listOf("-wal", "-shm", "-journal")) {
             val side = sqlite.resolveSibling(sqlite.fileName.toString() + suffix)
@@ -102,10 +111,6 @@ object Preflight {
                 )
             }
         }
-        val sha = sha256(sqlite)
-        val size = Files.size(sqlite)
-        val wal = isWalMode(sqlite)
-        return open(sqlite).use { c -> inspect(c, sha, size, wal) }
     }
 
     /**
@@ -293,7 +298,7 @@ object Preflight {
         sql: String,
     ): String? = c.createStatement().use { s -> s.executeQuery(sql).use { rs -> if (rs.next()) rs.getString(1) else null } }
 
-    private fun sha256(p: Path): String {
+    internal fun sha256(p: Path): String {
         val md = MessageDigest.getInstance("SHA-256")
         Files.newInputStream(p).use { input ->
             val buf = ByteArray(1 shl 16)
