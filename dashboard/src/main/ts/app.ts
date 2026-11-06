@@ -5,8 +5,10 @@
 import { ApiError, getJson, messageOf, post } from "./api.js";
 import { byId, el, emptyBox, errorBox, pill, show, table } from "./dom.js";
 import { dateQuery, hasNextPage, pageInfo, performanceQuery, signalsQuery } from "./format.js";
-import { Me, MlModels, type Override, Overrides, Performance, Races, Runs, SignalPage, Status } from "./schema.js";
+import { type Agent, Agents, Me, MlModels, type Override, Overrides, Performance, Races, Runs, SignalPage, Status } from "./schema.js";
 import {
+  AGENT_HEADERS,
+  agentRows,
   ML_HEADERS,
   ML_NUM_COLS,
   mlModelRows,
@@ -21,6 +23,7 @@ import {
   RACE_HEADERS,
   RUN_HEADERS,
   raceRows,
+  revokeReason,
   runRows,
   SIGNAL_HEADERS,
   SIGNAL_NUM_COLS,
@@ -62,6 +65,8 @@ function ui() {
     reason: byId("o-reason", HTMLInputElement),
     msg: byId("o-msg", HTMLSpanElement),
     mlModels: byId("ml-models", HTMLDivElement),
+    agents: byId("agents", HTMLDivElement),
+    agentMsg: byId("agent-msg", HTMLSpanElement),
   };
 }
 type Ui = ReturnType<typeof ui>;
@@ -169,6 +174,44 @@ function start(u: Ui): void {
     }
   }
 
+  function agentRevokeButton(a: Agent): HTMLButtonElement | string {
+    if (a.status !== "ACTIVE") return "";
+    const b = el("button", "失効");
+    b.type = "button";
+    b.addEventListener("click", async () => {
+      const reason = revokeReason(
+        prompt(`エージェント ${a.agentId} を失効します。以後このエージェントの送信は拒否されます。理由（必須・500 文字まで）:`),
+      );
+      if (reason === null) {
+        u.agentMsg.textContent = "理由が空、または長すぎるため失効していません。";
+        return;
+      }
+      if (!confirm(`エージェント ${a.agentId} を失効しますか？（元に戻す操作はありません）`)) return;
+      try {
+        await post(`/api/v1/admin/agents/${encodeURIComponent(a.agentId)}/revoke`, { reason });
+        u.agentMsg.textContent = "失効しました。";
+      } catch (e) {
+        u.agentMsg.textContent = messageOf(e);
+      }
+      void loadAgents();
+    });
+    return b;
+  }
+
+  async function loadAgents(): Promise<void> {
+    try {
+      const rows = await getJson("/api/v1/admin/agents", Agents);
+      if (!rows.length) return show(u.agents, emptyBox("登録されたエージェントはありません。"));
+      const cells = agentRows(rows).map((r, i) => {
+        const a = rows[i];
+        return a === undefined ? r : [...r, agentRevokeButton(a)];
+      });
+      show(u.agents, table(AGENT_HEADERS, cells));
+    } catch (e) {
+      show(u.agents, errorBox(messageOf(e)));
+    }
+  }
+
   async function initAdmin(): Promise<void> {
     let me: Me;
     try {
@@ -201,6 +244,7 @@ function start(u: Ui): void {
     });
     void loadOverrides();
     void loadMlModels();
+    void loadAgents();
   }
 
   const loaders: Readonly<Record<Tab, () => void>> = {
@@ -212,6 +256,7 @@ function start(u: Ui): void {
       if (!u.admin.hidden) {
         void loadOverrides();
         void loadMlModels();
+        void loadAgents();
       }
     },
   };

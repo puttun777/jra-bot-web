@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
-import { Me, MlModels, Overrides, Performance, Races, Runs, SignalPage, Status } from "../../main/ts/schema.js";
+import { Agents, Me, MlModels, Overrides, Performance, Races, Runs, SignalPage, Status } from "../../main/ts/schema.js";
 import { type Decoder, isRecord } from "../../main/ts/validate.js";
 
 const ROOT = "dashboard/src";
@@ -23,6 +23,7 @@ const CASES: ReadonlyArray<readonly [string, Decoder<unknown>]> = [
   ["overrides.json", Overrides],
   ["me.json", Me],
   ["ml-models.json", MlModels],
+  ["agents.json", Agents],
 ];
 
 /** 値の形（オブジェクトのキーを再帰的に。配列は全要素）。 */

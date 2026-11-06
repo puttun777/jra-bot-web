@@ -144,6 +144,34 @@ class ReadAdminApiMySqlIntegrationTest {
         assertEquals(1, db.count("SELECT COUNT(*) FROM calendar_override"))
     }
 
+    @Test
+    fun `エージェントの失効（R20）— 管理者だけが 理由つきで失効でき 監査記録が残り 二重は 409・閲覧者は 403`() {
+        db.exec("DELETE FROM agent_nonce")
+        db.exec("DELETE FROM agent_heartbeat")
+        db.exec("DELETE FROM agent")
+        db.exec(
+            "INSERT INTO agent (tenant_id, agent_id, name, token_hash, token_expires_at, created_at, created_by) VALUES " +
+                "(1, 'pc_main', '自宅 PC', '${"a".repeat(64)}', '2027-01-01 00:00:00.000000', '2026-10-01 00:00:00.000000', 'me@example.com')",
+        )
+        val list = http.get("/api/v1/admin/agents", admin)
+        assertEquals(200, list.status, list.body)
+        assertTrue(list.body.contains("\"agentId\":\"pc_main\"") && list.body.contains("\"status\":\"ACTIVE\""), list.body)
+        assertTrue(!list.body.contains("token_hash") && !list.body.contains("tokenHash") && !list.body.contains("aaaaaaaa"), "資格情報を返さない")
+        assertEquals(403, http.get("/api/v1/admin/agents", viewer).status)
+        assertEquals(403, http.send("POST", "/api/v1/admin/agents/pc_main/revoke", viewer, body = """{"reason":"x"}""").status)
+        assertEquals(400, http.send("POST", "/api/v1/admin/agents/pc_main/revoke", admin, body = """{"reason":""}""").status, "理由は必須")
+        val revoked = http.send("POST", "/api/v1/admin/agents/pc_main/revoke", admin, body = """{"reason":"PC を紛失"}""")
+        assertEquals(200, revoked.status, revoked.body)
+        assertEquals("REVOKED", db.scalar("SELECT status FROM agent WHERE agent_id = 'pc_main'"))
+        assertEquals(
+            1,
+            db.count("SELECT COUNT(*) FROM audit_log WHERE tenant_id = 1 AND actor = 'me@example.com' AND action = 'AGENT_REVOKE' AND target_id = 'pc_main'"),
+        )
+        assertEquals(409, http.send("POST", "/api/v1/admin/agents/pc_main/revoke", admin, body = """{"reason":"再度"}""").status, "二重の失効は 409")
+        assertEquals(404, http.send("POST", "/api/v1/admin/agents/nope/revoke", admin, body = """{"reason":"x"}""").status)
+        assertEquals(1, db.count("SELECT COUNT(*) FROM audit_log WHERE action = 'AGENT_REVOKE'"), "失敗した操作は記録しない")
+    }
+
     /**
      * 画面（dashboard/src/main/ts/schema.ts）が受け取る形と、実際の HTTP の応答の形が一致すること（D-263）。見本は src/test/resources/frontend-contract。
      * オブジェクトのキーの集合と、両方が null でないときの JSON の型を比べる（配列は見本の先頭要素と実際の全要素）。
@@ -190,6 +218,15 @@ class ReadAdminApiMySqlIntegrationTest {
                     } ?: "NULL"})",
             )
         }
+        // エージェント（R20）: 失効済みの 1 行（見本と同じく全項目に値がある）
+        db.exec("DELETE FROM agent_nonce")
+        db.exec("DELETE FROM agent_heartbeat")
+        db.exec("DELETE FROM agent")
+        db.exec(
+            "INSERT INTO agent (tenant_id, agent_id, name, token_hash, token_expires_at, status, created_at, created_by, revoked_at, revoked_by) VALUES " +
+                "(1, 'pc_main', '自宅 PC', '${"a".repeat(64)}', '2027-01-01 00:00:00.000000', 'REVOKED', '2026-10-01 00:00:00.000000', 'me@example.com', " +
+                "'2026-10-24 01:00:00.000000', 'me@example.com')",
+        )
         assertEquals(403, http.get("/api/v1/admin/ml-models", viewer).status, "閲覧者は ML モデルの一覧を見られない（ADMIN だけ）")
         // テナント 2 の利用者は閲覧者（ADMIN ではない）なので 403。テナントの分離そのものは persistence の試験（MlModelRegistryIntegrationTest）と、主体から決まるテナントで担保する
         assertEquals(403, http.get("/api/v1/admin/ml-models", other).status, "テナント 2 の閲覧者も 403")
@@ -203,6 +240,7 @@ class ReadAdminApiMySqlIntegrationTest {
                 "overrides.json" to "/api/v1/admin/overrides?date=2026-10-24",
                 "me.json" to "/api/v1/me",
                 "ml-models.json" to "/api/v1/admin/ml-models",
+                "agents.json" to "/api/v1/admin/agents",
             )
         val compared = mutableListOf<String>()
         for ((file, path) in cases) {
@@ -220,6 +258,7 @@ class ReadAdminApiMySqlIntegrationTest {
             "overrides.json[0]",
             "ml-models.json[0]",
             "ml-models.json[1]",
+            "agents.json[0]",
         )) {
             assertTrue(p in compared, "$p を比べていない: $compared")
         }
@@ -277,6 +316,11 @@ class ReadAdminApiMySqlIntegrationTest {
                         ),
                     ),
                 "me.json" to MeDto("me@example.com", "ADMIN", 1L),
+                "agents.json" to
+                    listOf(
+                        jp.jrabot.dashboard.api
+                            .AgentDto("pc_main", "自宅 PC", at, "REVOKED", at, "me@example.com", at, "me@example.com"),
+                    ),
                 "ml-models.json" to
                     listOf(
                         jp.jrabot.dashboard.api.MlModelDto(

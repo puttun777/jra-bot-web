@@ -132,3 +132,17 @@ export const MlModel = object({
 });
 export type MlModel = Infer<typeof MlModel>;
 export const MlModels = array(MlModel);
+
+/** Windows 取得エージェント（R20。D-270）。資格情報は含まない。 */
+export const Agent = object({
+  agentId: string,
+  name: string,
+  tokenExpiresAt: instant,
+  status: string,
+  createdAt: instant,
+  createdBy: nullable(string),
+  revokedAt: nullable(instant),
+  revokedBy: nullable(string),
+});
+export type Agent = Infer<typeof Agent>;
+export const Agents = array(Agent);

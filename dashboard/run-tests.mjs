@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-const MIN = 51;
+const MIN = 54;
 const testDir = "dashboard/build/frontend-test/test/ts";
 const outDir = "dashboard/build/frontend-test-results";
 mkdirSync(outDir, { recursive: true });

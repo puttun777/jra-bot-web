@@ -68,6 +68,7 @@ export const RUN: Readonly<Record<string, string>> = {
   INTERRUPTED: "中断",
 };
 
+export const AGENT_STATUS: Readonly<Record<string, string>> = { ACTIVE: "有効", REVOKED: "失効" };
 export const MODEL_STATUS: Readonly<Record<string, string>> = { CANDIDATE: "候補", ACTIVE: "有効", RETIRED: "退役", REJECTED: "不合格" };
 
 /** 表示名。未知の値（サーバ側で追加された状態）は値そのものを出す。継承したプロパティ（"constructor" など）は表示名にしない。 */
