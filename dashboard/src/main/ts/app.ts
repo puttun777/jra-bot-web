@@ -179,11 +179,11 @@ function start(u: Ui): void {
     const b = el("button", "失効");
     b.type = "button";
     b.addEventListener("click", async () => {
-      const reason = revokeReason(
-        prompt(`エージェント ${a.agentId} を失効します。以後このエージェントの送信は拒否されます。理由（必須・500 文字まで）:`),
-      );
+      const input = prompt(`エージェント ${a.agentId} を失効します。以後このエージェントの送信は拒否されます。理由（必須・500 文字まで）:`);
+      if (input === null) return; // 取消
+      const reason = revokeReason(input);
       if (reason === null) {
-        u.agentMsg.textContent = "理由が空、または長すぎるため失効していません。";
+        u.agentMsg.textContent = "理由が空、または長すぎる・制御文字を含むため失効していません。";
         return;
       }
       if (!confirm(`エージェント ${a.agentId} を失効しますか？（元に戻す操作はありません）`)) return;

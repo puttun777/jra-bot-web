@@ -329,5 +329,6 @@ describe("view: エージェント（R20）", () => {
     assert.equal(revokeReason("x".repeat(501)), null);
     assert.equal(revokeReason("x".repeat(500)), "x".repeat(500));
     assert.equal(revokeReason("改行\nあり"), null);
+    assert.equal(revokeReason("C1\u0085あり"), null, "サーバの isISOControl と同じく C1 も拒否");
   });
 });

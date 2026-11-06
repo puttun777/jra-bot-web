@@ -177,10 +177,10 @@ export function agentRows(rows: readonly Agent[]): string[][] {
   ]);
 }
 
-/** 失効の理由（入力の検査。サーバと同じく 1〜500 文字・改行などの制御文字なし）。不正なら null。 */
+/** 失効の理由（入力の検査。サーバの isISOControl と同じく C0・DEL・C1 の制御文字を拒否し、1〜500 文字）。不正なら null。 */
 export function revokeReason(input: string | null): string | null {
   if (input === null) return null;
   const r = input.trim();
   // biome-ignore lint/suspicious/noControlCharactersInRegex: 制御文字を拒否するための範囲
-  return r.length >= 1 && r.length <= 500 && !/[\u0000-\u001f\u007f]/.test(r) ? r : null;
+  return r.length >= 1 && r.length <= 500 && !/[\u0000-\u001f\u007f-\u009f]/.test(r) ? r : null;
 }

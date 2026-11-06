@@ -116,7 +116,7 @@ jobs:
             --classes "BotArgsParserTest,BotLauncherTest,BotJobExecutorTest,BotProcessTest,BotSpringWiringTest,JobGateTest,CycleGateTest,CalendarCheckTaskHandlerTest,CalendarSettingsParserTest,ExportDatasetTaskHandlerTest"
           node build/tools/src/main.js verify-junit --label "ingest unit" --dir ingest/build/test-results/test --min 35 \
             --classes "IngestInternalApiTest,AgentApiOpsGuardTest,IngestStartupConfigTest,AgentSigningVectorsTest,PlanProviderTest"
-          node build/tools/src/main.js verify-junit --label "dashboard unit" --dir dashboard/build/test-results/test --min 68 \
+          node build/tools/src/main.js verify-junit --label "dashboard unit" --dir dashboard/build/test-results/test --min 69 \
             --classes "DashboardInternalApiTest,AdminWriteGuardTest,DashboardStartupConfigTest,SecurityHeadersFilterTest,MlModelApiTest,AgentAdminApiTest"
           node build/tools/src/main.js verify-junit --label "ml-train unit (Kotlin. D-257)" --dir ml-train/build/test-results/test --min 47 \
             --classes "PythonReferenceTest,PythonReferencePipelineTest,TrainJobTest,LegacyPickleTest,ModelJsonTest,LogisticRoundoffTest,LauncherTest"

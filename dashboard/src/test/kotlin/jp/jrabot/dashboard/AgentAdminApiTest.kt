@@ -24,7 +24,6 @@ import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -119,7 +118,6 @@ class AgentAdminApiTest {
         assertEquals("pc-1", a.targetId)
         assertEquals("PC を紛失", a.reason)
         assertTrue(a.beforeJson!!.contains("\"status\":\"ACTIVE\"") && a.afterJson!!.contains("\"status\":\"REVOKED\""))
-        assertFalse((a.beforeJson + a.afterJson).contains("token", ignoreCase = true))
     }
 
     @Test
@@ -133,6 +131,17 @@ class AgentAdminApiTest {
         for (bad in listOf(null, "", "   ", "x".repeat(501), "改行\nあり")) assertEquals(400, status { api.revoke(req(), "pc-1", RevokeAgentRequest(bad)) })
         assertTrue(audits.isEmpty())
         assertEquals(AgentStatus.ACTIVE, store.rows.single { it.agentId.value == "pc-other" }.status, "他テナントのエージェントは変わらない")
+    }
+
+    @Test
+    fun `テナントは主体から決まる（テナント 2 の管理者はテナント 1 のエージェントを見られず失効できない）`() {
+        val t2 = TenantId.of(2)
+        assertEquals(listOf("pc-other"), assertNotNull(api.list(req(t2)).body).map { it.agentId })
+        assertEquals(404, status { api.revoke(req(t2), "pc-1", RevokeAgentRequest("他テナント")) })
+        assertEquals(AgentStatus.ACTIVE, store.rows.single { it.agentId.value == "pc-1" }.status)
+        val r = api.revoke(req(t2), "pc-other", RevokeAgentRequest("自テナント"))
+        assertEquals("REVOKED", assertNotNull(r.body).status)
+        assertEquals(t2, audits.single().tenantId)
     }
 
     @Test

@@ -79,8 +79,9 @@ class AgentAdminApi(
                 }
             } catch (e: AuditFailure) {
                 throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "audit_failed", e)
-            } catch (_: UnexpectedRollbackException) {
-                throw ResponseStatusException(HttpStatus.CONFLICT, "already_revoked")
+            } catch (e: UnexpectedRollbackException) {
+                // 現在のコールバックは例外を握らないので通常は起きない。起きたら何も変わっていない可能性が高いので、失効したとも二重とも言わない（レビュー 低）
+                throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "rolled_back", e)
             }
         return when (result) {
             is AgentRevokeResult.Revoked -> {
