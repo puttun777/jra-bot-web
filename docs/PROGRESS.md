@@ -16,7 +16,7 @@
 ## 2026-11-06 L8 ②: R22 ML モデルの一覧を管理画面に表示（ブランチ claude/l8-ml-models-view。D-268）
 **マージ済み（この日）**: web PR #46（R16 = c971420）、infra PR #10（I-038 = 58f79f2。infra の CI は Actions の実行枠の問題で 2 回ランナーに割り当てられず、本人が状態を戻して再実行した後に全ジョブ成功〔terraform test 17 件〕を確認してマージ）。
 **内容**: `GET /api/v1/admin/ml-models`（表示だけ。有効化・退役は置かない）、`ModelCatalogReader`、画面の運用タブの管理者の欄に表。COMPLETION R22 を A（表示）/ B（有効化）に。OPERATIONS §3.1 に `ml_degraded` の読み方（D-267 の再レビューの低）。
-**検証（ローカル。D-264）**: dashboard 単体 62（MlModelApiTest 4）・ktlint、persistence の MlModelRegistryIntegrationTest 6（MySQL 8.4。ACTIVE が先頭・想定外の値でも失敗しない）、dashboard の ReadAdminApiMySqlIntegrationTest 7（MySQL 8.4。ml-models の 2 行を HTTP で比較・閲覧者 403・DTO の厳密比較）、画面の TS 51 件。
+**検証（ローカル。D-264）**: dashboard 単体 63（MlModelApiTest 5）・ktlint、persistence の MlModelRegistryIntegrationTest 6（MySQL 8.4。ACTIVE が先頭・想定外の値でも失敗しない）、dashboard の ReadAdminApiMySqlIntegrationTest 7（MySQL 8.4。ml-models の 2 行を HTTP で比較・閲覧者 403（テナント 1・2）・DTO の厳密比較）、画面の TS 51 件。
 **独立レビュー（Sonnet・High・読取り専用）**: 高 0・中 3・低 8 → 中 3 と低 6 を修正（D-269）。
 **次**: PR → CI → マージ。続いて R20（エージェントの失効）、R24（SQLite 移行ツール）、R30。
 

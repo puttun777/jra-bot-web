@@ -67,6 +67,16 @@ class MlModelApiTest {
     }
 
     @Test
+    fun `上限ちょうどまでの指標の JSON は読める`() {
+        val prefix = "{\"brier\":0.2,\"pad\":\""
+        val atLimit = prefix + "x".repeat(MlModelApi.MAX_METRICS_CHARS - prefix.length - 2) + "\"}"
+        assertEquals(MlModelApi.MAX_METRICS_CHARS, atLimit.length)
+        val dto = MlModelApi.dto(entry("m4", metrics = atLimit))
+        assertTrue(dto.metricsReadable)
+        assertEquals(mapOf("brier" to 0.2), dto.metrics)
+    }
+
+    @Test
     fun `想定外の値（ハッシュの形式・種別・状態）の行でも一覧に出す`() {
         val odd = entry("weird", status = "ARCHIVED").copy(kind = "unknown", featureSchemaHash = "md5:x")
         val dto = MlModelApi.dto(odd)
@@ -88,7 +98,8 @@ class MlModelApiTest {
 
     @Test
     fun `壊れた・大きすぎる指標の JSON でも一覧の行は出し 指標は空で読めないと示す`() {
-        val huge = "{\"a\":" + "1".repeat(MlModelApi.MAX_METRICS_CHARS) + "}"
+        // 形式は正しいが大きすぎる（上限の効果だけを見る。上限未満の同じ形は読める: 下の試験）
+        val huge = "{\"brier\":0.2,\"pad\":\"" + "x".repeat(MlModelApi.MAX_METRICS_CHARS) + "\"}"
         for (bad in listOf("{", "[1,2]", "\"x\"", "", huge)) {
             val dto = MlModelApi.dto(entry("m3", metrics = bad))
             assertFalse(dto.metricsReadable, bad.take(20))

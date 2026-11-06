@@ -191,8 +191,8 @@ class ReadAdminApiMySqlIntegrationTest {
             )
         }
         assertEquals(403, http.get("/api/v1/admin/ml-models", viewer).status, "閲覧者は ML モデルの一覧を見られない（ADMIN だけ）")
-        val otherTenant = http.get("/api/v1/admin/ml-models", other)
-        assertTrue(otherTenant.status == 403 || otherTenant.body.trim() == "[]", "他テナントのモデルは見えない: ${otherTenant.status}")
+        // テナント 2 の利用者は閲覧者（ADMIN ではない）なので 403。テナントの分離そのものは persistence の試験（MlModelRegistryIntegrationTest）と、主体から決まるテナントで担保する
+        assertEquals(403, http.get("/api/v1/admin/ml-models", other).status, "テナント 2 の閲覧者も 403")
         val cases =
             linkedMapOf(
                 "status.json" to "/api/v1/status",
