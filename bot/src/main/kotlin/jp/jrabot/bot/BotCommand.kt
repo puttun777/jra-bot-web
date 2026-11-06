@@ -118,7 +118,7 @@ sealed interface ParsedArgs {
  * | `bot-run` | `--date=YYYY-MM-DD`、`--trigger=SCHEDULER\|MANUAL\|RECONCILE\|BACKFILL`（JobLauncher が渡す上書き） |
  * | `calendar-check` / `reconcile` | `--date=YYYY-MM-DD` |
  * | `retention` | `--dry-run`（削除せず対象だけを数える。D-043） |
- * | `backtest` | **必須**: `--from=YYYY-MM-DD`、`--to=YYYY-MM-DD`（レース日、両端を含む。最大 366 日）。任意: `--minutes-before-post=30,5`（発走の何分前に判定するか。0 < x <= 1440、最大 12 個）、`--max-odds-age-seconds=N`（1〜86400。既定は `BOT_RUN_MAX_ODDS_AGE_SECONDS`） |
+ * | `backtest` | **必須**: `--from=YYYY-MM-DD`、`--to=YYYY-MM-DD`（レース日、両端を含む。最大 366 日）。任意: `--minutes-before-post=30,5`（発走の何分前に判定するか。1 <= x <= 1440、最大 12 個。1 分未満は発走時刻と同じ秒に丸まり得る）、`--max-odds-age-seconds=N`（1〜86400。既定は `BOT_RUN_MAX_ODDS_AGE_SECONDS`） |
  * | `export-dataset` | **必須**: `--dataset-id=ID`（`[A-Za-z0-9_-]{1,64}`。データセットは不変なので内容ごとに別の ID）、`--from=YYYY-MM-DD`、`--to=YYYY-MM-DD`（レース日、両端を含む。最大 800 日）、`--feature-schema=calibration\|alpha`。任意: `--valid-fraction=0.2`（0 < x < 1）、`--as-of-lead-minutes=10`（1〜1440） |
  *
  * この表は T2.8 時点の暫定の契約（D-081）に、Stage 3-F2（T3.6-B）で `export-dataset` の引数を追加した（CONTRACTS 0.4.10）。
@@ -263,8 +263,8 @@ object BotArgsParser {
         val minutes =
             values["minutes-before-post"]?.let { raw ->
                 val parts = raw.split(',')
-                val parsed = parts.map { p -> p.toDoubleOrNull()?.takeIf { it > 0.0 && it <= 1440.0 && it.isFinite() } }
-                if (parsed.any { it == null } || parsed.isEmpty()) return bad("--minutes-before-post は 0 より大きく 1440 以下の数をカンマ区切りで指定します")
+                val parsed = parts.map { p -> p.toDoubleOrNull()?.takeIf { it >= 1.0 && it <= 1440.0 && it.isFinite() } }
+                if (parsed.any { it == null } || parsed.isEmpty()) return bad("--minutes-before-post は 1 以上 1440 以下の数をカンマ区切りで指定します")
                 val distinct = parsed.filterNotNull().distinct()
                 if (distinct.size != parsed.size) return bad("--minutes-before-post に重複があります")
                 if (distinct.size > BacktestArgs.MAX_POINTS) return bad("--minutes-before-post は ${BacktestArgs.MAX_POINTS} 個までです")

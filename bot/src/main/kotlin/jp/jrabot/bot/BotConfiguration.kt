@@ -189,17 +189,26 @@ class BotConfiguration {
                 val settings = checkNotNull(runtime.settings.botRun) { "backtest の設定が無い（BotSettings が検証しているはず）" }
                 BacktestTaskHandler(
                     runner = { req ->
-                        // bot-run と同じ判定（RaceEvaluator・同じ設定・同じ ML のモデル）。読取りだけで、書込み・通知の部品は渡さない
+                        // bot-run と同じ判定（RaceEvaluator・同じ設定・同じ ML のモデル）。渡すのは読取りの口だけ（予定・オッズ・特徴量は Reader の型、
+                        // 結果・払戻は書込みを例外にする ReadOnlyResults）。評価・Signal・通知・タイミングの書込みの部品は渡さない
                         val ml = BotRunWiring.startMl(settings, req.tenantId, registry, clock)
-                        jp.jrabot.domain.backtest
-                            .BacktestRunner(
-                                schedules,
-                                odds,
-                                resultStore,
-                                payoutStore,
-                                jp.jrabot.domain.botrun
-                                    .RaceEvaluator(settings.run, odds, combos, features, ml),
-                            ).run(req)
+                        val type = ml.modelType?.name?.lowercase()
+                        if (type != null && ml.pinnedModelId == null) {
+                            BacktestRun.MlUnavailable(type)
+                        } else {
+                            val readOnly = ReadOnlyResults(resultStore, payoutStore)
+                            val report =
+                                jp.jrabot.domain.backtest
+                                    .BacktestRunner(
+                                        schedules,
+                                        odds,
+                                        readOnly,
+                                        readOnly,
+                                        jp.jrabot.domain.botrun
+                                            .RaceEvaluator(settings.run, odds, combos, features, ml),
+                                    ).run(req)
+                            BacktestRun.Done(report, type, ml.pinnedModelId)
+                        }
                     },
                     defaultMaxOddsAge = settings.run.maxOddsAge,
                 )

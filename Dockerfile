@@ -88,13 +88,13 @@ LABEL org.opencontainers.image.title="jra-bot ingest" \
 ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75.0", "-XX:+ExitOnOutOfMemoryError", "-jar", "/app/app.jar"]
 
 # ---------------------------------------------------------------- bot
-# 1 イメージで `--task=bot-run|calendar-check|reconcile|retention|export-dataset` を切り替える（CONTRACTS §1）。
-# Cloud Run Jobs の args に `--task=… --tenant-id=…` を渡す（ENTRYPOINT は変えない）。実装済み: bot-run（T3.8）・calendar-check（T3.3）・export-dataset。reconcile・retention は未実装のスタブで、本番(APP_ENV=prod)では成功にならず終了コード 1（TASK_NOT_IMPLEMENTED）。
+# 1 イメージで `--task=bot-run|calendar-check|reconcile|retention|export-dataset|backtest` を切り替える（CONTRACTS §1）。
+# Cloud Run Jobs の args に `--task=… --tenant-id=…` を渡す（ENTRYPOINT は変えない）。すべてのタスクが実装済み（backtest は D-265）。
 FROM runtime-base AS bot
 COPY --from=build --chmod=0444 /src/bot/build/libs/bot.jar /app/app.jar
 ARG GIT_SHA=unknown
 LABEL org.opencontainers.image.title="jra-bot bot" \
-      org.opencontainers.image.description="JRA Bot Job (Spring Boot). Switch with --task. Implemented: bot-run, calendar-check, export-dataset. reconcile and retention are stubs (exit 1 in prod)" \
+      org.opencontainers.image.description="JRA Bot Job (Spring Boot). Switch with --task. Tasks: bot-run, calendar-check, reconcile, retention, export-dataset, backtest" \
       org.opencontainers.image.source="https://github.com/puttun777/jra-bot-web" \
       org.opencontainers.image.revision="${GIT_SHA}" \
       org.opencontainers.image.version="${GIT_SHA}"

@@ -134,6 +134,7 @@ class BotArgsParserTest {
                 "--from=2026-13-01",
                 "--to=2025-12-31",
                 "--minutes-before-post=0",
+                "--minutes-before-post=0.5",
                 "--minutes-before-post=-5",
                 "--minutes-before-post=1441",
                 "--minutes-before-post=NaN",
