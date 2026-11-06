@@ -143,7 +143,7 @@ class BotConfiguration {
     ): ErrorReporter = ErrorReporter(notifier, clock)
 
     /**
-     * タスクごとの実装。**calendar-check（T3.3）・export-dataset（T3.6-B）・bot-run（T3.8）・reconcile・retention（T3.9）が実装済み**。
+     * タスクごとの実装。**calendar-check（T3.3）・export-dataset（T3.6-B）・bot-run（T3.8）・reconcile・retention（T3.9）・backtest（R16。D-265）が実装済み**。
      * [StubTaskHandler] は `when` の網羅用に残るだけ（全タスクが実装済み）。
      */
     @Bean
@@ -183,6 +183,26 @@ class BotConfiguration {
             BotTask.EXPORT_DATASET -> {
                 val uri = checkNotNull(runtime.settings.modelStoreUri) { "export-dataset の保管先が無い（BotSettings が検証しているはず）" }
                 ExportDatasetTaskHandler(features, datasets, DatasetStoreFactory.create(uri), clock)
+            }
+
+            BotTask.BACKTEST -> {
+                val settings = checkNotNull(runtime.settings.botRun) { "backtest の設定が無い（BotSettings が検証しているはず）" }
+                BacktestTaskHandler(
+                    runner = { req ->
+                        // bot-run と同じ判定（RaceEvaluator・同じ設定・同じ ML のモデル）。読取りだけで、書込み・通知の部品は渡さない
+                        val ml = BotRunWiring.startMl(settings, req.tenantId, registry, clock)
+                        jp.jrabot.domain.backtest
+                            .BacktestRunner(
+                                schedules,
+                                odds,
+                                resultStore,
+                                payoutStore,
+                                jp.jrabot.domain.botrun
+                                    .RaceEvaluator(settings.run, odds, combos, features, ml),
+                            ).run(req)
+                    },
+                    defaultMaxOddsAge = settings.run.maxOddsAge,
+                )
             }
 
             BotTask.BOT_RUN -> {

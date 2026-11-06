@@ -86,6 +86,7 @@ class BotSpringWiringTest {
         start(runtime("reconcile")).use { ctx -> assertIs<ReconcileTaskHandler>(ctx.getBean(BotTaskHandler::class.java)) }
         start(runtime("bot-run")).use { ctx -> assertIs<BotRunTaskHandler>(ctx.getBean(BotTaskHandler::class.java)) }
         start(runtime("export-dataset")).use { ctx -> assertIs<ExportDatasetTaskHandler>(ctx.getBean(BotTaskHandler::class.java)) }
+        start(runtime("backtest")).use { ctx -> assertIs<BacktestTaskHandler>(ctx.getBean(BotTaskHandler::class.java)) }
     }
 
     @Test

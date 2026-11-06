@@ -110,7 +110,7 @@ internal object BotRunWiring {
         )
     }
 
-    private fun startMl(
+    internal fun startMl(
         settings: BotRunSettings,
         tenantId: TenantId,
         registry: ModelRegistryReader,

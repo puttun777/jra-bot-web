@@ -22,7 +22,7 @@ class BotSettings(
     val modelStoreUri: String? = null,
     /** `bot-run` だけが使う Discord の設定（`DISCORD_WEBHOOK_URL` ほか。いずれも任意）。他のタスクでは null。 */
     val discord: DiscordSettings? = null,
-    /** `bot-run` だけが必要とする設定（業務ループ・ML・監視ウィンドウ）。他のタスクでは null。環境変数は [BotRunSettingsParser]。 */
+    /** `bot-run` と `backtest` が必要とする設定（業務ループ・ML・監視ウィンドウ）。他のタスクでは null。環境変数は [BotRunSettingsParser]。 */
     val botRun: BotRunSettings? = null,
     /** `retention` のときだけ非 null（すべて任意。既定はドライラン）。 */
     val retention: RetentionSettings? = null,
@@ -54,7 +54,8 @@ class BotSettings(
                     null
                 }
             val discord = if (task == BotTask.BOT_RUN) DiscordSettings.fromEnv(env) else null
-            val botRun = if (task == BotTask.BOT_RUN) BotRunSettingsParser.fromEnv(env, appEnv) else null
+            // backtest は bot-run と同じ判定の設定（BOT_RUN_*・ML）を使う（同じ判定を過去の時点で再計算するため。D-265）
+            val botRun = if (task == BotTask.BOT_RUN || task == BotTask.BACKTEST) BotRunSettingsParser.fromEnv(env, appEnv) else null
             val retention = if (task == BotTask.RETENTION) RetentionSettings.fromEnv(env) else null
             val runJobs = if (task == BotTask.CALENDAR_CHECK) RunJobsSettings.fromEnv(env, appEnv) else null
             return BotSettings(appEnv, db, opsEnv, env["RELEASE_ID"], calendar, storeUri, discord, botRun, retention, runJobs)

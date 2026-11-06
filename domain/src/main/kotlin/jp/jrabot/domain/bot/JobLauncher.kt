@@ -11,6 +11,9 @@ enum class LaunchableJob(
     RECONCILE("reconcile"),
     RETENTION("retention"),
     EXPORT_DATASET("export-dataset"),
+
+    /** バックテスト（R16。D-265）。本人が手動で実行する（calendar-check は起動しない）。 */
+    BACKTEST("backtest"),
     ML_TRAIN("ml-train"),
 }
 

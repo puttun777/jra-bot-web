@@ -19,7 +19,7 @@ class BotArgsParserTest {
             assertEquals(t, c.task)
             assertEquals(7L, c.tenantId.value)
         }
-        assertEquals(listOf("bot-run", "calendar-check", "reconcile", "retention", "export-dataset"), BotTask.entries.map { it.cliName })
+        assertEquals(listOf("bot-run", "calendar-check", "reconcile", "retention", "export-dataset", "backtest"), BotTask.entries.map { it.cliName })
     }
 
     @Test
@@ -98,6 +98,58 @@ class BotArgsParserTest {
         // 全体の最大 24 接続（dashboard 6 + ingest 6 + bot-run 4 + 定期 Job 3 + export 2 + db-migration 2 + ml-train 1）
         val total = 3 * 2 + 3 * 2 + 4 + 1 * 3 + 2 + 2 + 1
         assertEquals(24, total)
+    }
+
+    private val backtestBase = arrayOf("--task=backtest", "--tenant-id=1", "--from=2026-01-01", "--to=2026-03-31")
+
+    @Test
+    fun `backtest の引数 — 必須と任意、既定値（評価の時点は降順・重複なし）`() {
+        val b = valid(*backtestBase).backtest!!
+        assertEquals(LocalDate.of(2026, 1, 1), b.from)
+        assertEquals(LocalDate.of(2026, 3, 31), b.to)
+        assertEquals(listOf(30.0, 5.0), b.minutesBeforePost)
+        assertEquals(null, b.maxOddsAge, "既定は BOT_RUN_MAX_ODDS_AGE_SECONDS")
+        val full = valid(*backtestBase, "--minutes-before-post=5,60,2.5", "--max-odds-age-seconds=120").backtest!!
+        assertEquals(listOf(60.0, 5.0, 2.5), full.minutesBeforePost)
+        assertEquals(120L, full.maxOddsAge!!.seconds)
+        assertEquals(
+            366L,
+            java.time.temporal.ChronoUnit.DAYS.between(
+                LocalDate.of(2025, 1, 1),
+                valid("--task=backtest", "--tenant-id=1", "--from=2025-01-01", "--to=2026-01-02").backtest!!.to,
+            ),
+        )
+        assertEquals(null, valid("--task=reconcile", "--tenant-id=1").backtest)
+        assertEquals(1, BotTask.BACKTEST.defaultPoolMax)
+    }
+
+    @Test
+    fun `backtest の不正な引数は拒否し、メッセージに値を含めない`() {
+        for (missing in listOf("--from", "--to")) invalid(*backtestBase.filterNot { it.startsWith(missing + "=") }.toTypedArray())
+        invalid("--task=backtest", "--tenant-id=1", "--from=2025-01-01", "--to=2026-01-03") // 367 日
+        invalid(*backtestBase, "--date=2026-01-01") // backtest の引数ではない
+        invalid(*backtestBase, "--dry-run")
+        val bads =
+            listOf(
+                "--from=2026-13-01",
+                "--to=2025-12-31",
+                "--minutes-before-post=0",
+                "--minutes-before-post=-5",
+                "--minutes-before-post=1441",
+                "--minutes-before-post=NaN",
+                "--minutes-before-post=Infinity",
+                "--minutes-before-post=30,",
+                "--minutes-before-post=30,30",
+                "--minutes-before-post=" + (1..13).joinToString(","),
+                "--max-odds-age-seconds=0",
+                "--max-odds-age-seconds=86401",
+                "--max-odds-age-seconds=1.5",
+            )
+        for (bad in bads) {
+            val name = bad.substringBefore('=')
+            val m = invalid(*backtestBase.filterNot { it.startsWith(name + "=") }.toTypedArray(), bad)
+            assertFalse(m.contains(bad.substringAfter('=')) && bad.substringAfter('=').length > 3, "$bad: $m")
+        }
     }
 
     private val exportBase =

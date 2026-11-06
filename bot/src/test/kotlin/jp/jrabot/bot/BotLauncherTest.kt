@@ -191,7 +191,7 @@ class BotLauncherTest {
 
     @Test
     fun `プール上限は task の既定値で、DB_POOL_MAX で上書きできる`() {
-        val cases = mapOf("bot-run" to 4, "calendar-check" to 1, "reconcile" to 1, "retention" to 1, "export-dataset" to 2)
+        val cases = mapOf("bot-run" to 4, "calendar-check" to 1, "reconcile" to 1, "retention" to 1, "export-dataset" to 2, "backtest" to 1)
         for ((task, expected) in cases) {
             val h = Harness()
             h.launcher.run(args(task), env)
