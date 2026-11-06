@@ -16,8 +16,9 @@
 ## 2026-11-06 L8 ④: R24 旧 SQLite の移行ツール（preflight。ブランチ claude/l8-legacy-import。D-271）
 **マージ済み（この日）**: web PR #48（R20 = 51b3a9c。初回の CI の build が SqlTemplateTenantGuardTest の DAO 一覧の漏れで失敗 → 追加して全ジョブ成功を確認）。教訓: 永続化の変更は push 前に `./gradlew build`（全モジュール）を実行する。
 **内容**: 新しいモジュール `:legacy-import`（Kotlin の CLI。sqlite-jdbc 3.53.4.0）。`preflight` だけ（読取り専用・件数だけのレポート・OK/WARN/NG）。期待するスキーマは参照元 f7dbf69 の DDL を写したリソース。DATA_MIGRATION_DESIGN の D-038（Python 案）を置換。
-**検証（ローカル。D-264）**: `./gradlew build -x integrationTest`（全モジュール）・build-logic の試験・legacy-import の単体 7（合成 SQLite）、tools 166。
-**次**: 独立レビュー → PR → CI → マージ。続いて移行ツールの extract 以降、R30、L9。
+**検証（ローカル。D-264）**: `./gradlew build -x integrationTest`（全モジュール）・build-logic の試験・legacy-import の単体 13（合成 SQLite）、tools 166。
+**独立レビュー（Sonnet・High・読取り専用）**: 高 1（WAL）・中 6・低 5 → 修正（D-272）。
+**次**: 修正後の再レビュー → PR → CI → マージ。続いて移行ツールの extract 以降、R30、L9。
 
 ## 2026-11-06 L8 ③: R20 エージェントの一覧と失効（ブランチ claude/l8-agent-revoke。D-270）
 **マージ済み（この日）**: web PR #47（R22 = c0a3a62。最新コミットで実行された全ジョブの成功を個別に確認）。

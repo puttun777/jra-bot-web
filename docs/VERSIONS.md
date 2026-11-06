@@ -258,4 +258,4 @@ GitHub Actions（`db-integration` 8.4 / 9.7、ubuntu-24.04、Temurin 25、PR #8�
 ## 20. 旧 SQLite の移行ツール（2026-11-06。D-271）
 | 項目 | 採用 | 根拠 |
 |---|---|---|
-| sqlite-jdbc（`org.xerial:sqlite-jdbc`） | **3.53.4.0**（2026-08-26 公開。repo1.maven.org の公開日で確認） | 3.54.1.0 は 2026-10-29 公開で 2 週間未満。Apache-2.0。`:legacy-import` だけが使う（イメージに入らない）。SQLite 本体の JSON1（`json_valid`）・`ALTER TABLE DROP COLUMN` を使う |
+| sqlite-jdbc（`org.xerial:sqlite-jdbc`） | **3.53.4.0**（2026-08-26 公開。repo1.maven.org の公開日で確認） | 3.54.1.0 は 2026-10-29 公開で 2 週間未満。Apache-2.0。`:legacy-import` だけが使う（イメージに入らない）。ツールは SQLite 本体の JSON1（`json_valid`）・URI のファイル名（`mode=ro&immutable=1`）を使う。試験は `ALTER TABLE DROP COLUMN`・WAL も使う |

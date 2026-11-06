@@ -3,17 +3,43 @@ package jp.jrabot.legacyimport
 import java.sql.Connection
 import java.sql.DriverManager
 
+/** 外部キー（子の表・列 → 親の表・列）。期待するスキーマの FOREIGN KEY 句から得る。 */
+data class ForeignKey(
+    val table: String,
+    val column: String,
+    val parent: String,
+    val parentColumn: String,
+)
+
 /**
  * 旧 SQLite の期待するスキーマ（D-271）。参照元 f7dbf69 の `schema.sql`・`migration_add_bets.sql` と、起動時に追加される列（`dynamic-columns.tsv`）を
  * メモリ上の SQLite に適用し、`PRAGMA table_info` で表と列を得る（列の一覧を手で写さない）。
  */
 object LegacySchema {
     /** 表名 → 列名（定義順）。 */
-    val expected: Map<String, List<String>> by lazy { load() }
+    val expected: Map<String, List<String>> get() = model.first
+
+    /**
+     * 期待するスキーマの外部キー（`PRAGMA foreign_key_list`）。孤立の検査はここに宣言された関係だけを見る
+     * （手で規則を書かない。例えば horse_past_runs.race_id は races への外部キーではない: レビュー 中）。
+     */
+    val foreignKeys: List<ForeignKey> get() = model.second
+
+    /** 起動時に足される列（表 → 列）。これが無いだけの古い DB は WARN、それ以外の列が無ければ NG。 */
+    val dynamicColumns: Map<String, Set<String>> by lazy {
+        resource("dynamic-columns.tsv")
+            .lines()
+            .filter { it.isNotBlank() && !it.startsWith("#") }
+            .map { it.split('\t') }
+            .groupBy({ it[0] }, { it[1] })
+            .mapValues { it.value.toSet() }
+    }
+
+    private val model: Pair<Map<String, List<String>>, List<ForeignKey>> by lazy { load() }
 
     private fun resource(name: String): String = checkNotNull(LegacySchema::class.java.getResource("/legacy-schema/$name")) { "リソース $name が無い" }.readText()
 
-    private fun load(): Map<String, List<String>> =
+    private fun load(): Pair<Map<String, List<String>>, List<ForeignKey>> =
         DriverManager.getConnection("jdbc:sqlite::memory:").use { c ->
             for (file in listOf("schema.sql", "migration_add_bets.sql")) {
                 for (stmt in statements(resource(file))) c.createStatement().use { it.executeUpdate(stmt) }
@@ -23,7 +49,18 @@ object LegacySchema {
                 val (table, column, type) = line.split('\t')
                 if (column !in columns(c, table)) c.createStatement().use { it.executeUpdate("ALTER TABLE $table ADD COLUMN $column $type") }
             }
-            tables(c).associateWith { columns(c, it) }
+            val ts = tables(c)
+            ts.associateWith { columns(c, it) } to ts.flatMap { foreignKeys(c, it) }
+        }
+
+    private fun foreignKeys(
+        c: Connection,
+        table: String,
+    ): List<ForeignKey> =
+        c.createStatement().use { s ->
+            s.executeQuery("PRAGMA foreign_key_list(\"$table\")").use { rs ->
+                buildList { while (rs.next()) add(ForeignKey(table, rs.getString("from"), rs.getString("table"), rs.getString("to") ?: "rowid")) }
+            }
         }
 
     /** `;` で区切った文（行コメント `--` を除く）。旧スキーマの DDL には文字列中の `;` が無い。 */

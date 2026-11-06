@@ -13,7 +13,7 @@ data class FormatCounts(
     val counts: Map<String, Long>,
 )
 
-/** 子の行の親が無い件数（外部キーの孤立）。 */
+/** 子の行の親が無い件数（期待するスキーマの外部キーごと）。 */
 data class OrphanCount(
     val table: String,
     val column: String,
@@ -21,13 +21,20 @@ data class OrphanCount(
     val count: Long,
 )
 
+/** 入力を受け付けない（終了コード 2）。理由だけで、パスや中身は含めない。 */
+class InputRejected(
+    message: String,
+) : RuntimeException(message)
+
 data class PreflightReport(
     val sha256: String,
     val sizeBytes: Long,
+    /** ファイルの見出し（バイト 18・19）が WAL のモード。 */
+    val walMode: Boolean,
     val integrity: String,
     val missingTables: List<String>,
     val extraTables: List<String>,
-    /** 表 → 期待にあって実ファイルに無い列。 */
+    /** 表 → 期待にあって実ファイルに無い列（起動時に足される列だけなら WARN、それ以外は NG）。 */
     val missingColumns: Map<String, List<String>>,
     /** 表 → 実ファイルにあって期待に無い列。 */
     val extraColumns: Map<String, List<String>>,
@@ -38,54 +45,107 @@ data class PreflightReport(
     val json: List<FormatCounts>,
     val orphans: List<OrphanCount>,
 ) {
-    /** NG: 開けたが整合性の検査に失敗、または期待する表が無い。WARN: 列の差・孤立・形式の不正がある。OK: それ以外。 */
+    /** 期待する列のうち、起動時に足される列以外が無い（抽出できない）。 */
+    val missingRequiredColumns: Map<String, List<String>>
+        get() =
+            missingColumns
+                .mapValues { (t, cols) -> cols - LegacySchema.dynamicColumns[t].orEmpty() }
+                .filterValues { it.isNotEmpty() }
+
+    /** 判定の理由（人が読む。件数と表・列の名前だけ）。 */
+    val warnings: List<String>
+        get() =
+            buildList {
+                if (walMode) add("WAL のモードのファイル（旧アプリを止めてから、または sqlite3 の .backup で作ったコピーでなければ、未反映の変更が欠ける）")
+                for ((t, cols) in missingColumns - missingRequiredColumns.keys) add("$t に起動時に足される列が無い: ${cols.joinToString()}")
+                for (t in extraTables) if ((rowCounts[t] ?: 0) > 0) add("期待に無い表に行がある（移行の対象外）: $t")
+                for ((t, cols) in extraColumns) if ((rowCounts[t] ?: 0) > 0) add("期待に無い列（移行の対象外）: $t.${cols.joinToString()}")
+                for (o in orphans) if (o.count > 0) add("孤立: ${o.table}.${o.column} → ${o.parent} が無い ${o.count} 行")
+                for (f in times) for (k in listOf("other", "with_offset")) if ((f.counts[k] ?: 0) > 0) add("時刻の形式（$k）: ${f.table}.${f.column} ${f.counts[k]} 行")
+                for (f in dates + raceIds + json) if ((f.counts["invalid"] ?: 0) > 0) add("不正な値: ${f.table}.${f.column} ${f.counts["invalid"]} 行")
+            }
+
+    /** NG: 整合性の失敗・期待する表が無い・抽出に要る列が無い。WARN: [warnings] がある。OK: それ以外。 */
     val verdict: String
         get() =
             when {
-                integrity != "ok" || missingTables.isNotEmpty() -> "NG"
-                missingColumns.isNotEmpty() || orphans.any { it.count > 0 } || problems() > 0 -> "WARN"
+                integrity != "ok" || missingTables.isNotEmpty() || missingRequiredColumns.isNotEmpty() -> "NG"
+                warnings.isNotEmpty() -> "WARN"
                 else -> "OK"
             }
-
-    private fun problems(): Long =
-        times.sumOf { it.counts["other"] ?: 0 } +
-            dates.sumOf { it.counts["invalid"] ?: 0 } +
-            raceIds.sumOf { it.counts["invalid"] ?: 0 } +
-            json.sumOf { it.counts["invalid"] ?: 0 }
 }
 
 /**
  * 移行の事前検査（DATA_MIGRATION_DESIGN §5.2 P0。D-271）: 旧 SQLite の**コピー**を読取り専用で開き、書き換えずに次を数える。
  * 値そのもの（レース ID・馬名・JSON の中身など）はレポートに出さず、件数だけを出す（実データの断片を残さない）。
- * - ファイルの sha256・大きさ、`PRAGMA integrity_check`
- * - 期待するスキーマ（[LegacySchema]）との表・列の差、表ごとの行数
- * - 時刻の列（`ts`・`*_at`）の形式: `T` 区切り（アプリの naive なローカル時刻 = 通常 JST）・空白区切り（`CURRENT_TIMESTAMP` = UTC）・それ以外・NULL
- * - 日付の列（`date`・`birth_date`・`date_from`・`date_to`）: YYYYMMDD・YYYY-MM-DD・それ以外・NULL
- * - `race_id` の形式（12 桁）と、`races` に親の無い子の行（孤立）。`ticket_evaluations.race_evaluation_id`・`bet_legs.bet_id` の孤立
- * - JSON の列（`*_json`）: `json_valid` で読めない件数
+ *
+ * **WAL**: 旧アプリは WAL のモードで書く。`-wal` に未反映の変更が残ったままのコピーは受け付けない（sha256 が検査した内容を表さず、読取り専用では
+ * 取り込めないため）。旧アプリを止めてから、または `sqlite3 <db> ".backup <copy>"` で作った 1 ファイルのコピーを渡す。`-wal`・`-shm` が無いときは
+ * `immutable=1` で開き、横に何も作らない（D-271 のレビュー 高）。
  */
 object Preflight {
     fun run(sqlite: Path): PreflightReport {
-        require(Files.isRegularFile(sqlite)) { "SQLite のファイルが無い" }
+        if (!Files.isRegularFile(sqlite)) throw InputRejected("SQLite のファイルが無い")
+        for (suffix in listOf("-wal", "-shm", "-journal")) {
+            val side = sqlite.resolveSibling(sqlite.fileName.toString() + suffix)
+            if (Files.exists(side) && Files.size(side) > 0) {
+                throw InputRejected(
+                    "横に $suffix がある（未反映の変更が残っている）。旧アプリを止めてから、または sqlite3 の .backup で 1 ファイルのコピーを作って渡す",
+                )
+            }
+        }
         val sha = sha256(sqlite)
         val size = Files.size(sqlite)
-        val cfg = SQLiteConfig().apply { setReadOnly(true) }
-        // 読取り専用（mode=ro）で開く。元のファイルを書き換えない（WAL の取り込みもしない: 利用者はコピーを渡す）
-        return cfg.createConnection("jdbc:sqlite:file:${sqlite.toAbsolutePath()}?mode=ro").use { c -> inspect(c, sha, size) }
+        val wal = isWalMode(sqlite)
+        return open(sqlite).use { c -> inspect(c, sha, size, wal) }
     }
+
+    /**
+     * 読取り専用・不変（`immutable=1`: ロックも `-shm` も使わない）で開く。パスは URI として正しくエンコードする
+     * （`%`・`#`・空白を含むパスで別のファイルを開かない。Windows のパスも `toUri` が file:/// にする）。
+     */
+    internal fun open(sqlite: Path): Connection {
+        val cfg = SQLiteConfig().apply { setReadOnly(true) }
+        val uri = sqlite.toAbsolutePath().toUri().toASCIIString() + "?mode=ro&immutable=1"
+        return cfg.createConnection("jdbc:sqlite:$uri")
+    }
+
+    /** SQLite の見出しのバイト 18（書込みの版）・19（読込みの版）が 2 なら WAL。 */
+    private fun isWalMode(p: Path): Boolean =
+        Files.newInputStream(p).use { input ->
+            val head = input.readNBytes(20)
+            head.size == 20 && (head[18].toInt() == 2 || head[19].toInt() == 2)
+        }
 
     private fun inspect(
         c: Connection,
         sha: String,
         size: Long,
+        wal: Boolean,
     ): PreflightReport {
         val integrity = scalarString(c, "PRAGMA integrity_check") ?: "unknown"
         val expected = LegacySchema.expected
-        val actualTables = LegacySchema.tables(c).filter { LegacySchema.IDENT.matches(it) }
+        val allTables = LegacySchema.tables(c)
+        // 識別子として扱えない名前の表は、列を読まずに余分な表として報告する（黙って落とさない）
+        val actualTables = allTables.filter { LegacySchema.IDENT.matches(it) }
         val actual = actualTables.associateWith { LegacySchema.columns(c, it) }
-        val common = expected.keys.intersect(actual.keys).sorted()
-        val missingColumns = common.associateWith { t -> expected.getValue(t) - actual.getValue(t).toSet() }.filterValues { it.isNotEmpty() }
-        val extraColumns = common.associateWith { t -> actual.getValue(t) - expected.getValue(t).toSet() }.filterValues { it.isNotEmpty() }
+        // SQLite の名前は大文字小文字を区別しないので、比較は小文字で
+        val byLower = actual.keys.associateBy { it.lowercase() }
+        val common = expected.keys.filter { it.lowercase() in byLower }.sorted()
+
+        fun actualCols(t: String) = actual.getValue(byLower.getValue(t.lowercase()))
+        val missingColumns =
+            common
+                .associateWith { t ->
+                    val have = actualCols(t).map { it.lowercase() }.toSet()
+                    expected.getValue(t).filter { it.lowercase() !in have }
+                }.filterValues { it.isNotEmpty() }
+        val extraColumns =
+            common
+                .associateWith { t ->
+                    val want = expected.getValue(t).map { it.lowercase() }.toSet()
+                    actualCols(t).filter { it.lowercase() !in want }
+                }.filterValues { it.isNotEmpty() }
         val rowCounts = actualTables.sorted().associateWith { t -> scalarLong(c, "SELECT COUNT(*) FROM \"$t\"") }
 
         val times = mutableListOf<FormatCounts>()
@@ -93,32 +153,38 @@ object Preflight {
         val raceIds = mutableListOf<FormatCounts>()
         val json = mutableListOf<FormatCounts>()
         for (t in common) {
-            for (col in actual.getValue(t).filter { LegacySchema.IDENT.matches(it) }) {
+            val tableName = byLower.getValue(t.lowercase())
+            for (col in actualCols(t).filter { LegacySchema.IDENT.matches(it) }) {
+                val lc = col.lowercase()
                 when {
-                    col == "ts" || col.endsWith("_at") -> times += counts(c, t, col, TIME_CASES)
-                    col == "date" || col == "birth_date" || col == "date_from" || col == "date_to" -> dates += counts(c, t, col, DATE_CASES)
-                    col == "race_id" -> raceIds += counts(c, t, col, RACE_ID_CASES)
-                    col.endsWith("_json") -> json += counts(c, t, col, JSON_CASES)
+                    lc == "ts" || lc.endsWith("_at") -> times += counts(c, tableName, col, TIME_CASES)
+                    lc == "date" || lc == "birth_date" || lc == "date_from" || lc == "date_to" -> dates += counts(c, tableName, col, DATE_CASES)
+                    lc == "race_id" -> raceIds += counts(c, tableName, col, RACE_ID_CASES)
+                    lc.endsWith("_json") || (t == "race_evaluations" && lc == "bet_types") -> json += counts(c, tableName, col, JSON_CASES)
                 }
             }
         }
-        val orphans = mutableListOf<OrphanCount>()
-        if ("races" in actual && "race_id" in actual.getValue("races")) {
-            for (t in common.filter { it != "races" && "race_id" in actual.getValue(it) }) {
-                orphans += OrphanCount(t, "race_id", "races", orphanCount(c, t, "race_id", "races", "race_id"))
-            }
-        }
-        for ((child, col, parent) in listOf(Triple("ticket_evaluations", "race_evaluation_id", "race_evaluations"), Triple("bet_legs", "bet_id", "bets"))) {
-            if (child in actual && parent in actual && col in actual.getValue(child) && "id" in actual.getValue(parent)) {
-                orphans += OrphanCount(child, col, parent, orphanCount(c, child, col, parent, "id"))
-            }
-        }
+        val orphans =
+            LegacySchema.foreignKeys
+                .filter { fk ->
+                    fk.table.lowercase() in byLower && fk.parent.lowercase() in byLower &&
+                        actualCols(fk.table).any { it.equals(fk.column, true) } && actualCols(fk.parent).any { it.equals(fk.parentColumn, true) }
+                }.map { fk ->
+                    OrphanCount(
+                        fk.table,
+                        fk.column,
+                        fk.parent,
+                        orphanCount(c, byLower.getValue(fk.table.lowercase()), fk.column, byLower.getValue(fk.parent.lowercase()), fk.parentColumn),
+                    )
+                }
+        val expectedLower = expected.keys.map { it.lowercase() }.toSet()
         return PreflightReport(
             sha256 = sha,
             sizeBytes = size,
+            walMode = wal,
             integrity = integrity,
-            missingTables = (expected.keys - actual.keys).sorted(),
-            extraTables = (actual.keys - expected.keys).sorted(),
+            missingTables = expected.keys.filter { it.lowercase() !in byLower }.sorted(),
+            extraTables = allTables.filter { it.lowercase() !in expectedLower }.sorted(),
             missingColumns = missingColumns,
             extraColumns = extraColumns,
             rowCounts = rowCounts,
@@ -130,24 +196,37 @@ object Preflight {
         )
     }
 
+    private const val DATE_TIME = "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]"
+
+    /** `%c` の 20 文字目以降が「.数字 1 個以上」で終わる（`n` 文字の接尾辞の前まで）。 */
+    private fun fraction(suffixLen: Int): String =
+        "(substr(%c, 20, 1) = '.' AND length(%c) > ${20 + suffixLen} AND substr(%c, 21, length(%c) - ${20 + suffixLen}) NOT GLOB '*[^0-9]*')"
+
     /** 分類名 → SQL の条件（`%c` を列に置き換える）。上から順に最初に当たった分類に数える。 */
     private val TIME_CASES =
         listOf(
             "null" to "%c IS NULL",
-            // アプリの datetime.now().isoformat()（naive・Windows のローカル時刻 = 通常 JST）。秒の小数は任意
-            "iso_t_naive" to "%c GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]' OR " +
-                "%c GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9]*'",
-            // SQLite の CURRENT_TIMESTAMP（UTC）
+            // アプリの datetime.now().isoformat()（naive・Windows のローカル時刻 = 通常 JST）。秒の小数は数字だけ（レビュー 中: 末尾の任意の文字を許していた）
+            "iso_t_naive" to "substr(%c, 1, 19) GLOB '$DATE_TIME' AND (length(%c) = 19 OR ${fraction(0)})",
+            // SQLite の CURRENT_TIMESTAMP（UTC。小数なし）
             "space_utc" to "%c GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9]'",
-            // タイムゾーン付き（想定外。解釈を本人が決める）
-            "with_offset" to "%c GLOB '*T*[+-][0-9][0-9]:[0-9][0-9]' OR %c GLOB '*Z'",
+            // タイムゾーン付き（想定外。解釈は本人が決めるので WARN）。+hh:mm または Z、その前に数字だけの小数は任意
+            "with_offset" to
+                "substr(%c, 1, 19) GLOB '$DATE_TIME' AND (" +
+                "(substr(%c, -6) GLOB '[+-][0-9][0-9]:[0-9][0-9]' AND (length(%c) = 25 OR ${fraction(6)})) OR " +
+                "(substr(%c, -1) = 'Z' AND (length(%c) = 20 OR ${fraction(1)})))",
             "other" to "1",
         )
+
+    /** 月 01〜12・日 01〜31 の範囲まで見る（暦の妥当性は移行の変換で確かめる）。 */
+    private const val MD8 = "CAST(substr(%c, 5, 2) AS INTEGER) BETWEEN 1 AND 12 AND CAST(substr(%c, 7, 2) AS INTEGER) BETWEEN 1 AND 31"
+    private const val MD10 = "CAST(substr(%c, 6, 2) AS INTEGER) BETWEEN 1 AND 12 AND CAST(substr(%c, 9, 2) AS INTEGER) BETWEEN 1 AND 31"
     private val DATE_CASES =
         listOf(
-            "null" to "%c IS NULL OR %c = ''",
-            "yyyymmdd" to "%c GLOB '[0-9][0-9][0-9][0-9][0-1][0-9][0-3][0-9]' AND length(%c) = 8",
-            "yyyy_mm_dd" to "%c GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]' AND length(%c) = 10",
+            "null" to "%c IS NULL",
+            // 数値として保存された 20261024 も、文字列としては同じ形なので yyyymmdd に数える（移行の変換で受け付ける）
+            "yyyymmdd" to "length(%c) = 8 AND %c GLOB '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]' AND $MD8",
+            "yyyy_mm_dd" to "length(%c) = 10 AND %c GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND $MD10",
             "invalid" to "1",
         )
     private val RACE_ID_CASES =
@@ -158,7 +237,7 @@ object Preflight {
         )
     private val JSON_CASES =
         listOf(
-            "null" to "%c IS NULL OR %c = ''",
+            "null" to "%c IS NULL",
             "valid" to "json_valid(%c)",
             "invalid" to "1",
         )
@@ -187,12 +266,14 @@ object Preflight {
         column: String,
         parent: String,
         parentKey: String,
-    ): Long =
-        scalarLong(
+    ): Long {
+        require(listOf(table, column, parent, parentKey).all { LegacySchema.IDENT.matches(it) }) { "識別子の形式が不正" }
+        return scalarLong(
             c,
             "SELECT COUNT(*) FROM \"$table\" ch WHERE ch.\"$column\" IS NOT NULL AND NOT EXISTS " +
                 "(SELECT 1 FROM \"$parent\" p WHERE p.\"$parentKey\" = ch.\"$column\")",
         )
+    }
 
     private fun scalarLong(
         c: Connection,

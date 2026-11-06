@@ -10,6 +10,7 @@ import java.sql.Connection
 import java.sql.DriverManager
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -161,5 +162,105 @@ class PreflightTest {
         val junk = dir.resolve("junk.sqlite")
         Files.write(junk, ByteArray(4096) { 7 })
         assertEquals(2, LegacyImport.run(arrayOf("preflight", "--sqlite", junk.toString()), sink, sink))
+    }
+
+    @Test
+    fun `横に未反映の -wal がある WAL のコピーは受け付けない（2）。-wal の無い WAL のファイルは WARN で 横に何も作らない`() {
+        val p = legacyDb("wal.sqlite")
+        DriverManager.getConnection("jdbc:sqlite:$p").use { live ->
+            live.createStatement().use { it.executeQuery("PRAGMA journal_mode=WAL").close() }
+            live.exec("INSERT INTO races (race_id, date, track, race_no, post_time) VALUES ('202610240501', '20261024', '東京', 1, '10:05')")
+            assertTrue(Files.size(dir.resolve("wal.sqlite-wal")) > 0, "前提: 未反映の変更が -wal にある")
+            val sink = PrintStream(ByteArrayOutputStream())
+            assertEquals(2, LegacyImport.run(arrayOf("preflight", "--sqlite", p.toString()), sink, sink))
+        }
+        // 閉じると -wal は本体に取り込まれて消える（見出しは WAL のまま）
+        assertFalse(Files.exists(dir.resolve("wal.sqlite-wal")))
+        val before = sha(p)
+        val r = Preflight.run(p)
+        assertTrue(r.walMode)
+        assertEquals("WARN", r.verdict)
+        assertEquals(1L, r.rowCounts["races"])
+        assertEquals(before, sha(p))
+        for (s in listOf("-wal", "-shm")) assertFalse(Files.exists(dir.resolve("wal.sqlite$s")), "読取りで $s を作らない")
+    }
+
+    @Test
+    fun `パスにパーセント・シャープ・空白があっても 指定したファイルそのものを開く`() {
+        val target =
+            legacyDb(
+                "a%20b #1.sqlite",
+            ) { c -> c.exec("INSERT INTO races (race_id, date, track, race_no, post_time) VALUES ('202610240501', '20261024', '東京', 1, '10:05')") }
+        legacyDb("a b #1.sqlite") // URI の解釈を誤ると開かれる別のファイル（空）
+        val r = Preflight.run(target)
+        assertEquals(1L, r.rowCounts["races"], "別のファイルではなく指定したファイルを数える")
+        assertEquals(sha(target), r.sha256)
+    }
+
+    @Test
+    fun `読取り専用で開いた接続には書き込めない`() {
+        val p = legacyDb("ro.sqlite")
+        Preflight.open(p).use { c ->
+            assertFailsWith<java.sql.SQLException> {
+                c.exec("INSERT INTO races (race_id, date, track, race_no, post_time) VALUES ('202610240501', '20261024', '東京', 1, '10:05')")
+            }
+        }
+    }
+
+    @Test
+    fun `時刻 — 小数と時差の付いた値・Z は with_offset（WARN）、末尾に余計な文字があれば other`() {
+        val p =
+            legacyDb("t.sqlite") { c ->
+                c.exec("INSERT INTO races (race_id, date, track, race_no, post_time) VALUES ('202610240501', '20261024', '東京', 1, '10:05')")
+                var u = 1
+                for (ts in listOf(
+                    "2026-10-24T09:55:00.123+09:00",
+                    "2026-10-24T09:55:00+09:00",
+                    "2026-10-24T00:55:00Z",
+                    "2026-10-24T00:55:00.5Z",
+                    "2026-10-24T09:55:00.1garbage",
+                    "ZZZ",
+                    "2026-10-24T09:55:00.123456",
+                )) {
+                    c.exec("INSERT INTO odds_snapshots (race_id, ts, umaban, odds) VALUES ('202610240501', '$ts', ${u++}, 2.0)")
+                }
+            }
+        val r = Preflight.run(p)
+        val k = r.times.single { it.table == "odds_snapshots" && it.column == "ts" }.counts
+        assertEquals(4L, k["with_offset"])
+        assertEquals(2L, k["other"])
+        assertEquals(1L, k["iso_t_naive"])
+        assertEquals("WARN", r.verdict)
+    }
+
+    @Test
+    fun `孤立は期待するスキーマの外部キーだけを見る（horse_past_runs は races への外部キーではない）`() {
+        val p =
+            legacyDb("o.sqlite") { c ->
+                c.exec("INSERT INTO horse_past_runs (ketto_num, race_id, date) VALUES ('2020100001', '201901010101', '20190101')")
+            }
+        val r = Preflight.run(p)
+        assertTrue(r.orphans.none { it.table == "horse_past_runs" }, r.orphans.toString())
+        assertTrue(r.orphans.any { it.table == "odds_snapshots" && it.parent == "races" })
+        assertTrue(r.orphans.any { it.table == "bet_legs" && it.parent == "bets" })
+        assertEquals("OK", r.verdict, LegacyImport.summary(r))
+    }
+
+    @Test
+    fun `抽出に要る列が無ければ NG、出力先が入力と同じ・既にあれば 2 で 入力を変えない`() {
+        val p = legacyDb("n.sqlite") { it.exec("ALTER TABLE races DROP COLUMN name") }
+        val r = Preflight.run(p)
+        assertEquals(mapOf("races" to listOf("name")), r.missingRequiredColumns)
+        assertEquals("NG", r.verdict)
+        val ok = legacyDb("ok.sqlite")
+        val before = sha(ok)
+        val sink = PrintStream(ByteArrayOutputStream())
+        assertEquals(2, LegacyImport.run(arrayOf("preflight", "--sqlite", ok.toString(), "--out", ok.toString()), sink, sink))
+        assertEquals(2, LegacyImport.run(arrayOf("preflight", "--sqlite", ok.toString(), "--out", "$ok-wal"), sink, sink))
+        assertEquals(before, sha(ok))
+        val existing = dir.resolve("old-report.json")
+        Files.writeString(existing, "previous")
+        assertEquals(2, LegacyImport.run(arrayOf("preflight", "--sqlite", ok.toString(), "--out", existing.toString()), sink, sink))
+        assertEquals("previous", Files.readString(existing), "既存のレポートを上書きしない")
     }
 }

@@ -2,6 +2,7 @@ package jp.jrabot.legacyimport
 
 import jp.jrabot.domain.ml.json.CanonicalJson
 import jp.jrabot.domain.ml.json.JsonArray
+import jp.jrabot.domain.ml.json.JsonBool
 import jp.jrabot.domain.ml.json.JsonInt
 import jp.jrabot.domain.ml.json.JsonObject
 import jp.jrabot.domain.ml.json.JsonString
@@ -21,7 +22,7 @@ import kotlin.system.exitProcess
  * |---|---|
  * | 0 | レポートを出した（判定 OK または WARN。WARN の内容は本人が確認して方針を決める） |
  * | 1 | 判定 NG（整合性の検査の失敗・期待する表が無い） |
- * | 2 | 引数・入力の誤り（ファイルが無い・開けない） |
+ * | 2 | 引数・入力の誤り・ツールの失敗（ファイルが無い・開けない・SQLite ではない・横に未反映の -wal がある・出力先が入力と同じか既にある・読み書きの失敗）。レポートは出さない |
  *
  * extract・transform・load・verify・promote は後続（今は preflight だけ。実データのクラウド投入は COMP-4 の回答待ち）。
  */
@@ -41,21 +42,54 @@ object LegacyImport {
         }
         val opts = parse(args.drop(1)) ?: return usage(err)
         val sqlite = opts["sqlite"] ?: return usage(err)
+        val input = Path.of(sqlite)
+        val outPath = opts["out"]?.let { Path.of(it) }
+        if (outPath != null && isSameOrSidecar(outPath, input)) {
+            err.println("出力先が入力（またはその -wal・-shm）と同じ。別のパスを指定する")
+            return 2
+        }
         val report =
             try {
-                Preflight.run(Path.of(sqlite))
-            } catch (e: IllegalArgumentException) {
-                err.println("入力の誤り: ${e.message}")
+                Preflight.run(input)
+            } catch (e: InputRejected) {
+                err.println("入力を受け付けない: ${e.message}")
                 return 2
             } catch (e: java.sql.SQLException) {
                 err.println("SQLite を開けない・読めない: ${e.javaClass.simpleName}") // パス・中身は出さない
                 return 2
+            } catch (e: java.io.IOException) {
+                err.println("入力を読めない: ${e.javaClass.simpleName}")
+                return 2
+            } catch (e: RuntimeException) {
+                // 判定 NG（1）と区別する: ツールの失敗は 2（レポートは無い）
+                err.println("ツールの失敗: ${e.javaClass.simpleName}")
+                return 2
             }
         val json = CanonicalJson.encode(toJson(report))
-        val outPath = opts["out"]
-        if (outPath == null) out.println(json) else Files.writeString(Path.of(outPath), json + "\n")
+        if (outPath == null) {
+            out.println(json)
+        } else {
+            try {
+                // 既存のファイルを上書きしない（入力の取り違え・前回のレポートの消失を防ぐ）
+                Files.writeString(outPath, json + "\n", java.nio.file.StandardOpenOption.CREATE_NEW, java.nio.file.StandardOpenOption.WRITE)
+            } catch (e: java.io.IOException) {
+                err.println("レポートを書けない（既にある・書込み不可）: ${e.javaClass.simpleName}")
+                return 2
+            }
+        }
         err.println(summary(report))
         return if (report.verdict == "NG") 1 else 0
+    }
+
+    /** 出力先が入力そのもの・リンク・横の -wal・-shm・-journal と同じか。 */
+    private fun isSameOrSidecar(
+        out: Path,
+        input: Path,
+    ): Boolean {
+        val o = out.toAbsolutePath().normalize()
+        val i = input.toAbsolutePath().normalize()
+        if (o == i || listOf("-wal", "-shm", "-journal").any { o == i.resolveSibling(i.fileName.toString() + it) }) return true
+        return Files.exists(o) && Files.exists(i) && runCatching { Files.isSameFile(o, i) }.getOrDefault(true)
     }
 
     private fun usage(err: PrintStream): Int {
@@ -76,21 +110,13 @@ object LegacyImport {
         return m
     }
 
-    /** 人が読む要約（件数だけ）。 */
+    /** 人が読む要約（件数と表・列の名前だけ）。 */
     fun summary(r: PreflightReport): String =
         buildString {
-            append("preflight: ${r.verdict} (integrity=${r.integrity}, tables=${r.rowCounts.size}, rows=${r.rowCounts.values.sum()})")
+            append("preflight: ${r.verdict} (integrity=${r.integrity}, tables=${r.rowCounts.size}, rows=${r.rowCounts.values.sum()}, wal=${r.walMode})")
             if (r.missingTables.isNotEmpty()) append("\n  期待する表が無い: ${r.missingTables.joinToString()}")
-            for ((t, cols) in r.missingColumns) append("\n  $t に期待する列が無い: ${cols.joinToString()}")
-            for (o in r.orphans.filter { it.count > 0 }) append("\n  孤立: ${o.table}.${o.column} → ${o.parent} が無い ${o.count} 行")
-            for (f in r.times) {
-                val n = f.counts["other"] ?: 0
-                if (n > 0) append("\n  時刻の形式を判別できない: ${f.table}.${f.column} $n 行")
-            }
-            for (f in r.dates + r.raceIds + r.json) {
-                val n = f.counts["invalid"] ?: 0
-                if (n > 0) append("\n  不正な値: ${f.table}.${f.column} $n 行")
-            }
+            for ((t, cols) in r.missingRequiredColumns) append("\n  抽出に要る列が無い: $t.${cols.joinToString()}")
+            for (w in r.warnings) append("\n  $w")
         }
 
     fun toJson(r: PreflightReport): JsonObject {
@@ -114,6 +140,9 @@ object LegacyImport {
             "verdict" to JsonString(r.verdict),
             "sha256" to JsonString(r.sha256),
             "size_bytes" to JsonInt(r.sizeBytes),
+            "wal_mode" to JsonBool(r.walMode),
+            "warnings" to list(r.warnings),
+            "missing_required_columns" to cols(r.missingRequiredColumns),
             "integrity" to JsonString(if (r.integrity == "ok") "ok" else "failed"), // integrity_check の詳細（ページ番号など）は出さない
             "missing_tables" to list(r.missingTables),
             "extra_tables" to list(r.extraTables),
