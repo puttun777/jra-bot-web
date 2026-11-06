@@ -42,26 +42,21 @@ internal class MlModelCatalogRepository(
     ): List<ModelCatalogEntry> {
         require(limit in 1..MAX_LIMIT) { "limit は 1〜$MAX_LIMIT" }
         return dao.selectRecent(tenantId.value, limit).map { e ->
+            // 表示用の生の値（ModelRecord の検査はしない: 想定外の 1 行で一覧全体を失敗させない。D-268 のレビュー 中）
             ModelCatalogEntry(
-                MlModelEntity(
-                    e.tenantId,
-                    e.modelId,
-                    e.kind,
-                    e.schemaVersion,
-                    e.featureSchemaHash,
-                    e.artifactUri,
-                    e.sha256,
-                    e.signatureSha256,
-                    e.status,
-                    e.trainedFrom,
-                    e.trainedTo,
-                    e.nTrain,
-                    e.createdAt,
-                    e.activatedAt,
-                    e.activatedBy,
-                    e.previousModelId,
-                ).toDomain(),
-                e.metricsJson,
+                modelId = e.modelId,
+                kind = e.kind,
+                status = e.status,
+                schemaVersion = e.schemaVersion,
+                featureSchemaHash = e.featureSchemaHash,
+                trainedFrom = e.trainedFrom,
+                trainedTo = e.trainedTo,
+                nTrain = e.nTrain,
+                createdAt = e.createdAt.toInstantUtc(),
+                activatedAt = e.activatedAt.toInstantUtcOrNull(),
+                activatedBy = e.activatedBy,
+                previousModelId = e.previousModelId,
+                metricsJson = e.metricsJson,
             )
         }
     }

@@ -174,6 +174,25 @@ class ReadAdminApiMySqlIntegrationTest {
                     "'2026-10-24 00:30:00.000000', '2026-10-24 08:00:00.000000')",
             )
         }
+        // ML モデル（R22）: 退役した前のモデルと有効なモデル（指標のキーは見本と同じ。metrics は自由なキーの表なので、比べる行のキーを揃える）
+        db.exec("UPDATE ml_model SET previous_model_id = NULL")
+        db.exec("DELETE FROM ml_model")
+        for ((id, status, prev) in listOf(Triple("cal-000", "RETIRED", null), Triple("cal-001", "ACTIVE", "cal-000"))) {
+            val active = status == "ACTIVE"
+            val metrics = """{"brier":0.2,"gate_purpose":"calibration","gate_reasons":["ok"],"logloss":0.5}"""
+            db.exec(
+                "INSERT INTO ml_model (tenant_id, model_id, kind, schema_version, feature_schema_hash, artifact_uri, sha256, signature_sha256, status, " +
+                    "active_flag, trained_from, trained_to, n_train, metrics_json, created_at, activated_at, activated_by, previous_model_id) VALUES " +
+                    "(1, '$id', 'calibration', 1, 'sha256:${"a".repeat(64)}', 'gs://synthetic/$id', '${"b".repeat(64)}', '${"c".repeat(64)}', " +
+                    "'$status', ${if (active) "1" else "NULL"}, '2025-01-01', '2026-01-01', 1234, '$metrics', '2026-10-01 00:00:00.000000', " +
+                    "${if (active) "'2026-10-02 00:00:00.000000'" else "NULL"}, ${if (active) "'me@example.com'" else "NULL"}, ${prev?.let {
+                        "'$it'"
+                    } ?: "NULL"})",
+            )
+        }
+        assertEquals(403, http.get("/api/v1/admin/ml-models", viewer).status, "閲覧者は ML モデルの一覧を見られない（ADMIN だけ）")
+        val otherTenant = http.get("/api/v1/admin/ml-models", other)
+        assertTrue(otherTenant.status == 403 || otherTenant.body.trim() == "[]", "他テナントのモデルは見えない: ${otherTenant.status}")
         val cases =
             linkedMapOf(
                 "status.json" to "/api/v1/status",
@@ -193,7 +212,15 @@ class ReadAdminApiMySqlIntegrationTest {
         }
         // 実際の応答が空の配列だと要素の形を比べられない。比べた位置を確かめる（見本の配列のうち、ここで要素まで比べたもの）。
         // performance.combos は合成の買い目の通知が要るため、下の DTO の試験で比べる
-        for (p in listOf("status.json.days[0]", "races.json[0]", "signals.json.items[0]", "runs.json[0]", "overrides.json[0]")) {
+        for (p in listOf(
+            "status.json.days[0]",
+            "races.json[0]",
+            "signals.json.items[0]",
+            "runs.json[0]",
+            "overrides.json[0]",
+            "ml-models.json[0]",
+            "ml-models.json[1]",
+        )) {
             assertTrue(p in compared, "$p を比べていない: $compared")
         }
         assertTrue("status.json.lastRun.finishedAt" in compared && "status.json.nextRaceAt" in compared, "status の値のある項目を比べていない: $compared")

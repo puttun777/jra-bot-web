@@ -90,5 +90,8 @@ describe("validate: 任意のキーのオブジェクト", () => {
     rejects(() => record(number)({ a: "1" }, "$"), "$.a");
     rejects(() => record(number)([1], "$"), "$");
     rejects(() => record(number)(null, "$"), "$");
+    const proto = record(number)(JSON.parse('{"__proto__": 1, "a": 2}'), "$");
+    assert.equal(Object.hasOwn(proto, "__proto__"), true, "__proto__ のキーも自身のプロパティとして残す");
+    assert.equal(Object.keys(proto).length, 2);
   });
 });

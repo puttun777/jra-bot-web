@@ -2,12 +2,8 @@ package jp.jrabot.dashboard
 
 import jp.jrabot.dashboard.api.ApiAuthFilter
 import jp.jrabot.dashboard.api.MlModelApi
-import jp.jrabot.domain.ml.ModelId
-import jp.jrabot.domain.ml.model.ModelKind
 import jp.jrabot.domain.ml.registry.ModelCatalogEntry
 import jp.jrabot.domain.ml.registry.ModelCatalogReader
-import jp.jrabot.domain.ml.registry.ModelRecord
-import jp.jrabot.domain.ml.registry.ModelStatus
 import jp.jrabot.domain.tenant.AppUserRole
 import jp.jrabot.domain.tenant.EmailAddress
 import jp.jrabot.domain.tenant.Principal
@@ -22,22 +18,24 @@ import kotlin.test.assertTrue
 
 /** ML モデルの一覧（R22。D-268）: 表示だけ。テナントは本人の行から、指標は最上位の有限の数だけ、壊れた指標でも一覧は出す。 */
 class MlModelApiTest {
-    private fun record(
-        tenant: Long,
+    private fun entry(
         id: String,
-        status: ModelStatus = ModelStatus.CANDIDATE,
-    ) = ModelRecord(
-        tenantId = TenantId.of(tenant),
-        modelId = ModelId.of(id),
-        kind = ModelKind.CALIBRATION,
+        status: String = "CANDIDATE",
+        metrics: String? = null,
+    ) = ModelCatalogEntry(
+        modelId = id,
+        kind = "calibration",
+        status = status,
         schemaVersion = 1,
         featureSchemaHash = "sha256:" + "a".repeat(64),
-        artifactUri = "gs://synthetic/$id",
-        sha256 = "b".repeat(64),
-        signatureSha256 = "c".repeat(64),
-        status = status,
+        trainedFrom = null,
+        trainedTo = null,
+        nTrain = null,
         createdAt = Instant.parse("2026-10-01T00:00:00Z"),
-        activatedAt = if (status == ModelStatus.ACTIVE) Instant.parse("2026-10-02T00:00:00Z") else null,
+        activatedAt = null,
+        activatedBy = null,
+        previousModelId = null,
+        metricsJson = metrics,
     )
 
     private fun req(tenant: Long) =
@@ -55,7 +53,7 @@ class MlModelApiTest {
                     limit: Int,
                 ): List<ModelCatalogEntry> {
                     seen += tenantId to limit
-                    return listOf(ModelCatalogEntry(record(tenantId.value, "m1", ModelStatus.ACTIVE), null))
+                    return listOf(entry("m1", "ACTIVE"))
                 }
             }
         val res = MlModelApi(catalog).list(req(2))
@@ -69,9 +67,18 @@ class MlModelApiTest {
     }
 
     @Test
+    fun `想定外の値（ハッシュの形式・種別・状態）の行でも一覧に出す`() {
+        val odd = entry("weird", status = "ARCHIVED").copy(kind = "unknown", featureSchemaHash = "md5:x")
+        val dto = MlModelApi.dto(odd)
+        assertEquals("ARCHIVED", dto.status)
+        assertEquals("unknown", dto.kind)
+    }
+
+    @Test
     fun `指標は最上位の有限の数だけを辞書順に 品質ゲートの目的と理由は別に出す`() {
-        val json = """{"brier":0.2,"gate_purpose":"calibration","gate_reasons":["ok","n>=100"],"logloss":0.5,"n_valid":120,"nested":{"x":1},"note":"t"}"""
-        val dto = MlModelApi.dto(ModelCatalogEntry(record(1, "m2"), json))
+        // キーを辞書順にしない（MySQL は JSON のキーを長さ順に並べ替えるので、並べ替えが本当に要る）
+        val json = """{"n_valid":120,"logloss":0.5,"gate_purpose":"calibration","brier":0.2,"gate_reasons":["ok","n>=100"],"nested":{"x":1},"note":"t"}"""
+        val dto = MlModelApi.dto(entry("m2", metrics = json))
         assertTrue(dto.metricsReadable)
         assertEquals(listOf("brier", "logloss", "n_valid"), dto.metrics.keys.toList())
         assertEquals(120.0, dto.metrics["n_valid"])
@@ -80,11 +87,12 @@ class MlModelApiTest {
     }
 
     @Test
-    fun `壊れた指標の JSON でも一覧の行は出し 指標は空で読めないと示す`() {
-        for (bad in listOf("{", "[1,2]", "\"x\"", "")) {
-            val dto = MlModelApi.dto(ModelCatalogEntry(record(1, "m3"), bad))
-            assertFalse(dto.metricsReadable, bad)
-            assertTrue(dto.metrics.isEmpty() && dto.gateReasons.isEmpty() && dto.gatePurpose == null, bad)
+    fun `壊れた・大きすぎる指標の JSON でも一覧の行は出し 指標は空で読めないと示す`() {
+        val huge = "{\"a\":" + "1".repeat(MlModelApi.MAX_METRICS_CHARS) + "}"
+        for (bad in listOf("{", "[1,2]", "\"x\"", "", huge)) {
+            val dto = MlModelApi.dto(entry("m3", metrics = bad))
+            assertFalse(dto.metricsReadable, bad.take(20))
+            assertTrue(dto.metrics.isEmpty() && dto.gateReasons.isEmpty() && dto.gatePurpose == null, bad.take(20))
         }
     }
 }

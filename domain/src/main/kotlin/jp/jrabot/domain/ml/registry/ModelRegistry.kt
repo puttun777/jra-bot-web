@@ -48,7 +48,7 @@ data class ModelRecord(
 
 /**
  * モデルレジストリの**読取り**（bot が使う）。DB の `ml_model` の `app`/`bot` の SELECT に対応する。
- * **昇格（CANDIDATE → ACTIVE）の操作はここに無い**: 管理者の昇格操作は Stage 4（dashboard）で、ml-train も ACTIVE にする権限を持たない（CONTRACTS §5.1・§8.2）。
+ * **昇格（CANDIDATE → ACTIVE）の操作はここに無い**: 昇格は本人の判断（品質ゲートの閾値が未承認。dashboard も一覧の表示だけ: D-268）で、ml-train も ACTIVE にする権限を持たない（CONTRACTS §5.1・§8.2）。
  * 未承認のモデルを自動で ACTIVE にしない。
  */
 interface ModelRegistryReader {
@@ -125,15 +125,29 @@ interface TrainingRegistry {
     fun insert(row: NewModelRecord)
 }
 
-/** 一覧の 1 行（dashboard の表示用。R22。[metricsJson] は `ml_model.metrics_json` の正準 JSON。指標だけで値・資格情報を含まない）。 */
+/**
+ * 一覧の 1 行（dashboard の表示用。R22）。**表示のための生の値**で、[ModelRecord] の検査（ハッシュの形式・種別・状態の列挙）はしない
+ * （1 行が想定外の値でも一覧全体を失敗させない: D-268 のレビュー 中）。[metricsJson] は `ml_model.metrics_json`（指標だけで値・資格情報を含まない）。
+ */
 data class ModelCatalogEntry(
-    val record: ModelRecord,
+    val modelId: String,
+    val kind: String,
+    val status: String,
+    val schemaVersion: Int,
+    val featureSchemaHash: String,
+    val trainedFrom: LocalDate?,
+    val trainedTo: LocalDate?,
+    val nTrain: Long?,
+    val createdAt: Instant,
+    val activatedAt: Instant?,
+    val activatedBy: String?,
+    val previousModelId: String?,
     val metricsJson: String?,
 )
 
 /**
  * モデルの一覧の**読取りだけ**（R22: 管理画面での表示。D-268）。**有効化（ACTIVE への昇格）の操作は持たない**: 品質ゲートの閾値が未承認のため、
- * 昇格は本人の判断事項（CLAUDE.md・COMPLETION R22 の B）。新しい順・テナントの範囲だけ。
+ * 昇格は本人の判断事項（CLAUDE.md・COMPLETION R22 の B）。テナントの範囲だけ。**ACTIVE の行を先頭に**、続けて新しい順（上限の外に有効なモデルが落ちないように）。
  */
 interface ModelCatalogReader {
     fun recent(

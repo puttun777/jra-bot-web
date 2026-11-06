@@ -133,7 +133,7 @@ export function mlModelRows(rows: readonly MlModel[]): string[][] {
     m.modelId,
     m.kind,
     label(MODEL_STATUS, m.status),
-    m.trainedFrom && m.trainedTo ? `${m.trainedFrom}〜${m.trainedTo}` : DASH,
+    m.trainedFrom || m.trainedTo ? `${m.trainedFrom ?? "?"}〜${m.trainedTo ?? "?"}` : DASH,
     m.nTrain === null ? DASH : num(m.nTrain),
     mlMetricsText(m),
     m.gatePurpose ? `${m.gatePurpose}: ${m.gateReasons.join("・") || DASH}` : m.gateReasons.join("・") || DASH,
@@ -143,8 +143,8 @@ export function mlModelRows(rows: readonly MlModel[]): string[][] {
 /** 指標（キーの辞書順。小数 4 桁まで）。読めなければその旨。 */
 export function mlMetricsText(m: MlModel): string {
   if (!m.metricsReadable) return "指標を読めない";
-  const parts = Object.keys(m.metrics)
-    .sort()
-    .map((k) => `${k}=${Number((m.metrics[k] ?? 0).toFixed(4))}`);
+  const parts = Object.entries(m.metrics)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([k, v]) => `${k}=${Number(v.toFixed(4))}`);
   return parts.length ? parts.join(", ") : DASH;
 }

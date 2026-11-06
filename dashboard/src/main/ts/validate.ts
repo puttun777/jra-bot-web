@@ -85,8 +85,7 @@ export function object<S extends Shape>(shape: S): Decoder<FromShape<S>> {
 export function record<T>(d: Decoder<T>): Decoder<Record<string, T>> {
   return (v, p) => {
     if (!isRecord(v)) throw new DecodeError(p, "オブジェクトではない");
-    const out: Record<string, T> = {};
-    for (const [k, x] of Object.entries(v)) out[k] = d(x, `${p}.${k}`);
-    return out;
+    // 代入ではなく fromEntries で作る（"__proto__" のキーも自身のプロパティとして残す）
+    return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, d(x, `${p}.${k}`)]));
   };
 }

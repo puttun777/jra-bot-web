@@ -52,6 +52,7 @@ class MlModelApi(
     @GetMapping("/ml-models")
     fun list(request: HttpServletRequest): ResponseEntity<List<MlModelDto>> {
         val p = ApiAuthFilter.principalOf(request)
+        // ACTIVE の行を先頭に、続けて新しい順の最大 LIMIT 件（ModelCatalogReader）。画面は件数の上限を表示する
         val rows = catalog.recent(p.tenantId, LIMIT).map(::dto)
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(rows)
     }
@@ -59,14 +60,18 @@ class MlModelApi(
     companion object {
         const val LIMIT = 100
 
+        /** 指標の JSON の大きさの上限（これより大きければ読まない。100 行を無制限に解析しない）。 */
+        const val MAX_METRICS_CHARS = 65_536
+
         fun dto(e: ModelCatalogEntry): MlModelDto {
-            val r = e.record
             val parsed =
-                e.metricsJson?.let {
+                e.metricsJson?.takeIf { it.length <= MAX_METRICS_CHARS }?.let {
                     try {
                         StrictJson.parse(it) as? JsonObject
                     } catch (_: JsonFormatException) {
                         null
+                    } catch (_: IllegalArgumentException) {
+                        null // 解析器の将来の変更でも一覧の 1 行の失敗で済ませる
                     }
                 }
             val metrics =
@@ -82,18 +87,18 @@ class MlModelApi(
                     ?.toMap()
                     .orEmpty()
             return MlModelDto(
-                modelId = r.modelId.value,
-                kind = r.kind.json,
-                status = r.status.name,
-                schemaVersion = r.schemaVersion,
-                featureSchemaHash = r.featureSchemaHash,
-                trainedFrom = r.trainedFrom,
-                trainedTo = r.trainedTo,
-                nTrain = r.nTrain,
-                createdAt = r.createdAt,
-                activatedAt = r.activatedAt,
-                activatedBy = r.activatedBy,
-                previousModelId = r.previousModelId?.value,
+                modelId = e.modelId,
+                kind = e.kind,
+                status = e.status,
+                schemaVersion = e.schemaVersion,
+                featureSchemaHash = e.featureSchemaHash,
+                trainedFrom = e.trainedFrom,
+                trainedTo = e.trainedTo,
+                nTrain = e.nTrain,
+                createdAt = e.createdAt,
+                activatedAt = e.activatedAt,
+                activatedBy = e.activatedBy,
+                previousModelId = e.previousModelId,
                 metrics = metrics,
                 gatePurpose = (parsed?.get("gate_purpose") as? JsonString)?.value,
                 gateReasons = (parsed?.get("gate_reasons") as? JsonArray)?.items?.mapNotNull { (it as? JsonString)?.value }.orEmpty(),

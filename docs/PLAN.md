@@ -66,7 +66,7 @@
 
 ## 第4段階 ― dashboard（W）
 - [ ] T4.1 認証/認可（IAP JWT 検証、許可リスト、ロール、deny by default）← T2.4  【実装済み: IAP JWT・許可リスト・ロール・deny by default。PR #31】
-- [ ] T4.2 API（DTO、Entity 非公開）← T4.1  【実装済み: /api/v1/status・runs・races・signals・performance・admin/overrides。DTO のみ】
+- [ ] T4.2 API（DTO、Entity 非公開）← T4.1  【実装済み: /api/v1/status・runs・races・signals・performance・admin/overrides・admin/ml-models（表示のみ: D-268）。DTO のみ】
 - [ ] T4.3 UI（日本語、レスポンシブ、最終更新、bot状態、次回予定、未更新表示）← T1.5,T4.2  【実装済み: 静的 HTML/CSS/JS（D-243）。ブラウザでの目視は B】
 - [ ] T4.4 管理者操作（手動補正等）、モード表示  【一部: 手動補正の作成/取消/一覧 + CSRF + 監査ログ。エージェント失効は未実装、ML の有効化は B】
 - [ ] T4.5 セキュリティテスト（認可マトリクス）  【一部: 実コンテキストの認可・CSRF 試験。認可マトリクスの網羅表は TEST_RESULTS.md】

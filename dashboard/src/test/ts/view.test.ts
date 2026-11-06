@@ -286,7 +286,8 @@ describe("view: ML モデルの一覧（R22。表示だけ）", () => {
       "brier=0.2, logloss=0.5123",
       "calibration: ok・n>=100",
     ]);
-    assert.deepEqual(rows[1]?.slice(3), ["不合格", "—", "—", "brier=0.2, logloss=0.5123", "—"]);
+    assert.deepEqual(rows[1]?.slice(3), ["不合格", "?〜2026-01-01", "—", "brier=0.2, logloss=0.5123", "—"]);
+    assert.equal(mlModelRows([{ ...base, trainedFrom: null, trainedTo: null }])[0]?.[4], "—");
     assert.equal(rows[0]?.length, ML_HEADERS.length);
   });
 
