@@ -11,6 +11,8 @@ google-cloud-storage = "2.75.0"
 google-auth-library = "1.54.0"
 # :ml-train だけが使う（D-257）。線形代数（Cholesky）・順位・分位点。Apache-2.0、2026-02 公開の 4.0.3（VERSIONS §16）
 hipparchus = "4.0.3"
+# :legacy-import だけが使う（D-271）。旧 SQLite を読取り専用で開く。Apache-2.0、3.53.4.0 は 2026-08-26 公開（3.54.1.0 は 2026-10-29 公開で 2 週間未満。VERSIONS §20）
+sqlite-jdbc = "3.53.4.0"
 
 [libraries]
 # Boot の BOM（JUnit・Spring 系・mysql-connector-j などの版をここに従わせる）
@@ -36,6 +38,7 @@ jackson-databind = { module = "tools.jackson.core:jackson-databind" }
 slf4j-api = { module = "org.slf4j:slf4j-api" }
 hipparchus-core = { module = "org.hipparchus:hipparchus-core", version.ref = "hipparchus" }
 hipparchus-stat = { module = "org.hipparchus:hipparchus-stat", version.ref = "hipparchus" }
+sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite-jdbc" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 kotlin-test-junit5 = { module = "org.jetbrains.kotlin:kotlin-test-junit5" }

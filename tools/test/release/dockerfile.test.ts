@@ -130,6 +130,7 @@ describe("dockerignore", () => {
         "/dashboard/",
         "/golden-runner/",
         "/ml-train/",
+        "/legacy-import/",
       ].sort(),
     );
     for (const f of [

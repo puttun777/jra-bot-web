@@ -1,0 +1,41 @@
+# 旧実装（puttun777/jra-bot f7dbf69）の src/jraev/storage/db.py が起動時に ALTER TABLE ADD COLUMN する列（無ければ追加）。table<TAB>column<TAB>type
+races	track_cd	TEXT
+races	distance_m	INTEGER
+races	track_type_cd	TEXT
+races	course_kubun_cd	TEXT
+races	tenko_cd	TEXT
+races	shiba_baba_cd	TEXT
+races	dirt_baba_cd	TEXT
+signals	is_paper	INTEGER NOT NULL DEFAULT 1
+signals	stake	REAL NOT NULL DEFAULT 1.0
+signals	expected_profit	REAL
+signals	skip_reason	TEXT
+signals	kelly_raw	REAL
+signals	kelly_adj	REAL
+signals	bet_before_clip	REAL
+signals	clipped	INTEGER DEFAULT 0
+signals	mkt	REAL
+signals	mkt_adj	REAL
+signals	ratio	REAL
+signals	expected_return	REAL
+signals	suggested_bet	REAL
+signals	prob_source	TEXT
+payouts	is_provisional	INTEGER DEFAULT 0
+race_evaluations	settled_at	TEXT
+race_evaluations	hit	INTEGER
+race_evaluations	payout_used	REAL
+race_evaluations	is_provisional	INTEGER DEFAULT 0
+race_evaluations	settle_status	TEXT
+race_evaluations	best_win_hint_json	TEXT
+bets	selection	TEXT
+bets	odds_at_bet	REAL
+bets	prob_used_for_bet	REAL
+bets	ev	REAL
+bets	expected_profit	REAL
+bets	signal_id	INTEGER
+bets	status	TEXT DEFAULT 'open'
+bets	settled_at	TEXT
+bets	payout	REAL
+bets	profit	REAL
+bets	notes	TEXT
+bets	skip_reason	TEXT

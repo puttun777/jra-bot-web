@@ -403,3 +403,21 @@ describe("dashboard frontend (TypeScript, D-263)", () => {
     assert.ok(p.runBuild && !p.runRelease);
   });
 });
+
+describe("legacy import tool (Kotlin, D-271)", () => {
+  it("tool source and tests run the build job only; docs stay docs", () => {
+    for (const f of [
+      "legacy-import/src/main/kotlin/jp/jrabot/legacyimport/Preflight.kt",
+      "legacy-import/src/main/resources/legacy-schema/schema.sql",
+    ]) {
+      const p = classify([f]);
+      assert.ok(p.runBuild && !p.runImages && !p.runRelease, f);
+      assert.deepEqual(p.dbMatrix, [], f);
+    }
+    assert.equal(classify(["legacy-import/src/main/resources/legacy-schema/README.md"]).mode, "docs");
+  });
+  it("its build definition also runs images (the Docker build stage evaluates settings)", () => {
+    const p = classify(["legacy-import/build.gradle.kts"]);
+    assert.ok(p.runBuild && p.runImages);
+  });
+});

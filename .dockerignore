@@ -20,6 +20,8 @@
 !/golden-runner/
 # ml-train（Kotlin。D-257）
 !/ml-train/
+# 旧 SQLite の移行ツール（D-271。settings.gradle.kts が include する。イメージには入らない）
+!/legacy-import/
 
 # 許可したディレクトリの中でも除外する（ビルド生成物・IDE・秘密/実データの拡張子）
 **/build/

@@ -254,3 +254,8 @@ GitHub Actions（`db-integration` 8.4 / 9.7、ubuntu-24.04、Temurin 25、PR #8�
 | TypeScript（画面） | 6.0.3（tools と同じ。ルートの package-lock.json） | 新しい依存は追加しない。ブラウザ向けは `dashboard/tsconfig.json`（target・lib は es2022 + dom、ES モジュール、moduleResolution bundler。相対 import は `.js` 付き） |
 | Docker の Node ステージ | `node:24.22.2-trixie-slim@sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446` | CI（actions/setup-node）・package.json の engines と同じ 24.22.2（§16。2026-10-27 公開）。Docker Hub の公式イメージの index digest を registry API で確認（2026-11-03）。Debian の現行安定版（trixie）の slim。変換にだけ使い、実行イメージには入らない |
 | 画面の外部ライブラリ | なし | 実行時検査は自前の `validate.ts`（zod などはバンドラが要るため使わない） |
+
+## 20. 旧 SQLite の移行ツール（2026-11-06。D-271）
+| 項目 | 採用 | 根拠 |
+|---|---|---|
+| sqlite-jdbc（`org.xerial:sqlite-jdbc`） | **3.53.4.0**（2026-08-26 公開。repo1.maven.org の公開日で確認） | 3.54.1.0 は 2026-10-29 公開で 2 週間未満。Apache-2.0。`:legacy-import` だけが使う（イメージに入らない）。SQLite 本体の JSON1（`json_valid`）・`ALTER TABLE DROP COLUMN` を使う |

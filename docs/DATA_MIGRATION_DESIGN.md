@@ -163,7 +163,7 @@ CREATE TABLE payouts (
                                                               ▼
                               verify(件数・チェックサム・集計) ──promote──▶ 本番スキーマ(ローカル → 規約回答後にクラウド)
 ```
-- ツール: **Python の独立ツール `tools/migrate/`**（リポジトリに置く。SQLite は標準ライブラリ、MySQL は公式ドライバ）。理由: 実 DB が利用者の PC にあり、Python/SQLite の扱いが容易、Kotlin 本体に移行専用コードを持ち込まない。**秘密・データ・出力ファイルは Git に入れない**。
+- ツール: **（2026-11-06 に置換: D-271）Kotlin の `:legacy-import`**（利用者の PC で実行する CLI。言語方針 D-250 で Python を使わない。まず preflight を実装し、以下の段階を順に足す）。旧案: Python の独立ツール `tools/migrate/`（リポジトリに置く。SQLite は標準ライブラリ、MySQL は公式ドライバ）。理由: 実 DB が利用者の PC にあり、Python/SQLite の扱いが容易、Kotlin 本体に移行専用コードを持ち込まない。**秘密・データ・出力ファイルは Git に入れない**。
 - 実行環境: 利用者の PC（Docker で MySQL）。クラウドへ載せる段階は、同じ staging→promote をクラウド DB に向けて実行（接続は Cloud SQL Auth Proxy 等。**規約回答後**）。
 
 ### 5.2 フェーズ
@@ -290,7 +290,7 @@ CREATE TABLE payouts (
 ## 13. 決定案・未確認
 | ID | 内容 | 状態 |
 |---|---|---|
-| D-038 | 移行は Python ツール（`tools/migrate/`）。staging→promote の段階制、チャンク再開、隔離（quarantine）。まずローカル MySQL でリハーサル、クラウドは規約回答後 | 案 |
+| D-038 | （**D-271 で Kotlin の `:legacy-import` に置換**）移行は Python ツール（`tools/migrate/`）。staging→promote の段階制、チャンク再開、隔離（quarantine）。まずローカル MySQL でリハーサル、クラウドは規約回答後 | 案 |
 | D-039 | テナント方式 A（共有スキーマ + `tenant_id` 先頭 + 複合 FK + DAO 必須引数 + CI の SQL 検査 + 越境テスト）。共有表は `tenant/app_user/code_venue` のみ | 案 |
 | D-040 | レース識別は `race_id CHAR(12)`（+ `kai`/`nichime` NULL 可）に統一し、RACE_CALENDAR_DESIGN の `race_key CHAR(16)` を修正。`rt_key`(16桁) は導出 | 案 |
 | D-041 | 時刻は UTC `DATETIME(6)`。移行時は形式（`T` 有無）で JST/UTC を判別して変換、実ファイルで JST 仮定を検証 | 案 |

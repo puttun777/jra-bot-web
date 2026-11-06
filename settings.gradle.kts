@@ -25,4 +25,5 @@ include(
     ":dashboard",
     ":golden-runner",
     ":ml-train",
+    ":legacy-import",
 )

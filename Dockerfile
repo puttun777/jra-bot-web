@@ -45,6 +45,8 @@ COPY dashboard ./dashboard
 COPY ml-train ./ml-train
 # settings.gradle.kts が include するため必要（検証専用のツールで、どのイメージにも入らない: jar は上の 4 つのターゲットの成果物だけをコピーする）
 COPY golden-runner ./golden-runner
+# 旧 SQLite の移行ツール（D-271）。settings.gradle.kts が include するため必要（どのイメージにも入らない）
+COPY legacy-import ./legacy-import
 # 画面の変換結果（frontend ステージ）。-PfrontendPrebuilt=true で Gradle の compileFrontend（Node が要る）を省き、この結果を jar に入れる
 COPY --from=frontend /src/dashboard/build/generated/frontend ./dashboard/build/generated/frontend
 ARG GIT_SHA=unknown
