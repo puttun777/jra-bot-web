@@ -47,7 +47,7 @@ Python の 3 つ（`agent/`、`ml/`、`tools/`）は依存を別々に管理す�
 | `:cloud-gcp`（D-045） | ポートの GCP 実装: GCS の `ModeProvider`・`ModelStore`・`DatasetStore`・`HeartbeatMirror`、Cloud Run Jobs の `JobLauncher`、Google の JWT/ID トークン検証部品 | `:domain`、Google Cloud のクライアントライブラリ | Spring Web、Doma、アプリのモジュール |
 | `:bot` | Job（`--task=bot-run\|calendar-check\|reconcile\|retention\|export-dataset`）、Discord 通知（`jp.jrabot.bot.discord`: URL 検証・JDK HttpClient・`DiscordNotifier`。本文・分割・調整役は `:domain` の `notify`。T3.7）、オーケストレーション | `:domain`、`:persistence`、`:cloud-gcp` | `:dashboard`、`:ingest` |
 | `:ingest` | エージェント API（認証・冪等・封筒）、パーサの呼び出し、upsert、heartbeat の写し | 同上 | `:bot`、`:dashboard` |
-| `:dashboard` | 画面（Thymeleaf+htmx）、`/api/v1`（DTO）、認証・認可、管理操作 | 同上 | `:bot`、`:ingest` |
+| `:dashboard` | 画面（静的 HTML/CSS + strict TypeScript の ES モジュール。`src/main/ts` を Gradle の compileFrontend が `static/js` へ変換: D-243・D-263）、`/api/v1`（DTO）、認証・認可、管理操作 | 同上 | `:bot`、`:ingest` |
 | `:golden-runner`（T3.1、D-106） | **検証専用**: `tools/golden` のフィクスチャを読み、`:domain` の計算（`jp.jrabot.domain.decision`）を実行して結果 JSON を出力する（Python の比較器 `kotlin_compare` が旧実装の期待値と比べる）。JSON の読み書きはここだけ（`:domain` は Jackson に依存しない） | `:domain`、Jackson | それ以外のモジュールすべて。**どのモジュールもこれに依存しない**。アプリのイメージに入れない（Dockerfile は settings の include のため COPY するだけ） |
 
 - **実行アプリ（bot/ingest/dashboard）同士は依存しない**。ルート build の検査タスクで、`project(":bot")` などへの依存があれば失敗させ、CI で強制する（T2.1）。

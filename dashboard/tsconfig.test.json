@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["es2024", "dom"],
+    "types": ["node"],
+    "rootDir": "src",
+    "outDir": "build/frontend-test",
+    "sourceMap": true
+  },
+  "include": ["src/main/ts/**/*.ts", "src/test/ts/**/*.ts"]
+}

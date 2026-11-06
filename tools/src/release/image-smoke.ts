@@ -127,6 +127,13 @@ async function httpStatus(url: string): Promise<number> {
   return r.status;
 }
 
+/** 静的な画面の検査用（本文は先頭 64 KiB まで）。 */
+async function httpGet(url: string): Promise<{ status: number; type: string; csp: string; body: string }> {
+  const r = await fetch(url, { signal: AbortSignal.timeout(5000), redirect: "manual" });
+  const body = (await r.text()).slice(0, 65536);
+  return { status: r.status, type: r.headers.get("content-type") ?? "", csp: r.headers.get("content-security-policy") ?? "", body };
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -775,6 +782,7 @@ export class Smoke {
       status["/internal/health"] === 401 && status["/internal/ready"] === 401 && Object.keys(status).length === 2,
       JSON.stringify(status),
     );
+    if (name === "dashboard") await this.dashboardStaticChecks(port);
     const lr = docker(["logs", cname]);
     const logs = lr.stdout + lr.stderr;
     this.captured.push([`${name} server logs`, logs]);
@@ -790,6 +798,38 @@ export class Smoke {
       (code === 0 || code === 143) && state["OOMKilled"] === false && took < 9.5,
       `exit=${String(code)} took=${took.toFixed(1)}s`,
     );
+  }
+
+  /**
+   * 画面（TypeScript を変換した ES モジュール。D-263）が jar に入り、同一オリジンから配信されること。index.html はモジュールを読み、
+   * 旧 /app.js は無い。静的な画面はアプリの認証の外（本番は IAP の内側）なので、トークン無しで取得できる。
+   */
+  async dashboardStaticChecks(port: string): Promise<void> {
+    try {
+      const index = await httpGet(`http://127.0.0.1:${port}/`);
+      const app = await httpGet(`http://127.0.0.1:${port}/js/app.js`);
+      const api = await httpGet(`http://127.0.0.1:${port}/js/api.js`);
+      const old = await httpGet(`http://127.0.0.1:${port}/app.js`);
+      this.r.check(
+        "[dashboard] index.html loads the compiled module /js/app.js (CSP header present)",
+        index.status === 200 &&
+          index.body.includes('<script type="module" src="/js/app.js"></script>') &&
+          index.csp.includes("script-src 'self'"),
+        `status=${index.status}`,
+      );
+      this.r.check(
+        "[dashboard] /js/app.js and /js/api.js are served as JavaScript (compiled from dashboard/src/main/ts)",
+        app.status === 200 &&
+          /javascript/.test(app.type) &&
+          app.body.includes('from "./api.js"') &&
+          api.status === 200 &&
+          /javascript/.test(api.type),
+        `app=${app.status} ${app.type} api=${api.status}`,
+      );
+      this.r.check("[dashboard] the legacy /app.js is gone (404)", old.status === 404, `status=${old.status}`);
+    } catch (e) {
+      this.r.check("[dashboard] static UI is reachable", false, e instanceof Error ? e.message.slice(0, 200) : "error");
+    }
   }
 
   // ------------------------------------------------------------------ ml-train（Kotlin。D-257）

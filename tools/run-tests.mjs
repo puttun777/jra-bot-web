@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-const MIN = 150;
+const MIN = 164;
 const i = process.argv.indexOf("--min");
 const min = i >= 0 ? Number(process.argv[i + 1]) : MIN;
 const outDir = "build/tools-test";

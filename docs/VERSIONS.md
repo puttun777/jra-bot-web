@@ -247,3 +247,10 @@ GitHub Actions（`db-integration` 8.4 / 9.7、ubuntu-24.04、Temurin 25、PR #8�
 | xunit.v3 | 4.0.2 | 試験（Microsoft.Testing.Platform。`global.json` の `test.runner`）。CI は試験の実行ファイルを直接起動し `-result-junit` で JUnit 形式を出す（`verify-junit` で件数・skip を検査） |
 | actions/setup-dotnet | **v6.0.0**（SHA `a98b56852c35b8e3190ac28c8c2271da59106c68`、2026-07-15） | v6.1.0 は 2026-11-02 公開で 2 週間未満 |
 | 解析 | `TreatWarningsAsErrors`・`AnalysisLevel=latest-recommended`・`Nullable=enable`・`EnforceCodeStyleInBuild` | CA1716（Visual Basic の予約語との衝突）だけ全体で対象外（C# だけで使う）。LibraryImport の生成コードのため JraAgent.Windows だけ `AllowUnsafeBlocks`（手書きのコードでは unsafe を使わない） |
+
+## 19. 画面の TypeScript の変換（2026-11-03。D-263）
+| 項目 | 採用 | 根拠 |
+|---|---|---|
+| TypeScript（画面） | 6.0.3（tools と同じ。ルートの package-lock.json） | 新しい依存は追加しない。ブラウザ向けは `dashboard/tsconfig.json`（target・lib は es2022 + dom、ES モジュール、moduleResolution bundler。相対 import は `.js` 付き） |
+| Docker の Node ステージ | `node:24.22.2-trixie-slim@sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446` | CI（actions/setup-node）・package.json の engines と同じ 24.22.2（§16。2026-10-27 公開）。Docker Hub の公式イメージの index digest を registry API で確認（2026-11-03）。Debian の現行安定版（trixie）の slim。変換にだけ使い、実行イメージには入らない |
+| 画面の外部ライブラリ | なし | 実行時検査は自前の `validate.ts`（zod などはバンドラが要るため使わない） |

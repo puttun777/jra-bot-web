@@ -9,10 +9,12 @@
   "scripts": {
     "build": "tsc -p tools/tsconfig.json",
     "typecheck": "tsc -p tools/tsconfig.json --noEmit",
-    "lint": "biome check tools",
-    "format": "biome check --write tools",
-    "test": "npm run build && node tools/run-tests.mjs",
-    "preflight": "npm run --silent build && node build/tools/src/main.js preflight"
+    "lint": "biome check tools dashboard/src/main/ts dashboard/src/test/ts dashboard/run-tests.mjs",
+    "format": "biome check --write tools dashboard/src/main/ts dashboard/src/test/ts dashboard/run-tests.mjs",
+    "test": "npm run build && node tools/run-tests.mjs && npm run --silent test:frontend",
+    "preflight": "npm run --silent build && node build/tools/src/main.js preflight",
+    "build:frontend": "tsc -p dashboard/tsconfig.json",
+    "test:frontend": "tsc -p dashboard/tsconfig.test.json && node dashboard/run-tests.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",

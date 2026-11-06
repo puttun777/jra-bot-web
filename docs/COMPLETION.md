@@ -1,6 +1,6 @@
 # COMPLETION（完成条件一覧と現在の状態）
 
-最終更新: 2026-11-02（言語移行 L1〜L9 を追加。web main = 37b043e、infra main = e21e9e4）。旧: 2026-11-01。**この表が『開発全体が終わったか』の判定の正本。** 他の文書（PROGRESS の履歴・PLAN のチェック項目）と食い違ったら、コード・PR・検証結果と突合してこちらを直す。
+最終更新: 2026-11-03（言語移行 L1〜L7 の状態を更新。web main = 432d05a、infra main = c6613ed）。旧: 2026-11-02（言語移行 L1〜L9 を追加）。旧: 2026-11-01。**この表が『開発全体が終わったか』の判定の正本。** 他の文書（PROGRESS の履歴・PLAN のチェック項目）と食い違ったら、コード・PR・検証結果と突合してこちらを直す。
 要件の出典: `REQUIREMENTS.md` §3〜§5、`MIGRATION_MATRIX.md` §1（F01〜F26）、`PLAN.md`、`UNRESOLVED.md`。
 
 ## 区分
@@ -31,14 +31,14 @@
 | R16 | バックテスト（F20）: 保存済みデータ・未来情報の遮断・除外件数/率 | `domain/backtest/BacktestRunner`（純粋な計算。DB に書かない: D-234） | 管理 API（R15/R20）から呼ぶ | 単体 5（未来のオッズを渡さない・理由別の除外件数と率・二重計上なし） | **A（計算）/ C（API への接続は R15）**。実データでの検証は B |
 | R17 | retention（F14/F16: 保持期間の削除。**既定はドライラン**、削除は `RETENTION_EXECUTE=true` の明示） | `domain/retention`、`persistence/RetentionDao`、`bot/RetentionTaskHandler` | `bot --task=retention`（DELETE 権限は V5 で付与済み） | 単体 + MySQL 通し試験（ドライラン・削除・テナント分離・冪等） | **A**（実データの削除の実行は本人の承認事項。単勝オッズの間引きは未実装 = 別の判断） |
 | R18 | 人の認証・認可（IAP JWT・許可リスト・ロール・deny by default） | `HumanAuthorizer`、`ApiAuthFilter` | dashboard `/api/**` | 単体 + Tomcat 統合 | **A**（実 IAP の `aud` は B: G-OPS-7） |
-| R19 | ダッシュボード UI（日本語・レスポンシブ・bot 状態・次回予定・最終更新・未更新表示・シグナル/成績/運用画面） | `dashboard/src/main/resources/static`（HTML/CSS/JS。D-243） | `/`（IAP の内側） | 静的検査（インライン script・外部 CDN・innerHTML なし）。**ブラウザでの目視確認は未実施（B）** | **A（実装）/ B（実機の目視）**。バックテスト画面・馬詳細・グラフは未実装（C） |
+| R19 | ダッシュボード UI（日本語・レスポンシブ・bot 状態・次回予定・最終更新・未更新表示・シグナル/成績/運用画面） | `dashboard/src/main/resources/static`（HTML/CSS）+ `dashboard/src/main/ts`（strict TypeScript。D-243・D-263） | `/`（IAP の内側） | 静的検査（インライン script・外部 CDN・innerHTML なし）+ TS 単体 47 件 + 契約の見本と実 API の形の比較（MySQL 統合）+ 配信と no-cache の確認（Tomcat）。イメージでの配信の確認は CI の images ジョブ（ローカルは環境の制約で未実施）。**ブラウザでの目視確認は未実施（B）** | **A（実装）/ B（実機の目視）**。バックテスト画面・馬詳細・グラフは未実装（C） |
 | R20 | 管理操作 + CSRF + 監査ログ | `AdminApi`（手動補正の作成・取消・一覧）、`CsrfGuardFilter`、`AuditLogWriter`（`audit_log` 追記専用）、`ApiAuthFilter`（`/api/v1/admin` は読取りも ADMIN）、`AdminWriteGuardFilter`（NORMAL 以外は 409） | `/api/v1/admin/**`（`app` ユーザー: calendar_override・audit_log の INSERT） | 単体（作成/取消/400/404/409/監査の記録と失敗/CSRF の拒否）+ MySQL（監査の追記・UPDATE/DELETE 不可）は CI | **A（手動補正）/ C（エージェント失効）**。ML モデルの有効化は R22（B） |
-| R21 | ML 学習 Job・推論・モデル署名・ゲート・レジストリ（F10/F11/F12） | `ml/`、`domain/ml`、`:bot` | GCS model-store | pytest 128 + Kotlin/Python 結合 5 | **A**（実モデル・実データでの学習は B: T1.20/T1.21） |
+| R21 | ML 学習 Job・推論・モデル署名・ゲート・レジストリ（F10/F11/F12） | `:ml-train`（Kotlin。D-257）、`domain/ml`、`:bot` | GCS model-store | ml-train 単体 47 以上 + `MlTrainInteropIntegrationTest`（bot ⇄ ml-train の jar） | **A**（実モデル・実データでの学習は B: T1.20/T1.21） |
 | R22 | ML 管理 UI（有効化・メトリクス表示） | — | — | — | **B**（有効化は品質ゲートの閾値が未承認〔CLAUDE.md: 未承認の数値仕様・品質閾値の有効化は本人判断〕。表示だけなら C） |
 | R23 | DB スキーマ・Flyway V1〜V5・GRANT・複数 MySQL 版 | `:db-migration` | MySQL 8.4/9.7 | 統合 49 + CI | **A**（本番 DB への適用は B） |
 | R24 | SQLite → MySQL のデータ移行ツール（F16、`DATA_MIGRATION_DESIGN`） | `tools/migrate/`（未作成） | 旧 SQLite のコピー | — | **C**（実データの投入は B。ツールは合成 SQLite で検証） |
 | R25 | 運用モード（NORMAL/STOPPED）の読取りと全アプリでの遵守、ビーコン | `:cloud-gcp`、各アプリ | GCS | 単体 + 統合 | **A**（実 GCS は B: G-OPS-*） |
-| R26 | CI・事前検証・イメージ・release-manifest | `.github/`、`tools/ci`、`tools/release` | GitHub Actions | CI + `tools.ci.preflight` | **A** |
+| R26 | CI・事前検証・イメージ・release-manifest | `.github/`、`tools/src`（TypeScript。D-254） | GitHub Actions | CI + `npm run preflight` | **A** |
 | R27 | Terraform（基盤・WIF・ネットワーク・IAM・Secret・AR・Cloud Run・Jobs・Cloud SQL・Scheduler・IAP） | `jra-bot-infra/terraform`（PR #4・#6） | GCP | `fmt/validate/test`（mock 17）。**実 plan は未実施** | **A（コード）/ B（apply・実 plan）** |
 | R28 | deploy / start / stop / status workflow・排他・部分失敗・安全な再実行 | `jra-bot-infra/.github/workflows` + `ops/`（PR #4） | GCP | ops 単体 77（偽 GCP）。**GitHub 上の実行は未実施** | **A（コード）/ B（実行）** |
 | R29 | 監視・アラート・予算・ロールバック・バックアップ復旧・鍵更新の手順 | infra `docs/OPERATIONS.md`、`terraform/monitoring.tf` | — | 文書 + mock | **A（文書・コード）/ B（予算は本人の設定）** |
@@ -50,13 +50,13 @@
 完成の条件: 自分たちで保守する Python が通常開発・CI・運用の必須経路に無い。区分は上と同じ（A = コード + 合成データ検証まで、B = 本人・実機・本番待ち、C = 未実装）。
 | ID | 対象 | 移行先 | 状態 | 区分 |
 |---|---|---|---|---|
-| L1 | CI・リリース補助（tools/ci・tools/release・JUnit 件数検査） | TypeScript（`tools/src`） | 実装・試験 163 件・ローカルのイメージスモーク 179 件成功（ブランチ claude/lang-l1-ci-tools-ts）。CI で確認中 | **A（PR 待ち）** |
-| L2 | infra の運用 CLI（ops） | TypeScript（infra `ops/src`） | 実装・試験 104 件・既知問題 5 件の修正（infra ブランチ claude/lang-l2-ops-ts）。実 GCP は未検証 | **A（コード）/ B（実 GCP）** |
+| L1 | CI・リリース補助（tools/ci・tools/release・JUnit 件数検査） | TypeScript（`tools/src`） | **実装・CI 接続済み**（web PR #36。D-254）。試験 164 件（2026-11-03） | **A** |
+| L2 | infra の運用 CLI（ops） | TypeScript（infra `ops/src`） | **実装・CI 接続済み**（infra PR #7）。試験 138 件（L6 の preview-guard・db-users を含む）。実 GCP は未検証 | **A（コード）/ B（実 GCP）** |
 | L3 | ML 学習・評価・品質ゲート・成果物・convert-pkl（ml/・tools/ml） | Kotlin（`:ml-train`） | **実装・接続・合成データで検証済み**（D-257）。Python の ml/・tools/ml は削除。実 pkl の変換確認は本人の PC（B）、実データでの学習・閾値は COMP-4・未承認のまま | **A**（合成データの範囲） |
 | L4 | ゴールデン（tools/golden） | Kotlin（`golden-runner verify/check`） | **実装・CI 接続済み**（D-258）。旧 Python の verify・kotlin_compare と同じ報告（要約がバイト単位で一致）。Python の生成器・CI ジョブは削除。旧実装からの再生成の一致は CI から外した（LANGUAGE_MIGRATION §5） | **A** |
-| L5 | Windows 取得エージェント（agent/） | C#/.NET 10 | 未着手 | **C**（実機 COM は B） |
-| L6 | GCP 資源定義（terraform/） | Pulumi + TypeScript | 未着手 | **C**（up/import は B） |
-| L7 | フロントエンド（app.js） | TypeScript | 未着手 | **C** |
+| L5 | Windows 取得エージェント（agent/） | C#/.NET 10 | **実装・CI 接続済み**（web PR #42。D-261・D-262）。xunit 307 件（Linux・Windows の CI）・Kotlin の相互運用試験 4/4。Python の agent は削除 | **A**（実機 COM は B: R4） |
+| L6 | GCP 資源定義（terraform/） | Pulumi + TypeScript | **定義・mock 試験 27 件・preview guard・`ops db-users` 済**（infra PR #9。I-036・I-037）。Terraform は up/import の承認まで現行の定義 | **A（コード・mock）/ B（preview の workflow・WIF・up/import・実 GCP）** |
+| L7 | フロントエンド（app.js） | TypeScript（`dashboard/src/main/ts`） | **実装・接続済み**（D-263）。TS 試験 47 件・契約の見本を Kotlin の MySQL 統合試験と共有。イメージの実ビルドと配信のスモークは CI の images ジョブで確認（ローカルは環境の制約で未実施）。Python は無い | **A**（実ブラウザの目視は B: R19） |
 | L8 | 残機能（上表の C） | Kotlin/TS | 未着手 | **C** |
 | L9 | リリース経路（AR 公開・本番 manifest・deploy 受渡し） | GitHub Actions + TS | 未着手 | **C**（実公開は B） |
 

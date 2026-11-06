@@ -108,6 +108,7 @@ run 39921807006（T2.6、head 6f24519。全ジョブが毎回実行）。壁時�
 | jar | 焼き込みの `requiredSchemaVersion` が `build.gradle.kts` と一致、`releaseId` = Git SHA／アプリに Flyway が入っていない／MySQL ドライバがある／jar 内に秘密・実データ名がない／自前リソースに秘密らしい代入がない。db-migration は同梱マイグレーションがリポジトリの `V*/R*.sql` と一致 |
 | bot（DB なし、`--network none`） | 引数なし・不正 `--task`・設定不足・`--tenant-id` 欠落 = 2、ModeProvider UNKNOWN = 75、prod でローカルファイルのモード = 2、prod で GCS 不達 = 75（0 にならない）、prod で bot 以外の DB ユーザー = 2 |
 | db-migration（DB なし） | 引数なし/不正 `--mode`/環境変数不足 = 2（stdout 空）、DB 不達 = 75 + JSON 1 行 |
+| dashboard の画面（CI 専用 MySQL で起動した後。D-263） | `/` の index.html が `<script type="module" src="/js/app.js">` を読み CSP（`script-src 'self'`）付き、`/js/app.js`・`/js/api.js` が JavaScript として配信され相対 import（`./api.js`）を持つ、旧 `/app.js` は 404 |
 | ingest / dashboard（DB なし） | prod で設定不足・環境なし・prod のローカルファイルモード = 起動失敗（非 0・ハングしない） |
 | CI 専用 MySQL 8.4（合成ユーザー・ランダムパスワード） | db-migration: 空 DB の info（current=null）→ validate=10 → migrate=0 → validate=0 → info（current=latest）／誤パスワード=1。bot: STOPPED は 5 タスクとも 0 で **DB 接続ゼロ**（サーバの Connections 差分 = 確認用の 1 本）、NORMAL（local のみ）は DB に接続しスタブが `TASK_NOT_IMPLEMENTED`/`STUB_LOCAL_OK` と記録して 0、認証失敗 = 1、スキーマ版不足（履歴の表なし）= 1 でテーブルを作らない。ingest/dashboard: 起動して `/internal/health`・`/internal/ready` が無トークンで 401、`docker stop` が 10 秒以内に 0/143（137・OOM でない） |
 | 秘密 | テスト用パスワードがどのコンテナの標準出力/標準エラー/ログにも出ない |
@@ -145,3 +146,9 @@ EVENT_NAME=push BEFORE_SHA=<sha> node build/tools/src/main.js classify   # 変�
 5. インフラ（Terraform）で将来 Workload Identity Federation を作るときは、`attribute_condition` を `jra-bot-infra` の特定リポジトリ・ブランチだけに限定し、`jra-bot-web` と PR からのトークンを信頼しない。
 
 **継続的なセキュリティスキャンの提案**（費用・頻度を考慮。今回は実装しない）: ①GitHub の Secret scanning と Push protection（Public は無料）を主とする。②gitleaks / trufflehog の全履歴スキャンは、**毎回の CI に入れない**。月次の既存フル検証に合わせた手動実行か、Claude クラウド上でのリリース前スキャンにする。③PR ごとの差分スキャン（`gitleaks --log-opts=base..head`）は数秒で終わるため、希望すれば `changes and repo hygiene` に足せる（今回は追加しない）。
+
+## 10. 画面の TypeScript（2026-11-03。D-263）
+- **CI**: release-tools ジョブに `npm run --silent build:frontend`（ブラウザ用の tsconfig で strict の型検査）と `npm run --silent test:frontend`（試験用の tsconfig で変換し node:test。`dashboard/run-tests.mjs` が JUnit で件数〔最小 47・試験ファイル 5 つの存在〕・skip 0 を検査）。Biome の lint は `dashboard/src/main/ts`・`src/test/ts`・`run-tests.mjs` も対象。
+- **Gradle**: `:dashboard:compileFrontend`（Exec。ルートの `node_modules/typescript`）→ `build/generated/frontend/static/js` → main の resources。build・db-integration ジョブは setup-tools で Node と `npm ci` を済ませているので追加の手順は無い。compat-connectorj26 は `:persistence` だけなので影響しない。
+- **Docker**: `frontend` ステージ（`node:24.22.2-trixie-slim`、digest 固定。Dependabot の docker が digest を更新）→ build ステージへ変換結果だけを COPY、Gradle は `-PfrontendPrebuilt=true`。実行イメージに Node は入らない（`dockerfile.test.ts` が検査）。
+- **分類**: `dashboard/src/main/ts`・`dashboard/tsconfig*.json`・`dashboard/src/main/resources/static` → kotlin_app + release + docker、`dashboard/src/test/ts`・`run-tests.mjs`・契約の見本（`src/test/resources/frontend-contract`）→ kotlin_app + release。

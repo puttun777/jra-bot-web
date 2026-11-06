@@ -71,6 +71,10 @@ export const RULES: ReadonlyArray<readonly [RegExp, readonly Tag[]]> = [
   [/^docs\/CONTRACTS\.md$/, ["docs", "release"]],
   [/^db-migration\/src\/main\/resources\/db\/migration\//, ["kotlin_db", "release", "docker"]],
   [/^(bot|ingest|dashboard)\/build\.gradle\.kts$/, ["kotlin_app", "release", "docker"]],
+  // 画面（TypeScript。D-263）: release-tools が lint・型検査・node:test、build が Gradle の compileFrontend と Kotlin の静的検査、images が Node のステージと配信。
+  //     契約の見本は TypeScript の試験と Kotlin の統合試験（ReadAdminApiMySqlIntegrationTest。kotlin_app）の両方が読む
+  [/^dashboard\/(src\/main\/ts\/|tsconfig(\.test)?\.json$|src\/main\/resources\/static\/)/, ["kotlin_app", "release", "docker"]],
+  [/^dashboard\/(src\/test\/ts\/|run-tests\.mjs$|src\/test\/resources\/frontend-contract\/)/, ["kotlin_app", "release"]],
   [/^(bot|ingest|dashboard)\/src\/main\/resources\//, ["kotlin_app", "docker"]],
   [/^db-migration\/src\/main\//, ["kotlin_db", "docker"]],
   // --- Connector/J・DB ドライバ関連の依存設定（gradle/libs.versions.toml は build_cfg でもある）

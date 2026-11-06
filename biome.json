@@ -4,7 +4,9 @@
     "includes": [
       "tools/**/*.ts",
       "tools/**/*.mjs",
-      "dashboard/src/main/ts/**/*.ts"
+      "dashboard/src/main/ts/**/*.ts",
+      "dashboard/src/test/ts/**/*.ts",
+      "dashboard/run-tests.mjs"
     ]
   },
   "formatter": {

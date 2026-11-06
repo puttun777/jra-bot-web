@@ -120,6 +120,9 @@
 | ダークモード | `prefers-color-scheme` 対応（CSS 変数） |
 | エラー/空状態 | 取得失敗・データ未更新・「該当なし」を明示（旧 UI の `st.info/warning` を踏襲）。**不明を 0 や空で隠さない** |
 
+## 3.1 実装（2026-11-03 時点。D-243・D-263）
+採用は §4 の比較の後に D-243 で変更した「静的な HTML/CSS + JSON API」。画面の処理は **strict TypeScript**（`dashboard/src/main/ts`。外部ライブラリ・バンドラなし）を Gradle の `compileFrontend` が ES モジュールへ変換し、`/js/app.js` から読む（CSP `script-src 'self'` のまま）。API の応答は `schema.ts` で実行時に検査し、形が違えば描画しない。値は textContent だけで描画する。画面と API の契約は `dashboard/src/test/resources/frontend-contract` の見本を TypeScript と Kotlin の試験が共有する。
+
 ## 4. 技術比較
 ### 4.1 候補
 | 案 | 構成 |

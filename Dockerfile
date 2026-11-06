@@ -12,6 +12,19 @@
 # - ベースイメージは digest 固定。更新は Dependabot（docker）が digest を更新する PR を出す（自動マージしない）。タグは JDK 25 の LTS 系列。
 # - GCP・レジストリへの push は行わない（ここはビルド定義だけ）。
 
+# ---------------------------------------------------------------- frontend
+# ダッシュボードの画面（TypeScript。D-263）を ES モジュールへ変換する。Gradle の compileFrontend と同じ tsc・同じ tsconfig（版は package-lock.json）。
+# Node は CI（actions/setup-node）と同じ 24.22.2。結果だけを build ステージへ渡す（Node・node_modules は実行イメージに入らない）。
+FROM node:24.22.2-trixie-slim@sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446 AS frontend
+WORKDIR /src
+COPY package.json package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm,id=jrabot-npm-cache \
+    npm ci --ignore-scripts --no-audit --no-fund
+COPY dashboard/tsconfig.json ./dashboard/
+COPY dashboard/src/main/ts ./dashboard/src/main/ts
+RUN node node_modules/typescript/bin/tsc -p dashboard/tsconfig.json \
+    && test -f dashboard/build/generated/frontend/static/js/app.js
+
 # ---------------------------------------------------------------- build
 FROM eclipse-temurin:25-jdk-noble@sha256:ba0f0e1a33864105e1d454e88105c617ab40f71062db1f306bf58be32a3f8e5e AS build
 WORKDIR /src
@@ -32,11 +45,13 @@ COPY dashboard ./dashboard
 COPY ml-train ./ml-train
 # settings.gradle.kts が include するため必要（検証専用のツールで、どのイメージにも入らない: jar は上の 4 つのターゲットの成果物だけをコピーする）
 COPY golden-runner ./golden-runner
+# 画面の変換結果（frontend ステージ）。-PfrontendPrebuilt=true で Gradle の compileFrontend（Node が要る）を省き、この結果を jar に入れる
+COPY --from=frontend /src/dashboard/build/generated/frontend ./dashboard/build/generated/frontend
 ARG GIT_SHA=unknown
 # テストと lint は CI の別ジョブで実行済み（イメージのビルドでは実行しない）。ここでは成果物だけを作る
 # 依存のダウンロード先（~/.gradle/caches）は BuildKit のキャッシュマウント: 層には残らず（イメージに入らない）、同じビルダー上の再ビルドで再利用される
 RUN --mount=type=cache,target=/root/.gradle/caches,id=jrabot-gradle-caches \
-    ./gradlew --no-daemon --console=plain --stacktrace -PreleaseId="${GIT_SHA}" \
+    ./gradlew --no-daemon --console=plain --stacktrace -PreleaseId="${GIT_SHA}" -PfrontendPrebuilt=true \
         :bot:bootJar :ingest:bootJar :dashboard:bootJar :ml-train:bootJar :db-migration:installDist
 
 # ---------------------------------------------------------------- runtime base
