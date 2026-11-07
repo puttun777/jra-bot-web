@@ -1,7 +1,7 @@
 name: release
 
 # 本番リリースの公開（L9。D-276）。本人が手動で実行し、環境 `release`（必須の承認者を本人が設定）の承認の後にだけ動く。
-# - main のコミットで、その `ci gate` が成功しているときだけ。5 つのイメージをビルド・スモークしてから Artifact Registry へ push し、
+# - main のコミットで、その ci.yml の最新の完了した実行が成功し、gate・build・images・db integration が成功しているときだけ（リリースの前に ci を手動で実行する）。5 つのイメージをビルド・スモークしてから Artifact Registry へ push し、
 #   push 後の digest で本番 release-manifest.json を生成・検証し、GitHub Release（タグ v<release>）の資産として公開する。
 # - GCP へは WIF（GitHub の OIDC → STS → SA の短期トークン）だけ。長期キー・Secrets は使わない。第三者の認証 action も使わない
 #   （トークンの交換は tools/src/release/publish.ts。トークンは docker login の標準入力にだけ渡す）。
@@ -36,7 +36,7 @@ jobs:
     environment: release
     permissions:
       contents: write # GitHub Release の作成（manifest の資産）
-      checks: read # 対象コミットの ci gate の確認
+      actions: read # 対象コミットの ci の実行とジョブの確認
       id-token: write # WIF（GitHub の OIDC トークン）
     env:
       RELEASE: ${{ inputs.release }}
@@ -63,7 +63,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-tools
-      - name: The ci gate of this commit must have succeeded
+      - name: The latest ci run of this commit must have tested the code (gate, build, images, db)
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: node build/tools/src/main.js publish check-ci --repo "$GITHUB_REPOSITORY" --sha "$GITHUB_SHA"

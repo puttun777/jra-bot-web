@@ -50,8 +50,9 @@ infra `docs/OPERATIONS.md` §0 の U1〜U8（プロジェクト・tfstate バケ
 1. infra の承認待ちの PR（web の push 用の WIF と `gha-web-push`）を確かめてマージし、`pulumi up`（または承認済みの手順）で作る。
 2. web の Settings → Environments に `release` を作り、必須の承認者に自分を入れ、デプロイできるブランチを `main` だけにする（**タグ・Release を作る権限（contents:write）はこの設定だけが守る**。必ず設定する）。
 3. 変数 `GCP_PROJECT_ID`・`GCP_WIF_PROVIDER_WEB`・`GCP_PUSH_SERVICE_ACCOUNT` を、**リポジトリではなく環境 `release` の変数**に入れる（Secrets ではない。値は infra の出力 `web_push`）。環境が無いまま実行されて自動で作られた環境には変数が無いので、最初の検査で止まる。
-4. web の Actions → release → Run workflow（main・release 例 `2026.11.0`）→ 承認。そのコミットで CI の `ci gate`・`build`・`images`・`db integration` が成功していなければ止まる（ドキュメントだけのコミットでは build が動かないので、先に Actions → ci → Run workflow で全部の検査を実行する）。
-5. 出来た Release の本文の `manifest_url` と `manifest_sha256` を、infra の deploy（workflow_dispatch）に入れる（A2 の V5 の適用もここ）。
+4. **毎回のリリースの前に**、web の Actions → ci → Run workflow（main）で全部の検査を実行し、成功を待つ（通常の push の CI は変更の分類で images・db を省くことがある）。
+5. web の Actions → release → Run workflow（main・release 例 `2026.11.0`）→ 承認。そのコミットの **ci の最新の完了した実行**で `ci gate`・`build`・`images`・`db integration` が成功し、参考の connectorj26 以外に失敗が無ければ進む。
+6. 出来た Release の本文の `manifest_url` と `manifest_sha256` を、infra の deploy（workflow_dispatch）に入れる（A2 の V5 の適用もここ）。
 
 ### B5. Discord（任意）
 通知用とエラー用の Webhook を作り、Secret Manager（`discord-webhook` / `discord-error-webhook`）に入れる（標準入力から。履歴に残さない）。最初の通知は `docs/OPERATIONS.md`（web）の確認手順で、合成データの 1 件を送って受信を確認。

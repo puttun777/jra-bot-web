@@ -183,48 +183,65 @@ describe("push (Git SHA のタグで push し、digest 付き参照を得る)", 
   });
 });
 
-describe("check-ci (このコミットで CI がコードを実際に検査したこと)", () => {
-  const url = `https://api.github.com/repos/puttun777/jra-bot-web/commits/${SHA}/check-runs`;
-  const cr = (name: string, conclusion: string | null, extra: Record<string, unknown> = {}) => ({
+describe("check-ci (このコミットの ci.yml の最新の完了した実行がコードを実際に検査したこと)", () => {
+  const RUNS = `https://api.github.com/repos/puttun777/jra-bot-web/actions/workflows/ci.yml/runs`;
+  const JOBS = (id: number) => `https://api.github.com/repos/puttun777/jra-bot-web/actions/runs/${id}/jobs`;
+  const job = (name: string, conclusion: string | null) => ({
     name,
-    head_sha: SHA,
     status: conclusion === null ? "in_progress" : "completed",
     conclusion,
-    app: { slug: "github-actions" },
-    ...extra,
+  });
+  const run = (id: number, created: string, conclusion = "success", sha = SHA) => ({
+    id,
+    created_at: created,
+    head_sha: sha,
+    status: "completed",
+    conclusion,
   });
   const green = [
-    cr("changes and repo hygiene", "success"),
-    cr("build (Temurin 25)", "success"),
-    cr("images / images (build + smoke, no push)", "success"),
-    cr("db integration (MySQL 8.4)", "success"),
-    cr("connectorj26", "skipped"),
-    cr("ci gate", "success"),
+    job("changes and repo hygiene", "success"),
+    job("build (Temurin 25)", "success"),
+    job("images / images (build + smoke, no push)", "success"),
+    job("db integration (MySQL 8.4)", "success"),
+    job("db integration (MySQL 9.7)", "success"),
+    job("connectorj26 / connector/j 26.x check (MySQL 8.4)", "failure"),
+    job("ci gate", "success"),
   ];
-  const check = (runs: unknown[], calls: Call[] = []) =>
+  const check = (runs: unknown[], jobsById: Record<number, unknown[]>, calls: Call[] = []) =>
     checkCi(
       { repo: "puttun777/jra-bot-web", sha: SHA, token: "t" },
-      fakeHttp({ [url]: { status: 200, body: { total_count: runs.length, check_runs: runs } } }, calls),
+      fakeHttp(
+        {
+          [RUNS]: { status: 200, body: { workflow_runs: runs } },
+          ...Object.fromEntries(Object.entries(jobsById).map(([id, jobs]) => [JOBS(Number(id)), { status: 200, body: { jobs } }])),
+        },
+        calls,
+      ),
     );
-  it("gate・build・images・db integration が成功なら通る（skipped の任意のジョブは問わない）", async () => {
+  it("最新の完了した実行の gate・build・images・db が成功なら通る（参考の connectorj26 の失敗は問わない）。古い実行の失敗は見ない", async () => {
     const calls: Call[] = [];
-    await check(green, calls);
-    assert.match(calls[0]?.url ?? "", /filter=latest&per_page=100&page=1$/);
+    await check(
+      [run(1, "2026-11-07T01:00:00Z", "failure"), run(2, "2026-11-07T02:00:00Z")],
+      { 1: [job("build (Temurin 25)", "failure")], 2: green },
+      calls,
+    );
+    assert.match(calls[0]?.url ?? "", /head_sha=a{40}&status=completed&per_page=100$/);
+    assert.match(calls[1]?.url ?? "", /\/runs\/2\/jobs\?filter=latest&per_page=100$/);
   });
-  it("ドキュメントだけのコミット（build・images が skipped）・失敗・取消・進行中・別 App の同名・別のコミットは 1", async () => {
-    const replace = (name: string, v: unknown) => green.map((c) => (c.name === name ? v : c));
-    for (const runs of [
-      replace("build (Temurin 25)", cr("build (Temurin 25)", "skipped")),
-      replace("images / images (build + smoke, no push)", cr("images / images (build + smoke, no push)", "skipped")),
-      green.filter((c) => !c.name.startsWith("db integration")),
-      [...green, cr("db integration (MySQL 9.7)", "failure")],
-      [...green, cr("agent windows", "cancelled")],
-      replace("ci gate", cr("ci gate", null)),
-      replace("ci gate", cr("ci gate", "success", { app: { slug: "someone-else" } })),
-      replace("build (Temurin 25)", cr("build (Temurin 25)", "success", { head_sha: "f".repeat(40) })),
-      [],
-    ]) {
-      await assert.rejects(check(runs), (e: unknown) => e instanceof PublishError && e.code === 1);
+  it("通常の push の CI（images・db が分類で省かれた）・最新の実行の失敗・必須のジョブの失敗・未完了・実行が無いは 1", async () => {
+    const without = (re: RegExp) => green.filter((jb) => !re.test(jb.name));
+    for (const [runs, jobs] of [
+      [[run(5, "2026-11-07T03:00:00Z")], without(/^images/)],
+      [[run(5, "2026-11-07T03:00:00Z")], without(/^db integration/)],
+      [[run(5, "2026-11-07T03:00:00Z")], without(/^build/)],
+      [[run(5, "2026-11-07T03:00:00Z")], [...without(/9\.7/), job("db integration (MySQL 9.7)", "failure")]],
+      [[run(5, "2026-11-07T03:00:00Z")], [...green, job("agent windows", "cancelled")]],
+      [[run(5, "2026-11-07T03:00:00Z")], [...green, job("agent dotnet (linux)", null)]],
+      [[run(4, "2026-11-07T01:00:00Z"), run(5, "2026-11-07T03:00:00Z", "failure")], green],
+      [[run(5, "2026-11-07T03:00:00Z", "success", "f".repeat(40))], green],
+      [[], green],
+    ] as const) {
+      await assert.rejects(check([...runs], { 4: green, 5: [...jobs] }), (e: unknown) => e instanceof PublishError && e.code === 1);
     }
     await assert.rejects(checkCi({ repo: "puttun777/jra-bot-web", sha: SHA, token: "t" }, fakeHttp({}, [])), /HTTP 404/);
   });

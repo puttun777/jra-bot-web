@@ -277,9 +277,9 @@ describe("release workflow (L9. D-276): the only workflow with write permissions
     assert.deepEqual(Object.keys(on), ["workflow_dispatch"]);
     assert.ok(isRecord(Y["concurrency"]) && Y["concurrency"]["cancel-in-progress"] === false);
   });
-  it("top-level permissions are read-only; the job alone gets exactly contents:write, checks:read, id-token:write and requires the release environment", () => {
+  it("top-level permissions are read-only; the job alone gets exactly contents:write, actions:read, id-token:write and requires the release environment", () => {
     assert.deepEqual(Y["permissions"], { contents: "read" });
-    assert.deepEqual(job["permissions"], { contents: "write", checks: "read", "id-token": "write" });
+    assert.deepEqual(job["permissions"], { contents: "write", actions: "read", "id-token": "write" });
     assert.equal(job["environment"], "release");
   });
   it("uses no secrets, no long-lived keys and no third-party auth actions (WIF is done by our own TypeScript)", () => {

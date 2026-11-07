@@ -182,56 +182,66 @@ export function pushImages(
   return out as Record<ImageName, string>;
 }
 
-/** このコミットで成功していなければならない CI のジョブ（ci.yml。gate だけでは足りない: ドキュメントだけのコミットでは build・images が動かない）。 */
-export const REQUIRED_RUNS = ["ci gate", "build (Temurin 25)", "images / images (build + smoke, no push)"] as const;
-const DB_RUN = /^db integration \(MySQL [0-9.]+\)$/;
+/** このコミットの ci の実行で成功していなければならないジョブ（ci.yml の名前。gate だけでは足りない: 分類で build・images が動かないコミットがある）。 */
+export const REQUIRED_JOBS = ["ci gate", "build (Temurin 25)"] as const;
+const IMAGES_JOB = /^images \/ /;
+const DB_JOB = /^db integration \(MySQL [0-9.]+\)$/;
+/** 失敗しても ci の結果に影響しない参考のジョブ（continue-on-error）。 */
+const INFORMATIONAL_JOB = /^connectorj26( \/ |$)/;
+const FAILED = ["failure", "cancelled", "timed_out", "action_required", "startup_failure"];
 
 /**
- * 対象コミットで CI が**コードを実際に検査した**こと（レビュー 中）: GitHub Actions の check run のうち、[REQUIRED_RUNS] と
- * db integration（1 つ以上）がすべて成功、かつ失敗・取消の check run が無い。ドキュメントだけのコミットなら、ci.yml を手動で実行（全部の検査）してから。
+ * 対象コミットで CI が**コードを実際に検査した**こと（レビュー 中）。そのコミットの **ci.yml の最新の完了した実行**だけを見る
+ * （他の実行・他のワークフロー・前回の release の失敗を混ぜない）: 実行が成功、ジョブ ci gate・build・images（1 つ以上）・
+ * db integration（1 つ以上）がすべて成功、参考のジョブ（connectorj26）以外に失敗・取消が無い。
+ * 通常の push の CI は分類で images・db を省くので、リリースの前に ci.yml を手動で実行する（全部の検査: USER_ACTIONS B4b）。
  */
 export async function checkCi(opts: { repo: string; sha: string; token: string }, http: Http = defaultHttp): Promise<void> {
   if (!/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(opts.repo)) throw new PublishError("--repo は owner/name");
   if (!/^[0-9a-f]{40}$/.test(opts.sha)) throw new PublishError("--sha は 40 桁の小文字 16 進");
-  const runs: Record<string, unknown>[] = [];
-  for (let page = 1; page <= 5; page++) {
-    const r = await http(
-      `https://api.github.com/repos/${opts.repo}/commits/${opts.sha}/check-runs?filter=latest&per_page=100&page=${page}`,
-      {
-        method: "GET",
-        headers: { Authorization: `Bearer ${opts.token}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" },
-      },
-    );
-    const body = await json(r, "check-runs の取得");
-    const items = Array.isArray(body["check_runs"]) ? body["check_runs"].filter(isRecord) : [];
-    runs.push(...items);
-    const total = typeof body["total_count"] === "number" ? body["total_count"] : 0;
-    if (items.length < 100 || runs.length >= total) break;
-  }
-  // GitHub Actions のもので、このコミットのものだけ（他の App の同名の check を数えない）
-  const ours = runs.filter((c) => c["head_sha"] === opts.sha && isRecord(c["app"]) && c["app"]["slug"] === "github-actions");
-  const bad = ours.filter(
-    (c) =>
-      c["status"] === "completed" &&
-      ["failure", "cancelled", "timed_out", "action_required", "startup_failure"].includes(String(c["conclusion"])),
+  const headers = { Authorization: `Bearer ${opts.token}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
+  const runsBody = await json(
+    await http(
+      `https://api.github.com/repos/${opts.repo}/actions/workflows/ci.yml/runs?head_sha=${opts.sha}&status=completed&per_page=100`,
+      { method: "GET", headers },
+    ),
+    "ci の実行の取得",
   );
-  if (bad.length > 0)
-    throw new PublishError(
-      `このコミットに失敗・取消の CI のジョブがある: ${bad
-        .map((c) => String(c["name"]))
-        .slice(0, 5)
-        .join(", ")}`,
-      1,
-    );
-  const success = (name: string): boolean =>
-    ours.some((c) => c["name"] === name && c["status"] === "completed" && c["conclusion"] === "success");
-  const missing: string[] = REQUIRED_RUNS.filter((n) => !success(n));
-  const db = ours.filter((c) => typeof c["name"] === "string" && DB_RUN.test(c["name"]));
-  if (db.length === 0 || !db.every((c) => c["status"] === "completed" && c["conclusion"] === "success"))
-    missing.push("db integration (MySQL …)");
+  const runs = (Array.isArray(runsBody["workflow_runs"]) ? runsBody["workflow_runs"].filter(isRecord) : []).filter(
+    (r) => r["head_sha"] === opts.sha && r["status"] === "completed" && typeof r["id"] === "number" && typeof r["created_at"] === "string",
+  );
+  const latest = runs.sort(
+    (a, b) => String(b["created_at"]).localeCompare(String(a["created_at"])) || Number(b["id"]) - Number(a["id"]),
+  )[0];
+  if (latest === undefined)
+    throw new PublishError("このコミットの ci の完了した実行が無い（Actions → ci → Run workflow で main を検査してから）", 1);
+  if (latest["conclusion"] !== "success")
+    throw new PublishError(`このコミットの最新の ci の実行が成功していない（${String(latest["conclusion"])}）`, 1);
+  const jobsBody = await json(
+    await http(`https://api.github.com/repos/${opts.repo}/actions/runs/${String(latest["id"])}/jobs?filter=latest&per_page=100`, {
+      method: "GET",
+      headers,
+    }),
+    "ci のジョブの取得",
+  );
+  const jobs = Array.isArray(jobsBody["jobs"]) ? jobsBody["jobs"].filter(isRecord) : [];
+  const name = (jb: Record<string, unknown>): string => (typeof jb["name"] === "string" ? jb["name"] : "");
+  const ok = (jb: Record<string, unknown>): boolean => jb["status"] === "completed" && jb["conclusion"] === "success";
+  const bad = jobs.filter(
+    (jb) => !INFORMATIONAL_JOB.test(name(jb)) && (jb["status"] !== "completed" || FAILED.includes(String(jb["conclusion"]))),
+  );
+  if (bad.length > 0) throw new PublishError(`ci の実行に失敗・取消・未完了のジョブがある: ${bad.map(name).slice(0, 5).join(", ")}`, 1);
+  const missing: string[] = REQUIRED_JOBS.filter((n) => !jobs.some((jb) => name(jb) === n && ok(jb)));
+  for (const [re, label] of [
+    [IMAGES_JOB, "images"],
+    [DB_JOB, "db integration"],
+  ] as const) {
+    const matched = jobs.filter((jb) => re.test(name(jb)));
+    if (matched.length === 0 || !matched.every(ok)) missing.push(label);
+  }
   if (missing.length > 0) {
     throw new PublishError(
-      `このコミットで成功していない・実行されていない CI のジョブ: ${missing.join(", ")}（ドキュメントだけのコミットなら ci.yml を手動で実行してから）`,
+      `このコミットの ci の実行で成功していない・実行されていないジョブ: ${missing.join(", ")}（Actions → ci → Run workflow で全部の検査を実行してから）`,
       1,
     );
   }
