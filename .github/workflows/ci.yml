@@ -111,7 +111,7 @@ jobs:
             --classes "SchemaVersionTest,SchemaCheckClassificationTest,DbSettingsTest,MappingTest,PersistenceModuleTest,SqlTemplateTenantGuardTest,DeadlockRetryTest,BotRunAcquireContentionTest"
           node build/tools/src/main.js verify-junit --label "domain unit (incl. decision logic T3.1/T3.2, calendar T3.3, ingest T3.4, ML T3.6-A)" --dir domain/build/test-results/test --min 822 \
             --classes "EvMathTest,KellyMathTest,PythonCompatTest,MarketProbabilityTest,SnapshotFiltersTest,MarketBlendTest,WinStakeTest,WinDecisionEvaluatorTest,PlackettLuceTest,ComboOddsTest,ComboStrategyTest,WinDecisionComboTest,SourceVersionTest,TransitionsTest,ScheduleEventTest,CalendarOverrideTest,WatchWindowTest,EffectiveCalendarTest,ScheduleUpdaterTest,CalendarCheckPolicyTest,CalendarCheckServiceTest,CalendarSourceGuardTest,LeaseAndDayModelTest,EnvelopeValidatorTest,AgentAuthTest,FetchPolicyTest,HeartbeatAndBackfillTest,PedigreeHashTest,CanonicalJsonTest,StrictJsonTest,FeatureSchemaTest,FeatureSchemaFixtureTest,FeatureBuilderTest,ModelLoaderTest,ProbabilityPipelineTest,MlEndToEndTest,DatasetExporterTest,HorseMasterAtTimeTest,DatasetPublisherTest,TenantBoundaryContractTest"
-          node build/tools/src/main.js verify-junit --label "legacy-import unit (D-271)" --dir legacy-import/build/test-results/test --min 34 --classes "PreflightTest,ExtractTest,ConvertTest,TransformTest"
+          node build/tools/src/main.js verify-junit --label "legacy-import unit (D-271)" --dir legacy-import/build/test-results/test --min 38 --classes "PreflightTest,ExtractTest,ConvertTest,TransformTest,LoadTest"
           node build/tools/src/main.js verify-junit --label "golden-runner unit" --dir golden-runner/build/test-results/test --min 36 --classes "GoldenRunnerTest,GoldenMlTest,GoldenVerifyCompareTest"
           node build/tools/src/main.js verify-junit --label "bot unit" --dir bot/build/test-results/test --min 75 \
             --classes "BotArgsParserTest,BotLauncherTest,BotJobExecutorTest,BotProcessTest,BotSpringWiringTest,JobGateTest,CycleGateTest,CalendarCheckTaskHandlerTest,CalendarSettingsParserTest,ExportDatasetTaskHandlerTest"
@@ -216,6 +216,14 @@ jobs:
           node build/tools/src/main.js verify-junit --label "bot integration" --dir bot/build/test-results/integrationTest --min 42 --classes "BotJobIntegrationTest,CalendarCheckIntegrationTest,MlTrainInteropIntegrationTest,ReconcileIntegrationTest,RetentionIntegrationTest"
           node build/tools/src/main.js verify-junit --label "ingest integration" --dir ingest/build/test-results/integrationTest --min 50 --classes "IngestReadyIntegrationTest,AgentAuthIntegrationTest,IngestIdempotencyIntegrationTest,IngestPipelineIntegrationTest,AgentInteropIntegrationTest"
           node build/tools/src/main.js verify-junit --label "dashboard integration" --dir dashboard/build/test-results/integrationTest --min 17 --classes "DashboardReadyIntegrationTest,ReadAdminApiMySqlIntegrationTest"
+      # 旧 SQLite の移行ツールの load（D-275）: 合成の旧 DB → extract → transform → db-migration CLI で V1〜V5 を適用した DB へ読込み。
+      - name: Legacy import integration tests (Testcontainers, ${{ env.MYSQL_IMAGE }})
+        if: always() && contains(env.DB_SUITES, 'tools')
+        run: ./gradlew :legacy-import:integrationTest --stacktrace
+      - name: Verify that the legacy import integration tests actually ran
+        if: always() && contains(env.DB_SUITES, 'tools')
+        run: |
+          node build/tools/src/main.js verify-junit --label "legacy-import integration (D-275)" --dir legacy-import/build/test-results/integrationTest --min 3 --classes "LoadIntegrationTest"
 
   # Windows 取得エージェント（agent/cs。C#/.NET 10。D-261）。Gradle に組み込まない独立プロジェクト。Linux で restore（lock file どおり）・ビルド（警告はエラー）・
   # 単体・SQLite WAL・偽サーバ・子プロセスのワーカー（Fake の JV-Link）・署名・ビーコン・再送と復旧・CLI・PoC の Mock を検査する。実 JV-Link・SDK・実トークンは使わない。

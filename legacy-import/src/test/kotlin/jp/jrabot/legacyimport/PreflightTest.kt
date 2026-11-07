@@ -272,4 +272,17 @@ class PreflightTest {
         assertEquals("WARN", r.verdict)
         assertTrue(r.warnings.any { it.contains("行数不明") }, r.warnings.toString())
     }
+
+    @Test
+    fun `主キーが期待と違う表があれば NG（旧 ID の一意性などの前提が崩れる）`() {
+        val db =
+            legacyDb("pk.sqlite") { c ->
+                c.exec("DROP TABLE jvlink_timestamps")
+                c.exec("CREATE TABLE jvlink_timestamps (data_type TEXT NOT NULL, lastfiletimestamp TEXT NOT NULL, updated_at TEXT)")
+            }
+        val r = Preflight.run(db)
+        assertEquals(listOf("jvlink_timestamps"), r.primaryKeyMismatch)
+        assertEquals("NG", r.verdict)
+        assertEquals(emptyList(), Preflight.run(legacyDb("ok-pk.sqlite")).primaryKeyMismatch)
+    }
 }

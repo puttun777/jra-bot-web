@@ -1,6 +1,6 @@
 # legacy-import（旧 SQLite → MySQL の移行ツール。D-271）
 
-利用者の PC で、旧実装（参照元 jra-bot）の `data/jraev.sqlite` の**コピー**に対して実行する CLI。アプリのイメージには入らない。今は `preflight`・`extract`・`verify-extract`・`transform`（load 以降は後続）。
+利用者の PC で、旧実装（参照元 jra-bot）の `data/jraev.sqlite` の**コピー**に対して実行する CLI。アプリのイメージには入らない。今は `preflight`・`extract`・`verify-extract`・`transform`・`load`。
 
 ## コピーの作り方（重要）
 旧アプリは WAL のモードで書く。**旧アプリ（デーモン・ダッシュボード）を止めてから**ファイルをコピーするか、`sqlite3 data/jraev.sqlite ".backup jraev-copy.sqlite"` で 1 ファイルのコピーを作る。
@@ -40,3 +40,17 @@ legacy-import/build/install/legacy-import/bin/legacy-import transform --extract 
 - 表ごとに「元の行数 = 変換 + 隔離」を `transform-manifest.json` に記録する。標準エラーには件数と理由のコードだけを出す。
 - 旧の未通知のシグナル（`sent=0`）は SEND_UNKNOWN にする。新しい bot が古い通知を送らないようにするため。
 - 時刻の解釈（`--naive-zone`）は、preflight の時刻の形式の内訳を見て本人が決める。
+
+## 読込み（load。D-275）
+```
+LEGACY_IMPORT_DB_PASSWORD=... legacy-import/build/install/legacy-import/bin/legacy-import load \
+  --transform <transform の出力先> --jdbc-url jdbc:mysql://localhost:3306/<db> --user <user>
+```
+- 接続先は**利用者の PC の MySQL だけ**（COMP-4: クラウドへの投入は回答まで行わない）。
+  - host は localhost・127.0.0.1・[::1] の 1 つだけ。URL のパラメータは sslMode・useSSL・allowPublicKeyRetrieval・connectTimeout・socketTimeout・characterEncoding だけ（SOCKS・名前付きパイプ・ソケットの差し替えなど、接続の経路を変えるものは拒否）。
+  - 接続後に Cloud SQL の変数（`cloudsql*`）があれば拒否する。
+  - **注意**: Cloud SQL Auth Proxy・IAP・`ssh -L` などのトンネルは localhost に見え、Cloud SQL 以外のクラウドの MySQL は検出できない。クラウドの DB に向けたトンネルを開いたまま実行しない。
+- Flyway の V1〜V5 を適用し、`tenant` に transform の `--tenant-id` の行を入れておく。パスワードは引数に取らず、環境変数 `LEGACY_IMPORT_DB_PASSWORD` から読む。
+- 新しい実行は、そのテナントの対象表が空の DB にだけ読み込む。読み込んだチャンクは、データと同じトランザクションで DB の台帳（`legacy_import_chunk`）に記録する。途中で止まったら同じコマンドを再実行すると続きから進む。すべての検証に通ったら台帳を消す。読込み済みの DB への再実行は拒否する。
+- 隔離した行は `import_quarantine` に入る（`migration_run` は transform の manifest の sha256）。
+- 最後に表ごとの件数を transform の manifest と照らす。終了コード: 0 = 一致、1 = 違う（台帳は調べられるように残す）、2 = 入力・接続・DB の失敗。

@@ -7,7 +7,7 @@ CI の実行範囲の決め方、分岐保護の設定、イメージのビル�
 |---|---|---|
 | `changes and repo hygiene` | 変更ファイルの分類（`tools/src/ci/classify.ts`）+ 秘密/実データの混入検査 + 整合検査（`consistency`） | **常に** |
 | `build (Temurin 25)` | `./gradlew build`（コンパイル・単体・ktlint・依存方向）、JDK 25 の確認、domain/golden-runner/cloud-gcp/アプリ/persistence の単体テスト件数の検証、**Kotlin と旧 Python のゴールデン比較**（`:golden-runner:run --args="check …"`。T3.1、D-107。D-258 で Kotlin だけに） | Kotlin・Gradle・ビルド定義・CI・**`tools/golden`（`.md` 以外）・`golden-runner`** の変更 |
-| `db integration (MySQL x)` | Testcontainers の MySQL。スイート: `migration`（:db-migration）/ `persistence`（:persistence）/ `apps`（:bot :ingest :dashboard） | 下表のとおり範囲が変わる |
+| `db integration (MySQL x)` | Testcontainers の MySQL。スイート: `migration`（:db-migration）/ `persistence`（:persistence）/ `apps`（:bot :ingest :dashboard）/ `tools`（:legacy-import の load の統合試験。D-275） | 下表のとおり範囲が変わる |
 | `release tools and ci scripts (TypeScript)` | `tools/`（TypeScript。D-254）の Biome（lint・format）・tsc（strict）・単体試験（node:test。件数下限 150・skip/todo/失敗 0 を JUnit XML で検査）。release-manifest・Dockerfile 静的検査・判定・ゲート・ワークフロー規則・JUnit 件数検査・preflight（Docker 不要） | リリース関連・Dockerfile・Dependabot 設定・マイグレーション・CI・`tools/` の変更 |
 | （削除: `golden tests (Python 3.12)`） | 2026-11-03（D-258）。フィクスチャの検証と Kotlin との比較は `build` ジョブの `golden-runner check`（Kotlin だけ）。旧実装からの再生成の一致は CI から外した（LANGUAGE_MIGRATION §5） | - |
 | （削除: `ml tools (Python 3.12)`・`ml-train (Python 3.13)`） | 2026-11-02（D-257）。ML 学習は Kotlin の `:ml-train` になり、単体試験は `build` ジョブ（件数を verify-junit で検査）、export-dataset → ml-train（jar を別プロセス）→ ModelLoader の結合試験は `db integration` の `apps` スイート（MySQL 8.4/9.7） | - |
@@ -35,6 +35,7 @@ CI の実行範囲の決め方、分岐保護の設定、イメージのビル�
 | `tools/src/release/`・`tools/test/release/` `docs/schemas/` `docs/release/` `docs/CONTRACTS.md` | - | - | - | ○ | `tools/*/release` のみ ○ | - |
 | `tools/golden/fixtures/`・`catalog.json` | ○（検証と Kotlin との比較が build ジョブの中にあるため。DB 統合は不要） | - | - | - | - | - |
 | `ml-train/`（Kotlin。D-257） | ○ | ○（`apps` スイート。:bot の結合試験が ml-train の jar を起動するため） | - | `build.gradle.kts` のみ ○ | `src/main` と `build.gradle.kts` は ○ | - |
+| `legacy-import/`（旧 SQLite の移行ツール。D-271・D-275） | ○ | ○（`tools` スイート・8.4。`:domain` の変更でも実行。DB 層の変更では全スイートの一つとして 8.4 + 9.7） | - | - | `build.gradle.kts` のみ ○ | - |
 | `golden-runner`（Kotlin ランナー） | ○ | -（`:domain` に依存するだけで、persistence/アプリは使わない） | - | - | -（イメージの jar には入らない。Dockerfile は COPY のみ） | - |
 | `.github/dependabot.yml` | - | - | - | ○ | - | - |
 | `.github/workflows/`・`.github/scripts/`・`.github/actions/`・`tools/src/{ci,lib}/`・`tools/test/{ci,lib}/`・`tools/tsconfig.json`・`package.json`・`package-lock.json`・`biome.json` | ○ | 8.4 + 9.7 × 全 | ○ | ○ | ○ | 本ワークフローのみ ○ |

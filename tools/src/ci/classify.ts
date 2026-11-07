@@ -11,7 +11,7 @@
  *   kotlin_db    :persistence :db-migration → build、DB 統合（全スイート・8.4 と 9.7）
  *   build_cfg    Gradle・版数・build-logic・ktlint 設定 → build、DB 統合（全・8.4 + 9.7）、images
  *   kotlin_golden tools/golden（fixtures・catalog.json。.md 以外）・golden-runner → build（検証と比較は build ジョブの中。D-258）
- *   kotlin_tool  legacy-import（旧 SQLite の移行ツール。D-271。イメージに入らない）→ build
+ *   kotlin_tool  legacy-import（旧 SQLite の移行ツール。D-271。イメージに入らない）→ build、DB 統合（tools のスイート = load の統合試験・8.4。D-275）
  *   release      リリース補助・スキーマ・契約・マイグレーション・アプリの build 定義 → release-tools（TypeScript 単体）
  *   docker       Dockerfile / .dockerignore → images
  *   connectorj   DB ドライバ関連の依存設定 → connector/j 26.x 互換性チェック（非ゲート）
@@ -126,7 +126,7 @@ export const RULES: ReadonlyArray<readonly [RegExp, readonly Tag[]]> = [
 ];
 
 export const FULL_MATRIX: readonly string[] = ["8.4", "9.7"];
-export const ALL_SUITES: readonly string[] = ["migration", "persistence", "apps"];
+export const ALL_SUITES: readonly string[] = ["migration", "persistence", "apps", "tools"];
 
 export type Mode = "docs" | "code" | "full";
 
@@ -226,6 +226,11 @@ export function classify(files: readonly string[]): Plan {
   } else if (has("kotlin_app")) {
     p.dbMatrix = ["8.4"];
     p.dbSuites = ["apps"];
+  }
+  // 移行ツールの load（D-275）は Flyway のスキーマと :domain の検査に依存する。ツールか :domain が変われば tools のスイートも実行する
+  if (has("kotlin_tool", "kotlin_core")) {
+    if (p.dbMatrix.length === 0) p.dbMatrix = ["8.4"];
+    if (!p.dbSuites.includes("tools")) p.dbSuites = [...p.dbSuites, "tools"];
   }
   p.runRelease = has("release");
   p.runImages = has("docker", "build_cfg");

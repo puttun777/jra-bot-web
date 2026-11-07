@@ -72,6 +72,12 @@ object LegacySchema {
             }
         }
 
+    /** 実ファイルの表の主キーの列（主キー内の順）。 */
+    internal fun primaryKeyOf(
+        c: Connection,
+        table: String,
+    ): List<String> = primaryKey(c, table.also { require(IDENT.matches(it)) { "表名の形式が不正" } })
+
     private fun primaryKey(
         c: Connection,
         table: String,

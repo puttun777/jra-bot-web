@@ -693,7 +693,10 @@ class Transform(
         ) = Mapping(source, target, columns, keys, partition, accept, map)
     }
 
-    /** 表ごとの一意キー・並び・受け入れ（子の参照の判定に使う親は、全列を変換でき重複でもない行だけ）。 */
+    /**
+     * 表ごとの一意キー・並び・受け入れ（子の参照の判定に使う親は、全列を変換でき重複でもない行だけ）。
+     * legacy_id だけが一意キーの表は、旧の INTEGER PRIMARY KEY で一意なので照らさない（メモリを使わない: 再レビュー 低）。
+     */
     private fun spec(m: Mapping): Mapping =
         when (m.source) {
             "races" -> m.with(listOf("race_id"), accept = { races += it[0] as String })
@@ -705,11 +708,11 @@ class Transform(
             "results" -> m.with(listOf("race_id", "umaban"), "race_id")
             "payouts" -> m.with(listOf("race_id", "market", "combo_key"), "race_id")
             "signals" -> m.with(listOf("race_id", "market", "umaban", "observed_at"), accept = { signals += it[0] as Long })
-            "race_evaluations" -> m.with(listOf("legacy_id"), accept = { evaluations += it[0] as Long })
-            "ticket_evaluations" -> m.with(listOf("legacy_id"))
-            "bets" -> m.with(listOf("legacy_id"), accept = { bets += it[0] as Long })
-            "bet_legs" -> m.with(listOf("legacy_id"))
-            "model_metrics" -> m.with(listOf("legacy_id"))
+            "race_evaluations" -> m.with(emptyList(), accept = { evaluations += it[0] as Long })
+            "ticket_evaluations" -> m.with(emptyList())
+            "bets" -> m.with(emptyList(), accept = { bets += it[0] as Long })
+            "bet_legs" -> m.with(emptyList())
+            "model_metrics" -> m.with(emptyList())
             "jvlink_timestamps" -> m.with(listOf("data_type"))
             else -> error("一意キーの指定が無い: ${m.source}")
         }
@@ -922,6 +925,10 @@ class Transform(
     }
 
     companion object {
+        /** 新表 → 出力する列（tenant_id を含む。load が manifest を照らす正本: D-275 のレビュー 低）。 */
+        internal fun outputColumns(): Map<String, List<String>> =
+            Transform(1, java.time.ZoneOffset.UTC, lenientJson = false).mappings().associate { it.target to listOf("tenant_id") + it.columns }
+
         const val MANIFEST = "transform-manifest.json"
         const val FORMAT = "legacy-import transform v1"
 

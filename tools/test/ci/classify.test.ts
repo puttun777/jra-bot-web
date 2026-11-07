@@ -32,13 +32,13 @@ describe("scenario", () => {
       images: false,
       c26: false,
       db: ["8.4"],
-      suites: ["persistence", "apps"],
+      suites: ["persistence", "apps", "tools"],
     });
   });
   it("03 persistence only", () => {
     const p = plan("persistence/src/main/kotlin/jp/jrabot/persistence/RaceDao.kt");
     assert.deepEqual(p.dbMatrix, ["8.4", "9.7"]);
-    assert.deepEqual(p.dbSuites, ["migration", "persistence", "apps"]);
+    assert.deepEqual(p.dbSuites, ["migration", "persistence", "apps", "tools"]);
     assert.equal(p.runBuild, true);
     assert.equal(p.runImages, false);
     assert.equal(p.runConnectorj26, false);
@@ -100,7 +100,7 @@ describe("scenario", () => {
     }
     const p = plan("domain/src/main/kotlin/jp/jrabot/domain/decision/EvMath.kt");
     assert.equal(p.runBuild, true);
-    assert.deepEqual([p.dbMatrix, p.dbSuites], [["8.4"], ["persistence", "apps"]]);
+    assert.deepEqual([p.dbMatrix, p.dbSuites], [["8.4"], ["persistence", "apps", "tools"]]);
   });
   it("07c golden docs only does not build", () => {
     assert.equal(plan("tools/golden/README.md").mode, "docs");
@@ -123,7 +123,7 @@ describe("scenario", () => {
     });
     p = plan("bot/src/main/kotlin/A.kt", "persistence/src/main/kotlin/B.kt");
     assert.deepEqual(p.dbMatrix, ["8.4", "9.7"]); // 広い方に合わせる
-    assert.deepEqual(p.dbSuites, ["migration", "persistence", "apps"]);
+    assert.deepEqual(p.dbSuites, ["migration", "persistence", "apps", "tools"]);
   });
   it("09 unknown or missing files fail closed", () => {
     for (const files of [[], ["new-top-level/thing.bin"], ["docs/a.md", "unmapped/main.py"], ["tools/src/unknown-area/x.ts"]]) {
@@ -276,7 +276,7 @@ describe("ml train (Kotlin, D-257)", () => {
   it("synthetic ML artifacts run build with the domain DB suites, golden comparison and release checks", () => {
     const p = classify(["domain/src/test/resources/ml/models/cal_test_001.json"]);
     assert.ok(p.runBuild && p.runRelease);
-    assert.deepEqual(p.dbSuites, ["persistence", "apps"]);
+    assert.deepEqual(p.dbSuites, ["persistence", "apps", "tools"]);
   });
   it("the removed Python locations are not silently classified (unknown = full run), docs stay docs", () => {
     for (const f of ["ml/src/ml_train/job.py", "ml/requirements.txt", "tools/ml/canonical.py", "tools/ml/signing.py"]) {
@@ -405,15 +405,24 @@ describe("dashboard frontend (TypeScript, D-263)", () => {
 });
 
 describe("legacy import tool (Kotlin, D-271)", () => {
-  it("tool source and tests run the build job only; docs stay docs", () => {
+  it("tool source and tests run the build job and the load integration suite (tools, 8.4; D-275); docs stay docs", () => {
     for (const f of [
       "legacy-import/src/main/kotlin/jp/jrabot/legacyimport/Preflight.kt",
       "legacy-import/src/main/resources/legacy-schema/schema.sql",
+      "legacy-import/src/test/kotlin/jp/jrabot/legacyimport/LoadIntegrationTest.kt",
     ]) {
       const p = classify([f]);
       assert.ok(p.runBuild && !p.runImages && !p.runRelease, f);
-      assert.deepEqual(p.dbMatrix, [], f);
+      assert.deepEqual([p.dbMatrix, p.dbSuites], [["8.4"], ["tools"]], f);
     }
+    // アプリと一緒なら apps に tools を足す。DB 層の変更は全スイート（8.4・9.7）
+    assert.deepEqual(classify(["bot/src/main/kotlin/A.kt", "legacy-import/src/main/kotlin/B.kt"]).dbSuites, ["apps", "tools"]);
+    assert.deepEqual(classify(["db-migration/src/main/resources/db/migration/V9__x.sql"]).dbSuites, [
+      "migration",
+      "persistence",
+      "apps",
+      "tools",
+    ]);
     assert.equal(classify(["legacy-import/src/main/resources/legacy-schema/README.md"]).mode, "docs");
   });
   it("its build definition also runs images (the Docker build stage evaluates settings)", () => {
