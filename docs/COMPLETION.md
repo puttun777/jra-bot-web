@@ -57,8 +57,8 @@
 | L5 | Windows 取得エージェント（agent/） | C#/.NET 10 | **実装・CI 接続済み**（web PR #42。D-261・D-262）。xunit 307 件（Linux・Windows の CI）・Kotlin の相互運用試験 4/4。Python の agent は削除 | **A**（実機 COM は B: R4） |
 | L6 | GCP 資源定義（terraform/） | Pulumi + TypeScript | **定義・mock 試験 27 件・preview guard・`ops db-users` 済**（infra PR #9。I-036・I-037）。Terraform は up/import の承認まで現行の定義 | **A（コード・mock）/ B（preview の workflow・WIF・up/import・実 GCP）** |
 | L7 | フロントエンド（app.js） | TypeScript（`dashboard/src/main/ts`） | **実装・接続済み**（D-263）。TS 試験 47 件・契約の見本を Kotlin の MySQL 統合試験と共有。イメージの実ビルドと配信のスモークは CI の images ジョブで確認（ローカルは環境の制約で未実施）。Python は無い | **A**（実ブラウザの目視は B: R19） |
-| L8 | 残機能（上表の C） | Kotlin/TS | 未着手 | **C** |
-| L9 | リリース経路（AR 公開・本番 manifest・deploy 受渡し） | GitHub Actions + TS | 未着手 | **C**（実公開は B） |
+| L8 | 残機能（上表の C） | Kotlin/TS | R16・R20・R22・R24（preflight〜load）は実装済み（D-266〜D-275）。R30 の 1 本の通し試験は未作成 | **A（大半）/ C（R30 の通し・R24 のチェックサムと promote は COMP-4 後）** |
+| L9 | リリース経路（AR 公開・本番 manifest・deploy 受渡し） | GitHub Actions + TS | **実装済み**（D-276）: `release.yml`（手動・環境の承認・ci gate の確認・ビルド・スモーク・WIF の短期トークンで push・digest・本番 manifest の生成と検証・GitHub Release の資産）と `publish`（TS。試験 8）。ワークフローの規則の試験 7。infra の WIF・SA は承認待ちの PR #13 | **A（コード）/ B（infra の WIF・SA の承認と作成、変数・環境の設定、実公開: USER_ACTIONS A8・B4b）** |
 
 ## 本人の判断・操作が必要なもの（B のまとめ。包括委任の対象外）
 | 項目 | 不足している情報・必要な操作 | 準備状況 |

@@ -48,9 +48,10 @@ LEGACY_IMPORT_DB_PASSWORD=... legacy-import/build/install/legacy-import/bin/lega
 ```
 - 接続先は**利用者の PC の MySQL だけ**（COMP-4: クラウドへの投入は回答まで行わない）。
   - host は localhost・127.0.0.1・[::1] の 1 つだけ。URL のパラメータは sslMode・useSSL・allowPublicKeyRetrieval・connectTimeout・socketTimeout・characterEncoding だけ（SOCKS・名前付きパイプ・ソケットの差し替えなど、接続の経路を変えるものは拒否）。
-  - 接続後に Cloud SQL の変数（`cloudsql*`）があれば拒否する。
+  - 接続後に Cloud SQL の変数（`cloudsql*`）があれば拒否する（Cloud SQL が持つ変数を使う経験則。実インスタンスでは未確認）。
   - **注意**: Cloud SQL Auth Proxy・IAP・`ssh -L` などのトンネルは localhost に見え、Cloud SQL 以外のクラウドの MySQL は検出できない。クラウドの DB に向けたトンネルを開いたまま実行しない。
 - Flyway の V1〜V5 を適用し、`tenant` に transform の `--tenant-id` の行を入れておく。パスワードは引数に取らず、環境変数 `LEGACY_IMPORT_DB_PASSWORD` から読む。
 - 新しい実行は、そのテナントの対象表が空の DB にだけ読み込む。読み込んだチャンクは、データと同じトランザクションで DB の台帳（`legacy_import_chunk`）に記録する。途中で止まったら同じコマンドを再実行すると続きから進む。すべての検証に通ったら台帳を消す。読込み済みの DB への再実行は拒否する。
 - 隔離した行は `import_quarantine` に入る（`migration_run` は transform の manifest の sha256）。
+- 途中まで読み込んだ後に transform をやり直す（`--naive-zone` を変える等）と manifest の sha256 が変わり、その DB には入れない（『別の transform』）。DB を作り直してから読み込む。
 - 最後に表ごとの件数を transform の manifest と照らす。終了コード: 0 = 一致、1 = 違う（台帳は調べられるように残す）、2 = 入力・接続・DB の失敗。

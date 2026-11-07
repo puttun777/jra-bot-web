@@ -1,6 +1,6 @@
 /**
  * TypeScript ツールの入口（`node build/tools/src/main.js <コマンド> …`）。各コマンドの説明は各モジュールの先頭。
- *   classify | gate | consistency | verify-junit | preflight | release | image-smoke
+ *   classify | gate | consistency | verify-junit | preflight | release | image-smoke | publish
  */
 import * as classify from "./ci/classify.js";
 import * as consistency from "./ci/consistency.js";
@@ -9,6 +9,7 @@ import * as junit from "./ci/junit.js";
 import * as preflight from "./ci/preflight.js";
 import * as releaseCli from "./release/cli.js";
 import * as imageSmoke from "./release/image-smoke.js";
+import * as publish from "./release/publish.js";
 
 const COMMANDS: Readonly<Record<string, (args: readonly string[]) => number | Promise<number>>> = {
   classify: () => classify.main(),
@@ -18,6 +19,7 @@ const COMMANDS: Readonly<Record<string, (args: readonly string[]) => number | Pr
   preflight: (a) => preflight.main(a),
   release: (a) => releaseCli.main(a),
   "image-smoke": (a) => imageSmoke.main(a),
+  publish: (a) => publish.main(a),
 };
 
 async function entry(argv: readonly string[]): Promise<number> {

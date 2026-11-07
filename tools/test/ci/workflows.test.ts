@@ -18,6 +18,7 @@ const ACTIONS: Record<string, string> = Object.fromEntries(
   readdirSync(join(ROOT, ".github", "actions")).map((d) => [d, readFileSync(join(ROOT, ".github", "actions", d, "action.yml"), "utf8")]),
 );
 const CI = WORKFLOWS["ci.yml"] ?? "";
+const RELEASE_WF = "release.yml";
 
 function yamlOf(text: string): Record<string, unknown> {
   const v: unknown = parseYaml(text);
@@ -49,7 +50,7 @@ function jobText(name: string): string {
 
 describe("workflow rules", () => {
   it("expected workflows and composite actions exist", () => {
-    assert.deepEqual(Object.keys(WORKFLOWS).sort(), ["ci.yml", "compat-connectorj26.yml", "images.yml"]);
+    assert.deepEqual(Object.keys(WORKFLOWS).sort(), ["ci.yml", "compat-connectorj26.yml", "images.yml", "release.yml"]);
     assert.deepEqual(Object.keys(ACTIONS).sort(), ["setup-tools"]);
   });
   it("all external actions are pinned to a commit sha with a version comment", () => {
@@ -62,8 +63,9 @@ describe("workflow rules", () => {
       }
     }
   });
-  it("permissions are read-only and there are no secrets or cloud auth", () => {
+  it("permissions are read-only and there are no secrets or cloud auth (except the manual release workflow, checked below)", () => {
     for (const [name, text] of Object.entries(WORKFLOWS)) {
+      if (name === RELEASE_WF) continue;
       assert.match(text, /^permissions:\n {2}contents: read\n/m, name);
       assert.doesNotMatch(text, /^\s+[a-z-]+:\s*write\s*$/m, `${name}: write 権限`);
       assert.ok(!text.replaceAll("Secrets は", "").includes("secrets."), name);
@@ -246,9 +248,110 @@ describe("workflow rules", () => {
     assert.ok(t.includes('test "$rc" = 1')); // プレビューを本番として検証して拒否されること
   });
   it("no workflow calls the removed python ci/release tools", () => {
+    assert.ok(WORKFLOWS[RELEASE_WF], "release.yml");
     for (const [name, text] of Object.entries(WORKFLOWS)) {
       assert.doesNotMatch(text, /tools\.ci\.|tools\.release\.|verify_test_results\.py/, name);
     }
+  });
+});
+
+describe("release workflow (L9. D-276): the only workflow with write permissions and cloud auth", () => {
+  const T = WORKFLOWS[RELEASE_WF] ?? "";
+  const Y = yamlOf(T);
+  const job = (() => {
+    const j = Y["jobs"];
+    assert.ok(isRecord(j) && isRecord(j["publish"]));
+    assert.deepEqual(Object.keys(j), ["publish"]);
+    return j["publish"];
+  })();
+  const steps = (() => {
+    const st = job["steps"];
+    assert.ok(Array.isArray(st));
+    return st.filter(isRecord);
+  })();
+  const stepIndex = (needle: string): number => steps.findIndex((s) => JSON.stringify(s).includes(needle));
+
+  it("runs only by hand (workflow_dispatch), never on push/PR/schedule, one at a time", () => {
+    const on = Y["on"];
+    assert.ok(isRecord(on));
+    assert.deepEqual(Object.keys(on), ["workflow_dispatch"]);
+    assert.ok(isRecord(Y["concurrency"]) && Y["concurrency"]["cancel-in-progress"] === false);
+  });
+  it("top-level permissions are read-only; the job alone gets exactly contents:write, actions:read, id-token:write and requires the release environment", () => {
+    assert.deepEqual(Y["permissions"], { contents: "read" });
+    assert.deepEqual(job["permissions"], { contents: "write", actions: "read", "id-token": "write" });
+    assert.equal(job["environment"], "release");
+  });
+  it("uses no secrets, no long-lived keys and no third-party auth actions (WIF is done by our own TypeScript)", () => {
+    assert.ok(!T.includes("secrets."));
+    assert.doesNotMatch(T, /google-github-actions|docker\/login-action|credentials_json|GOOGLE_APPLICATION_CREDENTIALS|password:/i);
+    assert.ok(T.includes("publish registry-login"));
+    for (const line of T.split("\n")) {
+      const m = /^\s*-?\s*uses:\s*(\S+)/.exec(line);
+      if (m?.[1] === undefined || m[1].startsWith("./")) continue;
+      assert.match(m[1], /^actions\/checkout@/, `release.yml で使える外部 action は checkout だけ: ${line.trim()}`);
+    }
+  });
+  it("no expression is interpolated inside run (inputs and contexts reach scripts only through env); pipes keep their exit status; checkout does not persist credentials", () => {
+    for (const st of steps) {
+      if (typeof st["run"] !== "string") continue;
+      assert.doesNotMatch(st["run"], /\$\{\{/, String(st["name"]));
+      if (/(?<!\|)\|(?!\|)/.test(st["run"]) || st["run"].trim().includes("\n")) {
+        assert.match(st["run"], /set -euo pipefail/, `${String(st["name"])}: 複数行・パイプの run は set -euo pipefail`);
+        assert.equal(st["shell"], "bash", String(st["name"]));
+      }
+    }
+    assert.match(T, /RELEASE: \$\{\{ inputs\.release \}\}/);
+    assert.equal(T.split("actions/checkout@").length, T.split("persist-credentials: false").length);
+  });
+  it("the guard checks main, the schema's release format, the notes and the configuration; the tag check treats only 404 as absent and the tag is verified after creation", () => {
+    const guard = JSON.stringify(steps[0]);
+    for (const needle of [
+      "refs/heads/main",
+      "(0?[1-9]|1[0-2])",
+      "2000",
+      "[[:cntrl:]]",
+      "GCP_PROJECT_ID GCP_WIF_PROVIDER_WEB GCP_PUSH_SERVICE_ACCOUNT",
+    ]) {
+      assert.ok(guard.includes(needle), needle);
+    }
+    const tag = JSON.stringify(
+      steps.find((x) => JSON.stringify(x).includes("git/ref/tags") && !JSON.stringify(x).includes("gh release create")),
+    );
+    assert.ok(tag.includes('\\"404\\"') && tag.includes('\\"200\\"'), "404 だけを『無い』とみなす");
+    const publish = JSON.stringify(steps.find((x) => JSON.stringify(x).includes("gh release create")));
+    assert.ok(publish.includes(".object.sha") && publish.includes("GITHUB_SHA"), "タグが対象のコミットを指すことを確かめる");
+    assert.ok(T.includes('--notes="$NOTES"'), "notes が - で始まっても引数として解釈されない");
+  });
+  it("gates come first: main only + release format + configuration, then ci gate success, then the tag check, then build and smoke, then push", () => {
+    const guard = stepIndex("refs/heads/main");
+    const ci = stepIndex("publish check-ci");
+    const tag = stepIndex("git/ref/tags");
+    const smoke = stepIndex("main.js image-smoke");
+    const login = stepIndex("publish registry-login");
+    const push = stepIndex("publish push");
+    const manifest = stepIndex("release production");
+    const validate = stepIndex("release validate --kind production");
+    const publish = stepIndex("gh release create");
+    assert.ok([guard, ci, tag, smoke, login, push, manifest, validate, publish].every((i) => i >= 0));
+    assert.ok(
+      guard === 0 &&
+        guard < ci &&
+        ci < tag &&
+        tag < smoke &&
+        smoke < login &&
+        login < push &&
+        push < manifest &&
+        manifest <= validate &&
+        validate <= publish,
+    );
+    const logout = steps.find((s) => JSON.stringify(s).includes("docker logout"));
+    assert.ok(logout && logout["if"] === "always()", "レジストリの認証を必ず消す");
+    assert.ok(T.includes('--min-app-release "$RELEASE"'), "検証済みのロールバック範囲は release 自身だけ");
+  });
+  it("does not deploy and pushes only to the Artifact Registry of the configured project", () => {
+    assert.doesNotMatch(T, /gcloud run|deploy\.yml|ops deploy|run\.googleapis|pulumi|terraform/i);
+    assert.ok(T.includes("REGISTRY: asia-northeast1-docker.pkg.dev"));
   });
 });
 

@@ -10,6 +10,7 @@
 | A4 | ML の品質ゲートの閾値・モデルの有効化 | `docs/ML_DESIGN.md`。閾値は未承認 | ML は無効（市場確率のみ）のまま |
 | A5 | GCP の課金リソースの作成（`terraform apply`） | infra `docs/OPERATIONS.md` §0〜§2、`docs/CLOUD_COSTS.md` §10（通常 ≈ ¥8,550/月、全停止 ≈ ¥1,200/月の推定） | 本番が存在しない |
 | A6 | Public 化（任意） | `docs/PUBLIC_READINESS.md`・D-180。**Visibility を変えられるのは本人だけ** | 非公開のまま |
+| A8 | web からイメージを公開する権限（L9。D-276） | infra の承認待ちの PR（web 専用の WIF provider と `gha-web-push` = Artifact Registry の `jra-bot` リポジトリへの書込みだけ）。公開の manifest には GCP のプロジェクト ID とレジストリの参照が入り、**web が Public なので Release の資産と release の実行のログは誰でも読める**（ログにはプロジェクト ID・WIF の provider〔プロジェクト番号を含む〕・SA のメールが出る。秘密ではないが、出したくなければ infra の deploy の入力を変える設計に戻す） | web の `release.yml` は変数の未設定で止まる = 本番のイメージを公開できない（デプロイできない） |
 | A7 | 実データのクラウド投入（COMP-4 の回答後） | `docs/DATA_SOURCE_COMPLIANCE.md` §0 の Q1〜Q3 を JRA-VAN に問い合わせ | **実データはクラウドに入れない**（ローカルでの検証のみ） |
 
 ## B. 実機・外部での作業
@@ -44,6 +45,14 @@ JV-Link 仕様書 Ver.4.9 の該当ページ（RA/SE/O1〜O6/HR などの項目�
 
 ### B4. GCP の準備（A5 の前）
 infra `docs/OPERATIONS.md` §0 の U1〜U8（プロジェクト・tfstate バケット・GitHub Environments/変数・OAuth クライアント・Secret・予算アラート）。**手順は infra の OPERATIONS.md に順番どおり書いてある**。
+
+### B4b. web のリリース（A5・A8 の後。L9: D-276）
+1. infra の承認待ちの PR（web の push 用の WIF と `gha-web-push`）を確かめてマージし、`pulumi up`（または承認済みの手順）で作る。
+2. web の Settings → Environments に `release` を作り、必須の承認者に自分を入れ、デプロイできるブランチを `main` だけにする（**タグ・Release を作る権限（contents:write）はこの設定だけが守る**。必ず設定する）。
+3. 変数 `GCP_PROJECT_ID`・`GCP_WIF_PROVIDER_WEB`・`GCP_PUSH_SERVICE_ACCOUNT` を、**リポジトリではなく環境 `release` の変数**に入れる（Secrets ではない。値は infra の出力 `web_push`）。環境が無いまま実行されて自動で作られた環境には変数が無いので、最初の検査で止まる。
+4. **毎回のリリースの前に**、web の Actions → ci → Run workflow（main）で全部の検査を実行し、成功を待つ（通常の push の CI は変更の分類で images・db を省くことがある）。
+5. web の Actions → release → Run workflow（main・release 例 `2026.11.0`）→ 承認。そのコミットの **ci の最新の完了した実行**で `ci gate`・`build`・`images`・`db integration` が成功し、参考の connectorj26 以外に失敗が無ければ進む。
+6. 出来た Release の本文の `manifest_url` と `manifest_sha256` を、infra の deploy（workflow_dispatch）に入れる（A2 の V5 の適用もここ）。
 
 ### B5. Discord（任意）
 通知用とエラー用の Webhook を作り、Secret Manager（`discord-webhook` / `discord-error-webhook`）に入れる（標準入力から。履歴に残さない）。最初の通知は `docs/OPERATIONS.md`（web）の確認手順で、合成データの 1 件を送って受信を確認。
