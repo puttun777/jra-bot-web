@@ -1,0 +1,116 @@
+name: release
+
+# 本番リリースの公開（L9。D-276）。本人が手動で実行し、環境 `release`（必須の承認者を本人が設定）の承認の後にだけ動く。
+# - main のコミットで、その `ci gate` が成功しているときだけ。5 つのイメージをビルド・スモークしてから Artifact Registry へ push し、
+#   push 後の digest で本番 release-manifest.json を生成・検証し、GitHub Release（タグ v<release>）の資産として公開する。
+# - GCP へは WIF（GitHub の OIDC → STS → SA の短期トークン）だけ。長期キー・Secrets は使わない。第三者の認証 action も使わない
+#   （トークンの交換は tools/src/release/publish.ts。トークンは docker login の標準入力にだけ渡す）。
+# - デプロイはしない。infra の deploy（workflow_dispatch）に、この Release の manifest の URL と SHA-256 を本人が渡す（CONTRACTS §10）。
+# - 本人の設定が揃うまで動かない（変数 GCP_PROJECT_ID・GCP_WIF_PROVIDER_WEB・GCP_PUSH_SERVICE_ACCOUNT。infra の gha-web-push と WIF は承認後: USER_ACTIONS）。
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "release（例: 2026.11.0。タグは v<release>。既にあれば失敗）"
+        required: true
+        type: string
+      notes:
+        description: "manifest の notes（任意）"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: publish release (push images, production manifest)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: release
+    permissions:
+      contents: write # GitHub Release の作成（manifest の資産）
+      checks: read # 対象コミットの ci gate の確認
+      id-token: write # WIF（GitHub の OIDC トークン）
+    env:
+      RELEASE: ${{ inputs.release }}
+      NOTES: ${{ inputs.notes }}
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_WIF_PROVIDER_WEB: ${{ vars.GCP_WIF_PROVIDER_WEB }}
+      GCP_PUSH_SERVICE_ACCOUNT: ${{ vars.GCP_PUSH_SERVICE_ACCOUNT }}
+      REGISTRY: asia-northeast1-docker.pkg.dev
+    steps:
+      - name: Guard (main only, release format, configuration present)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then echo "main のコミットだけをリリースする（ref=$GITHUB_REF）"; exit 1; fi
+          if ! [[ "$RELEASE" =~ ^[0-9]{4}\.[0-9]{1,2}\.[0-9]{1,3}$ ]]; then echo "release は YYYY.M.N の形（例 2026.11.0）"; exit 1; fi
+          for v in GCP_PROJECT_ID GCP_WIF_PROVIDER_WEB GCP_PUSH_SERVICE_ACCOUNT; do
+            if [ -z "${!v}" ]; then echo "変数 $v が未設定（本人の設定待ち: docs/USER_ACTIONS.md）"; exit 1; fi
+          done
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-tools
+      - name: The ci gate of this commit must have succeeded
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node build/tools/src/main.js publish check-ci --repo "$GITHUB_REPOSITORY" --sha "$GITHUB_SHA"
+      - name: The release tag must not exist yet
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$RELEASE" >/dev/null 2>&1; then echo "タグ v$RELEASE は既にある（release を上げる）"; exit 1; fi
+      - name: Build the 5 images (same as the images workflow)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for t in db-migration bot ingest dashboard ml-train; do
+            docker build --progress=plain --target "$t" --build-arg GIT_SHA="$GITHUB_SHA" -t "jra-bot/$t:$GITHUB_SHA" . 2>&1 | tail -n 20
+          done
+      - name: Pull the CI-only MySQL image
+        run: docker pull mysql:8.4
+      - name: Security and startup smoke (must pass before anything is pushed)
+        run: node build/tools/src/main.js image-smoke --git-sha "$GITHUB_SHA" --report-dir out
+      - name: Registry login (WIF short-lived token; no long-lived key)
+        run: node build/tools/src/main.js publish registry-login --provider "$GCP_WIF_PROVIDER_WEB" --service-account "$GCP_PUSH_SERVICE_ACCOUNT" --registry "$REGISTRY"
+      - name: Push and record the registry digests
+        run: node build/tools/src/main.js publish push --project "$GCP_PROJECT_ID" --git-sha "$GITHUB_SHA" --registry "$REGISTRY" --out out/registry-images.json
+      - name: Registry logout
+        if: always()
+        run: docker logout "$REGISTRY" || true
+      - name: Production manifest (generate and validate; nothing is written if validation fails)
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILT_AT="$(date -u -d "@$(git show -s --format=%ct HEAD)" +%Y-%m-%dT%H:%M:%SZ)"
+          node build/tools/src/main.js release production --git-sha "$GITHUB_SHA" --release "$RELEASE" --built-at "$BUILT_AT" \
+            --registry-images out/registry-images.json --min-app-release "$RELEASE" --notes "$NOTES" --out out/release-manifest.json
+          node build/tools/src/main.js release validate --kind production --expect-git-sha "$GITHUB_SHA" out/release-manifest.json
+          (cd out && sha256sum release-manifest.json > release-manifest.json.sha256)
+      - name: Publish the GitHub Release (manifest asset for the infra deploy)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          SHA256="$(cut -d' ' -f1 out/release-manifest.json.sha256)"
+          URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/v$RELEASE/release-manifest.json"
+          {
+            echo "release-manifest.json for the infra deploy (CONTRACTS §10). This release does not deploy anything."
+            echo
+            echo "- git_sha: \`$GITHUB_SHA\`"
+            echo "- manifest_url: $URL"
+            echo "- manifest_sha256: \`$SHA256\`"
+          } > out/release-notes.md
+          gh release create "v$RELEASE" out/release-manifest.json out/release-manifest.json.sha256 \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$RELEASE" --notes-file out/release-notes.md
+          cat out/release-notes.md >> "$GITHUB_STEP_SUMMARY"

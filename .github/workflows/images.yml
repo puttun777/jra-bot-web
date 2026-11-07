@@ -23,7 +23,7 @@ jobs:
       - uses: ./.github/actions/setup-tools
       - name: Docker
         run: docker version --format 'client={{.Client.Version}} server={{.Server.Version}}'
-      - name: Build the 5 images (JVM 4 share one Gradle build stage; ml-train is Python; local only, no push)
+      - name: Build the 5 images (JVM 4 share one Gradle build stage; ml-train is Kotlin; local only, no push)
         run: |
           set -euo pipefail
           GIT_SHA="$(git rev-parse HEAD)"

@@ -16,6 +16,7 @@
 | Windows エージェント配布物 | zip（秘密を含まない）+ 署名付き更新 manifest | GitHub Release asset（Private）。トークンは利用者が別途配置 |
 
 web→Artifact Registry の push 権限と、infra 側の manifest 取得権限は**推測しない**。第5段階でユーザーの確認を得てから、Workload Identity Federation で付与する（infra 案: `sa-gha-web-push`）。
+- **（2026-11-07 追記: D-276）web の公開経路**: web の `.github/workflows/release.yml`（手動・環境 `release` の承認後・main のコミットで `ci gate` が成功しているときだけ）が、WIF（GitHub の OIDC → STS → SA の短期トークン）で `asia-northeast1-docker.pkg.dev/<project>/jra-bot/<name>` へ push し、push 後の digest で本番 `release-manifest.json` を生成・検証して、GitHub Release `v<release>` の資産 `release-manifest.json` と `release-manifest.json.sha256` を公開する。infra の deploy の入力 `manifest_url` は `https://github.com/<owner>/jra-bot-web/releases/download/v<release>/release-manifest.json`、`manifest_sha256` は同じ Release の本文と `.sha256` の値。web の Actions の変数（Secrets ではない）: `GCP_PROJECT_ID`・`GCP_WIF_PROVIDER_WEB`（`projects/<番号>/locations/global/workloadIdentityPools/<pool>/providers/<id>`）・`GCP_PUSH_SERVICE_ACCOUNT`。infra 側の SA・WIF（web 専用の provider。`release.yml@refs/heads/main` だけ）は本人の承認後に作る（infra PR は承認待ち）。
 
 ## 2. 環境変数/設定（infra → app）
 | 名前 | 供給元 | 対象 | 用途 |
