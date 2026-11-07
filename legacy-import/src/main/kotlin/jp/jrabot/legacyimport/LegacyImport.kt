@@ -29,6 +29,7 @@ import kotlin.system.exitProcess
  *
  * extract: 0 = 抽出した、1 = preflight が NG（抽出しない）、2 = 引数・入力の誤り・出力先が空でない・抽出中に入力が変わった・ツールの失敗。
  * verify-extract: 0 = manifest と一致、1 = 食い違いがある、2 = 検証できない。
+ * load: 0 = 読み込み件数が一致、1 = 件数が違う、2 = 引数・入力の誤り・接続先がループバックでない・DB の失敗（再実行で続きから）。
  * transform: 0 = 変換した（隔離した行は quarantine/ と manifest の件数）、2 = 引数・入力の誤り・extract の食い違い・ツールの失敗。
  *
  * transform・load・verify・promote は後続（実データのクラウド投入は COMP-4 の回答待ち）。
@@ -48,6 +49,7 @@ object LegacyImport {
             "preflight" -> parse(rest, setOf("sqlite", "out"))?.let { preflight(it, out, err) } ?: usage(err)
             "extract" -> parse(rest, setOf("sqlite", "out-dir", "chunk-rows"))?.let { extract(it, err) } ?: usage(err)
             "verify-extract" -> parse(rest, setOf("dir"))?.let { verifyExtract(it, err) } ?: usage(err)
+            "load" -> parse(rest, setOf("transform", "jdbc-url", "user", "state"))?.let { load(it, System.getenv(Load.PASSWORD_ENV), err) } ?: usage(err)
             "transform" -> parse(rest, setOf("extract", "out-dir", "tenant-id", "naive-zone"), setOf("lenient-json"))?.let { transform(it, err) } ?: usage(err)
             else -> usage(err)
         }
@@ -177,6 +179,8 @@ object LegacyImport {
         "使い方: legacy-import preflight --sqlite <path> [--out <report.json>]\n" +
             "       legacy-import extract --sqlite <path> --out-dir <dir> [--chunk-rows <n>]\n" +
             "       legacy-import verify-extract --dir <dir>\n" +
+            "       legacy-import load --transform <dir> --jdbc-url jdbc:mysql://localhost:3306/<db> --user <user> --state <file>\n" +
+            "         （パスワードは環境変数 LEGACY_IMPORT_DB_PASSWORD）\n" +
             "       legacy-import transform --extract <dir> --out-dir <dir> --tenant-id <n> [--naive-zone Asia/Tokyo] [--lenient-json]"
 
     private fun usage(err: PrintStream): Int {
@@ -213,6 +217,47 @@ object LegacyImport {
             }
         }
         return m
+    }
+
+    /** パスワードは引数に取らない（プロセスの一覧・履歴に残るため）。環境変数 [Load.PASSWORD_ENV] から読む。 */
+    internal fun load(
+        opts: Map<String, String>,
+        password: String?,
+        err: PrintStream,
+    ): Int {
+        val transform = opts["transform"] ?: return usage(err)
+        val url = opts["jdbc-url"] ?: return usage(err)
+        val user = opts["user"] ?: return usage(err)
+        val state = opts["state"] ?: return usage(err)
+        if (password == null) {
+            err.println("環境変数 ${Load.PASSWORD_ENV} に DB のパスワードを入れる")
+            return 2
+        }
+        if (!Load.isLoopback(url)) {
+            // COMP-4: 実データのクラウド投入は公式回答まで行わない。利用者の PC の MySQL（ループバック）だけ
+            err.println("接続先は利用者の PC の MySQL（localhost・127.0.0.1・[::1]）だけ。クラウドへの投入は COMP-4 の回答まで行わない")
+            return 2
+        }
+        return try {
+            val r =
+                java.sql.DriverManager.getConnection(url, user, password).use { c ->
+                    Load(Path.of(transform), Path.of(state)).run(c, Load.targetOf(url))
+                }
+            for (t in r.tables) if (t.expected != t.actual) err.println("  ${t.target}: 期待 ${t.expected}、DB ${t.actual}")
+            if (r.quarantineExpected != r.quarantineActual) err.println("  import_quarantine: 期待 ${r.quarantineExpected}、DB ${r.quarantineActual}")
+            err.println("load: ${if (r.ok) "OK" else "NG"} (rows=${r.tables.sumOf { it.actual }}, quarantine=${r.quarantineActual})")
+            if (r.ok) 0 else 1
+        } catch (e: InputRejected) {
+            err.println("入力を受け付けない: ${e.message}")
+            2
+        } catch (e: java.sql.SQLException) {
+            // 値を含み得るので本文は出さない（SQLState とエラー番号だけ）。同じコマンドの再実行で続きから進む
+            err.println("DB の失敗（同じコマンドで再実行すると続きから進む）: SQLState=${e.sqlState} code=${e.errorCode}")
+            2
+        } catch (e: Exception) {
+            err.println("読込みに失敗した（同じコマンドで再実行すると続きから進む）: ${e.javaClass.simpleName}")
+            2
+        }
     }
 
     private fun transform(

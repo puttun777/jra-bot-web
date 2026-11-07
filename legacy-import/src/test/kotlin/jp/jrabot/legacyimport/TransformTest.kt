@@ -265,4 +265,22 @@ class TransformTest {
         assertEquals(mapOf("post_time: 不明（00:00・範囲外・形式外）" to 1L, "distance_m: 0 を NULL" to 1L), races.adjusted)
         assertEquals(mapOf("is_provisional: NULL を既定の 0" to 1L), m.tables.single { it.source == "payouts" }.adjusted)
     }
+
+    @Test
+    fun `過去走は ketto_num の末尾の空白違いを重複とし、複数の馬とレースが並んでも並びの検査で誤って止めない`() {
+        val db =
+            LegacyDbs.create(dir.resolve("hpr.sqlite")) { c ->
+                val h = "INSERT INTO horse_past_runs (ketto_num, race_id, date, created_at) VALUES "
+                for (k in listOf("202010001", "202010002", "202010003")) {
+                    for (r in listOf("202609010101", "202609080102", "202609150103")) c.exec("$h('$k', '$r', '${r.take(8)}', '2026-10-20 03:00:00')")
+                }
+                c.exec("$h('202010002 ', '202609010101', '20260901', '2026-10-20 03:00:00')") // ascii_bin では 202010002 と同じ
+                c.exec("$h('202010002!', '202609010101', '20260901', '2026-10-20 03:00:00')") // 別の値（空白より後に並ぶ）
+            }
+        val ex = dir.resolve("hpr-ex")
+        Extract.run(db, ex, 2)
+        val t = Transform(7, tokyo, lenientJson = false).run(ex, dir.resolve("hpr-t")).tables.single { it.source == "horse_past_runs" }
+        assertEquals(mapOf("duplicate" to 1L), t.quarantined)
+        assertEquals(10L, t.rows)
+    }
 }

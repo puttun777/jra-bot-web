@@ -1,6 +1,6 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-11-06（L8 ⑥: R24 移行ツールの transform。下の新しい節）。旧: 2026-11-06（L8 ⑤: R24 移行ツールの extract）。旧: 2026-11-06（L8 ④: R24 移行ツールの preflight）。旧: 2026-11-06（L8 ③: R20 エージェントの失効）。旧: 2026-11-06（L8 ②: R22 ML モデルの表示）。旧: 2026-11-06（L8 ①: R16 バックテストの Job）。旧: 2026-11-06（言語移行 L7）。旧: 2026-11-03（言語移行 L5）。旧: 2026-11-02（言語移行 L3）。旧: 2026-11-02（L1。web PR #36・infra PR #7〔L2〕はマージ済み）。旧: 2026-11-01 夜（web PR #30〜#33・infra PR #3/#4/#6 はマージ済み。残りは wip/final の TEST_RESULTS.md・D-247・R15 の MySQL 通し試験〈ReadAdminApiMySqlIntegrationTest〉。検証: ktlintCheck 成功、当該 4 試験は MySQL 8.4 で成功（ローカル）。それ以外の統合試験は CI で確認。再開手順: 本ブランチの PR の CI 結果を確認→失敗ジョブのログだけ読む→マージ条件を満たせばマージ→COMPLETION.md の C/B 項目を最終報告。判定の正本は COMPLETION.md）
+最終更新: 2026-11-07（L8 ⑦: R24 移行ツールの load。下の新しい節）。旧: 2026-11-06（L8 ⑥: R24 移行ツールの transform）。旧: 2026-11-06（L8 ⑤: R24 移行ツールの extract）。旧: 2026-11-06（L8 ④: R24 移行ツールの preflight）。旧: 2026-11-06（L8 ③: R20 エージェントの失効）。旧: 2026-11-06（L8 ②: R22 ML モデルの表示）。旧: 2026-11-06（L8 ①: R16 バックテストの Job）。旧: 2026-11-06（言語移行 L7）。旧: 2026-11-03（言語移行 L5）。旧: 2026-11-02（言語移行 L3）。旧: 2026-11-02（L1。web PR #36・infra PR #7〔L2〕はマージ済み）。旧: 2026-11-01 夜（web PR #30〜#33・infra PR #3/#4/#6 はマージ済み。残りは wip/final の TEST_RESULTS.md・D-247・R15 の MySQL 通し試験〈ReadAdminApiMySqlIntegrationTest〉。検証: ktlintCheck 成功、当該 4 試験は MySQL 8.4 で成功（ローカル）。それ以外の統合試験は CI で確認。再開手順: 本ブランチの PR の CI 結果を確認→失敗ジョブのログだけ読む→マージ条件を満たせばマージ→COMPLETION.md の C/B 項目を最終報告。判定の正本は COMPLETION.md）
 旧: 2026-11-01（T3.9③・reconcile・preflight・infra PR #4）
 旧: 2026-10-30（保留の再適用のレビュー・公開準備。D-229。CI 未実施）
 旧: 2026-10-29（追加レビュー 2: リース継続・保留の再適用・G-31 の null・T3.9 設計の訂正〈D-224〜D-228〉。同ブランチ。CI 未実施。PR なし）
@@ -12,6 +12,13 @@
 旧: 2026-10-27（Stage 3-G: T3.7 Discord 通知）
 旧: 2026-10-26（Public 化の準備）／2026-10-24（Stage 3-F2・3-F1・3-E）
 
+
+## 2026-11-07 L8 ⑦: R24 移行ツールの load（P3。ブランチ claude/l8-legacy-load。D-275）
+**マージ済み**: web PR #51（R24 transform = 77788b2。修正後の再レビューで高・中 0。最新コミットで ci gate と実行された全 8 ジョブの成功を個別に確認。connectorj26 は分類で対象外の skipped）。
+**環境**: セッションのワーカーが再起動した。Docker は `nohup dockerd` で再起動した。ロケールが空になり、日本語の試験名で Gradle の試験レポートが壊れたので、`LC_ALL=C.UTF-8` で実行した（CI は UTF-8）。
+**内容**: `legacy-import load`。利用者の PC の MySQL（ループバックだけ）に、Flyway を適用したスキーマへ再開できる形で読み込む。親子の参照は張り替え、隔離した行は import_quarantine に入れ、最後に件数を照らす。CI の `db integration` に `tools` スイートを足した。transform の再レビューの低 2 件も反映した。
+**検証（ローカル。D-264）**: legacy-import の単体 35・統合 3（MySQL 8.4 と 9.7 の両方で成功）・ktlint、`./gradlew build -x integrationTest`、tools 166・biome・tsc。
+**次**: 独立レビュー（Opus・High: DB 制約・再実行）→ 修正 → PR → CI → マージ。続いて R24 の残り（チェックサムの検証・promote は COMP-4 後に設計）、R30、L9。
 
 ## 2026-11-06 L8 ⑥: R24 移行ツールの transform（P2。ブランチ claude/l8-legacy-transform。D-274）
 **マージ済み（この日）**: web PR #50（R24 extract = e19e146。修正後の再レビューで高・中 0。最新コミットで ci gate と実行された全 8 ジョブの成功を個別に確認。connectorj26 は分類で対象外のため skipped で、成功とは数えていない）。

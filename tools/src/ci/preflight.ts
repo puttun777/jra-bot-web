@@ -226,6 +226,10 @@ export function stepsFor(plan: Plan, files: readonly string[], root: string, out
       ]);
       verify.push(["db-integration", "Verify that the app integration tests actually ran"]);
     }
+    if (suites.includes("tools")) {
+      tasks.push(["./gradlew", ":legacy-import:integrationTest", "--stacktrace"]);
+      verify.push(["db-integration", "Verify that the legacy import integration tests actually ran"]);
+    }
     if (tasks.length > 0) {
       s.push({
         id: `db-it-${mysql}`,
