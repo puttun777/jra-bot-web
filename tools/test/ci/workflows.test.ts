@@ -292,11 +292,36 @@ describe("release workflow (L9. D-276): the only workflow with write permissions
       assert.match(m[1], /^actions\/checkout@/, `release.yml で使える外部 action は checkout だけ: ${line.trim()}`);
     }
   });
-  it("workflow inputs reach shell scripts only through env (no ${{ inputs.* }} inside run)", () => {
-    for (const s of steps) {
-      if (typeof s["run"] === "string") assert.doesNotMatch(s["run"], /\$\{\{\s*(inputs|github\.event)\./, String(s["name"]));
+  it("no expression is interpolated inside run (inputs and contexts reach scripts only through env); pipes keep their exit status; checkout does not persist credentials", () => {
+    for (const st of steps) {
+      if (typeof st["run"] !== "string") continue;
+      assert.doesNotMatch(st["run"], /\$\{\{/, String(st["name"]));
+      if (/(?<!\|)\|(?!\|)/.test(st["run"]) || st["run"].trim().includes("\n")) {
+        assert.match(st["run"], /set -euo pipefail/, `${String(st["name"])}: 複数行・パイプの run は set -euo pipefail`);
+        assert.equal(st["shell"], "bash", String(st["name"]));
+      }
     }
     assert.match(T, /RELEASE: \$\{\{ inputs\.release \}\}/);
+    assert.equal(T.split("actions/checkout@").length, T.split("persist-credentials: false").length);
+  });
+  it("the guard checks main, the schema's release format, the notes and the configuration; the tag check treats only 404 as absent and the tag is verified after creation", () => {
+    const guard = JSON.stringify(steps[0]);
+    for (const needle of [
+      "refs/heads/main",
+      "(0?[1-9]|1[0-2])",
+      "2000",
+      "[[:cntrl:]]",
+      "GCP_PROJECT_ID GCP_WIF_PROVIDER_WEB GCP_PUSH_SERVICE_ACCOUNT",
+    ]) {
+      assert.ok(guard.includes(needle), needle);
+    }
+    const tag = JSON.stringify(
+      steps.find((x) => JSON.stringify(x).includes("git/ref/tags") && !JSON.stringify(x).includes("gh release create")),
+    );
+    assert.ok(tag.includes('\\"404\\"') && tag.includes('\\"200\\"'), "404 だけを『無い』とみなす");
+    const publish = JSON.stringify(steps.find((x) => JSON.stringify(x).includes("gh release create")));
+    assert.ok(publish.includes(".object.sha") && publish.includes("GITHUB_SHA"), "タグが対象のコミットを指すことを確かめる");
+    assert.ok(T.includes('--notes="$NOTES"'), "notes が - で始まっても引数として解釈されない");
   });
   it("gates come first: main only + release format + configuration, then ci gate success, then the tag check, then build and smoke, then push", () => {
     const guard = stepIndex("refs/heads/main");

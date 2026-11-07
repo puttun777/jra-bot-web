@@ -16,8 +16,9 @@
 ## 2026-11-07 L9: リリース経路（ブランチ claude/l9-release。D-276）
 **マージ済み（この日）**: web PR #52（R24 load = 9608a78。修正後の再レビューで高・中 0。最新コミットで ci gate と実行された全 8 ジョブの成功を個別に確認。connectorj26 は分類で対象外の skipped）。
 **内容**: `release.yml`（手動・環境 `release`・ci gate の確認・ビルド・スモーク・WIF の短期トークンで push・digest・本番 manifest・GitHub Release の資産）と `tools/src/release/publish.ts`（check-ci・registry-login・push）。デプロイはしない。infra の WIF・SA（web 専用）は本人の承認待ちの PR にする。
-**検証（ローカル。D-264）**: tools 179（publish 7・release ワークフローの規則 6 を追加）・biome・tsc・repo-hygiene・consistency。実 GCP・実 Release は未実施（B）。
-**次**: 独立レビュー（Opus・High: WIF・資格情報）→ 修正 → PR → CI → マージ。infra の PR（承認待ち）。続いて R30。
+**検証（ローカル。D-264）**: tools 181（publish 8・release ワークフローの規則 7）・biome・tsc・repo-hygiene・consistency。実 GCP・実 Release は未実施（B）。infra PR #13（web 専用の WIF・SA。既定は無効）は本人の承認待ちでマージしない（ops 140・pulumi 30）。
+**独立レビュー（Opus・High・読取り専用）**: 高 0・中 4・低 5 → 修正（D-276）。
+**次**: 修正後の再レビュー → PR → CI → マージ。続いて R30。
 
 ## 2026-11-07 L8 ⑦: R24 移行ツールの load（P3。ブランチ claude/l8-legacy-load。D-275）
 **マージ済み**: web PR #51（R24 transform = 77788b2。修正後の再レビューで高・中 0。最新コミットで ci gate と実行された全 8 ジョブの成功を個別に確認。connectorj26 は分類で対象外の skipped）。

@@ -40,10 +40,16 @@ export type Http = (url: string, init: { method: "GET" | "POST"; headers: Record
 export type Runner = (cmd: string, args: readonly string[], input?: string) => RunResult;
 
 const defaultHttp: Http = async (url, init) => {
-  const r = await fetch(url, init.body === undefined ? { method: init.method, headers: init.headers } : init);
+  const signal = AbortSignal.timeout(60_000);
+  const r = await fetch(url, init.body === undefined ? { method: init.method, headers: init.headers, signal } : { ...init, signal });
   return { status: r.status, text: () => r.text() };
 };
-const defaultRunner: Runner = (cmd, args, input) => runProcess(cmd, args, input === undefined ? {} : { input });
+/** docker の push は大きいので 30 分まで。止まったら失敗にする（タイムアウトの無い待ちを作らない: レビュー 低）。 */
+const defaultRunner: Runner = (cmd, args, input) =>
+  runProcess(cmd, args, { timeoutMs: 30 * 60_000, ...(input === undefined ? {} : { input }) });
+
+/** docker の失敗の理由（標準エラーの末尾。秘密は含まない: トークンは標準入力にだけ渡す）。 */
+const tail = (r: RunResult): string => r.stderr.trim().split("\n").slice(-3).join(" / ").slice(-300);
 
 async function json(r: HttpResponse, what: string): Promise<Record<string, unknown>> {
   const text = await r.text();
@@ -152,45 +158,82 @@ export function pushImages(
     const repo = `${opts.registry}/${opts.project}/${REPOSITORY}/${name}`;
     // タグは Git SHA（不変）。デプロイは digest で指定する（CONTRACTS §1）
     const remote = `${repo}:${opts.gitSha}`;
-    for (const [args, what] of [
-      [["tag", local, remote], "docker tag"],
-      [["push", remote], "docker push"],
-    ] as const) {
-      const r = runner("docker", args);
-      if (r.status !== 0) throw new PublishError(`${what} ${name} が失敗（status=${r.status}）`);
-    }
+    const tagged = runner("docker", ["tag", local, remote]);
+    if (tagged.status !== 0) throw new PublishError(`docker tag ${name} が失敗（status=${tagged.status}）: ${tail(tagged)}`);
+    const pushed = runner("docker", ["push", remote]);
+    if (pushed.status !== 0) throw new PublishError(`docker push ${name} が失敗（status=${pushed.status}）: ${tail(pushed)}`);
+    // push が報告した digest（この push のもの）。inspect の RepoDigests と一致しなければ失敗（古い・別の digest を選ばない: レビュー 低）
+    const reported = [...pushed.stdout.matchAll(/digest: (sha256:[0-9a-f]{64})/g)].map((m) => m[1]);
+    if (reported.length !== 1) throw new PublishError(`docker push ${name} の出力に digest が 1 つだけ無い`, 1);
     const inspect = runner("docker", ["image", "inspect", remote, "--format", "{{json .RepoDigests}}"]);
-    if (inspect.status !== 0) throw new PublishError(`docker image inspect ${name} が失敗（status=${inspect.status}）`);
+    if (inspect.status !== 0) throw new PublishError(`docker image inspect ${name} が失敗（status=${inspect.status}）: ${tail(inspect)}`);
     let digests: unknown;
     try {
       digests = JSON.parse(inspect.stdout);
     } catch {
       throw new PublishError(`${name} の RepoDigests が JSON ではない`, 1);
     }
-    out[name] = digestRef(digests, repo);
+    const ref = digestRef(digests, repo);
+    if (ref !== `${repo}@${String(reported[0])}`) throw new PublishError(`${name} の push の digest と RepoDigests が一致しない`, 1);
+    out[name] = ref;
   }
   const done = IMAGE_NAMES.every((n) => out[n] !== undefined);
   if (!done) throw new PublishError("digest の揃わないイメージがある", 1);
   return out as Record<ImageName, string>;
 }
 
-/** 対象コミットの `ci gate` が成功していること（再実行を含め、最新の完了した実行で判定）。 */
+/** このコミットで成功していなければならない CI のジョブ（ci.yml。gate だけでは足りない: ドキュメントだけのコミットでは build・images が動かない）。 */
+export const REQUIRED_RUNS = ["ci gate", "build (Temurin 25)", "images / images (build + smoke, no push)"] as const;
+const DB_RUN = /^db integration \(MySQL [0-9.]+\)$/;
+
+/**
+ * 対象コミットで CI が**コードを実際に検査した**こと（レビュー 中）: GitHub Actions の check run のうち、[REQUIRED_RUNS] と
+ * db integration（1 つ以上）がすべて成功、かつ失敗・取消の check run が無い。ドキュメントだけのコミットなら、ci.yml を手動で実行（全部の検査）してから。
+ */
 export async function checkCi(opts: { repo: string; sha: string; token: string }, http: Http = defaultHttp): Promise<void> {
   if (!/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(opts.repo)) throw new PublishError("--repo は owner/name");
   if (!/^[0-9a-f]{40}$/.test(opts.sha)) throw new PublishError("--sha は 40 桁の小文字 16 進");
-  const r = await http(
-    `https://api.github.com/repos/${opts.repo}/commits/${opts.sha}/check-runs?check_name=${encodeURIComponent("ci gate")}&filter=latest`,
-    {
-      method: "GET",
-      headers: { Authorization: `Bearer ${opts.token}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" },
-    },
+  const runs: Record<string, unknown>[] = [];
+  for (let page = 1; page <= 5; page++) {
+    const r = await http(
+      `https://api.github.com/repos/${opts.repo}/commits/${opts.sha}/check-runs?filter=latest&per_page=100&page=${page}`,
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${opts.token}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" },
+      },
+    );
+    const body = await json(r, "check-runs の取得");
+    const items = Array.isArray(body["check_runs"]) ? body["check_runs"].filter(isRecord) : [];
+    runs.push(...items);
+    const total = typeof body["total_count"] === "number" ? body["total_count"] : 0;
+    if (items.length < 100 || runs.length >= total) break;
+  }
+  // GitHub Actions のもので、このコミットのものだけ（他の App の同名の check を数えない）
+  const ours = runs.filter((c) => c["head_sha"] === opts.sha && isRecord(c["app"]) && c["app"]["slug"] === "github-actions");
+  const bad = ours.filter(
+    (c) =>
+      c["status"] === "completed" &&
+      ["failure", "cancelled", "timed_out", "action_required", "startup_failure"].includes(String(c["conclusion"])),
   );
-  const body = await json(r, "check-runs の取得");
-  const runs = Array.isArray(body["check_runs"]) ? body["check_runs"].filter(isRecord) : [];
-  const gate = runs.filter((c) => c["name"] === "ci gate" && c["head_sha"] === opts.sha);
-  if (gate.length === 0) throw new PublishError("このコミットの ci gate が無い（main の CI が終わってから実行する）", 1);
-  if (!gate.every((c) => c["status"] === "completed" && c["conclusion"] === "success")) {
-    throw new PublishError("このコミットの ci gate が成功していない", 1);
+  if (bad.length > 0)
+    throw new PublishError(
+      `このコミットに失敗・取消の CI のジョブがある: ${bad
+        .map((c) => String(c["name"]))
+        .slice(0, 5)
+        .join(", ")}`,
+      1,
+    );
+  const success = (name: string): boolean =>
+    ours.some((c) => c["name"] === name && c["status"] === "completed" && c["conclusion"] === "success");
+  const missing: string[] = REQUIRED_RUNS.filter((n) => !success(n));
+  const db = ours.filter((c) => typeof c["name"] === "string" && DB_RUN.test(c["name"]));
+  if (db.length === 0 || !db.every((c) => c["status"] === "completed" && c["conclusion"] === "success"))
+    missing.push("db integration (MySQL …)");
+  if (missing.length > 0) {
+    throw new PublishError(
+      `このコミットで成功していない・実行されていない CI のジョブ: ${missing.join(", ")}（ドキュメントだけのコミットなら ci.yml を手動で実行してから）`,
+      1,
+    );
   }
 }
 

@@ -137,17 +137,24 @@ describe("registry-login (WIF → 短期トークン → docker login)", () => {
 });
 
 describe("push (Git SHA のタグで push し、digest 付き参照を得る)", () => {
-  it("5 つのイメージを tag → push → inspect し、期待するリポジトリの digest だけを選ぶ", () => {
-    const runs: string[] = [];
-    const runner: Runner = (_cmd, args) => {
-      runs.push(args.join(" "));
+  const pushOut = (d = DIGEST): RunResult => ok(`The push refers to repository [x]\n${SHA}: digest: sha256:${d} size: 1234\n`);
+  const fake =
+    (inspectDigest = DIGEST, pushDigest = DIGEST): Runner =>
+    (_cmd, args) => {
+      if (args[0] === "push") return pushOut(pushDigest);
       if (args[0] === "image") {
         const ref = String(args[2]).split(":")[0] ?? "";
-        return ok(JSON.stringify([`other.example/x@sha256:${"c".repeat(64)}`, `${ref}@sha256:${DIGEST}`]));
+        return ok(JSON.stringify([`other.example/x@sha256:${"c".repeat(64)}`, `${ref}@sha256:${inspectDigest}`]));
       }
       return ok();
     };
-    const refs = pushImages({ project: "jrabot-prod", gitSha: SHA, registry: "asia-northeast1-docker.pkg.dev" }, runner);
+  it("5 つのイメージを tag → push → inspect し、push が報告した digest と一致する期待のリポジトリの参照を選ぶ", () => {
+    const runs: string[] = [];
+    const inner = fake();
+    const refs = pushImages({ project: "jrabot-prod", gitSha: SHA, registry: "asia-northeast1-docker.pkg.dev" }, (c, args, i) => {
+      runs.push(args.join(" "));
+      return inner(c, args, i);
+    });
     assert.deepEqual(Object.keys(refs).sort(), [...IMAGE_NAMES].sort());
     assert.equal(refs.bot, `asia-northeast1-docker.pkg.dev/jrabot-prod/jra-bot/bot@sha256:${DIGEST}`);
     assert.ok(runs.includes(`tag jra-bot/bot:${SHA} asia-northeast1-docker.pkg.dev/jrabot-prod/jra-bot/bot:${SHA}`));
@@ -155,48 +162,69 @@ describe("push (Git SHA のタグで push し、digest 付き参照を得る)", 
     assert.equal(runs.length, IMAGE_NAMES.length * 3);
   });
 
-  it("push の失敗・digest が無い・形の違う digest は失敗（不完全な registry-images を書かない）", () => {
+  it("push の失敗（理由の末尾を出す）・push の digest が無い・inspect と食い違う・形の違う digest は失敗", () => {
+    const opts = { project: "jrabot-prod", gitSha: SHA, registry: "asia-northeast1-docker.pkg.dev" };
     assert.throws(
       () =>
-        pushImages({ project: "jrabot-prod", gitSha: SHA, registry: "asia-northeast1-docker.pkg.dev" }, (_c, a) =>
-          a[0] === "push" ? { status: 1, stdout: "", stderr: "", timedOut: false } : ok("[]"),
+        pushImages(opts, (_c, a) =>
+          a[0] === "push" ? { status: 1, stdout: "", stderr: "denied: permission\n", timedOut: false } : ok("[]"),
         ),
-      /docker push/,
+      /docker push .*denied: permission/,
     );
+    assert.throws(() => pushImages(opts, (_c, a) => (a[0] === "push" ? ok("no digest here") : ok("[]"))), /digest が 1 つだけ無い/);
+    assert.throws(() => pushImages(opts, fake(DIGEST, "d".repeat(64))), /一致しない/);
     assert.throws(() => digestRef([], "r/x"), /digest を得られない/);
     assert.throws(() => digestRef([`r/x@sha256:${"g".repeat(64)}`], "r/x"), /digest を得られない/);
     assert.throws(() => digestRef([`r/xy@sha256:${DIGEST}`], "r/x"), /digest を得られない/);
     assert.throws(() => digestRef("nope", "r/x"), /形式が不正/);
     assert.equal(digestRef([`r/x@sha256:${DIGEST}`], "r/x"), `r/x@sha256:${DIGEST}`);
-    assert.throws(
-      () => pushImages({ project: "Bad_Project", gitSha: SHA, registry: "asia-northeast1-docker.pkg.dev" }, () => ok()),
-      /--project/,
-    );
-    assert.throws(
-      () => pushImages({ project: "jrabot-prod", gitSha: "abc", registry: "asia-northeast1-docker.pkg.dev" }, () => ok()),
-      /--git-sha/,
-    );
+    assert.throws(() => pushImages({ ...opts, project: "Bad_Project" }, () => ok()), /--project/);
+    assert.throws(() => pushImages({ ...opts, gitSha: "abc" }, () => ok()), /--git-sha/);
   });
 });
 
-describe("check-ci (対象コミットの ci gate が成功していること)", () => {
+describe("check-ci (このコミットで CI がコードを実際に検査したこと)", () => {
   const url = `https://api.github.com/repos/puttun777/jra-bot-web/commits/${SHA}/check-runs`;
-  const gate = (status: string, conclusion: string | null, sha = SHA) => ({ name: "ci gate", head_sha: sha, status, conclusion });
-  it("成功なら通り、無い・進行中・失敗・別のコミットなら 1", async () => {
-    const calls: Call[] = [];
-    await checkCi(
+  const cr = (name: string, conclusion: string | null, extra: Record<string, unknown> = {}) => ({
+    name,
+    head_sha: SHA,
+    status: conclusion === null ? "in_progress" : "completed",
+    conclusion,
+    app: { slug: "github-actions" },
+    ...extra,
+  });
+  const green = [
+    cr("changes and repo hygiene", "success"),
+    cr("build (Temurin 25)", "success"),
+    cr("images / images (build + smoke, no push)", "success"),
+    cr("db integration (MySQL 8.4)", "success"),
+    cr("connectorj26", "skipped"),
+    cr("ci gate", "success"),
+  ];
+  const check = (runs: unknown[], calls: Call[] = []) =>
+    checkCi(
       { repo: "puttun777/jra-bot-web", sha: SHA, token: "t" },
-      fakeHttp({ [url]: { status: 200, body: { check_runs: [gate("completed", "success")] } } }, calls),
+      fakeHttp({ [url]: { status: 200, body: { total_count: runs.length, check_runs: runs } } }, calls),
     );
-    assert.match(calls[0]?.url ?? "", /check_name=ci%20gate&filter=latest$/);
-    for (const runs of [[], [gate("in_progress", null)], [gate("completed", "failure")], [gate("completed", "success", "f".repeat(40))]]) {
-      await assert.rejects(
-        checkCi(
-          { repo: "puttun777/jra-bot-web", sha: SHA, token: "t" },
-          fakeHttp({ [url]: { status: 200, body: { check_runs: runs } } }, []),
-        ),
-        (e: unknown) => e instanceof PublishError && e.code === 1,
-      );
+  it("gate・build・images・db integration が成功なら通る（skipped の任意のジョブは問わない）", async () => {
+    const calls: Call[] = [];
+    await check(green, calls);
+    assert.match(calls[0]?.url ?? "", /filter=latest&per_page=100&page=1$/);
+  });
+  it("ドキュメントだけのコミット（build・images が skipped）・失敗・取消・進行中・別 App の同名・別のコミットは 1", async () => {
+    const replace = (name: string, v: unknown) => green.map((c) => (c.name === name ? v : c));
+    for (const runs of [
+      replace("build (Temurin 25)", cr("build (Temurin 25)", "skipped")),
+      replace("images / images (build + smoke, no push)", cr("images / images (build + smoke, no push)", "skipped")),
+      green.filter((c) => !c.name.startsWith("db integration")),
+      [...green, cr("db integration (MySQL 9.7)", "failure")],
+      [...green, cr("agent windows", "cancelled")],
+      replace("ci gate", cr("ci gate", null)),
+      replace("ci gate", cr("ci gate", "success", { app: { slug: "someone-else" } })),
+      replace("build (Temurin 25)", cr("build (Temurin 25)", "success", { head_sha: "f".repeat(40) })),
+      [],
+    ]) {
+      await assert.rejects(check(runs), (e: unknown) => e instanceof PublishError && e.code === 1);
     }
     await assert.rejects(checkCi({ repo: "puttun777/jra-bot-web", sha: SHA, token: "t" }, fakeHttp({}, [])), /HTTP 404/);
   });
