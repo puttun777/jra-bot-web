@@ -110,7 +110,7 @@ class LoadIntegrationTest {
     fun `合成の旧 DB を extract → transform → load し、件数・値・親子の張り替え・隔離が新表に入る`() {
         val t = transformed()
         val db = Db.migrated()
-        val (code, msg) = run("--transform", t.toString(), "--jdbc-url", db.url, "--user", "root", "--state", dir.resolve("state.json").toString())
+        val (code, msg) = run("--transform", t.toString(), "--jdbc-url", db.url, "--user", "root")
         assertEquals(0, code, msg)
         assertTrue(msg.contains("load: OK"), msg)
         db.root().use { c ->
@@ -144,52 +144,59 @@ class LoadIntegrationTest {
     }
 
     @Test
-    fun `途中で止まったチャンクは入れ直し（冪等）、完了済みの再実行は何もしない、状態ファイルの無い再実行と空でない DB は拒否`() {
+    fun `途中で失敗したら DB の台帳にある続きから進み、終わったら台帳を消す。読込み済みの DB と別の実行の途中の DB は拒否`() {
         val t = transformed(chunkRows = 1)
         val db = Db.migrated()
-        val state = dir.resolve("state.json")
-        val args = arrayOf("--transform", t.toString(), "--jdbc-url", db.url, "--user", "root", "--state", state.toString())
-        assertEquals(0, run(*args).first)
-        val counts = db.counts()
+        val args = arrayOf("--transform", t.toString(), "--jdbc-url", db.url, "--user", "root")
+        // signals の 2 つ目のチャンクを壊す（sha256 が manifest と違う）→ そのチャンクで止まり、前のチャンクは台帳とともに残る
+        val m = StrictJson.parse(Files.readString(t.resolve(Transform.MANIFEST))) as JsonObject
+        val signals = (m["tables"] as JsonArray).items.map { it as JsonObject }.single { it["target"] == JsonString("signals") }
+        val broken = t.resolve(((signals["chunks"] as JsonArray).items[1] as JsonObject)["file"].let { (it as JsonString).value })
+        val original = Files.readAllBytes(broken)
+        java.util.zip
+            .GZIPOutputStream(Files.newOutputStream(broken))
+            .use { it.write("[]\n".toByteArray()) }
+        val (code1, msg1) = run(*args)
+        assertEquals(2, code1, msg1)
+        assertEquals(1L, db.counts().getValue("signals"), "壊れたチャンクは入らず、前のチャンクは残る")
+        assertTrue(db.ledgerRows() > 0, "台帳が残る")
+        Files.write(broken, original)
+        val (code2, msg2) = run(*args)
+        assertEquals(0, code2, msg2)
+        assertEquals(2L, db.counts().getValue("signals"))
+        assertEquals(-1L, db.ledgerRows(), "すべて一致したら台帳の表を消す")
 
-        // odds_snapshots の最後のチャンクを「書き込み中に停止」に戻す（DB には入っている）
-        val s = StrictJson.parse(Files.readString(state)) as JsonObject
-        val done = (s["done"] as JsonArray).items.map { (it as JsonString).value }
-        val last = done.last { it.startsWith("odds_snapshots/") }
-        Files.writeString(
-            state,
-            CanonicalJson.encode(
-                JsonObject(
-                    s.fields.toMutableMap().also {
-                        it["done"] = JsonArray(done.filter { f -> f != last }.map(::JsonString))
-                        it["in_progress"] = JsonString(last)
-                    },
-                ),
-            ),
-        )
-        assertEquals(0, run(*args).first, "停止したチャンクは重複を無視して入れ直す")
-        assertEquals(counts, db.counts())
-        assertEquals(JsonNull, (StrictJson.parse(Files.readString(state)) as JsonObject)["in_progress"])
-        assertEquals(0, run(*args).first, "完了済みは何もしない")
-        assertEquals(counts, db.counts())
+        val (code3, msg3) = run(*args)
+        assertEquals(2, code3, "読込み済みの DB には入れ直さない")
+        assertTrue(msg3.contains("既にある"), msg3)
 
-        val (code, msg) = run("--transform", t.toString(), "--jdbc-url", db.url, "--user", "root", "--state", dir.resolve("other.json").toString())
-        assertEquals(2, code)
-        assertTrue(msg.contains("既にある"), msg)
+        // 別の transform（tenant が同じで内容が違う）の途中の記録がある DB には入れない
+        val other = Db.migrated()
+        java.util.zip
+            .GZIPOutputStream(Files.newOutputStream(broken))
+            .use { it.write("[]\n".toByteArray()) }
+        assertEquals(2, run("--transform", t.toString(), "--jdbc-url", other.url, "--user", "root").first)
+        Files.write(broken, original)
+        val t2 = dir.resolve("transform2")
+        Transform(TENANT, ZoneId.of("UTC"), lenientJson = false).run(dir.resolve("extract"), t2)
+        val (code4, msg4) = run("--transform", t2.toString(), "--jdbc-url", other.url, "--user", "root")
+        assertEquals(2, code4)
+        assertTrue(msg4.contains("別の transform"), msg4)
     }
 
     @Test
     fun `ループバック以外の接続先・パスワードの無い実行・テナントの無い DB は 2`() {
         val t = transformed()
-        val st = dir.resolve("s.json").toString()
-        assertEquals(2, run("--transform", t.toString(), "--jdbc-url", "jdbc:mysql://10.0.0.5:3306/jrabot", "--user", "root", "--state", st).first)
-        assertEquals(2, run("--transform", t.toString(), "--jdbc-url", "jdbc:mysql://db.example.com/jrabot", "--user", "root", "--state", st).first)
-        assertEquals(2, run("--transform", t.toString(), "--jdbc-url", Db.migrated().url, "--user", "root", "--state", st, password = null).first)
+        assertEquals(2, run("--transform", t.toString(), "--jdbc-url", "jdbc:mysql://10.0.0.5:3306/jrabot", "--user", "root").first)
+        assertEquals(2, run("--transform", t.toString(), "--jdbc-url", "jdbc:mysql://db.example.com/jrabot", "--user", "root").first)
+        val db = Db.migrated()
+        assertEquals(2, run("--transform", t.toString(), "--jdbc-url", "${db.url}?socksProxyHost=127.0.0.1&socksProxyPort=1", "--user", "root").first)
+        assertEquals(2, run("--transform", t.toString(), "--jdbc-url", db.url, "--user", "root", password = null).first)
         val noTenant = Db.migrated(tenant = false)
-        val (code, msg) = run("--transform", t.toString(), "--jdbc-url", noTenant.url, "--user", "root", "--state", st)
+        val (code, msg) = run("--transform", t.toString(), "--jdbc-url", noTenant.url, "--user", "root")
         assertEquals(2, code)
         assertTrue(msg.contains("テナントが無い"), msg)
-        assertTrue(!Files.exists(Path.of(st)), "検査で止まったら状態ファイルを作らない")
+        assertEquals(-1L, noTenant.ledgerRows(), "検査で止まったら台帳を作らない")
     }
 
     private companion object {
@@ -203,6 +210,22 @@ class LoadIntegrationTest {
         val url: String get() = "jdbc:mysql://localhost:${container.getMappedPort(3306)}/$name"
 
         fun root(): Connection = DriverManager.getConnection(url, "root", ROOT_PASSWORD)
+
+        /** 台帳の行数（表が無ければ -1）。 */
+        fun ledgerRows(): Long =
+            root().use { c ->
+                val exists = c.createStatement().use { s -> s.executeQuery("SHOW TABLES LIKE '${Load.LEDGER}'").use { it.next() } }
+                if (!exists) {
+                    -1L
+                } else {
+                    c.createStatement().use { s ->
+                        s.executeQuery("SELECT COUNT(*) FROM ${Load.LEDGER}").use { rs ->
+                            rs.next()
+                            rs.getLong(1)
+                        }
+                    }
+                }
+            }
 
         fun counts(): Map<String, Long> =
             root().use { c ->

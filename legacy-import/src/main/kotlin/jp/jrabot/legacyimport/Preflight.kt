@@ -44,6 +44,10 @@ data class PreflightReport(
     val raceIds: List<FormatCounts>,
     val json: List<FormatCounts>,
     val orphans: List<OrphanCount>,
+    /**
+     * 主キーが期待と違う表（NG）。抽出の並び・重複の扱い（例: 旧 ID の一意性）は期待する主キーを前提にする（D-275 のレビュー 低）。
+     */
+    val primaryKeyMismatch: List<String> = emptyList(),
 ) {
     /** 期待する列のうち、起動時に足される列以外が無い（抽出できない）。 */
     val missingRequiredColumns: Map<String, List<String>>
@@ -77,7 +81,7 @@ data class PreflightReport(
     val verdict: String
         get() =
             when {
-                integrity != "ok" || missingTables.isNotEmpty() || missingRequiredColumns.isNotEmpty() -> "NG"
+                integrity != "ok" || missingTables.isNotEmpty() || missingRequiredColumns.isNotEmpty() || primaryKeyMismatch.isNotEmpty() -> "NG"
                 warnings.isNotEmpty() -> "WARN"
                 else -> "OK"
             }
@@ -206,6 +210,12 @@ object Preflight {
             raceIds = raceIds,
             json = json,
             orphans = orphans,
+            primaryKeyMismatch =
+                common.filter { t ->
+                    val table = byLower.getValue(t.lowercase())
+                    !LegacySchema.IDENT.matches(table) ||
+                        LegacySchema.primaryKeyOf(c, table).map { it.lowercase() } != LegacySchema.primaryKeys.getValue(t).map { it.lowercase() }
+                },
         )
     }
 

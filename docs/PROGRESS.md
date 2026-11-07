@@ -17,8 +17,9 @@
 **マージ済み**: web PR #51（R24 transform = 77788b2。修正後の再レビューで高・中 0。最新コミットで ci gate と実行された全 8 ジョブの成功を個別に確認。connectorj26 は分類で対象外の skipped）。
 **環境**: セッションのワーカーが再起動した。Docker は `nohup dockerd` で再起動した。ロケールが空になり、日本語の試験名で Gradle の試験レポートが壊れたので、`LC_ALL=C.UTF-8` で実行した（CI は UTF-8）。
 **内容**: `legacy-import load`。利用者の PC の MySQL（ループバックだけ）に、Flyway を適用したスキーマへ再開できる形で読み込む。親子の参照は張り替え、隔離した行は import_quarantine に入れ、最後に件数を照らす。CI の `db integration` に `tools` スイートを足した。transform の再レビューの低 2 件も反映した。
-**検証（ローカル。D-264）**: legacy-import の単体 35・統合 3（MySQL 8.4 と 9.7 の両方で成功）・ktlint、`./gradlew build -x integrationTest`、tools 166・biome・tsc。
-**次**: 独立レビュー（Opus・High: DB 制約・再実行）→ 修正 → PR → CI → マージ。続いて R24 の残り（チェックサムの検証・promote は COMP-4 後に設計）、R30、L9。
+**検証（ローカル。D-264）**: legacy-import の単体 38・統合 3（MySQL 8.4 と 9.7 の両方で成功）・ktlint、`./gradlew build -x integrationTest`、tools 166・biome・tsc。
+**独立レビュー（Opus・High・読取り専用）**: 高 0・中 2（URL のパラメータでループバックの検査を迂回できた・状態ファイルを信じた再開）・低 5 → 修正（再開は DB の台帳に変更。D-275）。
+**次**: 修正後の再レビュー → PR → CI → マージ。続いて R24 の残り（チェックサムの検証・promote は COMP-4 後に設計）、R30、L9。
 
 ## 2026-11-06 L8 ⑥: R24 移行ツールの transform（P2。ブランチ claude/l8-legacy-transform。D-274）
 **マージ済み（この日）**: web PR #50（R24 extract = e19e146。修正後の再レビューで高・中 0。最新コミットで ci gate と実行された全 8 ジョブの成功を個別に確認。connectorj26 は分類で対象外のため skipped で、成功とは数えていない）。

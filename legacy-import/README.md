@@ -44,11 +44,13 @@ legacy-import/build/install/legacy-import/bin/legacy-import transform --extract 
 ## 読込み（load。D-275）
 ```
 LEGACY_IMPORT_DB_PASSWORD=... legacy-import/build/install/legacy-import/bin/legacy-import load \
-  --transform <transform の出力先> --jdbc-url jdbc:mysql://localhost:3306/<db> --user <user> --state load-state.json
+  --transform <transform の出力先> --jdbc-url jdbc:mysql://localhost:3306/<db> --user <user>
 ```
-- 接続先は**利用者の PC の MySQL（localhost・127.0.0.1・[::1]）だけ**。Flyway の V1〜V5 を適用し、`tenant` に transform の `--tenant-id` の行を入れておく。クラウドへの投入は COMP-4 の回答まで行わない。
-  - 注意: Cloud SQL Auth Proxy などのローカルの転送もループバックに見える。クラウドの DB に向けて使わない。
-- パスワードは引数に取らない。環境変数 `LEGACY_IMPORT_DB_PASSWORD` から読む。
-- 新しい実行は、そのテナントの対象表が空の DB にだけ読み込む。途中で止まったら同じコマンドを再実行すると、状態ファイル（`--state`）に記録した続きから進む。状態ファイルを消して再実行すると、DB に行があるので拒否する。
+- 接続先は**利用者の PC の MySQL だけ**（COMP-4: クラウドへの投入は回答まで行わない）。
+  - host は localhost・127.0.0.1・[::1] の 1 つだけ。URL のパラメータは sslMode・useSSL・allowPublicKeyRetrieval・connectTimeout・socketTimeout・characterEncoding だけ（SOCKS・名前付きパイプ・ソケットの差し替えなど、接続の経路を変えるものは拒否）。
+  - 接続後に Cloud SQL の変数（`cloudsql*`）があれば拒否する。
+  - **注意**: Cloud SQL Auth Proxy・IAP・`ssh -L` などのトンネルは localhost に見え、Cloud SQL 以外のクラウドの MySQL は検出できない。クラウドの DB に向けたトンネルを開いたまま実行しない。
+- Flyway の V1〜V5 を適用し、`tenant` に transform の `--tenant-id` の行を入れておく。パスワードは引数に取らず、環境変数 `LEGACY_IMPORT_DB_PASSWORD` から読む。
+- 新しい実行は、そのテナントの対象表が空の DB にだけ読み込む。読み込んだチャンクは、データと同じトランザクションで DB の台帳（`legacy_import_chunk`）に記録する。途中で止まったら同じコマンドを再実行すると続きから進む。すべての検証に通ったら台帳を消す。読込み済みの DB への再実行は拒否する。
 - 隔離した行は `import_quarantine` に入る（`migration_run` は transform の manifest の sha256）。
-- 最後に表ごとの件数を transform の manifest と照らす。終了コードは 0 = 一致、1 = 違う、2 = 入力・接続・DB の失敗。
+- 最後に表ごとの件数を transform の manifest と照らす。終了コード: 0 = 一致、1 = 違う（台帳は調べられるように残す）、2 = 入力・接続・DB の失敗。

@@ -925,6 +925,10 @@ class Transform(
     }
 
     companion object {
+        /** 新表 → 出力する列（tenant_id を含む。load が manifest を照らす正本: D-275 のレビュー 低）。 */
+        internal fun outputColumns(): Map<String, List<String>> =
+            Transform(1, java.time.ZoneOffset.UTC, lenientJson = false).mappings().associate { it.target to listOf("tenant_id") + it.columns }
+
         const val MANIFEST = "transform-manifest.json"
         const val FORMAT = "legacy-import transform v1"
 
