@@ -181,6 +181,30 @@ CREATE TABLE payouts (
 - `import_run`（run_id, 開始時刻, 入力ファイル sha256, 状態）と `import_chunk`（run_id, table, chunk_no, key_from, key_to, status[PENDING/LOADED/VERIFIED/PROMOTED/FAILED], rows, hash, attempts, error）を staging 側に保持。再実行は **VERIFIED/PROMOTED 済みチャンクをスキップ**、FAILED/LOADED は再処理。チャンクの load は「範囲削除→挿入」を 1 トランザクションで行い**冪等**。
 - ツール自体が途中で落ちても、同じ入力ファイル（sha256 一致）で同じコマンドを再実行すれば続きから進む。入力が変わった（sha256 不一致）場合は新しい run として扱い、旧 run は破棄を明示操作で。
 
+### 5.5 変換の表（P2。`legacy-import transform`。D-274）
+全表の先頭に `tenant_id`（`--tenant-id`）を付ける。時刻は UTC の `DATETIME(6)`。`T` 区切りの naive な時刻は `--naive-zone`（既定 Asia/Tokyo）とみなし、空白区切りの時刻（CURRENT_TIMESTAMP）は UTC、時差付きの時刻はその時差で変換する。どの形にも当たらない時刻、暦にない時刻、7 桁以上の小数を持つ時刻は隔離する。
+文字数は符号位置で数える。コード列は ASCII の印字可能文字だけを受け付け、超過・ASCII 以外の値は隔離する。印付きの値（`$blob`・`$real`・`$bytes`）は隔離する。
+
+| 旧表 → 新表 | 主な変換 | 隔離（reason_code） | 値を変える扱い（manifest の adjusted に件数） |
+|---|---|---|---|
+| races → races | `race_date`←`date`。`venue_code` と `race_no` は race_id から取り出す。`kai`・`nichime` は NULL。`updated_at`=`created_at` | race_id が 12 桁の数字でない（race_id）。date・track_cd・race_no が race_id と違う（race_id_mismatch）。場コードが 01..10 の外（venue） | post_time が `00:00`・範囲外・形式外なら NULL にし `post_time_unknown=1`。`distance_m=0` は NULL |
+| horses → horses | `created_at`=`updated_at`。JSON は正準化 | 読めない JSON（json。`--lenient-json` ならその列だけ NULL） | 暦にない `birth_date` は NULL |
+| race_horses → race_horses | — | 親のレースが無い・隔離された（orphan） | — |
+| horse_past_runs → horse_past_runs | `run_date`←`date`、`venue_code`←`track_cd`（races への外部キーは無い） | race_id が 12 桁の数字でない | 暦にない日付は NULL。0 以下の `odds` は NULL |
+| odds_snapshots → odds_snapshots | `observed_at`←`ts` | orphan。odds が 0 以下（out_of_range）。未知の賭式（enum） | — |
+| combo_odds_snapshots → 同名 | — | orphan。odds が 0 以下 | — |
+| results・payouts → 同名 | `combo_key`←`key` | orphan。払戻が負 | — |
+| signals → signals | `legacy_id`←`id`、`observed_at`←`ts`。`notify_state`: `sent=1` は SENT、それ以外は **SEND_UNKNOWN** | orphan。prob が 0..1 の外。odds が 0 以下 | `sent=0` を SEND_UNKNOWN にする（UNSENT にすると新しい bot が古い通知を送るため）。stake が NULL なら 1.0 |
+| race_evaluations → 同名 | `legacy_id`。`model_id`・`fallback_reason` は NULL | orphan。読めない JSON | — |
+| ticket_evaluations → 同名 | `legacy_id`、`race_evaluation_legacy_id`、`rank_no`←`rank` | 親の評価が無い・隔離された（orphan） | — |
+| bets → bets | `legacy_id`、`placed_at`←`ts`。`note` と `notes` の両方に値があれば改行でつなぐ（500 文字まで） | orphan。source が paper・manual 以外（enum） | 参照先の signal が無い・隔離されたら `signal_legacy_id` を NULL。0 以下の `odds_at_bet` は NULL |
+| bet_legs → bet_legs | `legacy_id`、`bet_legacy_id` | 親の bet が無い・隔離された（orphan） | — |
+| model_metrics → 同名 | `sample_count`←`count`。日付は 2 つの形を受け付ける | 暦にない日付 | — |
+| jvlink_timestamps → ingest_cursor | `last_file_timestamp`←`lastfiletimestamp` | 14 文字を超える | — |
+
+親子の参照は旧の ID のまま（`*_legacy_id`）出力し、新しい ID への張り替えは promote で行う（§5.2 P5）。**新表の主キー・一意キーの重複は transform で検出し、後の行を `duplicate` で隔離する**。例えば形の違う 2 つの時刻が同じ UTC になる場合、末尾の空白だけが違う場合（ascii_bin は PAD SPACE）、旧に一意キーの無い `signals` の自然キーが重なる場合が当たる。races の race_id はドメインの `RaceId` と同じ検査（1900 年以降・暦にある日付・既知の場・番号 1 以上）にかける。0/1 の列が NULL なら既定値にし、adjusted に数える。`--naive-zone` が夏時間のある地域なら、切替で無い・重なる時刻を隔離する。時刻・日付の年は MySQL の範囲（1000〜9999）に限る。数値の文字列は 10 進の形だけ受け付ける。
+出力: `<新表>/<番号>.ndjson.gz`、`quarantine/<旧表>.ndjson.gz`（理由・主キー・元の値）、`transform-manifest.json`（表ごとの元の行数・変換した行数・隔離の理由ごとの件数・adjusted・チャンクの sha256、extract の manifest の sha256）。
+
 ### 5.4 重複・孤立・不正データの扱い
 | ケース | 既定の扱い | 補足 |
 |---|---|---|

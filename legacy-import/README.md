@@ -1,6 +1,6 @@
 # legacy-import（旧 SQLite → MySQL の移行ツール。D-271）
 
-利用者の PC で、旧実装（参照元 jra-bot）の `data/jraev.sqlite` の**コピー**に対して実行する CLI。アプリのイメージには入らない。今は `preflight`・`extract`・`verify-extract`（transform 以降は後続）。
+利用者の PC で、旧実装（参照元 jra-bot）の `data/jraev.sqlite` の**コピー**に対して実行する CLI。アプリのイメージには入らない。今は `preflight`・`extract`・`verify-extract`・`transform`（load 以降は後続）。
 
 ## コピーの作り方（重要）
 旧アプリは WAL のモードで書く。**旧アプリ（デーモン・ダッシュボード）を止めてから**ファイルをコピーするか、`sqlite3 data/jraev.sqlite ".backup jraev-copy.sqlite"` で 1 ファイルのコピーを作る。
@@ -30,3 +30,13 @@ legacy-import/build/install/legacy-import/bin/legacy-import verify-extract --dir
 - 出力: `<表>/<番号>.ndjson.gz`（1 行 = 列の値の JSON 配列。主キーの順）と `manifest.json`（列・行数・主キーの範囲・内容の sha256・入力の sha256）。**値そのものを含む実データ**なので、Git・クラウドに置かない（クラウドへの投入は COMP-4 の回答待ち）。
 - 途中で失敗したら出力先を消して再実行する（抽出は決定的で、同じ入力から同じ内容になる）。`manifest.json` が無い出力先は不完全。
 - `verify-extract`: 各チャンクを読み直して manifest と照らす（0 = 一致、1 = 食い違い、2 = 検証できない）。
+
+## 変換（transform。D-274）
+```
+legacy-import/build/install/legacy-import/bin/legacy-import transform --extract <extract の出力先> --out-dir <無いか空のディレクトリ> --tenant-id <n> [--naive-zone Asia/Tokyo] [--lenient-json]
+```
+- extract のチャンクを sha256 で照合しながら読み、新しいスキーマの値に変換する（DB には触れない）。変換の表は DATA_MIGRATION_DESIGN §5.5 にある。
+- 変換できない行は `quarantine/<旧表>.ndjson.gz` に、理由・主キー・元の値と一緒に書く。親が隔離された子も隔離する。
+- 表ごとに「元の行数 = 変換 + 隔離」を `transform-manifest.json` に記録する。標準エラーには件数と理由のコードだけを出す。
+- 旧の未通知のシグナル（`sent=0`）は SEND_UNKNOWN にする。新しい bot が古い通知を送らないようにするため。
+- 時刻の解釈（`--naive-zone`）は、preflight の時刻の形式の内訳を見て本人が決める。
