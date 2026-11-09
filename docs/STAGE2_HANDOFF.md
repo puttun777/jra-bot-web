@@ -70,7 +70,7 @@ db-migration（単独）
 | G-AGENT-1〜6 | Windows + JV-Link の PoC（JVLINK_DESIGN §11） | 第3段階の冒頭 | ユーザー（Claude はスクリプトを用意し、集計値を記録） |
 | T1.17 | JV-Link の公式仕様書（SDK 同梱の PDF）の確認。**PDF は Git に入れない** | 第3段階の前 | ユーザー（結論だけを docs に） |
 | T1.20 / G-ML-1 / G-ML-2 | 実 SQLite の集計、実データのリプレイ（ローカル MySQL。**クラウドに投入しない**） | 第3段階 | ユーザーの PC（Claude は SQL とスクリプトを用意） |
-| G-COST-1 / G-DB-1 | 東京の単価、db-g1-small を選べるか、`max_connections`（作成画面を見るだけ。作成しない） | 第5段階の前 | ユーザー |
+| G-COST-1 / G-DB-1 | 東京の単価、db-f1-micro（D-278。代替 db-g1-small）を選べるか、`max_connections`（作成画面を見るだけ。作成しない） | 第5段階の前 | ユーザー |
 | G-OPS-1〜9, G-NET-1, G-DB-5/6/7（実環境の部分） | 実リソースでの検証 | 第5段階（**承認後**） | ユーザーの承認 → infra のセッション |
 
 ## 8. GitHub Actions による CI（T2.5。クラウドセッションの環境に依存しない再現性の正）
@@ -128,7 +128,7 @@ db-migration（単独）
 | G-DB-5 | IAM DB 認証を JDBC で使えるか | 2（調査）/ 5（実環境） | CONTRACTS §8.1 |
 | G-DB-6 | Cloud SQL のユーザーの既定権限と、`R__grants.sql` による REVOKE/GRANT | 2（MySQL で）/ 5（Cloud SQL で） | CONTRACTS §8.2。**MySQL コンテナ（8.4/9.7）では T2.3 で合格。Cloud SQL は未検証** |
 | G-DB-7 | プライベート IP での TLS 検証（`VERIFY_CA`）か Java Connector か | 5 | CONTRACTS §8.1 |
-| G-DB-1 / G-COST-1 | 東京で db-g1-small を選べるか、`max_connections`、正式な単価 | 5 の前（ユーザー） | infra CLOUD_COSTS §10 |
+| G-DB-1 / G-COST-1 | 東京で db-f1-micro（D-278。代替 db-g1-small）を選べるか、`max_connections`、正式な単価 | 5 の前（ユーザー） | infra CLOUD_COSTS §10 |
 | G-OPS-1〜9 | ingress=internal、停止と起動、メンテナンス、cancel のシグナル、Jobs の上限 14h、CAS、IAP のプログラム通過・`aud` の形式、組織なし IAP、apply 前ガード | 5 | infra OPERATIONS_DESIGN §12 |
 | G-NET-1 | Direct VPC egress + PSA | 5 | infra PLAN |
 | G-AGENT-1〜6 | Windows エージェントの PoC | 3 の冒頭（ユーザー） | JVLINK_DESIGN §11 |
