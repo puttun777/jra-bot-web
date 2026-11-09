@@ -55,7 +55,7 @@ JDK 25・MySQL 8.4（Docker）。各アプリの jar を直接起動し、`/proc
 
 内訳（1a 東京・無料枠なし, USD）: Cloud SQL 9.96・SSD 10 GB 2.21・バックアップ 5 GB 0.52・Cloud Run サービス 2.32（画面 20 時間 + ingest）・Jobs 4.63（bot-run 100 時間 + calendar-check 1,560 回 + その他）・レジストリ 0.15・Secret 0.48・Scheduler 0.40・GCS 0.05・Logging 0.50・通信 0.12。
 - **f1-micro は共有コア・SLA なし・0.6 GiB**。MySQL 8.4 で選べるか・接続プール合計 25 を受けられるかは未確認（G-DB-1）。
-- 1b は**DB を止めている間は画面も使えない**（REQUIREMENTS の「NORMAL: Web 常時可」を変える本人判断が要る）。
+- 1b は**DB を止めている間は画面も使えない**（本人が 1b を選択済み: D-279。REQUIREMENTS §5 に「Web 常時可は NORMAL の間」と注記）。
 - 2027-09 以降、Monitoring のアラートが 1 指標 $0.35/月（任意。公式の Cloud Observability の料金ページ、2026-11-07 取得）。
 
 ### 案 2: 小型 VM（Compute Engine）にアプリと MySQL を集約
@@ -152,6 +152,8 @@ Cloudflare Workers は JVM を動かせない（JS/TS/Wasm だけ・1 回 10 ms 
 
 ## 7.1 決定（2026-11-09）
 本人が**案 1** を選択（D-278）。IaC の既定を db-f1-micro・SSD 10 GB・予算の通知 3,000 円に変更（infra I-041。適用は本人承認後）。1a/1b は UNRESOLVED D-22。bot-run の縮小は P-1 の後。
+
+運用は **1b**（2026-11-09。D-279）: 通常は STOPPED、開催日など約 100 時間だけ NORMAL。
 
 ## 8. 構成移行の前でも進める（配置先に依存しない）作業
 - P-1: bot-run の周回中のメモリの統合試験（合成データ）。
