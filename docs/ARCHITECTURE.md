@@ -89,7 +89,7 @@ dashboard ─読取（DTO）─▶ MySQL        export-dataset ─▶ GCS datase
 ```
 
 ## 5. データ・DB（詳細は DATA_MIGRATION_DESIGN、契約は CONTRACTS §8）
-- Cloud SQL for MySQL **8.4 LTS（暫定。9.7 は G-DB-0 の後で判断: D-046）**、Enterprise、db-g1-small、プライベート IP のみ。Flyway の SQL がスキーマの正本で、範囲は §5.1。
+- Cloud SQL for MySQL **8.4 LTS（暫定。9.7 は G-DB-0 の後で判断: D-046）**、Enterprise、db-f1-micro（D-278。旧 db-g1-small）、プライベート IP のみ。Flyway の SQL がスキーマの正本で、範囲は §5.1。
 - **テナント**: 共有スキーマで、`tenant_id` を全テナント表の PK/UK/FK の先頭に置く（D-039）。共有の表は `tenant`、`app_user`、`code_venue` だけ。DAO は `TenantId` を必須引数にする。SQL の静的検査と越境テストを CI で行う。
 - **レース識別**: `race_id CHAR(12)`（YYYYMMDD + 場 2 + R2）。`kai`/`nichime` は NULL 可、`rt_key16` は導出（D-040）。
 - **時刻**: UTC の `DATETIME(6)` で保存し、表示と開催日の判定は Asia/Tokyo。`Clock` を注入し、`now()` を直接呼ばない（D-006・D-041）。
@@ -141,7 +141,7 @@ dashboard ─読取（DTO）─▶ MySQL        export-dataset ─▶ GCS datase
 ## 10. 検証ゲート（まだ実現済みとは扱わない）
 一覧と実施する段階は `STAGE2_HANDOFF.md` §13 にまとめた。主なものは次のとおり。
 - G-DB-0: MySQL 8.4/9.7 × Flyway 13.11.1 × Connector/J × Doma。
-- G-DB-1: 東京で db-g1-small を選べるか、`max_connections`。
+- G-DB-1: 東京で db-f1-micro（既定。D-278）・db-g1-small（代替）を MySQL 8.4 で選べるか、`max_connections`。
 - G-DB-5: IAM DB 認証。
 - G-DB-6: GRANT。
 - G-DB-7: TLS 検証方式。
