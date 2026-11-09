@@ -79,6 +79,7 @@
 - [ ] T5.4 start/stop/status workflow_dispatch、排他（concurrency）、部分失敗表示、安全な再実行  【infra PR #4: ops-start/stop/status】
 - [ ] T5.5 Terraform が mode/DB 起動状態を変更しないことの検証（plan 差分テスト）  【infra PR #4: plan_guard + terraform-plan/apply】
 - [ ] T5.6 監視/アラート/予算、ロールバック手順  【infra PR #4: 定期 status + Discord + OPERATIONS.md。予算は本人設定】
+- [ ] T5.7 **開催日に合わせた自動の起動・停止（D-279。案 1b）**: 通常は STOPPED、開催日の監視ウィンドウの前に NORMAL、終了・確定の後に STOPPED。STOPPED 中は DB の開催日程を読めないので、停止の前に次の開催日の一覧（日時だけ・実データ以外）を GCS の ops-state 側に書き、infra の定期ワークフローがそれを見て ops-start / ops-stop を呼ぶ案を設計する（失敗時は止める側に倒す・二重起動はリースで防ぐ）。前提: P-1、G-DB-1
 - [ ] ※ apply・課金リソース作成は **ユーザー承認後**
 
 ## 第6段階 ― 統合・レビュー

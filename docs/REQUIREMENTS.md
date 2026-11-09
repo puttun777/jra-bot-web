@@ -70,6 +70,7 @@ Windows / COM のため Linux コンテナで直接実行不可（**JV-Link 64bi
 ## 5. 運用モード（アプリ側の責務）
 `NORMAL` / `STOPPED`。希望モード（desired）と実リソース状態（actual）を区別して保持・表示する。
 - NORMAL: Web 常時可、DB 可、bot は開催日の必要時間帯のみ。非開催日に NORMAL へ戻しても bot は無条件起動しない。
+- **2026-11-09 の運用方針（D-279。費用の最小化・案 1b）**: 通常は **STOPPED** とし、**開催日など必要なとき（月 約 100 時間）だけ NORMAL** にする。画面（Web）は NORMAL の間だけ使える（「Web 常時可」は NORMAL の間の要件として読む）。切替は既存の ops-start / ops-stop。開催日に合わせた自動の切替は後続（PLAN）。
 - STOPPED: Web 新規受付停止、bot/定期/再試行停止、Windows エージェント送信抑止、DB 停止/休止、データ維持、意図しない再起動防止。
 アプリは `GET /internal/ops/mode`（契約案、CONTRACTS.md）でモードを提供し、bot・エージェントは実行前に必ず確認する。DB 停止中は取得不能になるため、**モードの正本はクラウド側のインフラ設定（infra）**とし、DB 内の値は表示用のコピーとする（DECISIONS D-005）。
 

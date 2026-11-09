@@ -153,6 +153,8 @@ Cloudflare Workers は JVM を動かせない（JS/TS/Wasm だけ・1 回 10 ms 
 ## 7.1 決定（2026-11-09）
 本人が**案 1** を選択（D-278）。IaC の既定を db-f1-micro・SSD 10 GB・予算の通知 3,000 円に変更（infra I-041。適用は本人承認後）。1a/1b は UNRESOLVED D-22。bot-run の縮小は P-1 の後。
 
+運用は **1b**（2026-11-09。D-279）: 通常は STOPPED、開催日など約 100 時間だけ NORMAL。
+
 ## 8. 構成移行の前でも進める（配置先に依存しない）作業
 - P-1: bot-run の周回中のメモリの統合試験（合成データ）。
 - JVM のメモリ設定を環境変数で上書きできるようにする（`JAVA_TOOL_OPTIONS` は Cloud Run・VM・Windows で共通に使える）。
