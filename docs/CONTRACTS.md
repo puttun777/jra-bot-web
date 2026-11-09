@@ -310,7 +310,7 @@ STOPPED 中の `ingest` 503、ビーコンのみ STOPPED、両方不達（UNKNOW
 
 ## 8. DB 接続契約（D8・D10）
 ### 8.1 接続
-- Cloud SQL for MySQL **8.4 LTS（暫定の基準、D10）**、Enterprise エディション、`db-g1-small`、**プライベート IP のみ**。9.7 LTS への変更は第2段階のゲート G-DB-0（Testcontainers で 8.4 と 9.7 × Flyway × Connector/J × Doma の互換性を検証）の結果を見て判断する。それまで SQL は 8.4 と 9.7 の共通機能に限る。
+- Cloud SQL for MySQL **8.4 LTS（暫定の基準、D10）**、Enterprise エディション、`db-f1-micro`（2026-11-09 に `db-g1-small` から変更: D-278。G-DB-1・P-3 で不足なら戻す）、**プライベート IP のみ**。9.7 LTS への変更は第2段階のゲート G-DB-0（Testcontainers で 8.4 と 9.7 × Flyway × Connector/J × Doma の互換性を検証）の結果を見て判断する。それまで SQL は 8.4 と 9.7 の共通機能に限る。
 - 接続方式の第一案は、Direct VPC egress 経由でプライベート IP へ JDBC 接続し、**TLS を必須**にする（`sslMode=VERIFY_CA` + Cloud SQL のサーバ CA を信頼ストアへ。IP 接続のため `VERIFY_IDENTITY` は使えない見込みで、要確認 G-DB-7）。代替案は Cloud SQL Java Connector（`ipTypes=PRIVATE`）。G-DB-5（IAM DB 認証）の結果と合わせて第2段階で選ぶ。
 - 認証は当面パスワード（Secret Manager）。IAM DB 認証が JDBC で使えれば（G-DB-5）、パスワードをやめる。
 - 文字セット `utf8mb4`、`serverTimezone=UTC`（接続のセッションも `time_zone='+00:00'`）。時刻は UTC の `DATETIME(6)` で保存し、表示だけ JST にする（DATA_MIGRATION_DESIGN §2）。
@@ -341,7 +341,7 @@ STOPPED 中の `ingest` 503、ビーコンのみ STOPPED、両方不達（UNKNOW
 | ml-train | 1 | 1 | 1 |
 | **合計（全部が同時に動いた最悪の場合）** | | | **25（≤ 25）** |
 - HikariCP の `maximumPoolSize` は `DB_POOL_MAX` で上書きできる。既定値はこの表の値。`connectionTimeout` は 10 秒、分離レベルは **REPEATABLE READ に固定**（サーバの既定に任せない。0.4.14。UNIQUE の無い表への `INSERT … WHERE NOT EXISTS` の重複防止が READ COMMITTED では成り立たないため）、`maxLifetime` は Cloud SQL 側の `wait_timeout` より短くする。
-- インスタンス数・同時実行数・`max_connections` を変えたときは、この表の合計を再計算して見直す（db-g1-small の `max_connections` の既定値は要確認 G-DB-1）。最大インスタンス数を増やすと合計が増えるので、その場合はプール上限を下げる。
+- インスタンス数・同時実行数・`max_connections` を変えたときは、この表の合計を再計算して見直す（既定の db-f1-micro〈2026-11-09。D-278〉・db-g1-small の `max_connections` の既定値は要確認 G-DB-1。合計 25 を受けられなければプール上限を下げるか db-g1-small に戻す）。最大インスタンス数を増やすと合計が増えるので、その場合はプール上限を下げる。
 
 ## 9. Job の実行契約（D9）
 ### 9.1 終了コード
