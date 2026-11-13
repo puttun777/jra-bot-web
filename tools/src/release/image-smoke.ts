@@ -818,7 +818,7 @@ export class Smoke {
       OPS_MODE_SOURCE: "/ops/NORMAL.json",
       DB_URL: "jdbc:mysql://127.0.0.1:1/jrabot",
       DB_USER: name === "dashboard" ? "app" : "ingest",
-      DB_PASSWORD: this.pw("aws"),
+      DB_PASSWORD: this.pw(name === "dashboard" ? "app" : "ingest"), // DB には接続しない（遅延接続）が、値は既存の利用者の合成の値を使う
       PORT: "8080",
       INTERNAL_OPS_TOKEN_FILE: "/run/jrabot/internal-ops-token",
       ...(name === "dashboard"
