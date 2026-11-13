@@ -19,7 +19,9 @@
 - **検証（ローカル。JDK 25・Node 24.22.2・Docker 29.9.2）**: 単体・結合（変更したモジュール）platform 75・cloud-gcp 43・cloud-aws 19・bot 159・ingest 37・dashboard 72・ml-train 47、tools 186、ktlint、consistency（infra と整合）・hygiene。**未実施**: MySQL 8.4/9.7 の全統合試験とイメージの試験（CI を正とする: D-264）、AWS の実環境（infra `AWS_OPERATIONS.md` §11）。
 - **本人の判断が必要**: AWS の構築（`pulumi up`）、`enableWebPush`（IAM）、ドメイン、COMP-4 の後の実データの移行、GCP の停止・削除。用意するもの: infra `AWS_OPERATIONS.md` §0、`USER_ACTIONS.md` の AWS の節。
 - **独立レビュー（Opus・読取り専用）**: web の指摘は無し（Cognito の検証・内部トークン・workload の柵・spool・モジュールの依存は確認済み）。infra の指摘 15 件は infra I-048 で修正。web 側の追加の修正: release の `--arch` は target=aws のときだけ（GCP の manifest は 0.4.18 の infra のスキーマでも通る）。
-- **次**: PR（web・infra）→ CI。
+- **PR #63 をマージ（2026-11-13。squash b352f8a）**: CI（ci gate と全 12 ジョブ: build・db integration MySQL 8.4/9.7・connector/j 26.x・images amd64/arm64・tools・agent linux/windows・hygiene）が head dbb69f1 で成功。初回の CI では images（amd64・arm64）の smoke が「未知のユーザー aws」で失敗（AWS の配線の確認が存在しない DB 利用者のパスワードを引いていた。この PR の不具合）→ ローカルで同じ環境変数の jar を起動して期待値（/internal はトークン 200・無し/誤り 401、IAP のヘッダ・内部トークンの人の API 401）を確認して修正（dbb69f1。独立レビュー〔Sonnet〕OK）。
+- **infra の PR #15**（AWS の定義・運用・手順書。I-042〜I-049）は CI 成功、**IAM・OIDC の定義を含むため本人の確認の後にマージ**。
+- **次（本人）**: infra #15 の確認・マージ → infra `docs/AWS_OPERATIONS.md` §0 の準備（U1〜U12）→ §1 の初回の構築（`pulumi up`。課金）→ 合成データで §2〜§8 の確認 → COMP-4 の後に §7 の切替。**次（開発）**: 実環境で見つかった問題の修正、infra の後続（`ssm:Overwrite` の条件の確認、アプリの資格情報をホストのロールから分ける）。
 
 ## 2026-11-09 運用は案 1b（D-279）
 - 本人が 1b を選択: 通常は STOPPED、開催日など約 100 時間だけ NORMAL。REQUIREMENTS §5・UNRESOLVED D-22・HOSTING_OPTIONS に反映（文書のみ）。GCP に統一（Cloudflare は使わない）。
