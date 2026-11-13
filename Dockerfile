@@ -26,7 +26,7 @@ RUN node node_modules/typescript/bin/tsc -p dashboard/tsconfig.json \
     && test -f dashboard/build/generated/frontend/static/js/app.js
 
 # ---------------------------------------------------------------- build
-FROM eclipse-temurin:25-jdk-noble@sha256:ba0f0e1a33864105e1d454e88105c617ab40f71062db1f306bf58be32a3f8e5e AS build
+FROM eclipse-temurin:25-jdk-noble@sha256:95e350ad1eb738f943e141640f7e3d797e483359a3b33c3864255bfd1ad71f8a AS build
 WORKDIR /src
 ENV GRADLE_OPTS="-Dorg.gradle.daemon=false -Dfile.encoding=UTF-8"
 # 1) Gradle Wrapper の取得（sha256 検証付き: gradle-wrapper.properties）。ビルド定義が変わらない限りこの層を再利用する
@@ -59,7 +59,7 @@ RUN --mount=type=cache,target=/root/.gradle/caches,id=jrabot-gradle-caches \
         :bot:bootJar :ingest:bootJar :dashboard:bootJar :ml-train:bootJar :db-migration:installDist
 
 # ---------------------------------------------------------------- runtime base
-FROM eclipse-temurin:25-jre-noble@sha256:3f2223fe04b750aa5a8179e29b5c9a1ddf7665fc9bb08bfe11ad01d143bc13a5 AS runtime-base
+FROM eclipse-temurin:25-jre-noble@sha256:a98128a57de944a72bd31fbc79b898edd5a5864d3652071d5bbd2160ab7d7dce AS runtime-base
 # uid/gid 10001 の専用ユーザー（ログイン不可・ホーム無し）。アプリは /app を読むだけで書かない（一時ファイルは /tmp）
 RUN groupadd --system --gid 10001 app \
     && useradd --system --uid 10001 --gid 10001 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin app
