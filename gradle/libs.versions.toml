@@ -3,18 +3,18 @@
 kotlin = "2.4.21"
 spring-boot = "4.1.2"
 ktlint = "1.8.0"
-flyway = "13.11.1"
-doma = "3.14.1"
+flyway = "13.12.1"
+doma = "3.15.0"
 doma-spring-boot = "3.0.0"
-google-cloud-storage = "2.75.0"
+google-cloud-storage = "2.78.0"
 # 内部 API の署名付きトークン検証（TokenVerifier）。google-cloud-storage 2.75.0 が引く版（解決結果）に合わせて固定する（D-082）
-google-auth-library = "1.54.0"
+google-auth-library = "1.57.0"
 # :ml-train だけが使う（D-257）。線形代数（Cholesky）・順位・分位点。Apache-2.0、2026-02 公開の 4.0.3（VERSIONS §16）
 hipparchus = "4.0.3"
 # :legacy-import だけが使う（D-271）。旧 SQLite を読取り専用で開く。Apache-2.0、3.53.4.0 は 2026-08-26 公開（3.54.1.0 は 2026-10-29 公開で 2 週間未満。VERSIONS §20）
-sqlite-jdbc = "3.53.4.0"
+sqlite-jdbc = "3.54.1.0"
 # :cloud-aws だけが使う（D-280）。S3 の読み書き。Apache-2.0、2.57.5 は 2026-10-27 公開（Maven Central の公開日。2.59.0 は 2026-11-12 で 2 週間未満。VERSIONS §21）
-aws-sdk = "2.57.5"
+aws-sdk = "2.57.12"
 
 [libraries]
 # Boot の BOM（JUnit・Spring 系・mysql-connector-j などの版をここに従わせる）
