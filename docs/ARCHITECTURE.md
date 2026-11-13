@@ -45,6 +45,8 @@ Python の 3 つ（`agent/`、`ml/`、`tools/`）は依存を別々に管理す�
 | `:domain` | 業務モデル、値オブジェクト（`TenantId`・`RaceId`・`Odds`・`Probability`・`OpsMode` など）、計算・判定（EV/Kelly/確率パイプライン/買い目/急落フィルタ/開催判定）、**ML 推論基盤 `jp.jrabot.domain.ml`（T3.6-A: 厳密 JSON・正準化、`FeatureSchema`・`FeatureBuilder`（旧互換と point-in-time）、ロジスティック回帰、`ProbabilityPipeline`（legacy/v2）、モデル JSON の署名・sha256 検証、レジストリの読取りと run 固定、データセット書出し。JSON は Jackson ではなく自前の厳密パーサ。ML_DESIGN §11）**、JV-Data パーサ（固定長 cp932）、成績集計、**ポート**（Repository・`ModeProvider`・`JobLauncher`・`Clock`・`ModelStore`・`DatasetStore`・`Notifier`・`HeartbeatMirror`） | Kotlin 標準ライブラリ、kotlinx の小さなもの（日時・直列化）だけ | Spring、Doma、JDBC、クラウド SDK、HTTP クライアント |
 | `:persistence` | Doma の DAO・SQL・Entity、Repository の実装、Entity⇔domain の変換、トランザクション | `:domain`、Doma、Spring JDBC/TX | Web、クラウド SDK。**Entity をモジュール外へ公開しない**（`internal`） |
 | `:db-migration` | Flyway の SQL（`V*`・`R__grants.sql`）と CLI（`--mode`） | Flyway、Connector/J（Boot の BOM に依存しない） | 他のモジュールすべて |
+| `:platform`（**D-281**） | 配置先に依存しない部品: 運用状態の読取り・キャッシュ（`OpsModeProviders`・`CachingModeProvider`・`workloads`）、認証の型（`CallerVerification`・`StaticTokenVerifier`）、オブジェクトストアの保管（`ObjectModelStore`・`ObjectDatasetStore`・`ObjectBlobStore` と `ObjectClient`）、`RuntimePlatform` | `:domain` | クラウドの SDK、Spring の Web |
+| `:cloud-aws`（**D-281**） | ポートの AWS 実装: S3 の運用状態・保管・ハートビートの写し（条件付き書込み）、Cognito の ID トークンの検証（JDK の暗号だけ） | `:domain`、`:platform`、AWS SDK for Java（S3・url-connection-client） | `:cloud-gcp`・アプリ |
 | `:cloud-gcp`（D-045） | ポートの GCP 実装: GCS の `ModeProvider`・`ModelStore`・`DatasetStore`・`HeartbeatMirror`、Cloud Run Jobs の `JobLauncher`、Google の JWT/ID トークン検証部品 | `:domain`、Google Cloud のクライアントライブラリ | Spring Web、Doma、アプリのモジュール |
 | `:bot` | Job（`--task=bot-run\|calendar-check\|reconcile\|retention\|export-dataset`）、Discord 通知（`jp.jrabot.bot.discord`: URL 検証・JDK HttpClient・`DiscordNotifier`。本文・分割・調整役は `:domain` の `notify`。T3.7）、オーケストレーション | `:domain`、`:persistence`、`:cloud-gcp` | `:dashboard`、`:ingest` |
 | `:ingest` | エージェント API（認証・冪等・封筒）、パーサの呼び出し、upsert、heartbeat の写し | 同上 | `:bot`、`:dashboard` |
@@ -52,7 +54,7 @@ Python の 3 つ（`agent/`、`ml/`、`tools/`）は依存を別々に管理す�
 | `:golden-runner`（T3.1、D-106） | **検証専用**: `tools/golden` のフィクスチャを読み、`:domain` の計算（`jp.jrabot.domain.decision`）を実行して結果 JSON を出力する（Python の比較器 `kotlin_compare` が旧実装の期待値と比べる）。JSON の読み書きはここだけ（`:domain` は Jackson に依存しない） | `:domain`、Jackson | それ以外のモジュールすべて。**どのモジュールもこれに依存しない**。アプリのイメージに入れない（Dockerfile は settings の include のため COPY するだけ） |
 
 - **実行アプリ（bot/ingest/dashboard）同士は依存しない**。ルート build の検査タスクで、`project(":bot")` などへの依存があれば失敗させ、CI で強制する（T2.1）。
-- 共通の処理は責務名のモジュール（`:domain`、`:persistence`、`:cloud-gcp`）に置く。`common` や `util` という名前のモジュールは作らない。マイクロサービスも増やさない。
+- 共通の処理は責務名のモジュール（`:domain`、`:persistence`、`:platform`、`:cloud-gcp`、`:cloud-aws`）に置く。`:cloud-gcp` と `:cloud-aws` は相互に依存せず、アプリは `RUNTIME_PLATFORM` で選ぶ（D-281）。`common` や `util` という名前のモジュールは作らない。マイクロサービスも増やさない。
 - ローカル・テスト用のポート実装は、各モジュールの `testFixtures` に置く。ファイルのモード、固定 `Clock`、メモリの `ModelStore` など。`APP_ENV=local` では、アプリの起動クラスがファイル実装を組み立てる。
 - `:domain` の `jp.jrabot.domain.decision`（T3.1）は、旧 Python と同じ式・同じ分岐順の**素の `Double`** で計算する（値オブジェクト `Odds`/`Probability`/`Money` は旧実装の境界挙動を再現できないので使わない。変換は呼び出し側）。設定は運用の既定値を持たない。D-104〜D-111。T3.2 でワイド/三連複を追加: Plackett–Luce（`PlackettLuce`）・実オッズの注入（`ComboOdds`。DB に依存せず、取得と鮮度は T3.4 の責務）・流し/BOX・`ticket_allocation`・`StrategyEntry.tickets`。D-112〜D-121。
 - fat jar（Spring Boot の実行可能 jar）を作るのは `:bot`・`:ingest`・`:dashboard`・`:db-migration` だけ。
@@ -137,6 +139,9 @@ dashboard ─読取（DTO）─▶ MySQL        export-dataset ─▶ GCS datase
 | モデル | pickle | JSON + 署名 + レジストリ |
 | UI | Streamlit（ローカル、認証なし） | dashboard（IAP + アプリ認可、テナント分離） |
 | 停止 | プロセス停止 | 4 つのモードと GCS の正本、DB の停止 |
+
+## 9b. AWS の配置（D-280。2026-11-13）
+配置先を AWS（東京）へ移す設計・実装（**適用前**）。EC2 t4g.small 1 台に dashboard・ingest・bot の Job・MySQL、普段は停止し、開催日（JRA の予定から自動）と閲覧（本人の手動）のときだけ起動する。制御は Lambda、本人の認証は Cognito + oauth2-proxy（dashboard が ID トークンを検証: D-286）、Job の起動は spool（D-283）、閲覧だけの起動は `workloads.raceday=false` で bot・通知を止める（D-282）。構成・手順・費用の正本は infra の `docs/AWS_ARCHITECTURE.md`・`AWS_OPERATIONS.md`・`CLOUD_COSTS.md` §12。GCP の構成（§3）は切替が終わるまで残す。
 
 ## 10. 検証ゲート（まだ実現済みとは扱わない）
 一覧と実施する段階は `STAGE2_HANDOFF.md` §13 にまとめた。主なものは次のとおり。

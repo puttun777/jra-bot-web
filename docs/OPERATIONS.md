@@ -1,4 +1,6 @@
 # OPERATIONS（アプリ側の運用）
+
+> **2026-11-13**: AWS への移行（D-280）の起動・停止・状態・deploy・バックアップの手順は infra の `docs/AWS_OPERATIONS.md`。アプリの挙動（下の §）は配置先に依らず同じ。閲覧だけの起動では bot・通知が動かない（`workloads`: CONTRACTS §5.6）。
 最終更新: 2026-11-01。インフラ（起動・停止・デプロイ・復元）は infra の `docs/OPERATIONS.md`。ここは**アプリの挙動と、困ったときの見方**。実 GCP・実データでの運用は未経験（`docs/COMPLETION.md` の B）。
 
 ## 1. 1 日の流れ（正常系）

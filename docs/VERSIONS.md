@@ -259,3 +259,15 @@ GitHub Actions（`db-integration` 8.4 / 9.7、ubuntu-24.04、Temurin 25、PR #8�
 | 項目 | 採用 | 根拠 |
 |---|---|---|
 | sqlite-jdbc（`org.xerial:sqlite-jdbc`） | **3.53.4.0**（2026-08-26 公開。repo1.maven.org の公開日で確認） | 3.54.1.0 は 2026-10-29 公開で 2 週間未満。Apache-2.0。`:legacy-import` だけが使う（イメージに入らない）。ツールは SQLite 本体の JSON1（`json_valid`）・URI のファイル名（`mode=ro&immutable=1`）を使う。試験は `ALTER TABLE DROP COLUMN`・WAL も使う |
+
+## 21. AWS への移行（2026-11-13。D-280〜D-287）
+| 項目 | 採用 | 根拠 |
+|---|---|---|
+| AWS SDK for Java v2（`software.amazon.awssdk:bom`・`s3`・`url-connection-client`） | **2.57.5**（2026-10-27 公開。repo1.maven.org の Last-Modified で確認。2 週間以上） | `:cloud-aws` だけが使う。HTTP は JDK の url-connection-client（Netty・Apache の依存を除外）。STS は使わない（資格情報は EC2 のインスタンスのロール） |
+| Cognito の ID トークンの検証 | JDK の `java.security`（RS256）と Jackson 3 だけ | JWT のライブラリを増やさない（D-286） |
+| infra の `@pulumi/aws` | **7.52.1**（2026-10-28 公開。npm の time） | infra `pulumi-aws/`（I-042） |
+| infra の `@aws-sdk/client-{ec2,lambda,route-53,s3,ssm}` | **3.1160.0**（2026-10-29 公開） | Lambda・ホストの運用エージェント・CLI |
+| infra の esbuild | **0.28.2**（2026-08-08 公開） | Lambda とホストのエージェントを 1 ファイルに |
+| ホストのイメージ | mysql **8.4.11**・caddy **2.11.6**（digest で固定）・oauth2-proxy **v7.15.3**（digest は deploy の前に本人が確認: infra `AWS_OPERATIONS.md` U5） | マルチアーキテクチャ（arm64 あり） |
+| Node（EC2 のホスト） | **v24.22.2**（nodejs.org の SHASUMS256 で arm64・x64 の SHA-256 を固定） | Amazon Linux 2023 の標準の Node は使わない（版の固定） |
+| CI の arm64 | GitHub の `ubuntu-24.04-arm`（Public のリポジトリは無料） | ネイティブでビルド・起動の確認（D-284） |
