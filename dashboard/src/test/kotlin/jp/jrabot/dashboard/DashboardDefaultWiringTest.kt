@@ -1,7 +1,7 @@
 package jp.jrabot.dashboard
 
-import jp.jrabot.cloudgcp.auth.InternalCallerVerifier
-import jp.jrabot.cloudgcp.auth.PersonVerifier
+import jp.jrabot.platform.auth.InternalCallerVerifier
+import jp.jrabot.platform.auth.PersonVerifier
 import org.junit.jupiter.api.Test
 import org.springframework.boot.WebApplicationType
 import org.springframework.boot.builder.SpringApplicationBuilder

@@ -1,7 +1,5 @@
 package jp.jrabot.dashboard
 
-import jp.jrabot.cloudgcp.auth.InternalCallerVerifier
-import jp.jrabot.cloudgcp.auth.PersonVerifier
 import jp.jrabot.dashboard.api.ApiAuthFilter
 import jp.jrabot.dashboard.guard.AdminWriteGuardFilter
 import jp.jrabot.dashboard.guard.CsrfGuardFilter
@@ -9,6 +7,8 @@ import jp.jrabot.dashboard.guard.SecurityHeadersFilter
 import jp.jrabot.dashboard.internal.InternalAuthFilter
 import jp.jrabot.domain.ops.InspectableModeProvider
 import jp.jrabot.domain.tenant.HumanAuthorizer
+import jp.jrabot.platform.auth.InternalCallerVerifier
+import jp.jrabot.platform.auth.PersonVerifier
 import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -31,8 +31,11 @@ class WebFilters {
         }
 
     @Bean
-    fun internalAuthFilter(verifier: InternalCallerVerifier): FilterRegistrationBean<InternalAuthFilter> =
-        FilterRegistrationBean(InternalAuthFilter(verifier)).apply {
+    fun internalAuthFilter(
+        verifier: InternalCallerVerifier,
+        headers: AuthHeaders,
+    ): FilterRegistrationBean<InternalAuthFilter> =
+        FilterRegistrationBean(InternalAuthFilter(verifier, headers.internal)).apply {
             addUrlPatterns("/*")
             order = 10
         }
@@ -41,8 +44,9 @@ class WebFilters {
     fun apiAuthFilter(
         verifier: PersonVerifier,
         authorizer: HumanAuthorizer,
+        headers: AuthHeaders,
     ): FilterRegistrationBean<ApiAuthFilter> =
-        FilterRegistrationBean(ApiAuthFilter(verifier, authorizer)).apply {
+        FilterRegistrationBean(ApiAuthFilter(verifier, authorizer, headers.person)).apply {
             addUrlPatterns("/*")
             order = 20
         }

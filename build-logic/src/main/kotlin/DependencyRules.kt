@@ -5,7 +5,13 @@ object DependencyRules {
     const val DOMAIN = ":domain"
     const val PERSISTENCE = ":persistence"
     const val DB_MIGRATION = ":db-migration"
+
+    // provider 中立の実行基盤の部品（運用モードの読取り・内部 API と人の認証の型・オブジェクトストレージ上の ML 成果物。D-280）
+    const val PLATFORM = ":platform"
     const val CLOUD_GCP = ":cloud-gcp"
+
+    // AWS の実装（S3・Cognito。D-280）。:cloud-gcp と互いに依存しない
+    const val CLOUD_AWS = ":cloud-aws"
     const val BOT = ":bot"
     const val INGEST = ":ingest"
     const val DASHBOARD = ":dashboard"
@@ -17,7 +23,7 @@ object DependencyRules {
     /** 旧 SQLite → MySQL の移行ツール（D-271。利用者の PC で実行する CLI。アプリのイメージには含めない）。 */
     const val LEGACY_IMPORT = ":legacy-import"
 
-    val modules = listOf(DOMAIN, PERSISTENCE, DB_MIGRATION, CLOUD_GCP, BOT, INGEST, DASHBOARD, GOLDEN_RUNNER, ML_TRAIN, LEGACY_IMPORT)
+    val modules = listOf(DOMAIN, PERSISTENCE, DB_MIGRATION, PLATFORM, CLOUD_GCP, CLOUD_AWS, BOT, INGEST, DASHBOARD, GOLDEN_RUNNER, ML_TRAIN, LEGACY_IMPORT)
     val apps = setOf(BOT, INGEST, DASHBOARD, ML_TRAIN)
 
     /** 各モジュールが依存してよいプロジェクト。表にないものはすべて禁止。 */
@@ -26,13 +32,16 @@ object DependencyRules {
             DOMAIN to emptySet(),
             PERSISTENCE to setOf(DOMAIN),
             DB_MIGRATION to emptySet(),
-            CLOUD_GCP to setOf(DOMAIN),
-            BOT to setOf(DOMAIN, PERSISTENCE, CLOUD_GCP),
-            INGEST to setOf(DOMAIN, PERSISTENCE, CLOUD_GCP),
-            DASHBOARD to setOf(DOMAIN, PERSISTENCE, CLOUD_GCP),
+            PLATFORM to setOf(DOMAIN),
+            CLOUD_GCP to setOf(DOMAIN, PLATFORM),
+            CLOUD_AWS to setOf(DOMAIN, PLATFORM),
+            // 移行期間（D-280）は GCP と AWS の両方の実装を持ち、環境変数で選ぶ（GCP の切戻しのため。GCP の撤去後に :cloud-gcp を外す）
+            BOT to setOf(DOMAIN, PERSISTENCE, PLATFORM, CLOUD_GCP, CLOUD_AWS),
+            INGEST to setOf(DOMAIN, PERSISTENCE, PLATFORM, CLOUD_GCP, CLOUD_AWS),
+            DASHBOARD to setOf(DOMAIN, PERSISTENCE, PLATFORM, CLOUD_GCP, CLOUD_AWS),
             GOLDEN_RUNNER to setOf(DOMAIN),
             // 学習 Job（D-257）。bot とは独立した実行単位。学習ライブラリ（Hipparchus）はここだけ（:domain に入れない）
-            ML_TRAIN to setOf(DOMAIN, PERSISTENCE, CLOUD_GCP),
+            ML_TRAIN to setOf(DOMAIN, PERSISTENCE, PLATFORM, CLOUD_GCP, CLOUD_AWS),
             // 移行ツール（D-271）。SQLite のドライバはここだけ。値の検査（RaceId など）に :domain を使う
             LEGACY_IMPORT to setOf(DOMAIN),
         )

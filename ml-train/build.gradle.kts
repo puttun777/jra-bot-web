@@ -10,7 +10,9 @@ extra["requiredSchemaVersion"] = "5"
 dependencies {
     implementation(project(":domain"))
     implementation(project(":persistence"))
+    implementation(project(":platform"))
     implementation(project(":cloud-gcp"))
+    implementation(project(":cloud-aws"))
     implementation(libs.spring.boot.starter)
     implementation(libs.hipparchus.core)
     implementation(libs.hipparchus.stat)

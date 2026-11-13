@@ -9,7 +9,9 @@ extra["requiredSchemaVersion"] = "5"
 dependencies {
     implementation(project(":domain"))
     implementation(project(":persistence"))
+    implementation(project(":platform"))
     implementation(project(":cloud-gcp"))
+    implementation(project(":cloud-aws"))
     implementation(libs.spring.boot.starter)
 
     // テスト専用: 偽の JWKS・MySQL コンテナの支援。HikariCP の型は DataSource の状態確認（接続していないこと）に使う

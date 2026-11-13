@@ -14,6 +14,9 @@ enum class LaunchableJob(
 
     /** バックテスト（R16。D-265）。本人が手動で実行する（calendar-check は起動しない）。 */
     BACKTEST("backtest"),
+
+    /** 先の開催予定の書出し（AWS の自動起動の計画。読取りだけ・通知しない。D-283）。calendar-check は起動しない。 */
+    CALENDAR_PLAN("calendar-plan"),
     ML_TRAIN("ml-train"),
 }
 

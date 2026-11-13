@@ -67,12 +67,13 @@ class BotConfiguration {
     ): SchemaVersionVerifier = SchemaVersionVerifier(dataSource, info.requiredSchemaVersion)
 
     /**
-     * 起動基盤: `RUN_JOBS_*` があれば Cloud Run Jobs の起動（`:cloud-gcp` の `CloudRunJobLauncher`。本番の calendar-check では必須）、無ければ [UnconfiguredJobLauncher]（起動できたことにしない = fail closed）。
+     * 起動基盤: `JOB_LAUNCHER=spool` なら 1 台の EC2 の spool への起動依頼（AWS。D-283）、`RUN_JOBS_*` があれば Cloud Run Jobs の起動（`:cloud-gcp` の `CloudRunJobLauncher`。本番の calendar-check では必須）、無ければ [UnconfiguredJobLauncher]（起動できたことにしない = fail closed）。
      * テスト用の Fake はテストコードにだけある。
      */
     @Bean
     @ConditionalOnMissingBean(JobLauncher::class)
     fun jobLauncher(runtime: BotRuntime): JobLauncher {
+        runtime.settings.spoolDir?.let { return SpoolJobLauncher(it) }
         val rj = runtime.settings.runJobs ?: return UnconfiguredJobLauncher()
         return jp.jrabot.cloudgcp.run
             .CloudRunJobLauncher(
@@ -178,6 +179,11 @@ class BotConfiguration {
             BotTask.CALENDAR_CHECK -> {
                 val settings = checkNotNull(runtime.settings.calendar) { "calendar-check の設定が無い（BotSettings が検証しているはず）" }
                 CalendarCheckTaskHandler(CalendarCheckService(clock, runtime.modeProvider, days, schedules, overrides, facts, runs, launcher, settings))
+            }
+
+            BotTask.CALENDAR_PLAN -> {
+                val settings = checkNotNull(runtime.settings.calendar) { "calendar-plan の設定が無い（BotSettings が検証しているはず）" }
+                CalendarPlanTaskHandler(clock, days, schedules, overrides, facts, settings)
             }
 
             BotTask.EXPORT_DATASET -> {

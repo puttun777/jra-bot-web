@@ -3,6 +3,10 @@ package jp.jrabot.cloudgcp.auth
 import com.google.api.client.json.webtoken.JsonWebSignature
 import com.google.auth.oauth2.TokenVerifier
 import jp.jrabot.domain.time.Clock
+import jp.jrabot.platform.auth.CallerVerification
+import jp.jrabot.platform.auth.InternalCallerVerifier
+import jp.jrabot.platform.auth.PersonVerifier
+import jp.jrabot.platform.auth.RejectReason
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.time.Duration

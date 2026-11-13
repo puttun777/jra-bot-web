@@ -11,4 +11,10 @@ package jp.jrabot.domain.ops
  */
 fun interface ModeProvider {
     fun current(): OpsMode
+
+    /**
+     * 起動目的ごとに許された処理（AWS の ops-state の `workloads`。D-282）。[current] と同じキャッシュ・検証を通る。例外を投げない。
+     * 既定は [WorkloadStatus.Unspecified]（GCP の構成・試験の偽物）。
+     */
+    fun workloads(): WorkloadStatus = WorkloadStatus.Unspecified
 }

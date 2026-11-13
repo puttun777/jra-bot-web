@@ -1,8 +1,8 @@
 package jp.jrabot.cloudgcp.store
 
-import com.google.cloud.storage.StorageException
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
+import jp.jrabot.platform.store.ObjectAccessDeniedException
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.util.concurrent.CopyOnWriteArrayList
@@ -81,7 +81,8 @@ class GoogleObjectClientHttpTest {
     @Test
     fun `権限不足（403）は例外（成功扱いにしない）`() {
         handler = { it.reply(403, """{"error":{"code":403,"message":"Forbidden"}}""") }
-        assertEquals(403, assertFailsWith<StorageException> { client().read("fake-bucket", "x") }.code)
-        assertEquals(403, assertFailsWith<StorageException> { client().createIfAbsent("fake-bucket", "x", byteArrayOf(1), "text/plain") }.code)
+        // 401・403 は provider 中立の権限エラー（D-280。ObjectBlobStore が再試行しない失敗に分ける）
+        assertEquals(403, assertFailsWith<ObjectAccessDeniedException> { client().read("fake-bucket", "x") }.status)
+        assertEquals(403, assertFailsWith<ObjectAccessDeniedException> { client().createIfAbsent("fake-bucket", "x", byteArrayOf(1), "text/plain") }.status)
     }
 }

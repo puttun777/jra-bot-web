@@ -3,6 +3,11 @@ package jp.jrabot.cloudgcp.ops
 import com.google.cloud.storage.BlobId
 import com.google.cloud.storage.Storage
 import com.google.cloud.storage.StorageException
+import jp.jrabot.platform.ops.CachingModeProvider
+import jp.jrabot.platform.ops.OpsFailureReason
+import jp.jrabot.platform.ops.OpsStateReadException
+import jp.jrabot.platform.ops.OpsStateSource
+import jp.jrabot.platform.ops.RemoteOpsStateSourceFactory
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.time.Duration
@@ -134,11 +139,19 @@ class GcsOpsStateSource(
 
     companion object {
         /** CONTRACTS §5.2: 取得のタイムアウトは 3 秒。 */
-        val READ_TIMEOUT: Duration = Duration.ofSeconds(3)
+        val READ_TIMEOUT: Duration = OpsStateSource.READ_TIMEOUT
 
         private val sharedExecutor: ExecutorService =
             Executors.newCachedThreadPool { runnable ->
                 Thread(runnable, "ops-state-reader").apply { isDaemon = true }
             }
     }
+}
+
+/** `OPS_MODE_SOURCE=gs://<bucket>/<object>` の読取り元（[jp.jrabot.platform.ops.OpsModeProviders] に渡す。D-280）。ADC のクライアントは最初の読取りで作る。 */
+object GcsOpsStateSources : RemoteOpsStateSourceFactory {
+    override val scheme: String = "gs"
+    override val sourceLabel: String = CachingModeProvider.SOURCE_GCS
+
+    override fun create(uri: String): OpsStateSource = GcsOpsStateSource(GcsLocation.parse(uri), { GcsStorageFactory.create() })
 }

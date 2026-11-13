@@ -3,6 +3,7 @@ package jp.jrabot.bot
 import jp.jrabot.domain.bot.LaunchableJob
 import jp.jrabot.domain.ml.DatasetId
 import jp.jrabot.domain.ml.features.FeatureSchema
+import jp.jrabot.domain.ops.Workload
 import jp.jrabot.domain.tenant.TenantId
 import java.time.Duration
 import java.time.LocalDate
@@ -15,13 +16,21 @@ enum class BotTask(
     val defaultPoolMax: Int,
     /** このタスクだけが受け付ける追加の引数。 */
     val options: Set<String>,
+    /**
+     * 必要とする処理の種類（AWS の起動目的の柵。`OPS_WORKLOAD_GATE=required` のときだけ確認する: D-282）。開催日の処理（通知を含む）は RACEDAY、
+     * 重い処理は BATCH、読取りだけの計画の書出しは ANY（閲覧用の起動でも動いてよい）。
+     */
+    val workload: Workload,
 ) {
-    BOT_RUN("bot-run", 4, setOf("date", "trigger")),
-    CALENDAR_CHECK("calendar-check", 1, setOf("date")),
-    RECONCILE("reconcile", 1, setOf("date")),
-    RETENTION("retention", 1, setOf("dry-run")),
-    EXPORT_DATASET("export-dataset", 2, setOf("dataset-id", "from", "to", "feature-schema", "valid-fraction", "as-of-lead-minutes")),
-    BACKTEST("backtest", 1, setOf("from", "to", "minutes-before-post", "max-odds-age-seconds")),
+    BOT_RUN("bot-run", 4, setOf("date", "trigger"), Workload.RACEDAY),
+    CALENDAR_CHECK("calendar-check", 1, setOf("date"), Workload.RACEDAY),
+    RECONCILE("reconcile", 1, setOf("date"), Workload.RACEDAY),
+    RETENTION("retention", 1, setOf("dry-run"), Workload.RACEDAY),
+    EXPORT_DATASET("export-dataset", 2, setOf("dataset-id", "from", "to", "feature-schema", "valid-fraction", "as-of-lead-minutes"), Workload.BATCH),
+    BACKTEST("backtest", 1, setOf("from", "to", "minutes-before-post", "max-odds-age-seconds"), Workload.BATCH),
+
+    /** 先の開催予定を JSON に書き出す（D-283）。DB を読むだけで、通知・起動・書込みをしない。 */
+    CALENDAR_PLAN("calendar-plan", 1, setOf("days", "out"), Workload.ANY),
     ;
 
     init {
@@ -83,6 +92,17 @@ data class BacktestArgs(
     }
 }
 
+/** `calendar-plan` の検証済み引数（D-283）。[out] は書出し先の絶対パス（`.json`）、[days] は今日から何日先まで（1〜60）。 */
+data class PlanArgs(
+    val days: Int,
+    val out: java.nio.file.Path,
+) {
+    companion object {
+        const val DEFAULT_DAYS = 21
+        const val MAX_DAYS = 60
+    }
+}
+
 /** 検証済みの Job 引数。 */
 data class BotCommand(
     val task: BotTask,
@@ -94,6 +114,8 @@ data class BotCommand(
     val export: ExportArgs? = null,
     /** `backtest` のときだけ非 null。 */
     val backtest: BacktestArgs? = null,
+    /** `calendar-plan` のときだけ非 null。 */
+    val plan: PlanArgs? = null,
 )
 
 sealed interface ParsedArgs {
@@ -178,7 +200,24 @@ object BotArgsParser {
                 TriggerType.entries.firstOrNull { it.name == v }
                     ?: return invalid("--trigger が不正です（${TriggerType.entries.joinToString("|")}）")
             }
-        return ParsedArgs.Valid(BotCommand(task, tenant, date, trigger, dryRun = "dry-run" in values, export = export, backtest = backtest))
+        val plan =
+            if (task == BotTask.CALENDAR_PLAN) {
+                val days =
+                    values["days"]?.let { v -> v.toIntOrNull()?.takeIf { it in 1..PlanArgs.MAX_DAYS } ?: return invalid("--days は 1〜${PlanArgs.MAX_DAYS} です") }
+                        ?: PlanArgs.DEFAULT_DAYS
+                val outRaw = values["out"] ?: return invalid("--out が必須です（書出し先の絶対パス .json）")
+                val out =
+                    runCatching {
+                        java.nio.file.Path
+                            .of(outRaw)
+                    }.getOrNull()?.takeIf { p ->
+                        p.isAbsolute && p.fileName?.toString()?.endsWith(".json") == true && p.normalize() == p && outRaw.none { it.isISOControl() }
+                    } ?: return invalid("--out は正規化された絶対パスの .json です")
+                PlanArgs(days, out)
+            } else {
+                null
+            }
+        return ParsedArgs.Valid(BotCommand(task, tenant, date, trigger, dryRun = "dry-run" in values, export = export, backtest = backtest, plan = plan))
     }
 
     private sealed interface ExportParse {
