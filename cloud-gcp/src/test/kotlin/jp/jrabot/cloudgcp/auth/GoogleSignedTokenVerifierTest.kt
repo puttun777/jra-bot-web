@@ -4,6 +4,8 @@ import jp.jrabot.cloudgcp.auth.testing.Claims
 import jp.jrabot.cloudgcp.auth.testing.FakeJwksServer
 import jp.jrabot.cloudgcp.auth.testing.FixedClock
 import jp.jrabot.cloudgcp.auth.testing.TestSigner
+import jp.jrabot.platform.auth.CallerVerification
+import jp.jrabot.platform.auth.RejectReason
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Test
 import java.time.Duration

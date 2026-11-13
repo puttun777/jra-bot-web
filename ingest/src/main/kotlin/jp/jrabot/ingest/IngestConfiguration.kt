@@ -1,8 +1,9 @@
 package jp.jrabot.ingest
 
+import jp.jrabot.cloudaws.agent.S3HeartbeatMirror
+import jp.jrabot.cloudaws.ops.S3OpsStateSources
 import jp.jrabot.cloudgcp.auth.GoogleSignedTokenVerifier
-import jp.jrabot.cloudgcp.auth.InternalCallerVerifier
-import jp.jrabot.cloudgcp.ops.OpsModeProviders
+import jp.jrabot.cloudgcp.ops.GcsOpsStateSources
 import jp.jrabot.domain.agent.HeartbeatMirror
 import jp.jrabot.domain.calendar.RaceDayRepository
 import jp.jrabot.domain.calendar.RaceDayUpdater
@@ -41,6 +42,10 @@ import jp.jrabot.persistence.PersistenceConfiguration
 import jp.jrabot.persistence.jdbc.DataSourceFactory
 import jp.jrabot.persistence.schema.AppBuildInfo
 import jp.jrabot.persistence.schema.SchemaVersionVerifier
+import jp.jrabot.platform.RuntimePlatform
+import jp.jrabot.platform.auth.InternalCallerVerifier
+import jp.jrabot.platform.auth.StaticTokenVerifier
+import jp.jrabot.platform.ops.OpsModeProviders
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -72,7 +77,7 @@ class IngestConfiguration {
     fun modeProvider(
         settings: IngestSettings,
         clock: Clock,
-    ): InspectableModeProvider = OpsModeProviders.fromEnvironment(settings.opsEnv, clock)
+    ): InspectableModeProvider = OpsModeProviders.fromEnvironment(settings.opsEnv, clock, listOf(GcsOpsStateSources, S3OpsStateSources))
 
     @Bean
     fun schemaVersionVerifier(
@@ -80,12 +85,19 @@ class IngestConfiguration {
         info: AppBuildInfo,
     ): SchemaVersionVerifier = SchemaVersionVerifier(dataSource, info.requiredSchemaVersion)
 
-    /** `/internal` の呼び出し元の検証（CONTRACTS §11.2: Google ID トークン、aud=INTERNAL_ID_TOKEN_AUDIENCE、email=OPS_SA_EMAIL）。 */
+    /**
+     * `/internal` の呼び出し元の検証（CONTRACTS §11.2）。GCP: Google ID トークン（aud=INTERNAL_ID_TOKEN_AUDIENCE、email=OPS_SA_EMAIL）。
+     * AWS: 同じホストの運用エージェントのトークン（`INTERNAL_OPS_TOKEN_FILE`。D-281）。どちらも `Authorization: Bearer`。
+     */
     @Bean
     fun internalCallerVerifier(
         settings: IngestSettings,
         clock: Clock,
-    ): InternalCallerVerifier = GoogleSignedTokenVerifier.googleIdToken(settings.internalAudience, settings.opsServiceAccountEmail, clock)
+    ): InternalCallerVerifier =
+        when (settings.platform) {
+            RuntimePlatform.GCP -> GoogleSignedTokenVerifier.googleIdToken(settings.internalAudience, settings.opsServiceAccountEmail, clock)
+            RuntimePlatform.AWS -> StaticTokenVerifier.fromFile(checkNotNull(settings.internalOpsTokenFile))
+        }
 
     // ---- エージェント API（T3.4）
 
@@ -100,8 +112,13 @@ class IngestConfiguration {
         // 実データ（JV-Data）のパーサは一次仕様の確認後（T1.17）。それまでは合成の正規化 JSON（ローカル・テストだけ）しか解析できない
         RecordParsers(if (settings.ingest.acceptNormalizedRecords) listOf(NormalizedJsonRecordParser(json)) else emptyList())
 
+    /** 最終接続の写し（CONTRACTS §5.4）。`AGENT_HEARTBEAT_PREFIX=s3://…` なら S3（D-280）。GCS 版は未実装のまま（書いたことにしない）。 */
     @Bean
-    fun heartbeatMirror(): HeartbeatMirror = UnavailableHeartbeatMirror()
+    fun heartbeatMirror(
+        settings: IngestSettings,
+        clock: Clock,
+    ): HeartbeatMirror =
+        settings.heartbeatPrefix?.takeIf { it.startsWith("s3://") }?.let { S3HeartbeatMirror.fromUri(it, clock) } ?: UnavailableHeartbeatMirror()
 
     @Bean
     fun envelopeValidator(): EnvelopeValidator = EnvelopeValidator()

@@ -12,7 +12,10 @@
 !/build-logic/
 !/domain/
 !/persistence/
+!/platform/
 !/cloud-gcp/
+# AWS の実装（D-280）
+!/cloud-aws/
 !/db-migration/
 !/bot/
 !/ingest/

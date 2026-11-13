@@ -13,6 +13,8 @@ google-auth-library = "1.54.0"
 hipparchus = "4.0.3"
 # :legacy-import だけが使う（D-271）。旧 SQLite を読取り専用で開く。Apache-2.0、3.53.4.0 は 2026-08-26 公開（3.54.1.0 は 2026-10-29 公開で 2 週間未満。VERSIONS §20）
 sqlite-jdbc = "3.53.4.0"
+# :cloud-aws だけが使う（D-280）。S3 の読み書き。Apache-2.0、2.57.5 は 2026-10-27 公開（Maven Central の公開日。2.59.0 は 2026-11-12 で 2 週間未満。VERSIONS §21）
+aws-sdk = "2.57.5"
 
 [libraries]
 # Boot の BOM（JUnit・Spring 系・mysql-connector-j などの版をここに従わせる）
@@ -39,6 +41,10 @@ slf4j-api = { module = "org.slf4j:slf4j-api" }
 hipparchus-core = { module = "org.hipparchus:hipparchus-core", version.ref = "hipparchus" }
 hipparchus-stat = { module = "org.hipparchus:hipparchus-stat", version.ref = "hipparchus" }
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite-jdbc" }
+# :cloud-aws だけが使う（D-280）。HTTP クライアントは JDK の URLConnection 版（Netty・Apache HttpClient を入れない）
+aws-sdk-bom = { module = "software.amazon.awssdk:bom", version.ref = "aws-sdk" }
+aws-s3 = { module = "software.amazon.awssdk:s3" }
+aws-url-connection-client = { module = "software.amazon.awssdk:url-connection-client" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 kotlin-test-junit5 = { module = "org.jetbrains.kotlin:kotlin-test-junit5" }

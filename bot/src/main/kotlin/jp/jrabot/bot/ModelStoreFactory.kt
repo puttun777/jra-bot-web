@@ -10,8 +10,21 @@ import java.nio.file.Path
 object ModelStoreFactory {
     fun create(uri: String): ModelStore =
         when {
-            uri.startsWith("gs://") -> GcsStores.modelStore(uri)
-            uri.startsWith("file:///") -> LocalFileModelStore(Path.of(URI.create(uri)))
-            else -> throw IllegalArgumentException("未対応の MODEL_STORE_URI")
+            uri.startsWith("gs://") -> {
+                GcsStores.modelStore(uri)
+            }
+
+            uri.startsWith("s3://") -> {
+                jp.jrabot.cloudaws.store.S3Stores
+                    .modelStore(uri)
+            }
+
+            uri.startsWith("file:///") -> {
+                LocalFileModelStore(Path.of(URI.create(uri)))
+            }
+
+            else -> {
+                throw IllegalArgumentException("未対応の MODEL_STORE_URI")
+            }
         }
 }

@@ -1,6 +1,6 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-11-09（案 1b に決定。D-279）。旧: 2026-11-09（案 1 に決定。D-278）。旧: 2026-11-07（配置先の 3 案の比較。D-277。下の新しい節）。旧: 2026-11-07（L9: リリース経路）。旧: 2026-11-07（L8 ⑦: R24 移行ツールの load）。旧: 2026-11-06（L8 ⑥: R24 移行ツールの transform）。旧: 2026-11-06（L8 ⑤: R24 移行ツールの extract）。旧: 2026-11-06（L8 ④: R24 移行ツールの preflight）。旧: 2026-11-06（L8 ③: R20 エージェントの失効）。旧: 2026-11-06（L8 ②: R22 ML モデルの表示）。旧: 2026-11-06（L8 ①: R16 バックテストの Job）。旧: 2026-11-06（言語移行 L7）。旧: 2026-11-03（言語移行 L5）。旧: 2026-11-02（言語移行 L3）。旧: 2026-11-02（L1。web PR #36・infra PR #7〔L2〕はマージ済み）。旧: 2026-11-01 夜（web PR #30〜#33・infra PR #3/#4/#6 はマージ済み。残りは wip/final の TEST_RESULTS.md・D-247・R15 の MySQL 通し試験〈ReadAdminApiMySqlIntegrationTest〉。検証: ktlintCheck 成功、当該 4 試験は MySQL 8.4 で成功（ローカル）。それ以外の統合試験は CI で確認。再開手順: 本ブランチの PR の CI 結果を確認→失敗ジョブのログだけ読む→マージ条件を満たせばマージ→COMPLETION.md の C/B 項目を最終報告。判定の正本は COMPLETION.md）
+最終更新: 2026-11-13（GCP → AWS の移行の設計・実装。D-280〜D-287。適用なし）。旧: 2026-11-09（案 1b に決定。D-279）。旧: 2026-11-09（案 1 に決定。D-278）。旧: 2026-11-07（配置先の 3 案の比較。D-277。下の新しい節）。旧: 2026-11-07（L9: リリース経路）。旧: 2026-11-07（L8 ⑦: R24 移行ツールの load）。旧: 2026-11-06（L8 ⑥: R24 移行ツールの transform）。旧: 2026-11-06（L8 ⑤: R24 移行ツールの extract）。旧: 2026-11-06（L8 ④: R24 移行ツールの preflight）。旧: 2026-11-06（L8 ③: R20 エージェントの失効）。旧: 2026-11-06（L8 ②: R22 ML モデルの表示）。旧: 2026-11-06（L8 ①: R16 バックテストの Job）。旧: 2026-11-06（言語移行 L7）。旧: 2026-11-03（言語移行 L5）。旧: 2026-11-02（言語移行 L3）。旧: 2026-11-02（L1。web PR #36・infra PR #7〔L2〕はマージ済み）。旧: 2026-11-01 夜（web PR #30〜#33・infra PR #3/#4/#6 はマージ済み。残りは wip/final の TEST_RESULTS.md・D-247・R15 の MySQL 通し試験〈ReadAdminApiMySqlIntegrationTest〉。検証: ktlintCheck 成功、当該 4 試験は MySQL 8.4 で成功（ローカル）。それ以外の統合試験は CI で確認。再開手順: 本ブランチの PR の CI 結果を確認→失敗ジョブのログだけ読む→マージ条件を満たせばマージ→COMPLETION.md の C/B 項目を最終報告。判定の正本は COMPLETION.md）
 旧: 2026-11-01（T3.9③・reconcile・preflight・infra PR #4）
 旧: 2026-10-30（保留の再適用のレビュー・公開準備。D-229。CI 未実施）
 旧: 2026-10-29（追加レビュー 2: リース継続・保留の再適用・G-31 の null・T3.9 設計の訂正〈D-224〜D-228〉。同ブランチ。CI 未実施。PR なし）
@@ -12,6 +12,14 @@
 旧: 2026-10-27（Stage 3-G: T3.7 Discord 通知）
 旧: 2026-10-26（Public 化の準備）／2026-10-24（Stage 3-F2・3-F1・3-E）
 
+
+## 2026-11-13 GCP → AWS の移行（ブランチ claude/jra-bot-gcp-to-aws-uqla8y。D-280〜D-287。infra I-042〜I-047。**AWS には何も作っていない**）
+- **実装**: `:platform`（運用状態・認証の型・オブジェクトストアの保管。`:cloud-gcp` から移動）・`:cloud-aws`（S3 の運用状態・保管・ハートビートの写し、Cognito の ID トークンの検証）、アプリの配線（`RUNTIME_PLATFORM`・Cognito・内部の静的トークン・`OPS_WORKLOAD_GATE`・spool・`--task=calendar-plan`・ml-train の S3）、Dockerfile、CI の `images-arm64`、release の `target`/`arch`（ECR・SigV4）、manifest v3 の ECR と `runtime.arch`、CONTRACTS 0.4.19。
+- **実測**（合成データ・ローカルの Docker・x86）: 同時稼働のピーク MySQL 177・dashboard 212・ingest 212・bot-run 203 MiB、CPU 1% 未満（D-287）。arm64 の実機は未計測。
+- **検証（ローカル。JDK 25・Node 24.22.2・Docker 29.9.2）**: 単体・結合（変更したモジュール）platform 75・cloud-gcp 43・cloud-aws 19・bot 159・ingest 37・dashboard 72・ml-train 47、tools 186、ktlint、consistency（infra と整合）・hygiene。**未実施**: MySQL 8.4/9.7 の全統合試験とイメージの試験（CI を正とする: D-264）、AWS の実環境（infra `AWS_OPERATIONS.md` §11）。
+- **本人の判断が必要**: AWS の構築（`pulumi up`）、`enableWebPush`（IAM）、ドメイン、COMP-4 の後の実データの移行、GCP の停止・削除。用意するもの: infra `AWS_OPERATIONS.md` §0、`USER_ACTIONS.md` の AWS の節。
+- **独立レビュー（Opus・読取り専用）**: web の指摘は無し（Cognito の検証・内部トークン・workload の柵・spool・モジュールの依存は確認済み）。infra の指摘 15 件は infra I-048 で修正。web 側の追加の修正: release の `--arch` は target=aws のときだけ（GCP の manifest は 0.4.18 の infra のスキーマでも通る）。
+- **次**: PR（web・infra）→ CI。
 
 ## 2026-11-09 運用は案 1b（D-279）
 - 本人が 1b を選択: 通常は STOPPED、開催日など約 100 時間だけ NORMAL。REQUIREMENTS §5・UNRESOLVED D-22・HOSTING_OPTIONS に反映（文書のみ）。GCP に統一（Cloudflare は使わない）。

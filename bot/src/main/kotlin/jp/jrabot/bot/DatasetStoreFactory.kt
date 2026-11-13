@@ -13,8 +13,21 @@ import java.nio.file.Path
 object DatasetStoreFactory {
     fun create(uri: String): DatasetStore =
         when {
-            uri.startsWith("gs://") -> GcsStores.datasetStore(uri)
-            uri.startsWith("file:///") -> LocalFileDatasetStore(Path.of(URI.create(uri)))
-            else -> throw IllegalArgumentException("未対応の MODEL_STORE_URI")
+            uri.startsWith("gs://") -> {
+                GcsStores.datasetStore(uri)
+            }
+
+            uri.startsWith("s3://") -> {
+                jp.jrabot.cloudaws.store.S3Stores
+                    .datasetStore(uri)
+            }
+
+            uri.startsWith("file:///") -> {
+                LocalFileDatasetStore(Path.of(URI.create(uri)))
+            }
+
+            else -> {
+                throw IllegalArgumentException("未対応の MODEL_STORE_URI")
+            }
         }
 }

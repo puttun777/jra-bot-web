@@ -1,8 +1,9 @@
 package jp.jrabot.mltrain
 
-import jp.jrabot.cloudgcp.ops.OpsModeConfigurationException
-import jp.jrabot.cloudgcp.ops.OpsModeProviders
-import jp.jrabot.cloudgcp.store.GcsBlobStore
+import jp.jrabot.cloudaws.ops.S3OpsStateSources
+import jp.jrabot.cloudaws.store.S3Stores
+import jp.jrabot.cloudgcp.ops.GcsOpsStateSources
+import jp.jrabot.cloudgcp.store.GcsStores
 import jp.jrabot.domain.ml.ArtifactBlobStore
 import jp.jrabot.domain.ml.json.JsonFormatException
 import jp.jrabot.domain.ml.json.JsonValue
@@ -10,6 +11,7 @@ import jp.jrabot.domain.ml.json.StrictJson
 import jp.jrabot.domain.ml.store.LocalFileBlobStore
 import jp.jrabot.domain.ops.ModeProvider
 import jp.jrabot.domain.ops.OpsMode
+import jp.jrabot.domain.ops.WorkloadStatus
 import jp.jrabot.domain.tenant.TenantId
 import jp.jrabot.domain.time.SystemClock
 import jp.jrabot.mltrain.job.ArtifactStore
@@ -27,6 +29,8 @@ import jp.jrabot.mltrain.job.UsageError
 import jp.jrabot.persistence.jdbc.DataSourceFactory
 import jp.jrabot.persistence.jdbc.DbSettings
 import jp.jrabot.persistence.repository.TrainingPersistence
+import jp.jrabot.platform.ops.OpsModeConfigurationException
+import jp.jrabot.platform.ops.OpsModeProviders
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.InvalidPathException
@@ -62,7 +66,9 @@ data class TrainArgs(
  */
 class Launcher(
     private val log: JobLog = JobLog(),
-    private val modeProviderFactory: (Map<String, String>) -> ModeProvider = { OpsModeProviders.fromEnvironment(it, SystemClock) },
+    private val modeProviderFactory: (
+        Map<String, String>,
+    ) -> ModeProvider = { OpsModeProviders.fromEnvironment(it, SystemClock, listOf(GcsOpsStateSources, S3OpsStateSources)) },
     private val dataSourceFactory: (DbSettings) -> DataSource = { DataSourceFactory.createLazy(it, "ml-train") },
     private val terminated: AtomicBoolean = AtomicBoolean(false),
 ) {
@@ -127,14 +133,28 @@ class Launcher(
                 throw UsageError("DB_ENV_MISSING", e.message ?: "DB の環境変数が不正")
             }
         if (appEnv == "prod" && db.user != "mltrain") throw UsageError("DB_USER_INVALID", "本番の DB_USER は mltrain（最小権限）")
-        val mode =
+        val gateRequired =
+            when (env["OPS_WORKLOAD_GATE"]?.trim().orEmpty()) {
+                "", "off" -> false
+                "required" -> true
+                else -> throw UsageError("OPS_WORKLOAD_GATE_INVALID", "OPS_WORKLOAD_GATE は required または off")
+            }
+        val modes =
             try {
-                modeProviderFactory(env).current()
+                modeProviderFactory(env)
             } catch (e: OpsModeConfigurationException) {
                 throw UsageError("OPS_MODE_SOURCE_INVALID", e.message ?: "OPS_MODE_SOURCE が不正")
             }
+        val mode = modes.current()
         if (mode == OpsMode.UNKNOWN) return result(ExitCode.TEMPFAIL, "MODE_UNKNOWN")
         if (mode != OpsMode.NORMAL) return result(ExitCode.OK, "MODE_${mode.name}")
+        // 起動目的の柵（AWS: 学習は重い処理の起動のときだけ。開催日の処理と同時に動かさない。D-282）
+        if (gateRequired) {
+            when (val w = modes.workloads()) {
+                is WorkloadStatus.Specified -> if (!w.batch) return result(ExitCode.OK, "WORKLOAD_BATCH_DISABLED")
+                else -> return result(ExitCode.TEMPFAIL, if (w == WorkloadStatus.Unknown) "WORKLOAD_UNKNOWN" else "WORKLOAD_UNSPECIFIED")
+            }
+        }
 
         val dataSource = dataSourceFactory(db)
         try {
@@ -228,7 +248,7 @@ class Launcher(
             }
         }
 
-        /** `MODEL_STORE_URI`: `gs://bucket[/prefix]`、または `file:///絶対パス`（既存のディレクトリ）。bare path は APP_ENV=local のときだけ。 */
+        /** `MODEL_STORE_URI`: `gs://bucket[/prefix]`・`s3://bucket[/prefix]`（D-280）、または `file:///絶対パス`（既存のディレクトリ）。bare path は APP_ENV=local のときだけ。 */
         fun openStore(
             uri: String?,
             appEnv: String,
@@ -237,9 +257,16 @@ class Launcher(
             if (raw.isEmpty()) throw UsageError("MODEL_STORE_URI_MISSING", "MODEL_STORE_URI が未設定")
             if (raw.startsWith("gs://")) {
                 return try {
-                    GcsBlobStore.open(raw)
+                    GcsStores.blobStore(raw)
                 } catch (_: IllegalArgumentException) {
                     throw UsageError("MODEL_STORE_URI_INVALID", "MODEL_STORE_URI が gs://<bucket>[/<prefix>] の形式でない")
+                }
+            }
+            if (raw.startsWith("s3://")) {
+                return try {
+                    S3Stores.blobStore(raw)
+                } catch (_: IllegalArgumentException) {
+                    throw UsageError("MODEL_STORE_URI_INVALID", "MODEL_STORE_URI が s3://<bucket>[/<prefix>] の形式でない")
                 }
             }
             val path =
@@ -247,7 +274,7 @@ class Launcher(
                     when {
                         raw.startsWith("file:///") -> Path.of(URI.create(raw))
                         raw.startsWith("/") && appEnv == "local" -> Path.of(raw)
-                        else -> throw UsageError("MODEL_STORE_URI_INVALID", "MODEL_STORE_URI は gs:// または file:///絶対パス")
+                        else -> throw UsageError("MODEL_STORE_URI_INVALID", "MODEL_STORE_URI は gs://・s3:// または file:///絶対パス")
                     }
                 } catch (_: IllegalArgumentException) {
                     throw UsageError("MODEL_STORE_URI_INVALID", "MODEL_STORE_URI のパスが不正")

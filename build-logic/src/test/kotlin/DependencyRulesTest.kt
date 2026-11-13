@@ -10,12 +10,14 @@ class DependencyRulesTest {
             ":domain" to emptySet(),
             ":persistence" to setOf(":domain"),
             ":db-migration" to emptySet(),
-            ":cloud-gcp" to setOf(":domain"),
-            ":bot" to setOf(":domain", ":persistence", ":cloud-gcp"),
-            ":ingest" to setOf(":domain", ":persistence", ":cloud-gcp"),
-            ":dashboard" to setOf(":domain", ":persistence", ":cloud-gcp"),
+            ":platform" to setOf(":domain"),
+            ":cloud-gcp" to setOf(":domain", ":platform"),
+            ":cloud-aws" to setOf(":domain", ":platform"),
+            ":bot" to setOf(":domain", ":persistence", ":platform", ":cloud-gcp", ":cloud-aws"),
+            ":ingest" to setOf(":domain", ":persistence", ":platform", ":cloud-gcp", ":cloud-aws"),
+            ":dashboard" to setOf(":domain", ":persistence", ":platform", ":cloud-gcp", ":cloud-aws"),
             ":golden-runner" to setOf(":domain"),
-            ":ml-train" to setOf(":domain", ":persistence", ":cloud-gcp"),
+            ":ml-train" to setOf(":domain", ":persistence", ":platform", ":cloud-gcp", ":cloud-aws"),
         )
 
     @Test
@@ -64,6 +66,20 @@ class DependencyRulesTest {
         }
         assertEquals(1, DependencyRules.checkProjectDependencies(ok + (":persistence" to setOf(":domain", ":cloud-gcp"))).size)
         assertEquals(1, DependencyRules.checkProjectDependencies(ok + (":cloud-gcp" to setOf(":domain", ":persistence"))).size)
+    }
+
+    @Test
+    fun `cloud-gcp と cloud-aws は互いに依存できず、platform は domain だけに依存する（D-280）`() {
+        assertEquals(1, DependencyRules.checkProjectDependencies(ok + (":cloud-aws" to setOf(":domain", ":platform", ":cloud-gcp"))).size)
+        assertEquals(1, DependencyRules.checkProjectDependencies(ok + (":cloud-gcp" to setOf(":domain", ":platform", ":cloud-aws"))).size)
+        for (to in listOf(":persistence", ":cloud-gcp", ":cloud-aws", ":bot", ":ingest", ":dashboard")) {
+            assertEquals(1, DependencyRules.checkProjectDependencies(ok + (":platform" to setOf(":domain", to))).size, "platform → $to")
+        }
+        for (m in listOf(":cloud-aws", ":platform")) {
+            for (to in listOf(":bot", ":ingest", ":dashboard", ":ml-train", ":persistence")) {
+                assertEquals(1, DependencyRules.checkProjectDependencies(ok + (m to (ok.getValue(m) + to))).size, "$m → $to")
+            }
+        }
     }
 
     @Test

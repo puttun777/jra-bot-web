@@ -3,11 +3,13 @@ name: release
 # 本番リリースの公開（L9。D-276）。本人が手動で実行し、環境 `release`（必須の承認者を本人が設定）の承認の後にだけ動く。
 # - main のコミットで、その ci.yml の最新の完了した実行が成功し、gate・build・images・db integration が成功しているときだけ（リリースの前に ci を手動で実行する）。5 つのイメージをビルド・スモークしてから Artifact Registry へ push し、
 #   push 後の digest で本番 release-manifest.json を生成・検証し、GitHub Release（タグ v<release>）の資産として公開する。
-# - GCP へは WIF（GitHub の OIDC → STS → SA の短期トークン）だけ。長期キー・Secrets は使わない。第三者の認証 action も使わない
-#   （トークンの交換は tools/src/release/publish.ts。トークンは docker login の標準入力にだけ渡す）。
+# - GCP へは WIF（GitHub の OIDC → STS → SA の短期トークン）、AWS へは OIDC → STS（AssumeRoleWithWebIdentity）→ ECR の短期パスワードだけ。
+#   長期キー・Secrets は使わない。第三者の認証 action も使わない（交換は tools/src/release/publish.ts・aws.ts。パスワードは docker login の標準入力にだけ渡す）。
 # - デプロイはしない。infra の deploy（workflow_dispatch）に、この Release の manifest の URL と SHA-256 を本人が渡す（CONTRACTS §10）。
-# - 本人の設定が揃うまで動かない（環境 release の変数 GCP_PROJECT_ID・GCP_WIF_PROVIDER_WEB・GCP_PUSH_SERVICE_ACCOUNT。infra の gha-web-push と WIF は承認後: USER_ACTIONS）。
-# - 注意: ログは公開（web は Public）。ジョブの env（GCP のプロジェクト ID・WIF の provider・SA のメール）はログに出る（秘密ではない: USER_ACTIONS A8）。
+# - 本人の設定が揃うまで動かない（環境 release の変数。AWS: AWS_ACCOUNT_ID・AWS_PUSH_ROLE_ARN〔infra の IaC の出力〕。GCP: GCP_PROJECT_ID・
+#   GCP_WIF_PROVIDER_WEB・GCP_PUSH_SERVICE_ACCOUNT）。USER_ACTIONS。
+# - 注意: ログは公開（web は Public）。ジョブの env（AWS のアカウント ID・ロールの ARN、GCP のプロジェクト ID・WIF の provider・SA のメール）はログに出る
+#   （秘密ではない: USER_ACTIONS A8）。
 on:
   workflow_dispatch:
     inputs:
@@ -20,6 +22,18 @@ on:
         required: false
         type: string
         default: ""
+      target:
+        description: "公開先（aws = ECR〔既定〕、gcp = Artifact Registry〔切戻し用〕）"
+        required: true
+        type: choice
+        options: [aws, gcp]
+        default: aws
+      arch:
+        description: "CPU アーキテクチャ（arm64 = Graviton の t4g〔既定〕、amd64 = t3 など・GCP は amd64）"
+        required: true
+        type: choice
+        options: [arm64, amd64]
+        default: arm64
 
 permissions:
   contents: read
@@ -31,7 +45,8 @@ concurrency:
 jobs:
   publish:
     name: publish release (push images, production manifest)
-    runs-on: ubuntu-24.04
+    # arm64 は arm64 のランナーでネイティブにビルドする（QEMU の模擬を使わない。Public の標準ランナーは無料）
+    runs-on: ${{ inputs.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     timeout-minutes: 60
     environment: release
     permissions:
@@ -41,10 +56,14 @@ jobs:
     env:
       RELEASE: ${{ inputs.release }}
       NOTES: ${{ inputs.notes }}
+      TARGET: ${{ inputs.target }}
+      ARCH: ${{ inputs.arch }}
       GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
       GCP_WIF_PROVIDER_WEB: ${{ vars.GCP_WIF_PROVIDER_WEB }}
       GCP_PUSH_SERVICE_ACCOUNT: ${{ vars.GCP_PUSH_SERVICE_ACCOUNT }}
-      REGISTRY: asia-northeast1-docker.pkg.dev
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      AWS_PUSH_ROLE_ARN: ${{ vars.AWS_PUSH_ROLE_ARN }}
+      GCP_REGISTRY: asia-northeast1-docker.pkg.dev
     steps:
       - name: Guard (main only, release format, configuration present)
         shell: bash
@@ -55,10 +74,24 @@ jobs:
           if ! [[ "$RELEASE" =~ ^[0-9]{4}\.(0?[1-9]|1[0-2])\.[0-9]{1,4}$ ]]; then echo "release は YYYY.M.N の形（例 2026.11.0）"; exit 1; fi
           if [ "${#NOTES}" -gt 2000 ]; then echo "notes は 2000 文字まで"; exit 1; fi
           if printf '%s' "$NOTES" | LC_ALL=C grep -q '[[:cntrl:]]'; then echo "notes に制御文字は使えない"; exit 1; fi
-          for v in GCP_PROJECT_ID GCP_WIF_PROVIDER_WEB GCP_PUSH_SERVICE_ACCOUNT; do
+          case "$TARGET" in
+            aws) need="AWS_ACCOUNT_ID AWS_PUSH_ROLE_ARN" ;;
+            gcp) need="GCP_PROJECT_ID GCP_WIF_PROVIDER_WEB GCP_PUSH_SERVICE_ACCOUNT"
+                 if [ "$ARCH" != amd64 ]; then echo "GCP（Cloud Run）は amd64 だけ"; exit 1; fi ;;
+            *) echo "target は aws か gcp"; exit 1 ;;
+          esac
+          for v in $need; do
             # 変数は環境 release の変数に置く（環境が無いまま自動で作られた実行では空 = ここで止まる: USER_ACTIONS B4b）
             if [ -z "${!v}" ]; then echo "変数 $v が未設定（環境 release の変数に入れる: docs/USER_ACTIONS.md B4b）"; exit 1; fi
           done
+          if [ "$TARGET" = aws ]; then
+            if ! [[ "$AWS_ACCOUNT_ID" =~ ^[0-9]{12}$ ]]; then echo "AWS_ACCOUNT_ID は 12 桁"; exit 1; fi
+            if ! [[ "$AWS_PUSH_ROLE_ARN" =~ ^arn:aws:iam::$AWS_ACCOUNT_ID:role/[A-Za-z0-9+=,.@_-]+$ ]]; then echo "AWS_PUSH_ROLE_ARN が同じアカウントのロールではない"; exit 1; fi
+            echo "REGISTRY=$AWS_ACCOUNT_ID.dkr.ecr.ap-northeast-1.amazonaws.com" >> "$GITHUB_ENV"
+          else
+            echo "REGISTRY=$GCP_REGISTRY" >> "$GITHUB_ENV"
+          fi
+          test "$(docker info --format '{{.Architecture}}')" = "$( [ "$ARCH" = arm64 ] && echo aarch64 || echo x86_64 )"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -78,21 +111,36 @@ jobs:
             "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/git/ref/tags/v$RELEASE")"
           if [ "$code" = "200" ]; then echo "タグ v$RELEASE は既にある（release を上げる）"; exit 1; fi
           if [ "$code" != "404" ]; then echo "タグの有無を確かめられない（HTTP $code）"; exit 1; fi
-      - name: Build the 5 images (same as the images workflow)
+      - name: Build the 5 images (same as the images workflow; native for the chosen architecture)
         shell: bash
         run: |
           set -euo pipefail
           for t in db-migration bot ingest dashboard ml-train; do
             docker build --progress=plain --target "$t" --build-arg GIT_SHA="$GITHUB_SHA" -t "jra-bot/$t:$GITHUB_SHA" . 2>&1 | tail -n 20
+            test "$(docker image inspect -f '{{.Architecture}}' "jra-bot/$t:$GITHUB_SHA")" = "$ARCH"
           done
       - name: Pull the CI-only MySQL image
         run: docker pull mysql:8.4
       - name: Security and startup smoke (must pass before anything is pushed)
         run: node build/tools/src/main.js image-smoke --git-sha "$GITHUB_SHA" --report-dir out
-      - name: Registry login (WIF short-lived token; no long-lived key)
-        run: node build/tools/src/main.js publish registry-login --provider "$GCP_WIF_PROVIDER_WEB" --service-account "$GCP_PUSH_SERVICE_ACCOUNT" --registry "$REGISTRY"
+      - name: Registry login (AWS - OIDC to STS to an ECR short-lived password; GCP - WIF short-lived token; no long-lived key)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$TARGET" = aws ]; then
+            node build/tools/src/main.js publish ecr-login --role-arn "$AWS_PUSH_ROLE_ARN" --registry "$REGISTRY"
+          else
+            node build/tools/src/main.js publish registry-login --provider "$GCP_WIF_PROVIDER_WEB" --service-account "$GCP_PUSH_SERVICE_ACCOUNT" --registry "$REGISTRY"
+          fi
       - name: Push and record the registry digests
-        run: node build/tools/src/main.js publish push --project "$GCP_PROJECT_ID" --git-sha "$GITHUB_SHA" --registry "$REGISTRY" --out out/registry-images.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$TARGET" = aws ]; then
+            node build/tools/src/main.js publish push --git-sha "$GITHUB_SHA" --registry "$REGISTRY" --out out/registry-images.json
+          else
+            node build/tools/src/main.js publish push --project "$GCP_PROJECT_ID" --git-sha "$GITHUB_SHA" --registry "$REGISTRY" --out out/registry-images.json
+          fi
       - name: Registry logout
         if: always()
         run: docker logout "$REGISTRY" || true
@@ -101,8 +149,11 @@ jobs:
         run: |
           set -euo pipefail
           BUILT_AT="$(date -u -d "@$(git show -s --format=%ct HEAD)" +%Y-%m-%dT%H:%M:%SZ)"
+          # runtime.arch は AWS 向けだけ（GCP の deploy の写しのスキーマは 0.4.18 のままでも受け付けるように）
+          arch_args=()
+          if [ "$TARGET" = aws ]; then arch_args=(--arch "$ARCH"); fi
           node build/tools/src/main.js release production --git-sha "$GITHUB_SHA" --release "$RELEASE" --built-at "$BUILT_AT" \
-            --registry-images out/registry-images.json --min-app-release "$RELEASE" --notes="$NOTES" --out out/release-manifest.json
+            --registry-images out/registry-images.json --min-app-release "$RELEASE" "${arch_args[@]}" --notes="$NOTES" --out out/release-manifest.json
           node build/tools/src/main.js release validate --kind production --expect-git-sha "$GITHUB_SHA" out/release-manifest.json
           (cd out && sha256sum release-manifest.json > release-manifest.json.sha256)
       - name: Publish the GitHub Release (manifest asset for the infra deploy)

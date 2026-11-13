@@ -1,10 +1,11 @@
 package jp.jrabot.ingest
 
-import jp.jrabot.cloudgcp.ops.OpsModeProviders
 import jp.jrabot.domain.ingest.KeyEncryptionKeys
 import jp.jrabot.domain.ingest.OddsBoundaryPolicy
 import jp.jrabot.domain.ops.AppEnv
 import jp.jrabot.persistence.jdbc.DbSettings
+import jp.jrabot.platform.RuntimePlatform
+import jp.jrabot.platform.ops.OpsModeProviders
 
 /**
  * ingest の環境変数による設定（CONTRACTS §2）。足りない・不正なら起動を失敗させる（既定値に黙って落とさない）。
@@ -15,8 +16,14 @@ class IngestSettings(
     val db: DbSettings,
     /** `OpsModeProviders.fromEnvironment` に渡す環境（`OPS_MODE_SOURCE`、`APP_ENV`）。 */
     val opsEnv: Map<String, String>,
+    /** 実行基盤（D-281）。GCP は [internalAudience]・[opsServiceAccountEmail] が必須、AWS は [internalOpsTokenFile] が必須。 */
+    val platform: RuntimePlatform,
     val internalAudience: String,
     val opsServiceAccountEmail: String,
+    /** AWS: 内部 API のトークンのファイル（`INTERNAL_OPS_TOKEN_FILE`）。GCP では null。 */
+    val internalOpsTokenFile: String?,
+    /** エージェントの最終接続の写しの置き場（`AGENT_HEARTBEAT_PREFIX`。任意。`s3://` だけ実装。D-280）。 */
+    val heartbeatPrefix: String?,
     val releaseIdOverride: String?,
     /** 署名鍵を暗号化する KEK（Secret Manager 由来）。null なら**エージェント API は認証できず 503**（未認証で業務データを保存しない）。 */
     val agentKeys: KeyEncryptionKeys?,
@@ -42,10 +49,22 @@ class IngestSettings(
             // 最小権限: 本番では ingest 用のユーザー以外（migrate など強い権限）で動かさない。ローカルは任意のユーザーを許す
             check(appEnv == AppEnv.LOCAL || db.user == DB_USER) { "DB_USER が ingest 用のユーザー($DB_USER)ではない" }
             val opsEnv = listOf(OpsModeProviders.ENV_SOURCE, OpsModeProviders.ENV_APP).mapNotNull { k -> get(k)?.let { k to it } }.toMap()
+            val platform = RuntimePlatform.fromEnv(get(RuntimePlatform.ENV))
             val audience = get("INTERNAL_ID_TOKEN_AUDIENCE")?.trim().orEmpty()
-            check(audience.isNotEmpty()) { "INTERNAL_ID_TOKEN_AUDIENCE が未設定" }
             val opsSa = get("OPS_SA_EMAIL")?.trim().orEmpty()
-            check(opsSa.isNotEmpty()) { "OPS_SA_EMAIL が未設定" }
+            val tokenFile = get("INTERNAL_OPS_TOKEN_FILE")?.trim().orEmpty()
+            when (platform) {
+                RuntimePlatform.GCP -> {
+                    check(audience.isNotEmpty()) { "INTERNAL_ID_TOKEN_AUDIENCE が未設定" }
+                    check(opsSa.isNotEmpty()) { "OPS_SA_EMAIL が未設定" }
+                }
+
+                RuntimePlatform.AWS -> {
+                    check(tokenFile.isNotEmpty()) { "INTERNAL_OPS_TOKEN_FILE が未設定（RUNTIME_PLATFORM=aws）" }
+                }
+            }
+            val heartbeat = get("AGENT_HEARTBEAT_PREFIX")?.trim()?.takeIf { it.isNotEmpty() }
+            check(heartbeat == null || heartbeat.startsWith("s3://") || heartbeat.startsWith("gs://")) { "AGENT_HEARTBEAT_PREFIX は s3:// または gs:// です" }
             val keysSpec = get("AGENT_KEK_KEYS")?.trim().orEmpty()
             val activeKid = get("AGENT_KEK_ACTIVE_KID")?.trim().orEmpty()
             val keys =
@@ -60,7 +79,19 @@ class IngestSettings(
                         throw IllegalStateException("AGENT_KEK_KEYS / AGENT_KEK_ACTIVE_KID の形式が不正")
                     }
                 }
-            return IngestSettings(appEnv, db, opsEnv, audience, opsSa, get("RELEASE_ID"), keys, IngestOptions.from(appEnv, get))
+            return IngestSettings(
+                appEnv,
+                db,
+                opsEnv,
+                platform,
+                audience,
+                opsSa,
+                tokenFile.ifEmpty { null },
+                heartbeat,
+                get("RELEASE_ID"),
+                keys,
+                IngestOptions.from(appEnv, get),
+            )
         }
     }
 }

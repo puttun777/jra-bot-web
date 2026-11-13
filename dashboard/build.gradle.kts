@@ -9,7 +9,9 @@ extra["requiredSchemaVersion"] = "5"
 dependencies {
     implementation(project(":domain"))
     implementation(project(":persistence"))
+    implementation(project(":platform"))
     implementation(project(":cloud-gcp"))
+    implementation(project(":cloud-aws"))
     implementation(libs.spring.boot.starter.webmvc)
     implementation(libs.spring.boot.starter.jdbc) // TransactionOperations（管理操作と監査記録を同じトランザクションにする）
 

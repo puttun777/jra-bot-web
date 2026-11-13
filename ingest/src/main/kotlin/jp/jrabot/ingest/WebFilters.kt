@@ -1,6 +1,5 @@
 package jp.jrabot.ingest
 
-import jp.jrabot.cloudgcp.auth.InternalCallerVerifier
 import jp.jrabot.domain.ingest.AgentAuthenticator
 import jp.jrabot.domain.ingest.AgentCredentialStore
 import jp.jrabot.domain.ingest.NonceStore
@@ -10,6 +9,7 @@ import jp.jrabot.domain.time.Clock
 import jp.jrabot.ingest.agent.AgentAuthFilter
 import jp.jrabot.ingest.guard.AgentApiOpsGuardFilter
 import jp.jrabot.ingest.internal.InternalAuthFilter
+import jp.jrabot.platform.auth.InternalCallerVerifier
 import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration

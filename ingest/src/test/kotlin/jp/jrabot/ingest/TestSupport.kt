@@ -1,7 +1,6 @@
 package jp.jrabot.ingest
 
 import jp.jrabot.cloudgcp.auth.GoogleSignedTokenVerifier
-import jp.jrabot.cloudgcp.auth.InternalCallerVerifier
 import jp.jrabot.cloudgcp.auth.testing.Claims
 import jp.jrabot.cloudgcp.auth.testing.FakeJwksServer
 import jp.jrabot.cloudgcp.auth.testing.FixedClock
@@ -9,6 +8,7 @@ import jp.jrabot.cloudgcp.auth.testing.TestSigner
 import jp.jrabot.domain.ops.InspectableModeProvider
 import jp.jrabot.domain.ops.ModeSnapshot
 import jp.jrabot.domain.ops.OpsMode
+import jp.jrabot.platform.auth.InternalCallerVerifier
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Primary

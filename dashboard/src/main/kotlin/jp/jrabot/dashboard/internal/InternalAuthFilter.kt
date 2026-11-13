@@ -3,11 +3,11 @@ package jp.jrabot.dashboard.internal
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
-import jp.jrabot.cloudgcp.auth.CallerVerification
-import jp.jrabot.cloudgcp.auth.GoogleSignedTokenVerifier
-import jp.jrabot.cloudgcp.auth.InternalCallerVerifier
-import jp.jrabot.cloudgcp.auth.RejectReason
-import jp.jrabot.cloudgcp.auth.RequestPaths
+import jp.jrabot.platform.auth.CallerVerification
+import jp.jrabot.platform.auth.InternalCallerVerifier
+import jp.jrabot.platform.auth.RejectReason
+import jp.jrabot.platform.auth.RequestPaths
+import jp.jrabot.platform.auth.TokenHeader
 import org.springframework.web.filter.OncePerRequestFilter
 
 /**
@@ -21,6 +21,8 @@ import org.springframework.web.filter.OncePerRequestFilter
  */
 class InternalAuthFilter(
     private val verifier: InternalCallerVerifier,
+    /** トークンを読むヘッダー（GCP: IAP の JWT。AWS: `Authorization: Bearer` の運用エージェントのトークン。D-281）。 */
+    private val header: TokenHeader = TokenHeader.IAP_ASSERTION,
 ) : OncePerRequestFilter() {
     override fun shouldNotFilter(request: HttpServletRequest): Boolean = !RequestPaths.isUnder(request.requestURI, INTERNAL_PREFIX)
 
@@ -29,7 +31,7 @@ class InternalAuthFilter(
         response: HttpServletResponse,
         filterChain: FilterChain,
     ) {
-        when (val result = verifier.verify(request.getHeader(GoogleSignedTokenVerifier.IAP_HEADER))) {
+        when (val result = verifier.verify(header.extract(request::getHeader))) {
             is CallerVerification.Verified -> {
                 filterChain.doFilter(request, response)
             }

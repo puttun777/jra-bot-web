@@ -1,9 +1,12 @@
 package jp.jrabot.bot
 
-import jp.jrabot.cloudgcp.ops.OpsModeConfigurationException
-import jp.jrabot.cloudgcp.ops.OpsModeProviders
+import jp.jrabot.cloudaws.ops.S3OpsStateSources
+import jp.jrabot.cloudgcp.ops.GcsOpsStateSources
 import jp.jrabot.domain.ops.ModeProvider
 import jp.jrabot.domain.time.SystemClock
+import jp.jrabot.platform.ops.OpsModeConfigurationException
+import jp.jrabot.platform.ops.OpsModeProviders
+import jp.jrabot.platform.ops.RemoteOpsStateSourceFactory
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -27,7 +30,7 @@ class BotRuntime(
  * 想定外の例外は **1**（バグ。再試行しても直るとは限らないので 75 にしない）。結果は `JOB_RESULT` の 1 行でログに残す。
  */
 class BotLauncher(
-    private val modeProviderFactory: (Map<String, String>) -> ModeProvider = { OpsModeProviders.fromEnvironment(it, SystemClock) },
+    private val modeProviderFactory: (Map<String, String>) -> ModeProvider = { OpsModeProviders.fromEnvironment(it, SystemClock, OPS_STATE_REMOTES) },
     private val execute: (BotRuntime) -> JobResult = SpringJobExecutor::run,
     private val log: Logger = LoggerFactory.getLogger(BotLauncher::class.java),
 ) {
@@ -71,7 +74,19 @@ class BotLauncher(
             } catch (e: OpsModeConfigurationException) {
                 return JobResult(JobExit.USAGE, "INVALID_CONFIGURATION: ${e.message}")
             }
-        return when (val gate = JobGate.decide(modeProvider.current())) {
+        when (val gate = JobGate.decide(modeProvider.current())) {
+            JobGate.Proceed -> {}
+
+            is JobGate.Skip -> {
+                return gate.result
+            }
+
+            is JobGate.Unavailable -> {
+                return gate.result
+            }
+        }
+        // 起動目的の柵（AWS: 閲覧用の起動では開催日の処理・重い処理をしない。D-282）。モードと同じく DB に接続する前
+        return when (val gate = WorkloadGate.decide(command.task.workload, modeProvider.workloads(), settings.workloadGate)) {
             JobGate.Proceed -> execute(BotRuntime(command, settings, modeProvider))
             is JobGate.Skip -> gate.result
             is JobGate.Unavailable -> gate.result
@@ -86,3 +101,6 @@ class BotLauncher(
         return r.exitCode
     }
 }
+
+/** 運用モードの正本の遠隔の読取り元（`gs://` = GCS、`s3://` = S3。D-280）。 */
+val OPS_STATE_REMOTES: List<RemoteOpsStateSourceFactory> = listOf(GcsOpsStateSources, S3OpsStateSources)

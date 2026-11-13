@@ -186,6 +186,9 @@ export function validateProduction(doc: unknown, root?: string, expectGitSha?: s
     const digest = String(ref).split("@sha256:").at(-1) ?? "";
     if (isPlaceholderDigest(digest)) errors.push(`images.${name}: digest が仮値に見える（実際のレジストリ digest ではない）`);
   }
+  // 5 つのイメージは同じレジストリ（GCP の Artifact Registry か、AWS の 1 つのアカウントの ECR）。混在は deploy で取り違える（D-285）
+  const registries = new Set(Object.values(images).map((ref) => String(ref).split("/jra-bot/")[0]));
+  if (registries.size > 1) errors.push("images が複数のレジストリにまたがっている（すべて同じレジストリにする）");
   errors.push(...semanticCommon(doc, root, expectGitSha));
   const rollback = isRecord(doc["rollback"]) ? doc["rollback"] : {};
   const minApp = String(rollback["min_app_release"]);
@@ -288,6 +291,7 @@ export function buildProduction(
   registryImages: Readonly<Record<string, unknown>>,
   minAppRelease: string,
   notes = "",
+  arch?: "arm64" | "amd64",
 ): Record<string, unknown> {
   const versions = flywayVersions(root);
   const schemas = featureSchemas(root);
@@ -307,7 +311,7 @@ export function buildProduction(
     model_schema_versions: [...MODEL_SCHEMA_VERSIONS],
     feature_schemas: schemas,
     feature_schema_hash: combinedFeatureSchemaHash(schemas),
-    runtime: { jdk: "25" },
+    runtime: arch === undefined ? { jdk: "25" } : { jdk: "25", arch },
     notes,
   };
   const errors = validateProduction(doc, root, gitSha);

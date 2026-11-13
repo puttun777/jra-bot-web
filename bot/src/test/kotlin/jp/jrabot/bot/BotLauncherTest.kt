@@ -1,8 +1,8 @@
 package jp.jrabot.bot
 
-import jp.jrabot.cloudgcp.ops.OpsModeConfigurationException
 import jp.jrabot.domain.ops.ModeProvider
 import jp.jrabot.domain.ops.OpsMode
+import jp.jrabot.platform.ops.OpsModeConfigurationException
 import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertEquals

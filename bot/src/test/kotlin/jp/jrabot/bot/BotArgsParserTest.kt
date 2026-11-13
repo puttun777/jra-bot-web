@@ -19,7 +19,10 @@ class BotArgsParserTest {
             assertEquals(t, c.task)
             assertEquals(7L, c.tenantId.value)
         }
-        assertEquals(listOf("bot-run", "calendar-check", "reconcile", "retention", "export-dataset", "backtest"), BotTask.entries.map { it.cliName })
+        assertEquals(
+            listOf("bot-run", "calendar-check", "reconcile", "retention", "export-dataset", "backtest", "calendar-plan"),
+            BotTask.entries.map { it.cliName },
+        )
     }
 
     @Test

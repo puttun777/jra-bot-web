@@ -1,7 +1,9 @@
 package jp.jrabot.dashboard
 
+import jp.jrabot.cloudaws.auth.CognitoIdTokenVerifier
+import jp.jrabot.cloudaws.ops.S3OpsStateSources
 import jp.jrabot.cloudgcp.auth.GoogleSignedTokenVerifier
-import jp.jrabot.cloudgcp.ops.OpsModeProviders
+import jp.jrabot.cloudgcp.ops.GcsOpsStateSources
 import jp.jrabot.domain.botrun.TimingNoticeStore
 import jp.jrabot.domain.calendar.CalendarOverrideRepository
 import jp.jrabot.domain.calendar.CalendarOverrideService
@@ -20,6 +22,13 @@ import jp.jrabot.persistence.PersistenceConfiguration
 import jp.jrabot.persistence.jdbc.DataSourceFactory
 import jp.jrabot.persistence.schema.AppBuildInfo
 import jp.jrabot.persistence.schema.SchemaVersionVerifier
+import jp.jrabot.platform.RuntimePlatform
+import jp.jrabot.platform.auth.InternalCallerVerifier
+import jp.jrabot.platform.auth.PersonVerifier
+import jp.jrabot.platform.auth.StaticTokenVerifier
+import jp.jrabot.platform.auth.TokenHeader
+import jp.jrabot.platform.ops.OpsModeProviders
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Import
@@ -50,7 +59,7 @@ class DashboardConfiguration {
     fun modeProvider(
         settings: DashboardSettings,
         clock: Clock,
-    ): InspectableModeProvider = OpsModeProviders.fromEnvironment(settings.opsEnv, clock)
+    ): InspectableModeProvider = OpsModeProviders.fromEnvironment(settings.opsEnv, clock, listOf(GcsOpsStateSources, S3OpsStateSources))
 
     @Bean
     fun schemaVersionVerifier(
@@ -63,7 +72,12 @@ class DashboardConfiguration {
         settings: DashboardSettings,
         users: AppUserRepository,
     ): HumanAuthorizer =
-        HumanAuthorizer(settings.allowedUsers, settings.adminUsers, users, listOfNotNull(EmailAddress.ofOrNull(settings.opsServiceAccountEmail)))
+        HumanAuthorizer(
+            settings.allowedUsers,
+            settings.adminUsers,
+            users,
+            if (settings.platform == RuntimePlatform.GCP) listOfNotNull(EmailAddress.ofOrNull(settings.opsServiceAccountEmail)) else emptyList(),
+        )
 
     /**
      * IAP の JWT の検証器。**1 つの Bean を 2 つの用途で使う**: 人の利用者（`/api`: [PersonVerifier]）と内部 API の呼び出し元（`/internal`: [InternalCallerVerifier]。
@@ -71,10 +85,38 @@ class DashboardConfiguration {
      * （試験は @Primary の差し替えで隠れていた: DashboardDefaultWiringTest が防ぐ）。テストは [GoogleSignedTokenVerifier] の Bean を @Primary で差し替える。
      */
     @Bean
+    @ConditionalOnProperty(name = [RuntimePlatform.ENV], havingValue = "gcp", matchIfMissing = true)
     fun iapVerifier(
         settings: DashboardSettings,
         clock: Clock,
     ): GoogleSignedTokenVerifier = GoogleSignedTokenVerifier.iap(settings.iapAudience, settings.opsServiceAccountEmail, clock)
+
+    /**
+     * AWS（D-281）: 人は Cognito の ID トークン（前段の oauth2-proxy が `Authorization: Bearer` で渡す。**署名を検証する**）、`/internal` は
+     * 同じホストの運用エージェントのトークン。型の違う 2 つの Bean（どちらも片方のインターフェースだけを実装する）なので注入は曖昧にならない。
+     */
+    @Bean
+    @ConditionalOnProperty(name = [RuntimePlatform.ENV], havingValue = "aws")
+    fun cognitoPersonVerifier(
+        settings: DashboardSettings,
+        clock: Clock,
+    ): PersonVerifier {
+        val c = checkNotNull(settings.cognito) { "COGNITO_* が無い（DashboardSettings が検証しているはず）" }
+        return CognitoIdTokenVerifier(c.issuer, c.clientId, clock)
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = [RuntimePlatform.ENV], havingValue = "aws")
+    fun opsTokenVerifier(settings: DashboardSettings): InternalCallerVerifier =
+        StaticTokenVerifier.fromFile(checkNotNull(settings.internalOpsTokenFile) { "INTERNAL_OPS_TOKEN_FILE が無い（DashboardSettings が検証しているはず）" })
+
+    /** 人・内部 API のトークンを読むヘッダー（GCP: IAP の JWT、AWS: `Authorization: Bearer`）。 */
+    @Bean
+    fun authHeaders(settings: DashboardSettings): AuthHeaders =
+        when (settings.platform) {
+            RuntimePlatform.GCP -> AuthHeaders(TokenHeader.IAP_ASSERTION, TokenHeader.IAP_ASSERTION)
+            RuntimePlatform.AWS -> AuthHeaders(TokenHeader.AUTHORIZATION_BEARER, TokenHeader.AUTHORIZATION_BEARER)
+        }
 
     /** 紙上成績の読取り（保存せず毎回計算: D-234）。`app` ユーザーの SELECT だけで動く。 */
     @Bean
@@ -94,3 +136,9 @@ class DashboardConfiguration {
         clock: Clock,
     ): CalendarOverrideService = CalendarOverrideService(overrides, schedules, clock)
 }
+
+/** 人（`/api`）と内部 API（`/internal`）のトークンの取り出し元（D-281）。 */
+data class AuthHeaders(
+    val person: TokenHeader,
+    val internal: TokenHeader,
+)

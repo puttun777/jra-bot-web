@@ -9,7 +9,9 @@ extra["requiredSchemaVersion"] = "5"
 dependencies {
     implementation(project(":domain"))
     implementation(project(":persistence"))
+    implementation(project(":platform"))
     implementation(project(":cloud-gcp"))
+    implementation(project(":cloud-aws"))
     implementation(libs.spring.boot.starter.webmvc)
     implementation(libs.jackson.databind) // エージェント API の JSON（アプリ側。ARCHITECTURE §2.1）
     implementation(libs.spring.boot.starter.jdbc) // DB 失敗の例外型（spring-tx / spring-jdbc）で 503 と 500 を分ける

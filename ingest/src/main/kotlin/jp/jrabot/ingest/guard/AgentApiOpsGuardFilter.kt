@@ -3,9 +3,9 @@ package jp.jrabot.ingest.guard
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
-import jp.jrabot.cloudgcp.auth.RequestPaths
 import jp.jrabot.domain.ops.ModeProvider
 import jp.jrabot.domain.ops.OpsMode
+import jp.jrabot.platform.auth.RequestPaths
 import org.springframework.web.filter.OncePerRequestFilter
 
 /**

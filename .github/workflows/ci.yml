@@ -98,11 +98,16 @@ jobs:
           mkdir -p "$RUNNER_TEMP/golden"
           ./gradlew :golden-runner:run --stacktrace --args="check --fixtures $PWD/tools/golden/fixtures --catalog $PWD/tools/golden/catalog.json --report $RUNNER_TEMP/golden/report.json" | tee "$RUNNER_TEMP/golden/summary.txt"
           { echo '### Kotlin vs legacy golden comparison'; echo '```'; cat "$RUNNER_TEMP/golden/summary.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-      # :cloud-gcp の単体テスト（T2.7。ModeProvider）。実 GCP には接続しない（フェイクとローカルの HTTP サーバだけ）。0 件・スキップ・失敗を許さない。
+      # :platform（provider 中立: ModeProvider・認証の型・成果物の保管。D-280）・:cloud-gcp・:cloud-aws の単体テスト。実 GCP・実 AWS には接続しない
+      # （フェイクとローカルの HTTP サーバだけ）。0 件・スキップ・失敗を許さない。
       - name: Verify that the cloud-gcp unit tests actually ran
         run: |
-          node build/tools/src/main.js verify-junit --label "cloud-gcp unit" --dir cloud-gcp/build/test-results/test --min 102 \
-            --classes "OpsStateParserTest,CachingModeProviderTest,CachingModeProviderConcurrencyTest,GcsOpsStateSourceTest,LocalFileModeProviderTest,ModeSnapshotTest,GoogleSignedTokenVerifierTest,RequestPathsTest,GcsStoresTest,GoogleObjectClientHttpTest"
+          node build/tools/src/main.js verify-junit --label "platform unit (D-280)" --dir platform/build/test-results/test --min 75 \
+            --classes "OpsStateParserTest,CachingModeProviderTest,CachingModeProviderConcurrencyTest,LocalFileModeProviderTest,ModeSnapshotTest,RequestPathsTest,ObjectStoresTest,StaticTokenVerifierTest,WorkloadsTest"
+          node build/tools/src/main.js verify-junit --label "cloud-gcp unit" --dir cloud-gcp/build/test-results/test --min 43 \
+            --classes "GcsOpsStateSourceTest,GoogleSignedTokenVerifierTest,GoogleObjectClientHttpTest"
+          node build/tools/src/main.js verify-junit --label "cloud-aws unit (D-280・D-281)" --dir cloud-aws/build/test-results/test --min 19 \
+            --classes "S3AdaptersTest,CognitoIdTokenVerifierTest"
       # 実行アプリと :persistence の起動・単体テスト（T2.8）。Docker を使わない: 実際の Tomcat（ランダムポート）・実プロセスの終了コード・
       # 偽の JWKS（ループバック）による署名検証。実 GCP・実 DB には接続しない。0 件・スキップ・失敗・期待クラスの欠落を許さない。
       - name: Verify that the app and persistence unit tests actually ran
@@ -114,11 +119,11 @@ jobs:
           node build/tools/src/main.js verify-junit --label "legacy-import unit (D-271)" --dir legacy-import/build/test-results/test --min 38 --classes "PreflightTest,ExtractTest,ConvertTest,TransformTest,LoadTest"
           node build/tools/src/main.js verify-junit --label "golden-runner unit" --dir golden-runner/build/test-results/test --min 36 --classes "GoldenRunnerTest,GoldenMlTest,GoldenVerifyCompareTest"
           node build/tools/src/main.js verify-junit --label "bot unit" --dir bot/build/test-results/test --min 75 \
-            --classes "BotArgsParserTest,BotLauncherTest,BotJobExecutorTest,BotProcessTest,BotSpringWiringTest,JobGateTest,CycleGateTest,CalendarCheckTaskHandlerTest,CalendarSettingsParserTest,ExportDatasetTaskHandlerTest"
+            --classes "BotArgsParserTest,BotLauncherTest,BotJobExecutorTest,BotProcessTest,BotSpringWiringTest,JobGateTest,CycleGateTest,CalendarCheckTaskHandlerTest,CalendarSettingsParserTest,ExportDatasetTaskHandlerTest,AwsLaunchTest"
           node build/tools/src/main.js verify-junit --label "ingest unit" --dir ingest/build/test-results/test --min 35 \
-            --classes "IngestInternalApiTest,AgentApiOpsGuardTest,IngestStartupConfigTest,AgentSigningVectorsTest,PlanProviderTest"
+            --classes "IngestInternalApiTest,AgentApiOpsGuardTest,IngestStartupConfigTest,AgentSigningVectorsTest,PlanProviderTest,IngestAwsWiringTest"
           node build/tools/src/main.js verify-junit --label "dashboard unit" --dir dashboard/build/test-results/test --min 69 \
-            --classes "DashboardInternalApiTest,AdminWriteGuardTest,DashboardStartupConfigTest,SecurityHeadersFilterTest,MlModelApiTest,AgentAdminApiTest"
+            --classes "DashboardInternalApiTest,AdminWriteGuardTest,DashboardStartupConfigTest,SecurityHeadersFilterTest,MlModelApiTest,AgentAdminApiTest,DashboardAwsWiringTest"
           node build/tools/src/main.js verify-junit --label "ml-train unit (Kotlin. D-257)" --dir ml-train/build/test-results/test --min 47 \
             --classes "PythonReferenceTest,PythonReferencePipelineTest,TrainJobTest,LegacyPickleTest,ModelJsonTest,LogisticRoundoffTest,LauncherTest"
 

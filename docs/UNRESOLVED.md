@@ -131,6 +131,7 @@
 | 3 | 実 `config.yaml` の値（D-016: 関数既定との食い違い項目） | 食い違い項目（MIGRATION_MATRIX の D-016 一覧）の**値だけ**を抜粋。Webhook URL・キーは伏せる | 項目名と値の表 |
 | 4 | `*.pkl` の所在 | `models/` などを検索し、ファイル名・サイズ・更新日・どのモデル種別かを記録（**pkl を信頼できない入力として扱い、ここでは読み込まない**） | 一覧（ファイル名・サイズ・日付）。変換は T3.6 |
 上記が揃うまで、GD10（旧関数既定値の突合）と H1 は**未実施のまま**。
+| D-23 | **AWS への移行（D-280）の本人の作業**: 構築の承認（USER_ACTIONS A9）、ドメインと Route 53、Cognito の初回ログイン、Discord の Webhook の登録、Windows エージェントの設定の変更、切替日（A11）。開催日の起動の窓（既定 発走の 240 分前〜150 分後）の妥当性は実運用で確認 | 本人の判断・作業待ち |
 
 ## E. 公式確認待ち
 | ID | 内容 | 状態 |
@@ -163,6 +164,7 @@
 | F-7 | **T3.8 のローカル検証は JDK 21・MySQL 8.0.46（ポート 3307。`JRABOT_TEST_MYSQL_EXTERNAL`）**。bot-run の MySQL 統合試験（`BotRunOrchestratorIntegrationTest`〔最小権限の `bot` ユーザー〕・`BotRunRepositoriesIntegrationTest`）はローカルで成功。**JDK 25・MySQL 8.4/9.7・Docker イメージ・GitHub Actions は未実施**（無料枠不足のため PR を作らず CI を起動していない）。`MlTrainInteropIntegrationTest`（`ML_TRAIN_PYTHON` が要る）と `WiringIntegrationTest` のサーバ版検査（8.4 を期待）はローカルでは失敗する（既知。環境の問題） |
 | F-8 | **Cloud Run Jobs での SIGTERM**（猶予時間 G-OPS-4、`sun.misc.Signal` のハンドラが実コンテナで効くか、14 時間の Job タイムアウト G-OPS-5）。ローカルでは `USR2` の実シグナルでハンドラの経路を確認しただけ |
 | F-9 | **監査・V5 のローカル検証は JDK 21・MySQL 8.0.46**。`MlTrainInteropIntegrationTest`（5 件）・`ml` の pytest 128 件・旧 Python との golden（32 ケース/994 呼び出し、Kotlin 対応 31 ケース/988 呼び出しが全一致）は 2026-10-29 に実行して成功（`ML_TRAIN_PYTHON` に `ml/requirements.txt` を入れたローカル venv）。**GitHub Actions（JDK 25・MySQL 8.4/9.7・Docker・required check `ci gate`）は未実施。T3.8・V5 は CI で未検証**。V5 の 8.4/9.7 での適用も未確認 |
+| F-10 | **AWS の実環境での検証**（D-280）: `pulumi preview/up`、Lambda の制御・EC2 の起動と user data・Cognito のログイン・Let's Encrypt・Route 53 の更新・SSM・ECR・S3 の条件付き書込み、arm64 の実機のメモリと JVM、開催日の自動の起動・停止、Windows エージェントの接続、バックアップ・復元。手順は infra `AWS_OPERATIONS.md` §11 |
 
 ## G. 後続タスク待ち
 | ID | 内容 | 予定 |

@@ -113,6 +113,8 @@ fun exportDefaults(
         arrayOf("--dataset-id=ds-test", "--from=2026-01-01", "--to=2026-01-31", "--feature-schema=calibration")
     } else if (task == "backtest" && more.none { it.startsWith("--from") }) {
         arrayOf("--from=2026-01-01", "--to=2026-01-31")
+    } else if (task == "calendar-plan" && more.none { it.startsWith("--out") }) {
+        arrayOf("--out=/tmp/jrabot-test-plan.json")
     } else {
         emptyArray()
     }

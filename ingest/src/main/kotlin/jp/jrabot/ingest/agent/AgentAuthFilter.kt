@@ -3,7 +3,6 @@ package jp.jrabot.ingest.agent
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
-import jp.jrabot.cloudgcp.auth.RequestPaths
 import jp.jrabot.domain.ingest.AgentAuthRequest
 import jp.jrabot.domain.ingest.AgentAuthenticator
 import jp.jrabot.domain.ingest.AuthResult
@@ -11,6 +10,7 @@ import jp.jrabot.domain.ingest.Hashing
 import jp.jrabot.domain.ingest.IngestCaller
 import jp.jrabot.domain.ingest.NonceStore
 import jp.jrabot.domain.time.Clock
+import jp.jrabot.platform.auth.RequestPaths
 import org.slf4j.LoggerFactory
 import org.springframework.web.filter.OncePerRequestFilter
 import java.util.concurrent.atomic.AtomicLong

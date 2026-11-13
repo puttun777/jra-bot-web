@@ -250,7 +250,9 @@ export function stepsFor(plan: Plan, files: readonly string[], root: string, out
       commands: [],
       special: "agent",
     });
-  const appRuntimeChanged = files.some((f) => /^(bot|ingest|dashboard|cloud-gcp|persistence|domain)\/src\/main\//.test(f));
+  const appRuntimeChanged = files.some((f) =>
+    /^(bot|ingest|dashboard|platform|cloud-gcp|cloud-aws|persistence|domain)\/src\/main\//.test(f),
+  );
   if (plan.runImages || appRuntimeChanged) {
     // CI は kotlin のアプリ/ドメイン変更だけでは images を実行しない（節約）。起動設定の食い違いを push 前に捕まえるため、ローカルでは実行する
     s.push({

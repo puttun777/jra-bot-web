@@ -11,7 +11,7 @@ class JobLaunchRequestTest {
     @Test
     fun `Job 名は CLI の --task と一致する`() {
         assertEquals(
-            listOf("bot-run", "calendar-check", "reconcile", "retention", "export-dataset", "backtest", "ml-train"),
+            listOf("bot-run", "calendar-check", "reconcile", "retention", "export-dataset", "backtest", "calendar-plan", "ml-train"),
             LaunchableJob.entries.map { it.cliName },
         )
     }

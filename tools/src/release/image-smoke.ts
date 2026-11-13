@@ -121,8 +121,8 @@ export function jsonLine(out: string): Record<string, unknown> {
   }
 }
 
-async function httpStatus(url: string): Promise<number> {
-  const r = await fetch(url, { signal: AbortSignal.timeout(5000), redirect: "manual" });
+async function httpStatus(url: string, headers: Readonly<Record<string, string>> = {}): Promise<number> {
+  const r = await fetch(url, { signal: AbortSignal.timeout(5000), redirect: "manual", headers });
   await r.body?.cancel();
   return r.status;
 }
@@ -638,8 +638,9 @@ export class Smoke {
     };
     const mounts = [`${d}:/ops:ro`];
     const net = this.network;
-    const tasks = ["bot-run", "calendar-check", "reconcile", "retention", "export-dataset", "backtest"];
+    const tasks = ["bot-run", "calendar-check", "reconcile", "retention", "export-dataset", "backtest", "calendar-plan"];
     const extraArgs: Readonly<Record<string, readonly string[]>> = {
+      "calendar-plan": ["--out=/tmp/plan.json"],
       "export-dataset": ["--dataset-id=smoke", "--from=2026-01-01", "--to=2026-01-31", "--feature-schema=calibration"],
       backtest: ["--from=2026-01-01", "--to=2026-01-31"],
     };
@@ -656,7 +657,7 @@ export class Smoke {
     }
     let after = this.connections();
     this.r.check(
-      "[bot] STOPPED -> exit 0 for all 6 tasks",
+      "[bot] STOPPED -> exit 0 for all 7 tasks",
       Object.values(codes).every((c) => c === 0),
       JSON.stringify(codes),
     );
@@ -799,6 +800,83 @@ export class Smoke {
       (code === 0 || code === 143) && state["OOMKilled"] === false && took < 9.5,
       `exit=${String(code)} took=${took.toFixed(1)}s`,
     );
+  }
+
+  /**
+   * AWS の配線（RUNTIME_PLATFORM=aws。D-281）: `/internal` は同じホストのトークン（ファイルで渡す）が一致したときだけ 200、無ければ 401。
+   * dashboard は IAP のヘッダーを根拠にしない（AWS ではクライアントが付けられるただのヘッダー）。DB には接続しない（遅延接続）。
+   */
+  async webChecksAws(name: "ingest" | "dashboard"): Promise<void> {
+    const d = join(this.tmp, `aws-${name}`);
+    mkdirSync(d, { recursive: true });
+    const token = randomBytes(32).toString("base64url");
+    writeFileSync(join(d, "internal-ops-token"), `${token}\n`);
+    chmodSync(join(d, "internal-ops-token"), 0o644);
+    const env: Record<string, string> = {
+      APP_ENV: "local",
+      RUNTIME_PLATFORM: "aws",
+      OPS_MODE_SOURCE: "/ops/NORMAL.json",
+      DB_URL: "jdbc:mysql://127.0.0.1:1/jrabot",
+      DB_USER: name === "dashboard" ? "app" : "ingest",
+      DB_PASSWORD: this.pw(name === "dashboard" ? "app" : "ingest"), // DB には接続しない（遅延接続）が、値は既存の利用者の合成の値を使う
+      PORT: "8080",
+      INTERNAL_OPS_TOKEN_FILE: "/run/jrabot/internal-ops-token",
+      ...(name === "dashboard"
+        ? {
+            COGNITO_ISSUER: "https://cognito-idp.ap-northeast-1.amazonaws.com/ap-northeast-1_Smoke",
+            COGNITO_CLIENT_ID: "smokeclient0123456789",
+          }
+        : {}),
+    };
+    const cname = `jrasmoke-aws-${name}-${hex(3)}`;
+    const cmd = [
+      "run",
+      "-d",
+      "--name",
+      cname,
+      "--read-only",
+      "--tmpfs",
+      "/tmp",
+      "--cap-drop",
+      "ALL",
+      "--security-opt",
+      "no-new-privileges",
+    ];
+    const opsDir = this.writeOpsFiles(true);
+    cmd.push("-p", "127.0.0.1::8080", "-v", `${opsDir}:/ops:ro`, "-v", `${d}:/run/jrabot:ro`);
+    for (const [k, v] of Object.entries(env)) cmd.push("-e", `${k}=${v}`);
+    cmd.push(this.image(name));
+    const p = docker(cmd);
+    this.created.push(cname);
+    if (!this.r.check(`[${name}] AWS wiring: container starts`, p.status === 0, p.stderr.slice(0, 200))) return;
+    const port = docker(["port", cname, "8080/tcp"]).stdout.trim().split("\n")[0]?.split(":").at(-1) ?? "";
+    const base = `http://127.0.0.1:${port}`;
+    const status: Record<string, number> = {};
+    const deadline = Date.now() + 120_000;
+    while (Date.now() < deadline) {
+      try {
+        status["token"] = await httpStatus(`${base}/internal/health`, { Authorization: `Bearer ${token}` });
+        status["none"] = await httpStatus(`${base}/internal/health`);
+        status["wrong"] = await httpStatus(`${base}/internal/health`, { Authorization: `Bearer x${token}` });
+        if (name === "dashboard") {
+          status["iap-header"] = await httpStatus(`${base}/api/v1/me`, { "X-Goog-IAP-JWT-Assertion": "eyJhbGciOiJub25lIn0.e30." });
+          status["token-as-person"] = await httpStatus(`${base}/api/v1/me`, { Authorization: `Bearer ${token}` });
+        }
+        break;
+      } catch {
+        if (docker(["inspect", "-f", "{{.State.Running}}", cname]).stdout.trim() !== "true") break;
+        await sleep(2000);
+      }
+    }
+    const ok =
+      status["token"] === 200 &&
+      status["none"] === 401 &&
+      status["wrong"] === 401 &&
+      (name !== "dashboard" || (status["iap-header"] === 401 && status["token-as-person"] === 401));
+    this.r.check(`[${name}] AWS wiring: /internal requires the host token; client headers are not trusted`, ok, JSON.stringify(status));
+    const lr = docker(["logs", cname]);
+    this.captured.push([`${name} aws logs`, lr.stdout + lr.stderr]);
+    docker(["stop", "-t", "10", cname], 60);
   }
 
   /**
@@ -1083,6 +1161,8 @@ export class Smoke {
           await this.webChecksWithDb("ingest", "ingest", INGEST_EXTRA);
           await this.webChecksWithDb("dashboard", "app", DASHBOARD_EXTRA);
         }
+        await this.webChecksAws("ingest");
+        await this.webChecksAws("dashboard");
       }
       this.secretScanOutputs();
     } catch (e) {

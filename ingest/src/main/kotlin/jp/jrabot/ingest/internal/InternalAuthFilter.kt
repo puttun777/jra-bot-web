@@ -3,9 +3,9 @@ package jp.jrabot.ingest.internal
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
-import jp.jrabot.cloudgcp.auth.CallerVerification
-import jp.jrabot.cloudgcp.auth.InternalCallerVerifier
-import jp.jrabot.cloudgcp.auth.RequestPaths
+import jp.jrabot.platform.auth.CallerVerification
+import jp.jrabot.platform.auth.InternalCallerVerifier
+import jp.jrabot.platform.auth.RequestPaths
 import org.springframework.web.filter.OncePerRequestFilter
 
 /**

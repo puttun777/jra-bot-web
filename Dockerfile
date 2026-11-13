@@ -37,7 +37,9 @@ RUN ./gradlew --no-daemon --console=plain --version
 # 2) ソース（.dockerignore で必要なものだけ）。リリース ID は jar の jrabot-app.properties に焼き込む
 COPY domain ./domain
 COPY persistence ./persistence
+COPY platform ./platform
 COPY cloud-gcp ./cloud-gcp
+COPY cloud-aws ./cloud-aws
 COPY db-migration ./db-migration
 COPY bot ./bot
 COPY ingest ./ingest

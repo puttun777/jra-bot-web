@@ -3,13 +3,13 @@ package jp.jrabot.dashboard.api
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
-import jp.jrabot.cloudgcp.auth.CallerVerification
-import jp.jrabot.cloudgcp.auth.GoogleSignedTokenVerifier
-import jp.jrabot.cloudgcp.auth.PersonVerifier
-import jp.jrabot.cloudgcp.auth.RequestPaths
 import jp.jrabot.domain.tenant.AuthDecision
 import jp.jrabot.domain.tenant.HumanAuthorizer
 import jp.jrabot.domain.tenant.Principal
+import jp.jrabot.platform.auth.CallerVerification
+import jp.jrabot.platform.auth.PersonVerifier
+import jp.jrabot.platform.auth.RequestPaths
+import jp.jrabot.platform.auth.TokenHeader
 import org.springframework.web.filter.OncePerRequestFilter
 
 /**
@@ -21,6 +21,8 @@ import org.springframework.web.filter.OncePerRequestFilter
 class ApiAuthFilter(
     private val verifier: PersonVerifier,
     private val authorizer: HumanAuthorizer,
+    /** トークンを読むヘッダー（GCP: IAP の JWT。AWS: `Authorization: Bearer` の Cognito の ID トークン。D-281）。 */
+    private val header: TokenHeader = TokenHeader.IAP_ASSERTION,
 ) : OncePerRequestFilter() {
     override fun shouldNotFilter(request: HttpServletRequest): Boolean = !RequestPaths.isUnder(request.requestURI, API_PREFIX)
 
@@ -29,7 +31,7 @@ class ApiAuthFilter(
         response: HttpServletResponse,
         filterChain: FilterChain,
     ) {
-        val verified = verifier.verifyPerson(request.getHeader(GoogleSignedTokenVerifier.IAP_HEADER))
+        val verified = verifier.verifyPerson(header.extract(request::getHeader))
         if (verified !is CallerVerification.Verified) return reject(response, HttpServletResponse.SC_UNAUTHORIZED, "unauthorized")
         when (val decision = authorizer.authorize(verified.email)) {
             is AuthDecision.Allowed -> {
