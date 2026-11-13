@@ -149,8 +149,11 @@ jobs:
         run: |
           set -euo pipefail
           BUILT_AT="$(date -u -d "@$(git show -s --format=%ct HEAD)" +%Y-%m-%dT%H:%M:%SZ)"
+          # runtime.arch は AWS 向けだけ（GCP の deploy の写しのスキーマは 0.4.18 のままでも受け付けるように）
+          arch_args=()
+          if [ "$TARGET" = aws ]; then arch_args=(--arch "$ARCH"); fi
           node build/tools/src/main.js release production --git-sha "$GITHUB_SHA" --release "$RELEASE" --built-at "$BUILT_AT" \
-            --registry-images out/registry-images.json --min-app-release "$RELEASE" --arch "$ARCH" --notes="$NOTES" --out out/release-manifest.json
+            --registry-images out/registry-images.json --min-app-release "$RELEASE" "${arch_args[@]}" --notes="$NOTES" --out out/release-manifest.json
           node build/tools/src/main.js release validate --kind production --expect-git-sha "$GITHUB_SHA" out/release-manifest.json
           (cd out && sha256sum release-manifest.json > release-manifest.json.sha256)
       - name: Publish the GitHub Release (manifest asset for the infra deploy)

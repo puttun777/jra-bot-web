@@ -18,7 +18,8 @@
 - **実測**（合成データ・ローカルの Docker・x86）: 同時稼働のピーク MySQL 177・dashboard 212・ingest 212・bot-run 203 MiB、CPU 1% 未満（D-287）。arm64 の実機は未計測。
 - **検証（ローカル。JDK 25・Node 24.22.2・Docker 29.9.2）**: 単体・結合（変更したモジュール）platform 75・cloud-gcp 43・cloud-aws 19・bot 159・ingest 37・dashboard 72・ml-train 47、tools 186、ktlint、consistency（infra と整合）・hygiene。**未実施**: MySQL 8.4/9.7 の全統合試験とイメージの試験（CI を正とする: D-264）、AWS の実環境（infra `AWS_OPERATIONS.md` §11）。
 - **本人の判断が必要**: AWS の構築（`pulumi up`）、`enableWebPush`（IAM）、ドメイン、COMP-4 の後の実データの移行、GCP の停止・削除。用意するもの: infra `AWS_OPERATIONS.md` §0、`USER_ACTIONS.md` の AWS の節。
-- **次**: 独立レビュー → 修正 → PR（web・infra）→ CI。
+- **独立レビュー（Opus・読取り専用）**: web の指摘は無し（Cognito の検証・内部トークン・workload の柵・spool・モジュールの依存は確認済み）。infra の指摘 15 件は infra I-048 で修正。web 側の追加の修正: release の `--arch` は target=aws のときだけ（GCP の manifest は 0.4.18 の infra のスキーマでも通る）。
+- **次**: PR（web・infra）→ CI。
 
 ## 2026-11-09 運用は案 1b（D-279）
 - 本人が 1b を選択: 通常は STOPPED、開催日など約 100 時間だけ NORMAL。REQUIREMENTS §5・UNRESOLVED D-22・HOSTING_OPTIONS に反映（文書のみ）。GCP に統一（Cloudflare は使わない）。
