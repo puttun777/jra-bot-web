@@ -312,6 +312,8 @@ describe("release workflow (L9. D-276): the only workflow with write permissions
       "2000",
       "[[:cntrl:]]",
       "GCP_PROJECT_ID GCP_WIF_PROVIDER_WEB GCP_PUSH_SERVICE_ACCOUNT",
+      "AWS_ACCOUNT_ID AWS_PUSH_ROLE_ARN",
+      "GCP（Cloud Run）は amd64 だけ",
     ]) {
       assert.ok(guard.includes(needle), needle);
     }
@@ -349,9 +351,11 @@ describe("release workflow (L9. D-276): the only workflow with write permissions
     assert.ok(logout && logout["if"] === "always()", "レジストリの認証を必ず消す");
     assert.ok(T.includes('--min-app-release "$RELEASE"'), "検証済みのロールバック範囲は release 自身だけ");
   });
-  it("does not deploy and pushes only to the Artifact Registry of the configured project", () => {
-    assert.doesNotMatch(T, /gcloud run|deploy\.yml|ops deploy|run\.googleapis|pulumi|terraform/i);
-    assert.ok(T.includes("REGISTRY: asia-northeast1-docker.pkg.dev"));
+  it("does not deploy and pushes only to the configured registry (AWS: the ECR of the configured account, D-285; GCP: Artifact Registry)", () => {
+    assert.doesNotMatch(T, /gcloud run|deploy\.yml|ops deploy|run\.googleapis|pulumi|terraform|aws ecs|ssm send-command/i);
+    assert.ok(T.includes("GCP_REGISTRY: asia-northeast1-docker.pkg.dev"));
+    assert.ok(T.includes("REGISTRY=$AWS_ACCOUNT_ID.dkr.ecr.ap-northeast-1.amazonaws.com"));
+    assert.ok(T.includes("publish ecr-login") && T.includes('--arch "$ARCH"'));
   });
 });
 

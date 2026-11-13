@@ -68,3 +68,42 @@ jobs:
           path: out/
           retention-days: 14
           if-no-files-found: warn
+
+  # AWS の既定は Graviton（arm64。t4g。D-284）。同じ Dockerfile を arm64 のランナーで**ネイティブに**ビルドし、同じスモーク（非 root・終了コード・
+  # SIGTERM・合成データの MySQL・AWS の配線）を実行して、ベースイメージ・JDK・ネイティブライブラリが arm64 で動くことを確かめる（QEMU の模擬ではない）。
+  # Public リポジトリの標準ランナー（ubuntu-24.04-arm）は無料。manifest のプレビューは amd64 側だけで作る（内容は同じ）。
+  images-arm64:
+    name: images arm64 (build + smoke, no push)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-tools
+      - name: Docker and architecture
+        run: |
+          docker version --format 'client={{.Client.Version}} server={{.Server.Version}}'
+          test "$(docker info --format '{{.Architecture}}')" = aarch64
+      - name: Build the 5 images natively on arm64 (local only, no push)
+        run: |
+          set -euo pipefail
+          GIT_SHA="$(git rev-parse HEAD)"
+          for t in db-migration bot ingest dashboard ml-train; do
+            docker build --progress=plain --target "$t" --build-arg GIT_SHA="$GIT_SHA" -t "jra-bot/$t:$GIT_SHA" . 2>&1 | tail -n 20
+            test "$(docker image inspect -f '{{.Architecture}}' "jra-bot/$t:$GIT_SHA")" = arm64
+          done
+          docker image ls --format '{{.Repository}}:{{.Tag}} {{.Size}}' | grep '^jra-bot/'
+        shell: bash
+      - name: Pull the CI-only MySQL image (arm64)
+        run: docker pull mysql:8.4
+      - name: Security and startup smoke on arm64
+        run: node build/tools/src/main.js image-smoke --git-sha "$(git rev-parse HEAD)" --report-dir out-arm64
+      - name: Upload the arm64 smoke report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: images-arm64-smoke
+          path: out-arm64/
+          retention-days: 14
+          if-no-files-found: warn

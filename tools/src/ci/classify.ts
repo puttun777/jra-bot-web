@@ -6,7 +6,7 @@
  *
  * ファイルは先頭から順に規則に当てはめてタグを付ける（どれにも当たらないファイルは `unknown` = 全部実行）。タグ → ジョブ:
  *   docs         ドキュメントのみ（hygiene と最終ゲートだけ）
- *   kotlin_app   :bot :ingest :dashboard :cloud-gcp :ml-train → build、DB 統合（アプリのスイート・MySQL 8.4。:bot の結合試験が ml-train の jar を起動する）
+ *   kotlin_app   :bot :ingest :dashboard :platform :cloud-gcp :cloud-aws :ml-train → build、DB 統合（アプリのスイート・MySQL 8.4。:bot の結合試験が ml-train の jar を起動する）
  *   kotlin_core  :domain → build、DB 統合（persistence + アプリ・8.4）
  *   kotlin_db    :persistence :db-migration → build、DB 統合（全スイート・8.4 と 9.7）
  *   build_cfg    Gradle・版数・build-logic・ktlint 設定 → build、DB 統合（全・8.4 + 9.7）、images
@@ -110,7 +110,7 @@ export const RULES: ReadonlyArray<readonly [RegExp, readonly Tag[]]> = [
   // --- Kotlin
   [/^(persistence|db-migration)\//, ["kotlin_db"]],
   [/^domain\//, ["kotlin_core"]],
-  [/^(bot|ingest|dashboard|cloud-gcp)\//, ["kotlin_app"]],
+  [/^(bot|ingest|dashboard|platform|cloud-gcp|cloud-aws)\//, ["kotlin_app"]],
   // --- ビルド・lint の設定
   [
     /^(gradle\/|build-logic\/|gradlew(\.bat)?$|settings\.gradle\.kts$|build\.gradle\.kts$|gradle\.properties$|\.editorconfig$)/,

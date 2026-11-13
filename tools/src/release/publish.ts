@@ -4,7 +4,9 @@
  *   publish check-ci     --repo owner/name --sha <40桁>                 対象コミットの `ci gate` が成功していること（GITHUB_TOKEN）
  *   publish registry-login --provider <WIF の provider> --service-account <SA> [--registry asia-northeast1-docker.pkg.dev]
  *                                                                       GitHub の OIDC → STS → SA の短期トークンで docker login（長期キーなし）
- *   publish push         --project <GCP プロジェクト> --git-sha <40桁> --out registry-images.json [--registry …]
+ *   publish ecr-login    --role-arn arn:aws:iam::<12 桁>:role/<名前> --registry <12 桁>.dkr.ecr.ap-northeast-1.amazonaws.com
+ *                                                                       GitHub の OIDC → STS → ECR の短期パスワードで docker login（AWS。D-285）
+ *   publish push         [--project <GCP プロジェクト>] --git-sha <40桁> --out registry-images.json [--registry …]（ECR なら --project 不要）
  *                                                                       ローカルの jra-bot/<name>:<sha> を push し、digest 付き参照を書く
  *
  * トークンは標準出力・標準エラー・ファイルに書かない（docker login の標準入力にだけ渡す）。
@@ -14,6 +16,7 @@ import { writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { isRecord } from "../lib/json.js";
 import { type RunResult, run as runProcess } from "../lib/proc.js";
+import { ECR_REGISTRY_RE, ecrLogin } from "./aws.js";
 import { IMAGE_NAMES, type ImageName } from "./repo-facts.js";
 
 export const DEFAULT_REGISTRY = "asia-northeast1-docker.pkg.dev";
@@ -39,13 +42,13 @@ export interface HttpResponse {
 export type Http = (url: string, init: { method: "GET" | "POST"; headers: Record<string, string>; body?: string }) => Promise<HttpResponse>;
 export type Runner = (cmd: string, args: readonly string[], input?: string) => RunResult;
 
-const defaultHttp: Http = async (url, init) => {
+export const defaultHttp: Http = async (url, init) => {
   const signal = AbortSignal.timeout(60_000);
   const r = await fetch(url, init.body === undefined ? { method: init.method, headers: init.headers, signal } : { ...init, signal });
   return { status: r.status, text: () => r.text() };
 };
 /** docker の push は大きいので 30 分まで。止まったら失敗にする（タイムアウトの無い待ちを作らない: レビュー 低）。 */
-const defaultRunner: Runner = (cmd, args, input) =>
+export const defaultRunner: Runner = (cmd, args, input) =>
   runProcess(cmd, args, { timeoutMs: 30 * 60_000, ...(input === undefined ? {} : { input }) });
 
 /** docker の失敗の理由（標準エラーの末尾。秘密は含まない: トークンは標準入力にだけ渡す）。 */
@@ -146,16 +149,22 @@ export function digestRef(repoDigests: unknown, repo: string): string {
 }
 
 export function pushImages(
-  opts: { project: string; gitSha: string; registry: string },
+  opts: { project?: string; gitSha: string; registry: string },
   runner: Runner = defaultRunner,
 ): Record<ImageName, string> {
-  if (!PROJECT_RE.test(opts.project)) throw new PublishError("--project は GCP のプロジェクト ID");
   if (!/^[0-9a-f]{40}$/.test(opts.gitSha)) throw new PublishError("--git-sha は 40 桁の小文字 16 進");
-  if (!REGISTRY_RE.test(opts.registry)) throw new PublishError("--registry は <地域>-docker.pkg.dev");
+  // GCP: <地域>-docker.pkg.dev/<project>/jra-bot/<name>。AWS: <12 桁>.dkr.ecr.ap-northeast-1.amazonaws.com/jra-bot/<name>（D-285）
+  const ecr = ECR_REGISTRY_RE.test(opts.registry);
+  if (!ecr) {
+    if (opts.project === undefined || !PROJECT_RE.test(opts.project)) throw new PublishError("--project は GCP のプロジェクト ID");
+    if (!REGISTRY_RE.test(opts.registry))
+      throw new PublishError("--registry は <地域>-docker.pkg.dev または <12 桁>.dkr.ecr.ap-northeast-1.amazonaws.com");
+  }
+  const prefix = ecr ? opts.registry : `${opts.registry}/${String(opts.project)}`;
   const out: Partial<Record<ImageName, string>> = {};
   for (const name of IMAGE_NAMES) {
     const local = `jra-bot/${name}:${opts.gitSha}`;
-    const repo = `${opts.registry}/${opts.project}/${REPOSITORY}/${name}`;
+    const repo = `${prefix}/${REPOSITORY}/${name}`;
     // タグは Git SHA（不変）。デプロイは digest で指定する（CONTRACTS §1）
     const remote = `${repo}:${opts.gitSha}`;
     const tagged = runner("docker", ["tag", local, remote]);
@@ -262,6 +271,7 @@ export async function main(argv: readonly string[], env: NodeJS.ProcessEnv = pro
         project: { type: "string" },
         "git-sha": { type: "string" },
         out: { type: "string" },
+        "role-arn": { type: "string" },
       },
     });
     const need = (v: string | undefined, name: string): string => {
@@ -285,9 +295,23 @@ export async function main(argv: readonly string[], env: NodeJS.ProcessEnv = pro
       console.error("registry login: ok");
       return 0;
     }
+    if (cmd === "ecr-login") {
+      await ecrLogin(
+        {
+          roleArn: need(a["role-arn"], "--role-arn"),
+          registry: need(a.registry, "--registry"),
+          sessionName: `release-${env["GITHUB_RUN_ID"] ?? "local"}`,
+        },
+        env,
+        defaultHttp,
+        defaultRunner,
+      );
+      console.error("ecr login: ok");
+      return 0;
+    }
     if (cmd === "push") {
       const refs = pushImages({
-        project: need(a.project, "--project"),
+        ...(a.project === undefined ? {} : { project: a.project }),
         gitSha: need(a["git-sha"], "--git-sha"),
         registry: a.registry ?? DEFAULT_REGISTRY,
       });

@@ -3,7 +3,7 @@
  *
  *   release preview    --git-sha <40桁> --built-at 2026-11-01T00:00:00Z --local-images images-local.json --out manifest-preview.json [--release R]
  *   release validate   --kind preview|production FILE [--expect-git-sha <40桁>]
- *   release production --git-sha … --release 2026.11.0 --built-at … --registry-images registry.json --min-app-release 2026.11.0 --out release-manifest.json [--notes N]
+ *   release production --git-sha … --release 2026.11.0 --built-at … --registry-images registry.json --min-app-release 2026.11.0 --out release-manifest.json [--notes N] [--arch arm64|amd64]
  * （schema_version 3 で --python-version は廃止。指定すると引数の誤り = 2）
  *
  * 終了コード: 0=適合 / 1=検証 NG（production の生成拒否を含む）/ 2=引数・入力の誤り
@@ -68,6 +68,7 @@ export function main(argv: readonly string[]): number {
         out: { type: "string" },
         kind: { type: "string" },
         "expect-git-sha": { type: "string" },
+        arch: { type: "string" },
       },
     });
     const root = repoRoot();
@@ -111,6 +112,7 @@ export function main(argv: readonly string[]): number {
         reg,
         need(a["min-app-release"], "--min-app-release"),
         a.notes ?? "",
+        parseArch(a.arch),
       );
       writeFileSync(need(a.out, "--out"), dumps(doc), "utf8");
       console.log(`wrote ${a.out}`);
@@ -122,4 +124,11 @@ export function main(argv: readonly string[]): number {
     if (e instanceof ManifestError && cmd === "production") return 1;
     return 2;
   }
+}
+
+/** `--arch`（任意。D-284）。 */
+function parseArch(v: string | undefined): "arm64" | "amd64" | undefined {
+  if (v === undefined) return undefined;
+  if (v === "arm64" || v === "amd64") return v;
+  throw new UsageError("--arch は arm64 か amd64");
 }
