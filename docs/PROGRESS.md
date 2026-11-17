@@ -13,6 +13,9 @@
 旧: 2026-10-26（Public 化の準備）／2026-10-24（Stage 3-F2・3-F1・3-E）
 
 
+## 2026-11-17 中断・再開の記録（**作業中**。詳細・レビューの指摘の一覧・次の手順は infra の `docs/PROGRESS.md` の同日の「中断・再開の記録」）
+- web `claude/jra-bot-gcp-to-aws-uqla8y` = eb3d7ef（push 済み・PR なし）、infra 同名 = ac02611（push 済み・PR なし）。独立レビュー A（認証）・B（AWS）は完了、C（アプリ・契約・試験）は使用量の上限で途中停止 → 再開して照合・修正・再レビュー・PR・CI へ。web に関わる指摘: A2（契約 §11.4 の識別ヘッダの記述）・A5（AllViewer と Authorization の記述）・A6（`DashboardAwsPersonAuthTest` の陽性の試験・403 の理由）、B4（USER_ACTIONS A9 の金額）。
+
 ## 2026-11-17 独自ドメインなし: CloudFront の標準 URL（ブランチ claude/jra-bot-gcp-to-aws-uqla8y〔main 445a79d から作り直し〕。D-288・CONTRACTS 0.4.20・infra I-050。**AWS には何も作っていない・適用しない**）
 - **本人の方針変更**: 独自ドメインを取得しない。公開 URL は `https://<distribution>.cloudfront.net`。認証は必須・本人だけ（Cognito・MFA・アプリの本人の許可を再利用。Basic 認証なし）。
 - **web の変更**: アプリのコードは変えていない（CloudFront・Caddy が Host を変えないので CSRF の Origin == Host がそのまま成り立つ。AWS の人の認証は D-286 のまま）。試験を追加: `DashboardAwsPersonAuthTest`（実際の Tomcat・本番と同じ `CognitoIdTokenVerifier`・偽の JWKS: 本人 200〔ADMIN・テナント 1・no-store〕、Cognito の他の利用者・行があっても許可リストに無い人は 403、未認証・メール未確認・期限切れ・別の client・別の発行者・access トークン・本文の改変・知らない鍵は 401、偽の `X-Forwarded-Email`・IAP のヘッダは 401、管理の書込みは CSRF が欠ける・別の distribution の Origin は本人でも 403・本人以外は 403）、`CsrfGuardCloudFrontTest`（CloudFront のホストでの Origin/Host の一致・別の distribution・private DNS の Host は 403）。文書: CONTRACTS 0.4.20（§11.4 入口）・D-288・REQUIREMENTS §5・ARCHITECTURE §9b・UNRESOLVED D-23/F-10・USER_ACTIONS A9・agent README（`base_url = site_url`）。
