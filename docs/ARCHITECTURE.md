@@ -141,7 +141,7 @@ dashboard ─読取（DTO）─▶ MySQL        export-dataset ─▶ GCS datase
 | 停止 | プロセス停止 | 4 つのモードと GCS の正本、DB の停止 |
 
 ## 9b. AWS の配置（D-280。2026-11-13）
-配置先を AWS（東京）へ移す設計・実装（**適用前**）。EC2 t4g.small 1 台に dashboard・ingest・bot の Job・MySQL、普段は停止し、開催日（JRA の予定から自動）と閲覧（本人の手動）のときだけ起動する。制御は Lambda、本人の認証は Cognito + oauth2-proxy（dashboard が ID トークンを検証: D-286）、Job の起動は spool（D-283）、閲覧だけの起動は `workloads.raceday=false` で bot・通知を止める（D-282）。構成・手順・費用の正本は infra の `docs/AWS_ARCHITECTURE.md`・`AWS_OPERATIONS.md`・`CLOUD_COSTS.md` §12。GCP の構成（§3）は切替が終わるまで残す。
+配置先を AWS（東京）へ移す設計・実装（**適用前**）。EC2 t4g.small 1 台に dashboard・ingest・bot の Job・MySQL、普段は停止し、開催日（JRA の予定から自動）と閲覧（本人の手動）のときだけ起動する。制御は Lambda、本人の認証は Cognito + oauth2-proxy（dashboard が ID トークンを検証: D-286）、公開 URL は CloudFront の標準のドメイン（独自ドメインなし。CloudFront → VPC origin → EC2 の Caddy。キャッシュしない。D-288・CONTRACTS §11.4）、Job の起動は spool（D-283）、閲覧だけの起動は `workloads.raceday=false` で bot・通知を止める（D-282）。構成・手順・費用の正本は infra の `docs/AWS_ARCHITECTURE.md`・`AWS_OPERATIONS.md`・`CLOUD_COSTS.md` §13（§12 は独自ドメインを使っていたときの旧版）。GCP の構成（§3）は切替が終わるまで残す。
 
 ## 10. 検証ゲート（まだ実現済みとは扱わない）
 一覧と実施する段階は `STAGE2_HANDOFF.md` §13 にまとめた。主なものは次のとおり。
