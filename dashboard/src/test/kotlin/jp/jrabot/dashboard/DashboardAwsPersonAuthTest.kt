@@ -54,7 +54,7 @@ class DashboardAwsPersonAuthTest {
             r.add("COGNITO_CLIENT_ID") { CLIENT }
             r.add("INTERNAL_OPS_TOKEN_FILE") { tokenFile.toString() }
             // infra が渡すのと同じ: 本人のメールだけ（pulumi-aws の renderAppEnv）
-            r.add("ALLOWED_USERS") { "me@example.com" }
+            r.add("ALLOWED_USERS") { "me@example.com,off@example.com,norow@example.com" }
             r.add("ADMIN_USERS") { "me@example.com" }
         }
 
@@ -103,6 +103,8 @@ class DashboardAwsPersonAuthTest {
     fun `Cognito でログインできても本人以外は 403（ALLOWED_USERS に無い・行があっても）`() {
         assertEquals(403, me(idToken("stranger@example.com")).status, "Cognito の利用者でも許可リストに無ければ拒否")
         assertEquals(403, me(idToken("viewer@example.com")).status, "app_user の行があっても許可リストに無ければ拒否")
+        assertEquals(403, me(idToken("norow@example.com")).status, "許可リストにあっても app_user の行が無ければ拒否")
+        assertEquals(403, me(idToken("off@example.com")).status, "許可リストにあっても app_user の行が無効なら拒否")
     }
 
     @Test
@@ -140,15 +142,30 @@ class DashboardAwsPersonAuthTest {
     }
 
     @Test
-    fun `管理の書込み - CSRF の条件が欠ける・別の Origin は本人でも 403、本人以外は CSRF を満たしても 403`() {
+    fun `管理の書込み - 本人が CSRF の条件を満たせば CSRF・認可で拒否しない`() {
         val owner = mapOf("Authorization" to "Bearer ${idToken("me@example.com")}")
-        val noCsrf = http.send("POST", "/api/v1/admin/agents", headers = owner, csrf = false)
+        // 同一オリジンの書込み（Origin が Host と同じ: ここでは試験のサーバの 127.0.0.1:<port>。公開 URL の Host は CsrfGuardCloudFrontTest）
+        val origin = "http://127.0.0.1:${env.serverPort()}"
+        val ok = http.send("POST", "/api/v1/admin/agents/ag_test/revoke", headers = owner + ("Origin" to origin), body = """{"reason":"試験"}""")
+        assertTrue(ok.status != 401 && ok.status != 403, "${ok.status} ${ok.body}")
+        assertTrue(!ok.body.contains("csrf") && !ok.body.contains("forbidden") && !ok.body.contains("OPS_MODE"), ok.body)
+    }
+
+    @Test
+    fun `管理の書込み - CSRF の条件が欠ける・別の Origin は本人でも 403（理由 csrf）、本人以外は CSRF を満たしても 403（理由 forbidden）`() {
+        val owner = mapOf("Authorization" to "Bearer ${idToken("me@example.com")}")
+        val path = "/api/v1/admin/agents/ag_test/revoke"
+        val noCsrf = http.send("POST", path, headers = owner, csrf = false)
         assertEquals(403, noCsrf.status, noCsrf.body)
-        val crossOrigin = http.send("POST", "/api/v1/admin/agents", headers = owner + ("Origin" to "https://d9999999999999.cloudfront.net"))
+        assertTrue(noCsrf.body.contains("csrf"), noCsrf.body)
+        val crossOrigin = http.send("POST", path, headers = owner + ("Origin" to "https://d9999999999999.cloudfront.net"))
         assertEquals(403, crossOrigin.status, crossOrigin.body)
         assertTrue(crossOrigin.body.contains("csrf"), crossOrigin.body)
-        val stranger = http.send("POST", "/api/v1/admin/agents", headers = mapOf("Authorization" to "Bearer ${idToken("stranger@example.com")}"))
+        val stranger = http.send("POST", path, headers = mapOf("Authorization" to "Bearer ${idToken("stranger@example.com")}"))
         assertEquals(403, stranger.status, stranger.body)
+        assertTrue(stranger.body.contains("forbidden"), "CSRF ではなく認可で拒否: ${stranger.body}")
+        val disabled = http.send("POST", path, headers = mapOf("Authorization" to "Bearer ${idToken("off@example.com")}"))
+        assertEquals(403, disabled.status, "許可リストにあっても app_user の行が無効なら 403: ${disabled.body}")
     }
 }
 
@@ -174,6 +191,7 @@ class AwsPersonAuthTestConfig {
                 listOf(
                     AppUser(TenantId.of(1), EmailAddress.of("me@example.com"), AppUserRole.ADMIN, true),
                     AppUser(TenantId.of(1), EmailAddress.of("viewer@example.com"), AppUserRole.VIEWER, true),
+                    AppUser(TenantId.of(1), EmailAddress.of("off@example.com"), AppUserRole.ADMIN, false),
                 )
 
             override fun findByEmail(email: EmailAddress) = rows.firstOrNull { it.email == email }
