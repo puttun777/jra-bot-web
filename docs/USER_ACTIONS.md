@@ -1,5 +1,5 @@
 # USER_ACTIONS（本人だけが行う作業・承認と、その手順）
-最終更新: 2026-11-01。ここに無い開発作業は Claude が進める。**秘密（キー・Webhook・パスワード）や実データ（レコード・DB ダンプ）は貼らない**。返すのは『成否・件数・エラーの種類』だけでよい。
+最終更新: 2026-11-17。ここに無い開発作業は Claude が進める。**秘密（キー・Webhook・パスワード）や実データ（レコード・DB ダンプ）は貼らない**。返すのは『成否・件数・エラーの種類』だけでよい。
 
 ## A. 承認が要るもの（返事は一言でよい）
 | # | 内容 | 判断材料 | 承認しないとどうなるか |
@@ -12,7 +12,7 @@
 | A6 | Public 化（任意） | `docs/PUBLIC_READINESS.md`・D-180。**Visibility を変えられるのは本人だけ** | 非公開のまま |
 | A8 | web からイメージを公開する権限（L9。D-276） | infra の承認待ちの PR（web 専用の WIF provider と `gha-web-push` = Artifact Registry の `jra-bot` リポジトリへの書込みだけ）。公開の manifest には GCP のプロジェクト ID とレジストリの参照が入り、**web が Public なので Release の資産と release の実行のログは誰でも読める**（ログにはプロジェクト ID・WIF の provider〔プロジェクト番号を含む〕・SA のメールが出る。秘密ではないが、出したくなければ infra の deploy の入力を変える設計に戻す） | web の `release.yml` は変数の未設定で止まる = 本番のイメージを公開できない（デプロイできない） |
 | A7 | 実データのクラウド投入（COMP-4 の回答後） | `docs/DATA_SOURCE_COMPLIANCE.md` §0 の Q1〜Q3 を JRA-VAN に問い合わせ | **実データはクラウドに入れない**（ローカルでの検証のみ） |
-| A9 | **AWS の構築（`pulumi up`。課金リソースの作成）**（D-280） | infra `docs/AWS_OPERATIONS.md` §0（用意するもの U1〜U12）・§1（手順）、費用 infra `docs/CLOUD_COSTS.md` §12（100 時間 ≈ ¥1,226/月・停止のまま ≈ ¥789/月。税抜・無料枠なし） | AWS には何も無いまま（GCP の定義も残っている） |
+| A9 | **AWS の構築（`pulumi up`。課金リソースの作成）**（D-280・D-288。**独自ドメインは不要**: 公開 URL は CloudFront の標準の `https://<distribution>.cloudfront.net`） | infra `docs/AWS_OPERATIONS.md` §0（用意するもの U1〜U13。ドメイン・DNS・証明書は無い）・§1（手順）、費用 infra `docs/CLOUD_COSTS.md` §13（100 時間 ≈ ¥1,169/月・停止のまま ≈ ¥712/月。税抜・無料枠なし） | AWS には何も無いまま（GCP の定義も残っている） |
 | A10 | AWS で web からイメージを push する権限（`enableWebPush`。IAM） | infra `AWS_ARCHITECTURE.md` §6。web の environment `release` に `AWS_ACCOUNT_ID`・`AWS_PUSH_ROLE_ARN` | release（target=aws）は失敗する（ガードで止まる） |
 | A11 | GCP → AWS の切替日・GCP の停止と（後日の）削除 | infra `AWS_OPERATIONS.md` §7（GCP を先に止める・両方の開催日の起動を同時に有効にしない・切戻し） | 切り替わらない |
 

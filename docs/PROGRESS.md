@@ -1,6 +1,6 @@
 # PROGRESS（jra-bot-web）
 
-最終更新: 2026-11-13（GCP → AWS の移行の設計・実装。D-280〜D-287。適用なし）。旧: 2026-11-09（案 1b に決定。D-279）。旧: 2026-11-09（案 1 に決定。D-278）。旧: 2026-11-07（配置先の 3 案の比較。D-277。下の新しい節）。旧: 2026-11-07（L9: リリース経路）。旧: 2026-11-07（L8 ⑦: R24 移行ツールの load）。旧: 2026-11-06（L8 ⑥: R24 移行ツールの transform）。旧: 2026-11-06（L8 ⑤: R24 移行ツールの extract）。旧: 2026-11-06（L8 ④: R24 移行ツールの preflight）。旧: 2026-11-06（L8 ③: R20 エージェントの失効）。旧: 2026-11-06（L8 ②: R22 ML モデルの表示）。旧: 2026-11-06（L8 ①: R16 バックテストの Job）。旧: 2026-11-06（言語移行 L7）。旧: 2026-11-03（言語移行 L5）。旧: 2026-11-02（言語移行 L3）。旧: 2026-11-02（L1。web PR #36・infra PR #7〔L2〕はマージ済み）。旧: 2026-11-01 夜（web PR #30〜#33・infra PR #3/#4/#6 はマージ済み。残りは wip/final の TEST_RESULTS.md・D-247・R15 の MySQL 通し試験〈ReadAdminApiMySqlIntegrationTest〉。検証: ktlintCheck 成功、当該 4 試験は MySQL 8.4 で成功（ローカル）。それ以外の統合試験は CI で確認。再開手順: 本ブランチの PR の CI 結果を確認→失敗ジョブのログだけ読む→マージ条件を満たせばマージ→COMPLETION.md の C/B 項目を最終報告。判定の正本は COMPLETION.md）
+最終更新: 2026-11-17（AWS の公開 URL を CloudFront の標準のドメインに。独自ドメインなし。D-288。適用なし）。旧: 2026-11-13（GCP → AWS の移行の設計・実装。D-280〜D-287。適用なし）。旧: 2026-11-09（案 1b に決定。D-279）。旧: 2026-11-09（案 1 に決定。D-278）。旧: 2026-11-07（配置先の 3 案の比較。D-277。下の新しい節）。旧: 2026-11-07（L9: リリース経路）。旧: 2026-11-07（L8 ⑦: R24 移行ツールの load）。旧: 2026-11-06（L8 ⑥: R24 移行ツールの transform）。旧: 2026-11-06（L8 ⑤: R24 移行ツールの extract）。旧: 2026-11-06（L8 ④: R24 移行ツールの preflight）。旧: 2026-11-06（L8 ③: R20 エージェントの失効）。旧: 2026-11-06（L8 ②: R22 ML モデルの表示）。旧: 2026-11-06（L8 ①: R16 バックテストの Job）。旧: 2026-11-06（言語移行 L7）。旧: 2026-11-03（言語移行 L5）。旧: 2026-11-02（言語移行 L3）。旧: 2026-11-02（L1。web PR #36・infra PR #7〔L2〕はマージ済み）。旧: 2026-11-01 夜（web PR #30〜#33・infra PR #3/#4/#6 はマージ済み。残りは wip/final の TEST_RESULTS.md・D-247・R15 の MySQL 通し試験〈ReadAdminApiMySqlIntegrationTest〉。検証: ktlintCheck 成功、当該 4 試験は MySQL 8.4 で成功（ローカル）。それ以外の統合試験は CI で確認。再開手順: 本ブランチの PR の CI 結果を確認→失敗ジョブのログだけ読む→マージ条件を満たせばマージ→COMPLETION.md の C/B 項目を最終報告。判定の正本は COMPLETION.md）
 旧: 2026-11-01（T3.9③・reconcile・preflight・infra PR #4）
 旧: 2026-10-30（保留の再適用のレビュー・公開準備。D-229。CI 未実施）
 旧: 2026-10-29（追加レビュー 2: リース継続・保留の再適用・G-31 の null・T3.9 設計の訂正〈D-224〜D-228〉。同ブランチ。CI 未実施。PR なし）
@@ -12,6 +12,12 @@
 旧: 2026-10-27（Stage 3-G: T3.7 Discord 通知）
 旧: 2026-10-26（Public 化の準備）／2026-10-24（Stage 3-F2・3-F1・3-E）
 
+
+## 2026-11-17 独自ドメインなし: CloudFront の標準 URL（ブランチ claude/jra-bot-gcp-to-aws-uqla8y〔main 445a79d から作り直し〕。D-288・CONTRACTS 0.4.20・infra I-050。**AWS には何も作っていない・適用しない**）
+- **本人の方針変更**: 独自ドメインを取得しない。公開 URL は `https://<distribution>.cloudfront.net`。認証は必須・本人だけ（Cognito・MFA・アプリの本人の許可を再利用。Basic 認証なし）。
+- **web の変更**: アプリのコードは変えていない（CloudFront・Caddy が Host を変えないので CSRF の Origin == Host がそのまま成り立つ。AWS の人の認証は D-286 のまま）。試験を追加: `DashboardAwsPersonAuthTest`（実際の Tomcat・本番と同じ `CognitoIdTokenVerifier`・偽の JWKS: 本人 200〔ADMIN・テナント 1・no-store〕、Cognito の他の利用者・行があっても許可リストに無い人は 403、未認証・メール未確認・期限切れ・別の client・別の発行者・access トークン・本文の改変・知らない鍵は 401、偽の `X-Forwarded-Email`・IAP のヘッダは 401、管理の書込みは CSRF が欠ける・別の distribution の Origin は本人でも 403・本人以外は 403）、`CsrfGuardCloudFrontTest`（CloudFront のホストでの Origin/Host の一致・別の distribution・private DNS の Host は 403）。文書: CONTRACTS 0.4.20（§11.4 入口）・D-288・REQUIREMENTS §5・ARCHITECTURE §9b・UNRESOLVED D-23/F-10・USER_ACTIONS A9・agent README（`base_url = site_url`）。
+- **検証（ローカル。JDK 25・Node 24.22.2・Docker 29.9.2。dotnet はこのセッションに無い〔C# は変更なし〕）**: `:dashboard:test` の新しい 2 クラス + `DashboardAwsWiringTest`（5 + 2 + 3 件・失敗 0）、ktlint（ルート）、TypeScript の lint・tools 186 件・画面 54 件（skip 0）、consistency（infra の CONTRACTS の同期を含む）。**完全な preflight（MySQL 8.4/9.7 の統合・イメージ）は実行していない**（D-264: CI を正とする）。
+- **実環境で残る確認**（infra `AWS_OPERATIONS.md` §11・UNRESOLVED F-10）: CloudFront・VPC origin の作成と到達、Cognito のログイン/ログアウトの往復、停止/起動の後の復帰、Windows エージェントの送信（CloudFront 経由の HMAC）。
 
 ## 2026-11-13 GCP → AWS の移行（ブランチ claude/jra-bot-gcp-to-aws-uqla8y。D-280〜D-287。infra I-042〜I-047。**AWS には何も作っていない**）
 - **実装**: `:platform`（運用状態・認証の型・オブジェクトストアの保管。`:cloud-gcp` から移動）・`:cloud-aws`（S3 の運用状態・保管・ハートビートの写し、Cognito の ID トークンの検証）、アプリの配線（`RUNTIME_PLATFORM`・Cognito・内部の静的トークン・`OPS_WORKLOAD_GATE`・spool・`--task=calendar-plan`・ml-train の S3）、Dockerfile、CI の `images-arm64`、release の `target`/`arch`（ECR・SigV4）、manifest v3 の ECR と `runtime.arch`、CONTRACTS 0.4.19。
