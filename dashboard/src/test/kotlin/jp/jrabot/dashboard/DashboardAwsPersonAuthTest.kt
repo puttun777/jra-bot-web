@@ -4,6 +4,10 @@ import jp.jrabot.cloudaws.auth.CognitoIdTokenVerifier
 import jp.jrabot.cloudgcp.auth.testing.FakeJwksServer
 import jp.jrabot.cloudgcp.auth.testing.FixedClock
 import jp.jrabot.cloudgcp.auth.testing.TestSigner
+import jp.jrabot.domain.agent.AgentAdminStore
+import jp.jrabot.domain.agent.AgentId
+import jp.jrabot.domain.agent.AgentRevokeResult
+import jp.jrabot.domain.agent.AgentSummary
 import jp.jrabot.domain.tenant.AppUser
 import jp.jrabot.domain.tenant.AppUserRepository
 import jp.jrabot.domain.tenant.AppUserRole
@@ -20,8 +24,10 @@ import org.springframework.context.annotation.Primary
 import org.springframework.core.env.Environment
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
+import org.springframework.transaction.support.TransactionOperations
 import java.net.URI
 import java.nio.file.Files
+import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -39,6 +45,9 @@ class DashboardAwsPersonAuthTest {
         val signer: TestSigner = TestSigner.rs256("cognito-test-key")
         val jwks = FakeJwksServer(listOf(signer))
         val clock = FixedClock()
+        val revokeCalls =
+            java.util.concurrent.atomic
+                .AtomicInteger()
         private val dir = Files.createTempDirectory("dashboard-aws-person")
         private val ops = writeOpsState(dir)
         private val tokenFile = dir.resolve("internal-ops-token").also { Files.writeString(it, "Zr8vQh2Lx5mN9pW3kT7yB1cD4fG6jH0sA_uE-iO2qRw\n") }
@@ -53,7 +62,7 @@ class DashboardAwsPersonAuthTest {
             r.add("COGNITO_ISSUER") { ISSUER }
             r.add("COGNITO_CLIENT_ID") { CLIENT }
             r.add("INTERNAL_OPS_TOKEN_FILE") { tokenFile.toString() }
-            // infra が渡すのと同じ: 本人のメールだけ（pulumi-aws の renderAppEnv）
+            // infra が渡すのは本人のメールだけ（pulumi-aws の renderAppEnv）。ここでは「許可リストにあるが行が無い・無効」の試験のために 2 名を足す
             r.add("ALLOWED_USERS") { "me@example.com,off@example.com,norow@example.com" }
             r.add("ADMIN_USERS") { "me@example.com" }
         }
@@ -146,15 +155,18 @@ class DashboardAwsPersonAuthTest {
         val owner = mapOf("Authorization" to "Bearer ${idToken("me@example.com")}")
         // 同一オリジンの書込み（Origin が Host と同じ: ここでは試験のサーバの 127.0.0.1:<port>。公開 URL の Host は CsrfGuardCloudFrontTest）
         val origin = "http://127.0.0.1:${env.serverPort()}"
+        val before = revokeCalls.get()
         val ok = http.send("POST", "/api/v1/admin/agents/ag_test/revoke", headers = owner + ("Origin" to origin), body = """{"reason":"試験"}""")
-        assertTrue(ok.status != 401 && ok.status != 403, "${ok.status} ${ok.body}")
-        assertTrue(!ok.body.contains("csrf") && !ok.body.contains("forbidden") && !ok.body.contains("OPS_MODE"), ok.body)
+        // CSRF・認可・運用モードの柵を通って controller の失効の処理まで届いた（偽の保管が呼ばれ、「無い」を返す → 404）
+        assertEquals(404, ok.status, ok.body)
+        assertEquals(before + 1, revokeCalls.get(), "controller まで届いていない（経路の誤り等の 404 ではない）")
     }
 
     @Test
     fun `管理の書込み - CSRF の条件が欠ける・別の Origin は本人でも 403（理由 csrf）、本人以外は CSRF を満たしても 403（理由 forbidden）`() {
         val owner = mapOf("Authorization" to "Bearer ${idToken("me@example.com")}")
         val path = "/api/v1/admin/agents/ag_test/revoke"
+        val before = revokeCalls.get()
         val noCsrf = http.send("POST", path, headers = owner, csrf = false)
         assertEquals(403, noCsrf.status, noCsrf.body)
         assertTrue(noCsrf.body.contains("csrf"), noCsrf.body)
@@ -166,6 +178,7 @@ class DashboardAwsPersonAuthTest {
         assertTrue(stranger.body.contains("forbidden"), "CSRF ではなく認可で拒否: ${stranger.body}")
         val disabled = http.send("POST", path, headers = mapOf("Authorization" to "Bearer ${idToken("off@example.com")}"))
         assertEquals(403, disabled.status, "許可リストにあっても app_user の行が無効なら 403: ${disabled.body}")
+        assertEquals(before, revokeCalls.get(), "拒否した要求は controller に届かない")
     }
 }
 
@@ -181,6 +194,33 @@ class AwsPersonAuthTestConfig {
             DashboardAwsPersonAuthTest.clock,
             jwksUri = URI.create(DashboardAwsPersonAuthTest.jwks.url),
         )
+
+    /** 管理の書込みの試験用: DB を使わない保管（どのエージェントも「無い」）とトランザクション。 */
+    @Bean
+    @Primary
+    fun testAgents(): AgentAdminStore =
+        object : AgentAdminStore {
+            override fun list(tenantId: TenantId) = emptyList<AgentSummary>()
+
+            override fun find(
+                tenantId: TenantId,
+                agentId: AgentId,
+            ): AgentSummary? = null
+
+            override fun revoke(
+                tenantId: TenantId,
+                agentId: AgentId,
+                by: String,
+                at: Instant,
+            ): AgentRevokeResult {
+                DashboardAwsPersonAuthTest.revokeCalls.incrementAndGet()
+                return AgentRevokeResult.NotFound
+            }
+        }
+
+    @Bean
+    @Primary
+    fun testTx(): TransactionOperations = TransactionOperations.withoutTransaction()
 
     /** DB を使わない固定の利用者表（合成）。viewer は行があるが ALLOWED_USERS に無い。 */
     @Bean

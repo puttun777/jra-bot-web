@@ -13,10 +13,10 @@
 旧: 2026-10-26（Public 化の準備）／2026-10-24（Stage 3-F2・3-F1・3-E）
 
 
-## 2026-11-17 中断・再開の記録（**作業中**。詳細・レビューの指摘・次の手順は infra の `docs/PROGRESS.md` の同日の「中断・再開の記録」と infra I-051）
-- 独立レビュー A・B・C は完了し、照合（D-289・infra I-051）と修正まで済んだ。web の修正: `DashboardAwsPersonAuthTest`（本人の正しい書込み・403 の理由・行が無い/無効）、CONTRACTS §11.4（パスの検査・捨てるヘッダ・Authorization・停止中のエラーの実環境の確認・復元の後の本人の行）、ARCHITECTURE の費用の参照（§13）、USER_ACTIONS A9（¥1,073/¥615）、UNRESOLVED F-10。**アプリのコードは変えていない**。
-- 検証（ローカル）: `:dashboard:test` の 2 クラス（6 + 2 件・失敗 0）、ktlint、TypeScript の lint・tools・画面、consistency。完全な preflight は CI を正とする（D-264）。
-- 残り: 修正の再レビュー → push・PR → CI → マージ（条件を満たせば）。
+## 2026-11-17 中断・再開の記録（詳細・次の手順は infra の `docs/PROGRESS.md` の同日の「中断・再開の記録」と infra I-051）
+- 独立レビュー A・B・C → 照合（D-289）→ 修正 → 修正の再レビュー（新しい高・中なし）まで完了。web の修正: `DashboardAwsPersonAuthTest`（本人の正しい書込みが controller まで届く〔偽の保管の呼出しの回数〕・拒否は届かない・403 の理由・行が無い/無効）、CONTRACTS §11.4、ARCHITECTURE（費用は §13）、USER_ACTIONS A9（¥1,073/¥615）、UNRESOLVED F-10。**アプリのコードは変えていない**。
+- 検証（ローカル）: `:dashboard:test` の 3 クラス（6 + 3 + 2 件・失敗 0）、ktlint、TypeScript の lint・tools 186・画面 54、consistency。完全な preflight は CI を正とする（D-264）。
+- 残り: push・PR → CI → マージ（条件を満たせば）。
 
 ## 2026-11-17 独自ドメインなし: CloudFront の標準 URL（ブランチ claude/jra-bot-gcp-to-aws-uqla8y〔main 445a79d から作り直し〕。D-288・CONTRACTS 0.4.20・infra I-050。**AWS には何も作っていない・適用しない**）
 - **本人の方針変更**: 独自ドメインを取得しない。公開 URL は `https://<distribution>.cloudfront.net`。認証は必須・本人だけ（Cognito・MFA・アプリの本人の許可を再利用。Basic 認証なし）。
