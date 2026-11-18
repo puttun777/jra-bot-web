@@ -9,6 +9,8 @@
     <InternalsVisibleTo Include="JraAgent.Core.Tests" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Tomlyn" />
     <ProjectReference Include="../JraAgent.Core/JraAgent.Core.csproj" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" />
   </ItemGroup>
